@@ -426,30 +426,31 @@ const core_1 = __webpack_require__(13);
 const serve_static_1 = __webpack_require__(31);
 const path_1 = __webpack_require__(20);
 const app_module_1 = __webpack_require__(32);
-const auth_module_1 = __webpack_require__(119);
-const autoReply_module_1 = __webpack_require__(133);
-const badWords_module_1 = __webpack_require__(141);
-const chat_module_1 = __webpack_require__(151);
-const chatGroup_module_1 = __webpack_require__(172);
-const chatLog_module_1 = __webpack_require__(177);
-const crami_module_1 = __webpack_require__(188);
-const database_module_1 = __webpack_require__(200);
-const globalConfig_module_1 = __webpack_require__(205);
-const models_module_1 = __webpack_require__(209);
-const official_module_1 = __webpack_require__(215);
-const order_module_1 = __webpack_require__(220);
-const pay_module_1 = __webpack_require__(227);
-const plugin_module_1 = __webpack_require__(229);
+const auth_module_1 = __webpack_require__(120);
+const autoReply_module_1 = __webpack_require__(134);
+const badWords_module_1 = __webpack_require__(142);
+const chat_module_1 = __webpack_require__(152);
+const chatGroup_module_1 = __webpack_require__(184);
+const chatLog_module_1 = __webpack_require__(189);
+const crami_module_1 = __webpack_require__(200);
+const database_module_1 = __webpack_require__(212);
+const globalConfig_module_1 = __webpack_require__(173);
+const models_module_1 = __webpack_require__(217);
+const official_module_1 = __webpack_require__(223);
+const order_module_1 = __webpack_require__(228);
+const pay_module_1 = __webpack_require__(235);
+const plugin_module_1 = __webpack_require__(237);
 const redisCache_module_1 = __webpack_require__(26);
-const share_module_1 = __webpack_require__(232);
-const signin_module_1 = __webpack_require__(235);
-const spa_module_1 = __webpack_require__(238);
-const statistic_module_1 = __webpack_require__(240);
-const task_module_1 = __webpack_require__(244);
-const upload_module_1 = __webpack_require__(247);
-const user_module_1 = __webpack_require__(122);
-const userBalance_module_1 = __webpack_require__(250);
-const verification_module_1 = __webpack_require__(252);
+const share_module_1 = __webpack_require__(240);
+const signin_module_1 = __webpack_require__(243);
+const spa_module_1 = __webpack_require__(246);
+const statistic_module_1 = __webpack_require__(248);
+const task_module_1 = __webpack_require__(252);
+const upload_module_1 = __webpack_require__(178);
+const user_module_1 = __webpack_require__(123);
+const userBalance_module_1 = __webpack_require__(255);
+const verification_module_1 = __webpack_require__(257);
+const voice_module_1 = __webpack_require__(169);
 let AppModule = class AppModule {
     configure(consumer) {
         consumer;
@@ -513,6 +514,7 @@ exports.AppModule = AppModule = __decorate([
             chatGroup_module_1.ChatGroupModule,
             signin_module_1.SigninModule,
             models_module_1.ModelsModule,
+            voice_module_1.VoiceModule,
             share_module_1.ShareModule,
             spa_module_1.SpaModule,
         ],
@@ -1011,13 +1013,14 @@ const app_controller_1 = __webpack_require__(85);
 const app_entity_1 = __webpack_require__(106);
 const app_service_1 = __webpack_require__(105);
 const appCats_entity_1 = __webpack_require__(107);
-const userApps_entity_1 = __webpack_require__(108);
+const appVoice_entity_1 = __webpack_require__(108);
+const userApps_entity_1 = __webpack_require__(109);
 let AppModule = class AppModule {
 };
 exports.AppModule = AppModule;
 exports.AppModule = AppModule = __decorate([
     (0, common_1.Module)({
-        imports: [typeorm_1.TypeOrmModule.forFeature([appCats_entity_1.AppCatsEntity, app_entity_1.AppEntity, userApps_entity_1.UserAppsEntity])],
+        imports: [typeorm_1.TypeOrmModule.forFeature([appCats_entity_1.AppCatsEntity, app_entity_1.AppEntity, userApps_entity_1.UserAppsEntity, appVoice_entity_1.AppVoiceEntity])],
         controllers: [app_controller_1.AppController],
         providers: [app_service_1.AppService, userBalance_service_1.UserBalanceService],
     })
@@ -2117,7 +2120,11 @@ const axios_1 = __webpack_require__(39);
 function handleError(error) {
     let message = '发生未知错误，请稍后再试';
     if (axios_1.default.isAxiosError(error) && error.response) {
-        switch (error.response.status) {
+        const status = error.response.status;
+        const data = error.response.data;
+        const serverMsg = data?.errorMessage || data?.message || data?.msg || data?.error || data?.reason;
+        const code = data?.errorCode || data?.code;
+        switch (status) {
             case 400:
                 message = '发生错误：400 Bad Request - 请求因格式错误无法被服务器处理。';
                 break;
@@ -2134,19 +2141,24 @@ function handleError(error) {
                 message = '发生错误：500 Internal Server Error - 服务器内部错误，无法完成请求。';
                 break;
             case 502:
-                message =
-                    '发生错误：502 Bad Gateway - 作为网关或代理工作的服务器从上游服务器收到无效响应。';
+                message = '发生错误：502 Bad Gateway - 上游服务返回无效响应。';
                 break;
             case 503:
-                message =
-                    '发生错误：503 Service Unavailable - 服务器暂时处于超负载或维护状态，无法处理请求。';
+                message = '发生错误：503 Service Unavailable - 服务暂不可用或维护中。';
                 break;
             default:
+                message = `发生错误：${status}`;
                 break;
+        }
+        if (serverMsg) {
+            message += ` 详细信息：${serverMsg}`;
+        }
+        if (code && String(code) !== String(status)) {
+            message += ` (错误码：${code})`;
         }
     }
     else {
-        message = error.message || message;
+        message = error?.message || message;
     }
     return message;
 }
@@ -2460,7 +2472,7 @@ __decorate([
     (0, typeorm_1.DeleteDateColumn)({
         type: 'datetime',
         length: 0,
-        nullable: false,
+        nullable: true,
         name: 'deletedAt',
         comment: '删除时间',
     }),
@@ -4393,15 +4405,15 @@ const common_1 = __webpack_require__(2);
 const swagger_1 = __webpack_require__(14);
 const express_1 = __webpack_require__(104);
 const app_service_1 = __webpack_require__(105);
-const collectApp_dto_1 = __webpack_require__(109);
-const createApp_dto_1 = __webpack_require__(111);
-const createCats_dto_1 = __webpack_require__(112);
-const deleteApp_dto_1 = __webpack_require__(113);
-const deleteCats_dto_1 = __webpack_require__(114);
-const queryApp_dto_1 = __webpack_require__(115);
-const queryCats_dto_1 = __webpack_require__(116);
-const updateApp_dto_1 = __webpack_require__(117);
-const updateCats_dto_1 = __webpack_require__(118);
+const collectApp_dto_1 = __webpack_require__(110);
+const createApp_dto_1 = __webpack_require__(112);
+const createCats_dto_1 = __webpack_require__(113);
+const deleteApp_dto_1 = __webpack_require__(114);
+const deleteCats_dto_1 = __webpack_require__(115);
+const queryApp_dto_1 = __webpack_require__(116);
+const queryCats_dto_1 = __webpack_require__(117);
+const updateApp_dto_1 = __webpack_require__(118);
+const updateCats_dto_1 = __webpack_require__(119);
 let AppController = class AppController {
     appService;
     constructor(appService) {
@@ -6151,7 +6163,7 @@ var __metadata = (this && this.__metadata) || function (k, v) {
 var __param = (this && this.__param) || function (paramIndex, decorator) {
     return function (target, key) { decorator(target, key, paramIndex); }
 };
-var _a, _b, _c, _d;
+var _a, _b, _c, _d, _e;
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.AppService = void 0;
 const common_1 = __webpack_require__(2);
@@ -6160,16 +6172,19 @@ const typeorm_2 = __webpack_require__(3);
 const userBalance_service_1 = __webpack_require__(34);
 const app_entity_1 = __webpack_require__(106);
 const appCats_entity_1 = __webpack_require__(107);
-const userApps_entity_1 = __webpack_require__(108);
+const appVoice_entity_1 = __webpack_require__(108);
+const userApps_entity_1 = __webpack_require__(109);
 let AppService = class AppService {
     appCatsEntity;
     appEntity;
     userAppsEntity;
+    appVoiceRepo;
     userBalanceService;
-    constructor(appCatsEntity, appEntity, userAppsEntity, userBalanceService) {
+    constructor(appCatsEntity, appEntity, userAppsEntity, appVoiceRepo, userBalanceService) {
         this.appCatsEntity = appCatsEntity;
         this.appEntity = appEntity;
         this.userAppsEntity = userAppsEntity;
+        this.appVoiceRepo = appVoiceRepo;
         this.userBalanceService = userBalanceService;
     }
     async createAppCat(body) {
@@ -6320,6 +6335,24 @@ let AppService = class AppService {
             item.backgroundImg = item.backgroundImg;
             item.prompt = item.prompt;
         });
+        try {
+            const appIds = rows.map(r => r.id);
+            if (appIds.length > 0) {
+                const maps = await this.appVoiceRepo.find({ where: { appId: (0, typeorm_2.In)(appIds), isDefault: 1 } });
+                const mapByApp = new Map(maps.map(m => [m.appId, m.voiceId]));
+                rows.forEach((item) => {
+                    const v = mapByApp.get(item.id) ?? null;
+                    try {
+                        Object.defineProperty(item, 'voiceId', { value: v, enumerable: true, configurable: true, writable: true });
+                    }
+                    catch (_) {
+                        item.voiceId = v;
+                    }
+                });
+            }
+        }
+        catch (e) {
+        }
         if (req?.user?.role !== 'super') {
             rows.forEach((item) => {
                 delete item.preset;
@@ -6508,6 +6541,8 @@ let AppService = class AppService {
         }
         try {
             const saveData = { ...body };
+            if ('voiceId' in saveData)
+                delete saveData.voiceId;
             if (!saveData.id || isNaN(Number(saveData.id))) {
                 delete saveData.id;
             }
@@ -6523,7 +6558,23 @@ let AppService = class AppService {
             saveData.isFixedModel = isNaN(Number(saveData.isFixedModel)) ? 0 : saveData.isFixedModel;
             saveData.backgroundImg = saveData.backgroundImg || '';
             saveData.prompt = saveData.prompt || '';
-            return await this.appEntity.save(saveData);
+            const saved = await this.appEntity.save(saveData);
+            try {
+                const delRes = await this.appVoiceRepo.delete({ appId: saved.id });
+                common_1.Logger.log(`[AppService] 删除旧音色映射 appId=${saved.id} affected=${delRes.affected ?? 0}`);
+                const voiceId = body?.voiceId;
+                if (voiceId) {
+                    await this.appVoiceRepo.save({ appId: saved.id, voiceId: String(voiceId), isDefault: 1 });
+                    common_1.Logger.log(`[AppService] 写入默认音色成功 appId=${saved.id} voiceId=${voiceId}`);
+                }
+                else {
+                    common_1.Logger.log(`[AppService] 未提供 voiceId, 跳过写入 app_voice appId=${saved.id}`);
+                }
+            }
+            catch (e) {
+                common_1.Logger.warn(`[AppService] 写入/删除 app_voice 失败 appId=${saved.id} err=${e?.message || e}`);
+            }
+            return saved;
         }
         catch (error) {
             throw new common_1.HttpException(`保存应用失败`, common_1.HttpStatus.BAD_REQUEST);
@@ -6548,6 +6599,9 @@ let AppService = class AppService {
         const updateData = { ...body };
         const curApp = await this.appEntity.findOne({ where: { id } });
         const curAppData = curApp;
+        const newVoiceId = body?.voiceId;
+        if ('voiceId' in updateData)
+            delete updateData.voiceId;
         updateData.appModel = updateData.appModel ?? (curAppData.appModel || '');
         updateData.order = isNaN(Number(updateData.order)) ? 100 : updateData.order;
         updateData.status = isNaN(Number(updateData.status)) ? 1 : updateData.status;
@@ -6562,8 +6616,20 @@ let AppService = class AppService {
             await this.userAppsEntity.update({ appId: id }, { status: updateData.status });
         }
         const res = await this.appEntity.update({ id }, updateData);
-        if (res.affected > 0)
+        if (res.affected > 0) {
+            if (typeof newVoiceId !== 'undefined' && newVoiceId !== null && String(newVoiceId).trim() !== '') {
+                try {
+                    const delRes2 = await this.appVoiceRepo.delete({ appId: id });
+                    common_1.Logger.log(`[AppService] 更新时删除旧映射 appId=${id} affected=${delRes2.affected ?? 0}`);
+                    await this.appVoiceRepo.save({ appId: id, voiceId: String(newVoiceId), isDefault: 1 });
+                    common_1.Logger.log(`[AppService] 更新写入默认音色成功 appId=${id} voiceId=${String(newVoiceId)}`);
+                }
+                catch (e) {
+                    common_1.Logger.warn(`[AppService] 更新写入/删除 app_voice 失败 appId=${id} err=${e?.message || e}`);
+                }
+            }
             return '修改App信息成功';
+        }
         throw new common_1.HttpException('修改App信息失败！', common_1.HttpStatus.BAD_REQUEST);
     }
     async delApp(body) {
@@ -6715,7 +6781,8 @@ exports.AppService = AppService = __decorate([
     __param(0, (0, typeorm_1.InjectRepository)(appCats_entity_1.AppCatsEntity)),
     __param(1, (0, typeorm_1.InjectRepository)(app_entity_1.AppEntity)),
     __param(2, (0, typeorm_1.InjectRepository)(userApps_entity_1.UserAppsEntity)),
-    __metadata("design:paramtypes", [typeof (_a = typeof typeorm_2.Repository !== "undefined" && typeorm_2.Repository) === "function" ? _a : Object, typeof (_b = typeof typeorm_2.Repository !== "undefined" && typeorm_2.Repository) === "function" ? _b : Object, typeof (_c = typeof typeorm_2.Repository !== "undefined" && typeorm_2.Repository) === "function" ? _c : Object, typeof (_d = typeof userBalance_service_1.UserBalanceService !== "undefined" && userBalance_service_1.UserBalanceService) === "function" ? _d : Object])
+    __param(3, (0, typeorm_1.InjectRepository)(appVoice_entity_1.AppVoiceEntity)),
+    __metadata("design:paramtypes", [typeof (_a = typeof typeorm_2.Repository !== "undefined" && typeorm_2.Repository) === "function" ? _a : Object, typeof (_b = typeof typeorm_2.Repository !== "undefined" && typeorm_2.Repository) === "function" ? _b : Object, typeof (_c = typeof typeorm_2.Repository !== "undefined" && typeorm_2.Repository) === "function" ? _c : Object, typeof (_d = typeof typeorm_2.Repository !== "undefined" && typeorm_2.Repository) === "function" ? _d : Object, typeof (_e = typeof userBalance_service_1.UserBalanceService !== "undefined" && userBalance_service_1.UserBalanceService) === "function" ? _e : Object])
 ], AppService);
 
 
@@ -6759,6 +6826,7 @@ let AppEntity = class AppEntity extends baseEntity_1.BaseEntity {
     flowithKey;
     backgroundImg;
     prompt;
+    voiceId;
 };
 exports.AppEntity = AppEntity;
 __decorate([
@@ -6845,6 +6913,10 @@ __decorate([
     (0, typeorm_1.Column)({ comment: 'App提问模版', nullable: true, type: 'text' }),
     __metadata("design:type", String)
 ], AppEntity.prototype, "prompt", void 0);
+__decorate([
+    (0, typeorm_1.Column)({ comment: '角色默认音色ID', nullable: true }),
+    __metadata("design:type", String)
+], AppEntity.prototype, "voiceId", void 0);
 exports.AppEntity = AppEntity = __decorate([
     (0, typeorm_1.Entity)({ name: 'app' })
 ], AppEntity);
@@ -6916,6 +6988,49 @@ var __metadata = (this && this.__metadata) || function (k, v) {
     if (typeof Reflect === "object" && typeof Reflect.metadata === "function") return Reflect.metadata(k, v);
 };
 Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.AppVoiceEntity = void 0;
+const baseEntity_1 = __webpack_require__(72);
+const typeorm_1 = __webpack_require__(3);
+let AppVoiceEntity = class AppVoiceEntity extends baseEntity_1.BaseEntity {
+    appId;
+    voiceId;
+    isDefault;
+};
+exports.AppVoiceEntity = AppVoiceEntity;
+__decorate([
+    (0, typeorm_1.Index)(),
+    (0, typeorm_1.Column)({ comment: '应用ID' }),
+    __metadata("design:type", Number)
+], AppVoiceEntity.prototype, "appId", void 0);
+__decorate([
+    (0, typeorm_1.Index)(),
+    (0, typeorm_1.Column)({ comment: '音色ID（DashScope/CosyVoice voice_id）' }),
+    __metadata("design:type", String)
+], AppVoiceEntity.prototype, "voiceId", void 0);
+__decorate([
+    (0, typeorm_1.Column)({ comment: '是否默认音色 0/1', type: 'int', default: 1 }),
+    __metadata("design:type", Number)
+], AppVoiceEntity.prototype, "isDefault", void 0);
+exports.AppVoiceEntity = AppVoiceEntity = __decorate([
+    (0, typeorm_1.Entity)({ name: 'app_voice' })
+], AppVoiceEntity);
+
+
+/***/ }),
+/* 109 */
+/***/ (function(__unused_webpack_module, exports, __webpack_require__) {
+
+
+var __decorate = (this && this.__decorate) || function (decorators, target, key, desc) {
+    var c = arguments.length, r = c < 3 ? target : desc === null ? desc = Object.getOwnPropertyDescriptor(target, key) : desc, d;
+    if (typeof Reflect === "object" && typeof Reflect.decorate === "function") r = Reflect.decorate(decorators, target, key, desc);
+    else for (var i = decorators.length - 1; i >= 0; i--) if (d = decorators[i]) r = (c < 3 ? d(r) : c > 3 ? d(target, key, r) : d(target, key)) || r;
+    return c > 3 && r && Object.defineProperty(target, key, r), r;
+};
+var __metadata = (this && this.__metadata) || function (k, v) {
+    if (typeof Reflect === "object" && typeof Reflect.metadata === "function") return Reflect.metadata(k, v);
+};
+Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.UserAppsEntity = void 0;
 const baseEntity_1 = __webpack_require__(72);
 const typeorm_1 = __webpack_require__(3);
@@ -6958,7 +7073,7 @@ exports.UserAppsEntity = UserAppsEntity = __decorate([
 
 
 /***/ }),
-/* 109 */
+/* 110 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
@@ -6974,7 +7089,7 @@ var __metadata = (this && this.__metadata) || function (k, v) {
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.CollectAppDto = void 0;
 const swagger_1 = __webpack_require__(14);
-const class_validator_1 = __webpack_require__(110);
+const class_validator_1 = __webpack_require__(111);
 class CollectAppDto {
     appId;
 }
@@ -6987,13 +7102,13 @@ __decorate([
 
 
 /***/ }),
-/* 110 */
+/* 111 */
 /***/ ((module) => {
 
 module.exports = require("class-validator");
 
 /***/ }),
-/* 111 */
+/* 112 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
@@ -7009,7 +7124,7 @@ var __metadata = (this && this.__metadata) || function (k, v) {
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.CreateAppDto = void 0;
 const swagger_1 = __webpack_require__(14);
-const class_validator_1 = __webpack_require__(110);
+const class_validator_1 = __webpack_require__(111);
 class CreateAppDto {
     name;
     catId;
@@ -7026,6 +7141,7 @@ class CreateAppDto {
     flowithId;
     flowithName;
     flowithKey;
+    voiceId;
 }
 exports.CreateAppDto = CreateAppDto;
 __decorate([
@@ -7150,10 +7266,19 @@ __decorate([
     }),
     __metadata("design:type", String)
 ], CreateAppDto.prototype, "flowithKey", void 0);
+__decorate([
+    (0, swagger_1.ApiProperty)({
+        example: 'cosyvoice-v2-xxxxxxxx',
+        description: '角色默认音色ID（DashScope/CosyVoice voice_id）',
+        required: false,
+    }),
+    (0, class_validator_1.IsOptional)(),
+    __metadata("design:type", String)
+], CreateAppDto.prototype, "voiceId", void 0);
 
 
 /***/ }),
-/* 112 */
+/* 113 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
@@ -7169,7 +7294,7 @@ var __metadata = (this && this.__metadata) || function (k, v) {
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.CreateCatsDto = void 0;
 const swagger_1 = __webpack_require__(14);
-const class_validator_1 = __webpack_require__(110);
+const class_validator_1 = __webpack_require__(111);
 class CreateCatsDto {
     name;
     order;
@@ -7229,7 +7354,7 @@ __decorate([
 
 
 /***/ }),
-/* 113 */
+/* 114 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
@@ -7245,7 +7370,7 @@ var __metadata = (this && this.__metadata) || function (k, v) {
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.OperateAppDto = void 0;
 const swagger_1 = __webpack_require__(14);
-const class_validator_1 = __webpack_require__(110);
+const class_validator_1 = __webpack_require__(111);
 class OperateAppDto {
     id;
 }
@@ -7255,35 +7380,6 @@ __decorate([
     (0, class_validator_1.IsNumber)({}, { message: 'ID必须是Number' }),
     __metadata("design:type", Number)
 ], OperateAppDto.prototype, "id", void 0);
-
-
-/***/ }),
-/* 114 */
-/***/ (function(__unused_webpack_module, exports, __webpack_require__) {
-
-
-var __decorate = (this && this.__decorate) || function (decorators, target, key, desc) {
-    var c = arguments.length, r = c < 3 ? target : desc === null ? desc = Object.getOwnPropertyDescriptor(target, key) : desc, d;
-    if (typeof Reflect === "object" && typeof Reflect.decorate === "function") r = Reflect.decorate(decorators, target, key, desc);
-    else for (var i = decorators.length - 1; i >= 0; i--) if (d = decorators[i]) r = (c < 3 ? d(r) : c > 3 ? d(target, key, r) : d(target, key)) || r;
-    return c > 3 && r && Object.defineProperty(target, key, r), r;
-};
-var __metadata = (this && this.__metadata) || function (k, v) {
-    if (typeof Reflect === "object" && typeof Reflect.metadata === "function") return Reflect.metadata(k, v);
-};
-Object.defineProperty(exports, "__esModule", ({ value: true }));
-exports.DeleteCatsDto = void 0;
-const swagger_1 = __webpack_require__(14);
-const class_validator_1 = __webpack_require__(110);
-class DeleteCatsDto {
-    id;
-}
-exports.DeleteCatsDto = DeleteCatsDto;
-__decorate([
-    (0, swagger_1.ApiProperty)({ example: 1, description: '要删除app分类Id', required: true }),
-    (0, class_validator_1.IsNumber)({}, { message: 'ID必须是Number' }),
-    __metadata("design:type", Number)
-], DeleteCatsDto.prototype, "id", void 0);
 
 
 /***/ }),
@@ -7301,9 +7397,38 @@ var __metadata = (this && this.__metadata) || function (k, v) {
     if (typeof Reflect === "object" && typeof Reflect.metadata === "function") return Reflect.metadata(k, v);
 };
 Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.DeleteCatsDto = void 0;
+const swagger_1 = __webpack_require__(14);
+const class_validator_1 = __webpack_require__(111);
+class DeleteCatsDto {
+    id;
+}
+exports.DeleteCatsDto = DeleteCatsDto;
+__decorate([
+    (0, swagger_1.ApiProperty)({ example: 1, description: '要删除app分类Id', required: true }),
+    (0, class_validator_1.IsNumber)({}, { message: 'ID必须是Number' }),
+    __metadata("design:type", Number)
+], DeleteCatsDto.prototype, "id", void 0);
+
+
+/***/ }),
+/* 116 */
+/***/ (function(__unused_webpack_module, exports, __webpack_require__) {
+
+
+var __decorate = (this && this.__decorate) || function (decorators, target, key, desc) {
+    var c = arguments.length, r = c < 3 ? target : desc === null ? desc = Object.getOwnPropertyDescriptor(target, key) : desc, d;
+    if (typeof Reflect === "object" && typeof Reflect.decorate === "function") r = Reflect.decorate(decorators, target, key, desc);
+    else for (var i = decorators.length - 1; i >= 0; i--) if (d = decorators[i]) r = (c < 3 ? d(r) : c > 3 ? d(target, key, r) : d(target, key)) || r;
+    return c > 3 && r && Object.defineProperty(target, key, r), r;
+};
+var __metadata = (this && this.__metadata) || function (k, v) {
+    if (typeof Reflect === "object" && typeof Reflect.metadata === "function") return Reflect.metadata(k, v);
+};
+Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.QuerAppDto = void 0;
 const swagger_1 = __webpack_require__(14);
-const class_validator_1 = __webpack_require__(110);
+const class_validator_1 = __webpack_require__(111);
 class QuerAppDto {
     page;
     size;
@@ -7360,7 +7485,7 @@ __decorate([
 
 
 /***/ }),
-/* 116 */
+/* 117 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
@@ -7375,7 +7500,7 @@ var __metadata = (this && this.__metadata) || function (k, v) {
 };
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.QuerCatsDto = void 0;
-const class_validator_1 = __webpack_require__(110);
+const class_validator_1 = __webpack_require__(111);
 const swagger_1 = __webpack_require__(14);
 class QuerCatsDto {
     page;
@@ -7411,36 +7536,6 @@ __decorate([
 
 
 /***/ }),
-/* 117 */
-/***/ (function(__unused_webpack_module, exports, __webpack_require__) {
-
-
-var __decorate = (this && this.__decorate) || function (decorators, target, key, desc) {
-    var c = arguments.length, r = c < 3 ? target : desc === null ? desc = Object.getOwnPropertyDescriptor(target, key) : desc, d;
-    if (typeof Reflect === "object" && typeof Reflect.decorate === "function") r = Reflect.decorate(decorators, target, key, desc);
-    else for (var i = decorators.length - 1; i >= 0; i--) if (d = decorators[i]) r = (c < 3 ? d(r) : c > 3 ? d(target, key, r) : d(target, key)) || r;
-    return c > 3 && r && Object.defineProperty(target, key, r), r;
-};
-var __metadata = (this && this.__metadata) || function (k, v) {
-    if (typeof Reflect === "object" && typeof Reflect.metadata === "function") return Reflect.metadata(k, v);
-};
-Object.defineProperty(exports, "__esModule", ({ value: true }));
-exports.UpdateAppDto = void 0;
-const class_validator_1 = __webpack_require__(110);
-const swagger_1 = __webpack_require__(14);
-const createApp_dto_1 = __webpack_require__(111);
-class UpdateAppDto extends createApp_dto_1.CreateAppDto {
-    id;
-}
-exports.UpdateAppDto = UpdateAppDto;
-__decorate([
-    (0, swagger_1.ApiProperty)({ example: 1, description: '要修改的分类Id', required: true }),
-    (0, class_validator_1.IsNumber)({}, { message: '分类ID必须是Number' }),
-    __metadata("design:type", Number)
-], UpdateAppDto.prototype, "id", void 0);
-
-
-/***/ }),
 /* 118 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
@@ -7455,19 +7550,19 @@ var __metadata = (this && this.__metadata) || function (k, v) {
     if (typeof Reflect === "object" && typeof Reflect.metadata === "function") return Reflect.metadata(k, v);
 };
 Object.defineProperty(exports, "__esModule", ({ value: true }));
-exports.UpdateCatsDto = void 0;
-const class_validator_1 = __webpack_require__(110);
+exports.UpdateAppDto = void 0;
+const class_validator_1 = __webpack_require__(111);
 const swagger_1 = __webpack_require__(14);
-const createCats_dto_1 = __webpack_require__(112);
-class UpdateCatsDto extends createCats_dto_1.CreateCatsDto {
+const createApp_dto_1 = __webpack_require__(112);
+class UpdateAppDto extends createApp_dto_1.CreateAppDto {
     id;
 }
-exports.UpdateCatsDto = UpdateCatsDto;
+exports.UpdateAppDto = UpdateAppDto;
 __decorate([
     (0, swagger_1.ApiProperty)({ example: 1, description: '要修改的分类Id', required: true }),
     (0, class_validator_1.IsNumber)({}, { message: '分类ID必须是Number' }),
     __metadata("design:type", Number)
-], UpdateCatsDto.prototype, "id", void 0);
+], UpdateAppDto.prototype, "id", void 0);
 
 
 /***/ }),
@@ -7481,9 +7576,39 @@ var __decorate = (this && this.__decorate) || function (decorators, target, key,
     else for (var i = decorators.length - 1; i >= 0; i--) if (d = decorators[i]) r = (c < 3 ? d(r) : c > 3 ? d(target, key, r) : d(target, key)) || r;
     return c > 3 && r && Object.defineProperty(target, key, r), r;
 };
+var __metadata = (this && this.__metadata) || function (k, v) {
+    if (typeof Reflect === "object" && typeof Reflect.metadata === "function") return Reflect.metadata(k, v);
+};
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.UpdateCatsDto = void 0;
+const class_validator_1 = __webpack_require__(111);
+const swagger_1 = __webpack_require__(14);
+const createCats_dto_1 = __webpack_require__(113);
+class UpdateCatsDto extends createCats_dto_1.CreateCatsDto {
+    id;
+}
+exports.UpdateCatsDto = UpdateCatsDto;
+__decorate([
+    (0, swagger_1.ApiProperty)({ example: 1, description: '要修改的分类Id', required: true }),
+    (0, class_validator_1.IsNumber)({}, { message: '分类ID必须是Number' }),
+    __metadata("design:type", Number)
+], UpdateCatsDto.prototype, "id", void 0);
+
+
+/***/ }),
+/* 120 */
+/***/ (function(__unused_webpack_module, exports, __webpack_require__) {
+
+
+var __decorate = (this && this.__decorate) || function (decorators, target, key, desc) {
+    var c = arguments.length, r = c < 3 ? target : desc === null ? desc = Object.getOwnPropertyDescriptor(target, key) : desc, d;
+    if (typeof Reflect === "object" && typeof Reflect.decorate === "function") r = Reflect.decorate(decorators, target, key, desc);
+    else for (var i = decorators.length - 1; i >= 0; i--) if (d = decorators[i]) r = (c < 3 ? d(r) : c > 3 ? d(target, key, r) : d(target, key)) || r;
+    return c > 3 && r && Object.defineProperty(target, key, r), r;
+};
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.AuthModule = void 0;
-const jwt_strategy_1 = __webpack_require__(120);
+const jwt_strategy_1 = __webpack_require__(121);
 const jwtAuth_guard_1 = __webpack_require__(87);
 const common_1 = __webpack_require__(2);
 const jwt_1 = __webpack_require__(92);
@@ -7497,7 +7622,7 @@ const mailer_service_1 = __webpack_require__(95);
 const redisCache_module_1 = __webpack_require__(26);
 const redisCache_service_1 = __webpack_require__(28);
 const user_entity_1 = __webpack_require__(83);
-const user_module_1 = __webpack_require__(122);
+const user_module_1 = __webpack_require__(123);
 const accountLog_entity_1 = __webpack_require__(79);
 const balance_entity_1 = __webpack_require__(80);
 const fingerprint_entity_1 = __webpack_require__(84);
@@ -7505,7 +7630,7 @@ const userBalance_entity_1 = __webpack_require__(81);
 const userBalance_service_1 = __webpack_require__(34);
 const verification_entity_1 = __webpack_require__(101);
 const verification_service_1 = __webpack_require__(100);
-const auth_controller_1 = __webpack_require__(129);
+const auth_controller_1 = __webpack_require__(130);
 const auth_service_1 = __webpack_require__(90);
 let AuthModule = class AuthModule {
 };
@@ -7553,7 +7678,7 @@ exports.AuthModule = AuthModule = __decorate([
 
 
 /***/ }),
-/* 120 */
+/* 121 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
@@ -7571,7 +7696,7 @@ Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.JwtStrategy = void 0;
 const common_1 = __webpack_require__(2);
 const passport_1 = __webpack_require__(88);
-const passport_jwt_1 = __webpack_require__(121);
+const passport_jwt_1 = __webpack_require__(122);
 const redisCache_service_1 = __webpack_require__(28);
 let JwtStrategy = class JwtStrategy extends (0, passport_1.PassportStrategy)(passport_jwt_1.Strategy) {
     redisService;
@@ -7594,13 +7719,13 @@ exports.JwtStrategy = JwtStrategy = __decorate([
 
 
 /***/ }),
-/* 121 */
+/* 122 */
 /***/ ((module) => {
 
 module.exports = require("passport-jwt");
 
 /***/ }),
-/* 122 */
+/* 123 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
@@ -7629,7 +7754,7 @@ const userBalance_entity_1 = __webpack_require__(81);
 const userBalance_service_1 = __webpack_require__(34);
 const verification_entity_1 = __webpack_require__(101);
 const verification_service_1 = __webpack_require__(100);
-const user_controller_1 = __webpack_require__(123);
+const user_controller_1 = __webpack_require__(124);
 const user_entity_1 = __webpack_require__(83);
 const user_service_1 = __webpack_require__(97);
 let UserModule = class UserModule {
@@ -7668,7 +7793,7 @@ exports.UserModule = UserModule = __decorate([
 
 
 /***/ }),
-/* 123 */
+/* 124 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
@@ -7693,11 +7818,11 @@ const superAuth_guard_1 = __webpack_require__(103);
 const common_1 = __webpack_require__(2);
 const swagger_1 = __webpack_require__(14);
 const express_1 = __webpack_require__(104);
-const queryAllUser_dto_1 = __webpack_require__(124);
-const resetUserPass_dto_1 = __webpack_require__(125);
-const updateUser_dto_1 = __webpack_require__(126);
-const updateUserStatus_dto_1 = __webpack_require__(127);
-const userRecharge_dto_1 = __webpack_require__(128);
+const queryAllUser_dto_1 = __webpack_require__(125);
+const resetUserPass_dto_1 = __webpack_require__(126);
+const updateUser_dto_1 = __webpack_require__(127);
+const updateUserStatus_dto_1 = __webpack_require__(128);
+const userRecharge_dto_1 = __webpack_require__(129);
 const user_service_1 = __webpack_require__(97);
 let UserController = class UserController {
     userService;
@@ -7781,7 +7906,7 @@ exports.UserController = UserController = __decorate([
 
 
 /***/ }),
-/* 124 */
+/* 125 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
@@ -7797,7 +7922,7 @@ var __metadata = (this && this.__metadata) || function (k, v) {
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.QueryAllUserDto = void 0;
 const swagger_1 = __webpack_require__(14);
-const class_validator_1 = __webpack_require__(110);
+const class_validator_1 = __webpack_require__(111);
 class QueryAllUserDto {
     page;
     size;
@@ -7860,7 +7985,7 @@ __decorate([
 
 
 /***/ }),
-/* 125 */
+/* 126 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
@@ -7875,7 +8000,7 @@ var __metadata = (this && this.__metadata) || function (k, v) {
 };
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.ResetUserPassDto = void 0;
-const class_validator_1 = __webpack_require__(110);
+const class_validator_1 = __webpack_require__(111);
 const swagger_1 = __webpack_require__(14);
 class ResetUserPassDto {
     id;
@@ -7894,7 +8019,7 @@ __decorate([
 
 
 /***/ }),
-/* 126 */
+/* 127 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
@@ -7910,7 +8035,7 @@ var __metadata = (this && this.__metadata) || function (k, v) {
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.UpdateUserDto = void 0;
 const swagger_1 = __webpack_require__(14);
-const class_validator_1 = __webpack_require__(110);
+const class_validator_1 = __webpack_require__(111);
 class UpdateUserDto {
     nickname;
     avatar;
@@ -7938,7 +8063,7 @@ __decorate([
 
 
 /***/ }),
-/* 127 */
+/* 128 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
@@ -7953,7 +8078,7 @@ var __metadata = (this && this.__metadata) || function (k, v) {
 };
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.UpdateUserStatusDto = void 0;
-const class_validator_1 = __webpack_require__(110);
+const class_validator_1 = __webpack_require__(111);
 const swagger_1 = __webpack_require__(14);
 class UpdateUserStatusDto {
     status;
@@ -7975,7 +8100,7 @@ __decorate([
 
 
 /***/ }),
-/* 128 */
+/* 129 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
@@ -7990,7 +8115,7 @@ var __metadata = (this && this.__metadata) || function (k, v) {
 };
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.UserRechargeDto = void 0;
-const class_validator_1 = __webpack_require__(110);
+const class_validator_1 = __webpack_require__(111);
 const swagger_1 = __webpack_require__(14);
 class UserRechargeDto {
     userId;
@@ -8030,7 +8155,7 @@ __decorate([
 
 
 /***/ }),
-/* 129 */
+/* 130 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
@@ -8055,9 +8180,9 @@ const common_1 = __webpack_require__(2);
 const swagger_1 = __webpack_require__(14);
 const express_1 = __webpack_require__(104);
 const auth_service_1 = __webpack_require__(90);
-const authLogin_dto_1 = __webpack_require__(130);
-const updatePassByOther_dto_1 = __webpack_require__(131);
-const updatePassword_dto_1 = __webpack_require__(132);
+const authLogin_dto_1 = __webpack_require__(131);
+const updatePassByOther_dto_1 = __webpack_require__(132);
+const updatePassword_dto_1 = __webpack_require__(133);
 let AuthController = class AuthController {
     authService;
     constructor(authService) {
@@ -8180,7 +8305,7 @@ exports.AuthController = AuthController = __decorate([
 
 
 /***/ }),
-/* 130 */
+/* 131 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
@@ -8196,7 +8321,7 @@ var __metadata = (this && this.__metadata) || function (k, v) {
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.UserLoginDto = void 0;
 const swagger_1 = __webpack_require__(14);
-const class_validator_1 = __webpack_require__(110);
+const class_validator_1 = __webpack_require__(111);
 class UserLoginDto {
     username;
     uid;
@@ -8232,7 +8357,7 @@ __decorate([
 
 
 /***/ }),
-/* 131 */
+/* 132 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
@@ -8247,7 +8372,7 @@ var __metadata = (this && this.__metadata) || function (k, v) {
 };
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.UpdatePassByOtherDto = void 0;
-const class_validator_1 = __webpack_require__(110);
+const class_validator_1 = __webpack_require__(111);
 const swagger_1 = __webpack_require__(14);
 class UpdatePassByOtherDto {
     password;
@@ -8263,7 +8388,7 @@ __decorate([
 
 
 /***/ }),
-/* 132 */
+/* 133 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
@@ -8279,7 +8404,7 @@ var __metadata = (this && this.__metadata) || function (k, v) {
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.UpdatePasswordDto = void 0;
 const swagger_1 = __webpack_require__(14);
-const class_validator_1 = __webpack_require__(110);
+const class_validator_1 = __webpack_require__(111);
 class UpdatePasswordDto {
     password;
 }
@@ -8294,7 +8419,7 @@ __decorate([
 
 
 /***/ }),
-/* 133 */
+/* 134 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
@@ -8308,9 +8433,9 @@ Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.AutoReplyModule = void 0;
 const common_1 = __webpack_require__(2);
 const typeorm_1 = __webpack_require__(33);
-const autoReply_controller_1 = __webpack_require__(134);
-const autoReply_entity_1 = __webpack_require__(136);
-const autoReply_service_1 = __webpack_require__(135);
+const autoReply_controller_1 = __webpack_require__(135);
+const autoReply_entity_1 = __webpack_require__(137);
+const autoReply_service_1 = __webpack_require__(136);
 let AutoReplyModule = class AutoReplyModule {
 };
 exports.AutoReplyModule = AutoReplyModule;
@@ -8326,7 +8451,7 @@ exports.AutoReplyModule = AutoReplyModule = __decorate([
 
 
 /***/ }),
-/* 134 */
+/* 135 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
@@ -8349,11 +8474,11 @@ const adminAuth_guard_1 = __webpack_require__(86);
 const superAuth_guard_1 = __webpack_require__(103);
 const common_1 = __webpack_require__(2);
 const swagger_1 = __webpack_require__(14);
-const autoReply_service_1 = __webpack_require__(135);
-const addAutoReply_dto_1 = __webpack_require__(137);
-const delBadWords_dto_1 = __webpack_require__(138);
-const queryAutoReply_dto_1 = __webpack_require__(139);
-const updateAutoReply_dto_1 = __webpack_require__(140);
+const autoReply_service_1 = __webpack_require__(136);
+const addAutoReply_dto_1 = __webpack_require__(138);
+const delBadWords_dto_1 = __webpack_require__(139);
+const queryAutoReply_dto_1 = __webpack_require__(140);
+const updateAutoReply_dto_1 = __webpack_require__(141);
 let AutoReplyController = class AutoReplyController {
     autoReplyService;
     constructor(autoReplyService) {
@@ -8421,7 +8546,7 @@ exports.AutoReplyController = AutoReplyController = __decorate([
 
 
 /***/ }),
-/* 135 */
+/* 136 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
@@ -8443,7 +8568,7 @@ exports.AutoReplyService = void 0;
 const common_1 = __webpack_require__(2);
 const typeorm_1 = __webpack_require__(33);
 const typeorm_2 = __webpack_require__(3);
-const autoReply_entity_1 = __webpack_require__(136);
+const autoReply_entity_1 = __webpack_require__(137);
 let AutoReplyService = class AutoReplyService {
     autoReplyEntity;
     autoReplyKes = [];
@@ -8555,7 +8680,7 @@ exports.AutoReplyService = AutoReplyService = __decorate([
 
 
 /***/ }),
-/* 136 */
+/* 137 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
@@ -8601,7 +8726,7 @@ exports.AutoReplyEntity = AutoReplyEntity = __decorate([
 
 
 /***/ }),
-/* 137 */
+/* 138 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
@@ -8637,7 +8762,7 @@ __decorate([
 
 
 /***/ }),
-/* 138 */
+/* 139 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
@@ -8664,7 +8789,7 @@ __decorate([
 
 
 /***/ }),
-/* 139 */
+/* 140 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
@@ -8679,7 +8804,7 @@ var __metadata = (this && this.__metadata) || function (k, v) {
 };
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.QueryAutoReplyDto = void 0;
-const class_validator_1 = __webpack_require__(110);
+const class_validator_1 = __webpack_require__(111);
 const swagger_1 = __webpack_require__(14);
 class QueryAutoReplyDto {
     page;
@@ -8711,7 +8836,7 @@ __decorate([
 
 
 /***/ }),
-/* 140 */
+/* 141 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
@@ -8727,7 +8852,7 @@ var __metadata = (this && this.__metadata) || function (k, v) {
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.UpdateAutoReplyDto = void 0;
 const swagger_1 = __webpack_require__(14);
-const class_validator_1 = __webpack_require__(110);
+const class_validator_1 = __webpack_require__(111);
 class UpdateAutoReplyDto {
     id;
     prompt;
@@ -8762,7 +8887,7 @@ __decorate([
 
 
 /***/ }),
-/* 141 */
+/* 142 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
@@ -8777,10 +8902,10 @@ exports.BadWordsModule = void 0;
 const common_1 = __webpack_require__(2);
 const typeorm_1 = __webpack_require__(33);
 const user_entity_1 = __webpack_require__(83);
-const badWords_controller_1 = __webpack_require__(142);
-const badWords_entity_1 = __webpack_require__(144);
-const badWords_service_1 = __webpack_require__(143);
-const violationLog_entity_1 = __webpack_require__(145);
+const badWords_controller_1 = __webpack_require__(143);
+const badWords_entity_1 = __webpack_require__(145);
+const badWords_service_1 = __webpack_require__(144);
+const violationLog_entity_1 = __webpack_require__(146);
 let BadWordsModule = class BadWordsModule {
 };
 exports.BadWordsModule = BadWordsModule;
@@ -8796,7 +8921,7 @@ exports.BadWordsModule = BadWordsModule = __decorate([
 
 
 /***/ }),
-/* 142 */
+/* 143 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
@@ -8820,12 +8945,12 @@ const superAuth_guard_1 = __webpack_require__(103);
 const common_1 = __webpack_require__(2);
 const swagger_1 = __webpack_require__(14);
 const express_1 = __webpack_require__(104);
-const badWords_service_1 = __webpack_require__(143);
-const addBadWords_dto_1 = __webpack_require__(146);
-const delBadWords_dto_1 = __webpack_require__(147);
-const queryBadWords_dto_1 = __webpack_require__(148);
-const queryViolation_dto_1 = __webpack_require__(149);
-const updateBadWords_dto_1 = __webpack_require__(150);
+const badWords_service_1 = __webpack_require__(144);
+const addBadWords_dto_1 = __webpack_require__(147);
+const delBadWords_dto_1 = __webpack_require__(148);
+const queryBadWords_dto_1 = __webpack_require__(149);
+const queryViolation_dto_1 = __webpack_require__(150);
+const updateBadWords_dto_1 = __webpack_require__(151);
 let BadWordsController = class BadWordsController {
     badWordsService;
     constructor(badWordsService) {
@@ -8905,7 +9030,7 @@ exports.BadWordsController = BadWordsController = __decorate([
 
 
 /***/ }),
-/* 143 */
+/* 144 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
@@ -8931,8 +9056,8 @@ const axios_1 = __webpack_require__(39);
 const typeorm_2 = __webpack_require__(3);
 const globalConfig_service_1 = __webpack_require__(74);
 const user_entity_1 = __webpack_require__(83);
-const badWords_entity_1 = __webpack_require__(144);
-const violationLog_entity_1 = __webpack_require__(145);
+const badWords_entity_1 = __webpack_require__(145);
+const violationLog_entity_1 = __webpack_require__(146);
 let BadWordsService = class BadWordsService {
     badWordsEntity;
     violationLogEntity;
@@ -9130,7 +9255,7 @@ exports.BadWordsService = BadWordsService = __decorate([
 
 
 /***/ }),
-/* 144 */
+/* 145 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
@@ -9171,7 +9296,7 @@ exports.BadWordsEntity = BadWordsEntity = __decorate([
 
 
 /***/ }),
-/* 145 */
+/* 146 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
@@ -9222,7 +9347,7 @@ exports.ViolationLogEntity = ViolationLogEntity = __decorate([
 
 
 /***/ }),
-/* 146 */
+/* 147 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
@@ -9249,7 +9374,7 @@ __decorate([
 
 
 /***/ }),
-/* 147 */
+/* 148 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
@@ -9276,7 +9401,7 @@ __decorate([
 
 
 /***/ }),
-/* 148 */
+/* 149 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
@@ -9291,7 +9416,7 @@ var __metadata = (this && this.__metadata) || function (k, v) {
 };
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.QueryBadWordsDto = void 0;
-const class_validator_1 = __webpack_require__(110);
+const class_validator_1 = __webpack_require__(111);
 const swagger_1 = __webpack_require__(14);
 class QueryBadWordsDto {
     page;
@@ -9323,7 +9448,7 @@ __decorate([
 
 
 /***/ }),
-/* 149 */
+/* 150 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
@@ -9338,7 +9463,7 @@ var __metadata = (this && this.__metadata) || function (k, v) {
 };
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.QueryViolationDto = void 0;
-const class_validator_1 = __webpack_require__(110);
+const class_validator_1 = __webpack_require__(111);
 const swagger_1 = __webpack_require__(14);
 class QueryViolationDto {
     page;
@@ -9374,7 +9499,7 @@ __decorate([
 
 
 /***/ }),
-/* 150 */
+/* 151 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
@@ -9389,7 +9514,7 @@ var __metadata = (this && this.__metadata) || function (k, v) {
 };
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.UpdateBadWordsDto = void 0;
-const class_validator_1 = __webpack_require__(110);
+const class_validator_1 = __webpack_require__(111);
 const swagger_1 = __webpack_require__(14);
 class UpdateBadWordsDto {
     id;
@@ -9415,7 +9540,7 @@ __decorate([
 
 
 /***/ }),
-/* 151 */
+/* 152 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
@@ -9429,30 +9554,31 @@ Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.ChatModule = void 0;
 const common_1 = __webpack_require__(2);
 const typeorm_1 = __webpack_require__(33);
-const chat_service_1 = __webpack_require__(152);
-const netSearch_service_1 = __webpack_require__(154);
+const chat_service_1 = __webpack_require__(153);
+const netSearch_service_1 = __webpack_require__(155);
 const app_entity_1 = __webpack_require__(106);
 const app_service_1 = __webpack_require__(105);
 const appCats_entity_1 = __webpack_require__(107);
-const userApps_entity_1 = __webpack_require__(108);
-const autoReply_entity_1 = __webpack_require__(136);
-const autoReply_service_1 = __webpack_require__(135);
-const badWords_entity_1 = __webpack_require__(144);
-const badWords_service_1 = __webpack_require__(143);
-const violationLog_entity_1 = __webpack_require__(145);
+const appVoice_entity_1 = __webpack_require__(108);
+const userApps_entity_1 = __webpack_require__(109);
+const autoReply_entity_1 = __webpack_require__(137);
+const autoReply_service_1 = __webpack_require__(136);
+const badWords_entity_1 = __webpack_require__(145);
+const badWords_service_1 = __webpack_require__(144);
+const violationLog_entity_1 = __webpack_require__(146);
 const chatGroup_entity_1 = __webpack_require__(82);
-const chatGroup_service_1 = __webpack_require__(156);
+const chatGroup_service_1 = __webpack_require__(157);
 const chatLog_entity_1 = __webpack_require__(75);
-const chatLog_service_1 = __webpack_require__(158);
+const chatLog_service_1 = __webpack_require__(159);
 const cramiPackage_entity_1 = __webpack_require__(71);
 const config_entity_1 = __webpack_require__(73);
 const globalConfig_service_1 = __webpack_require__(74);
 const mailer_service_1 = __webpack_require__(95);
 const models_entity_1 = __webpack_require__(78);
 const models_service_1 = __webpack_require__(76);
-const plugin_entity_1 = __webpack_require__(160);
+const plugin_entity_1 = __webpack_require__(161);
 const redisCache_service_1 = __webpack_require__(28);
-const upload_service_1 = __webpack_require__(161);
+const upload_service_1 = __webpack_require__(162);
 const user_entity_1 = __webpack_require__(83);
 const user_service_1 = __webpack_require__(97);
 const accountLog_entity_1 = __webpack_require__(79);
@@ -9462,8 +9588,9 @@ const userBalance_entity_1 = __webpack_require__(81);
 const userBalance_service_1 = __webpack_require__(34);
 const verification_entity_1 = __webpack_require__(101);
 const verification_service_1 = __webpack_require__(100);
-const chat_controller_1 = __webpack_require__(168);
-const chat_service_2 = __webpack_require__(169);
+const voice_module_1 = __webpack_require__(169);
+const chat_controller_1 = __webpack_require__(181);
+const chat_service_2 = __webpack_require__(182);
 let ChatModule = class ChatModule {
 };
 exports.ChatModule = ChatModule;
@@ -9491,7 +9618,9 @@ exports.ChatModule = ChatModule = __decorate([
                 badWords_entity_1.BadWordsEntity,
                 violationLog_entity_1.ViolationLogEntity,
                 models_entity_1.ModelsEntity,
+                appVoice_entity_1.AppVoiceEntity,
             ]),
+            voice_module_1.VoiceModule,
         ],
         controllers: [chat_controller_1.ChatController],
         providers: [
@@ -9518,7 +9647,7 @@ exports.ChatModule = ChatModule = __decorate([
 
 
 /***/ }),
-/* 152 */
+/* 153 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
@@ -9537,9 +9666,10 @@ exports.OpenAIChatService = void 0;
 const utils_1 = __webpack_require__(36);
 const correctApiBaseUrl_1 = __webpack_require__(70);
 const common_1 = __webpack_require__(2);
-const openai_1 = __webpack_require__(153);
+const axios_1 = __webpack_require__(39);
+const openai_1 = __webpack_require__(154);
 const globalConfig_service_1 = __webpack_require__(74);
-const netSearch_service_1 = __webpack_require__(154);
+const netSearch_service_1 = __webpack_require__(155);
 let OpenAIChatService = class OpenAIChatService {
     globalConfigService;
     netSearchService;
@@ -9813,7 +9943,7 @@ let OpenAIChatService = class OpenAIChatService {
         return deepThinkingType === 2 && result.full_content.length > 0;
     }
     async handleRegularResponse(messagesHistory, inputs, result) {
-        const { apiKey, model, proxyUrl, timeout, temperature, max_tokens, searchResults, images, abortController, onProgress, } = inputs;
+        const { apiKey, model, proxyUrl, timeout, temperature, max_tokens, searchResults, images, userId, abortController, onProgress, } = inputs;
         const processedMessages = this.prepareSystemMessage(messagesHistory, {
             searchResults,
             images,
@@ -9825,12 +9955,13 @@ let OpenAIChatService = class OpenAIChatService {
             timeout,
             temperature,
             max_tokens,
+            userId,
             abortController,
             onProgress,
         }, result);
     }
     async chat(messagesHistory, inputs) {
-        const { chatId, maxModelTokens, max_tokens, apiKey, model, modelName, temperature, prompt, timeout, proxyUrl, modelAvatar, usingDeepThinking, usingNetwork, extraParam, deepThinkingType, onProgress, onFailure, onDatabase, abortController, } = inputs;
+        const { chatId, userId, maxModelTokens, max_tokens, apiKey, model, modelName, temperature, prompt, timeout, proxyUrl, modelAvatar, usingDeepThinking, usingNetwork, extraParam, deepThinkingType, onProgress, onFailure, onDatabase, abortController, } = inputs;
         const originalMessagesHistory = JSON.parse(JSON.stringify(messagesHistory));
         const result = {
             chatId,
@@ -9904,64 +10035,67 @@ let OpenAIChatService = class OpenAIChatService {
         }
     }
     async chatFree(prompt, systemMessage, messagesHistory, imageUrl) {
-        const { openaiBaseUrl = '', openaiBaseKey = '', openaiBaseModel, } = await this.globalConfigService.getConfigs([
-            'openaiBaseKey',
-            'openaiBaseUrl',
-            'openaiBaseModel',
-        ]);
-        const key = openaiBaseKey;
-        const proxyUrl = openaiBaseUrl;
-        let requestData = [];
-        if (systemMessage) {
-            requestData.push({
-                role: 'system',
-                content: systemMessage,
-            });
-        }
+        let botContent = systemMessage || '';
+        const messages = [];
         if (messagesHistory && messagesHistory.length > 0) {
-            requestData = requestData.concat(messagesHistory);
+            for (const msg of messagesHistory) {
+                if (msg?.role === 'system' && !botContent) {
+                    botContent = typeof msg.content === 'string' ? msg.content : botContent;
+                    continue;
+                }
+                messages.push(msg);
+            }
         }
         else {
-            if (imageUrl) {
-                requestData.push({
-                    role: 'user',
-                    content: [
-                        {
-                            type: 'text',
-                            text: prompt,
-                        },
-                        {
-                            type: 'image_url',
-                            image_url: {
-                                url: imageUrl,
-                            },
-                        },
-                    ],
-                });
-            }
-            else {
-                requestData.push({
-                    role: 'user',
-                    content: prompt,
-                });
-            }
+            messages.push({ role: 'user', content: prompt });
         }
+        const cfgKey = await this.globalConfigService.getConfigs(['xingchenApiKey']);
+        const xingchenApiKey = typeof cfgKey === 'string' ? cfgKey : cfgKey?.xingchenApiKey;
+        const useKey = xingchenApiKey || process.env.XINGCHEN_API_KEY || '';
+        const url = 'https://nlp.aliyuncs.com/v2/api/chat/send';
+        const headers = {
+            'Content-Type': 'application/json',
+            'x-fag-servicename': 'aca-chat-send',
+            'x-fag-appcode': 'aca',
+            Authorization: `Bearer ${useKey}`,
+            'X-AcA-DataInspection': 'enable',
+        };
+        const payload = {
+            input: {
+                messages,
+                aca: {
+                    botProfile: {
+                        name: 'AI助手',
+                        content: botContent || '',
+                    },
+                    userProfile: {
+                        userId: 'system',
+                    },
+                },
+            },
+        };
         try {
-            const openai = new openai_1.default({
-                apiKey: key,
-                baseURL: await (0, correctApiBaseUrl_1.correctApiBaseUrl)(proxyUrl),
-            });
-            const response = await openai.chat.completions.create({
-                model: openaiBaseModel || 'gpt-4o-mini',
-                messages: requestData,
-            }, {
-                timeout: 30000,
-            });
-            return response.choices[0].message.content;
+            const resp = await axios_1.default.post(url, payload, { headers, timeout: 30000 });
+            const data = resp.data || {};
+            let text = '';
+            try {
+                const choices = data?.data?.choices || data?.choices;
+                if (choices?.length) {
+                    const msgs = choices[0]?.messages;
+                    if (Array.isArray(msgs) && msgs.length)
+                        text = msgs[0]?.content || '';
+                }
+                if (!text && typeof data?.output === 'string')
+                    text = data.output;
+                if (!text && typeof data?.content === 'string')
+                    text = data.content;
+            }
+            catch (_) { }
+            return text;
         }
         catch (error) {
             const errorMessage = (0, utils_1.handleError)(error);
-            common_1.Logger.error(`全局模型调用失败: ${errorMessage}`, 'OpenAIChatService');
+            common_1.Logger.error(`星尘全局模型调用失败: ${errorMessage}`, 'OpenAIChatService');
             return;
         }
     }
@@ -10019,50 +10153,116 @@ let OpenAIChatService = class OpenAIChatService {
         return processedMessages;
     }
     async handleOpenAIChat(messagesHistory, inputs, result) {
-        const { apiKey, model, proxyUrl, timeout, temperature, max_tokens, abortController, onProgress, } = inputs;
-        const streamData = {
-            model,
-            messages: messagesHistory,
-            stream: true,
-            temperature,
-        };
-        const openai = new openai_1.default({
-            apiKey: apiKey,
-            baseURL: await (0, correctApiBaseUrl_1.correctApiBaseUrl)(proxyUrl),
-            timeout: timeout,
-        });
-        try {
-            common_1.Logger.debug(`对话请求 - Messages: ${JSON.stringify(streamData.messages)}`, 'OpenAIChatService');
-            const stream = await openai.chat.completions.create({
-                model: streamData.model,
-                messages: streamData.messages,
-                stream: true,
-                max_tokens: max_tokens,
-                temperature: streamData.temperature,
-            }, {
-                signal: abortController.signal,
-            });
-            for await (const chunk of stream) {
-                if (abortController.signal.aborted) {
-                    break;
-                }
-                const content = chunk.choices[0]?.delta?.content || '';
-                if (content) {
-                    result.content = [
-                        {
-                            type: 'text',
-                            text: content,
-                        },
-                    ];
-                    result.full_content += content;
-                    onProgress?.({
-                        content: result.content,
-                    });
-                }
+        const { apiKey, model, timeout, onProgress, userId } = inputs;
+        let botContent = '';
+        const filteredMessages = [];
+        for (const msg of messagesHistory || []) {
+            if (msg?.role === 'system' && !botContent) {
+                botContent = typeof msg.content === 'string' ? msg.content : '';
+                continue;
             }
+            filteredMessages.push(msg);
+        }
+        const normalizedMessages = filteredMessages.map((m) => {
+            if (Array.isArray(m?.content)) {
+                const text = m.content
+                    .map((it) => {
+                    if (typeof it === 'string')
+                        return it;
+                    if (it?.type === 'image_url')
+                        return '';
+                    return it?.text ?? '';
+                })
+                    .join('');
+                return { ...m, content: text };
+            }
+            return m;
+        });
+        const cfgKey2 = await this.globalConfigService.getConfigs(['xingchenApiKey']);
+        const xingchenApiKey = typeof cfgKey2 === 'string' ? cfgKey2 : cfgKey2?.xingchenApiKey;
+        const useKey = xingchenApiKey || process.env.XINGCHEN_API_KEY || apiKey;
+        const url = 'https://nlp.aliyuncs.com/v2/api/chat/send';
+        const headers = {
+            'Content-Type': 'application/json',
+            'x-fag-servicename': 'aca-chat-send-sse',
+            'x-fag-appcode': 'aca',
+            Authorization: `Bearer ${useKey}`,
+            'X-AcA-DataInspection': 'enable',
+            'X-AcA-SSE': 'enable',
+        };
+        const payload = {
+            input: {
+                messages: normalizedMessages,
+                aca: {
+                    botProfile: {
+                        name: model || 'AI助手',
+                        content: botContent || '',
+                    },
+                    userProfile: {
+                        userId: userId || 'anonymous',
+                    },
+                },
+            },
+            parameters: { incrementalOutput: true },
+        };
+        try {
+            common_1.Logger.debug(`星尘SSE请求 - Payload: ${JSON.stringify(payload)}`, 'OpenAIChatService');
+            const resp = await axios_1.default.post(url, payload, {
+                headers,
+                timeout,
+                responseType: 'stream',
+                signal: inputs.abortController?.signal,
+            });
+            const stream = resp.data;
+            let buffer = '';
+            await new Promise((resolve, reject) => {
+                stream.on('data', (chunk) => {
+                    if (inputs.abortController?.signal.aborted)
+                        return;
+                    const textChunk = typeof chunk === 'string' ? chunk : chunk.toString('utf8');
+                    buffer += textChunk;
+                    let idx;
+                    while ((idx = buffer.indexOf('\n')) >= 0) {
+                        let line = buffer.slice(0, idx);
+                        buffer = buffer.slice(idx + 1);
+                        line = line.trim();
+                        if (!line)
+                            continue;
+                        if (line.startsWith('id:') || line.startsWith('event:') || line.startsWith('retry:')) {
+                            continue;
+                        }
+                        if (line.startsWith('data:'))
+                            line = line.slice(5).trim();
+                        let deltaText = '';
+                        try {
+                            const obj = JSON.parse(line);
+                            const choices = obj?.data?.choices || obj?.choices;
+                            if (choices?.length) {
+                                const msgs = choices[0]?.messages;
+                                if (Array.isArray(msgs) && msgs.length)
+                                    deltaText = msgs[0]?.content || '';
+                            }
+                            if (!deltaText)
+                                deltaText = obj?.delta?.content || obj?.content || '';
+                            if (!deltaText && typeof obj === 'string')
+                                deltaText = obj;
+                        }
+                        catch {
+                            deltaText = line;
+                        }
+                        if (deltaText) {
+                            result.content = [{ type: 'text', text: deltaText }];
+                            result.full_content += deltaText;
+                            onProgress?.({ content: result.content });
+                        }
+                    }
+                });
+                stream.on('end', () => resolve());
+                stream.on('error', err => reject(err));
+            });
         }
         catch (error) {
-            common_1.Logger.error(`OpenAI请求失败: ${(0, utils_1.handleError)(error)}`, 'OpenAIChatService');
+            common_1.Logger.error(`星尘SSE请求失败: ${(0, utils_1.handleError)(error)}`, 'OpenAIChatService');
             throw error;
         }
     }
@@ -10075,13 +10275,13 @@ exports.OpenAIChatService = OpenAIChatService = __decorate([
 
 
 /***/ }),
-/* 153 */
+/* 154 */
 /***/ ((module) => {
 
 module.exports = require("openai");
 
 /***/ }),
-/* 154 */
+/* 155 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
@@ -10099,7 +10299,7 @@ Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.NetSearchService = void 0;
 const utils_1 = __webpack_require__(36);
 const common_1 = __webpack_require__(2);
-const cross_fetch_1 = __webpack_require__(155);
+const cross_fetch_1 = __webpack_require__(156);
 const globalConfig_service_1 = __webpack_require__(74);
 let NetSearchService = class NetSearchService {
     globalConfigService;
@@ -10272,13 +10472,13 @@ exports.NetSearchService = NetSearchService = __decorate([
 
 
 /***/ }),
-/* 155 */
+/* 156 */
 /***/ ((module) => {
 
 module.exports = require("cross-fetch");
 
 /***/ }),
-/* 156 */
+/* 157 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
@@ -10300,7 +10500,7 @@ exports.ChatGroupService = void 0;
 const common_1 = __webpack_require__(2);
 const typeorm_1 = __webpack_require__(33);
 const axios_1 = __webpack_require__(39);
-const pdf = __webpack_require__(157);
+const pdf = __webpack_require__(158);
 const typeorm_2 = __webpack_require__(3);
 const app_entity_1 = __webpack_require__(106);
 const models_service_1 = __webpack_require__(76);
@@ -10392,13 +10592,16 @@ let ChatGroupService = class ChatGroupService {
                 where: params,
                 order: { isSticky: 'DESC', updatedAt: 'DESC' },
             });
-            return res;
             const appIds = res.filter(t => t.appId).map(t => t.appId);
-            const appInfos = await this.appEntity.find({ where: { id: (0, typeorm_2.In)(appIds) } });
-            return res.map((item) => {
-                item.appLogo = appInfos.find(t => t.id === item.appId)?.coverImg;
-                return item;
-            });
+            let mapped = res;
+            if (appIds.length) {
+                const appInfos = await this.appEntity.find({ where: { id: (0, typeorm_2.In)(appIds) } });
+                mapped = res.map((item) => {
+                    item.appLogo = appInfos.find(t => t.id === item.appId)?.coverImg;
+                    return item;
+                });
+            }
+            return mapped;
         }
         catch (error) {
             console.log('error: ', error);
@@ -10511,13 +10714,13 @@ exports.ChatGroupService = ChatGroupService = __decorate([
 
 
 /***/ }),
-/* 157 */
+/* 158 */
 /***/ ((module) => {
 
 module.exports = require("pdf-parse");
 
 /***/ }),
-/* 158 */
+/* 159 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
@@ -10540,7 +10743,7 @@ const balance_constant_1 = __webpack_require__(35);
 const utils_1 = __webpack_require__(36);
 const common_1 = __webpack_require__(2);
 const typeorm_1 = __webpack_require__(33);
-const exceljs_1 = __webpack_require__(159);
+const exceljs_1 = __webpack_require__(160);
 const typeorm_2 = __webpack_require__(3);
 const chatGroup_entity_1 = __webpack_require__(82);
 const user_entity_1 = __webpack_require__(83);
@@ -10920,13 +11123,13 @@ exports.ChatLogService = ChatLogService = __decorate([
 
 
 /***/ }),
-/* 159 */
+/* 160 */
 /***/ ((module) => {
 
 module.exports = require("exceljs");
 
 /***/ }),
-/* 160 */
+/* 161 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
@@ -10982,7 +11185,7 @@ exports.PluginEntity = PluginEntity = __decorate([
 
 
 /***/ }),
-/* 161 */
+/* 162 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
@@ -10999,16 +11202,16 @@ var _a, _b;
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.UploadService = void 0;
 const utils_1 = __webpack_require__(36);
-const client_s3_1 = __webpack_require__(162);
+const client_s3_1 = __webpack_require__(163);
 const common_1 = __webpack_require__(2);
-const ALIOSS = __webpack_require__(163);
+const ALIOSS = __webpack_require__(164);
 const axios_1 = __webpack_require__(39);
-const TENCENTCOS = __webpack_require__(164);
-const FormData = __webpack_require__(165);
+const TENCENTCOS = __webpack_require__(165);
+const FormData = __webpack_require__(166);
 const fs_1 = __webpack_require__(18);
-const mime = __webpack_require__(166);
+const mime = __webpack_require__(167);
 const path = __webpack_require__(20);
-const streamToBuffer = __webpack_require__(167);
+const streamToBuffer = __webpack_require__(168);
 const globalConfig_service_1 = __webpack_require__(74);
 const redisCache_service_1 = __webpack_require__(28);
 const blacklist = ['exe', 'sh', 'bat', 'js', 'php', 'py'];
@@ -11383,43 +11586,803 @@ exports.UploadService = UploadService = __decorate([
 
 
 /***/ }),
-/* 162 */
+/* 163 */
 /***/ ((module) => {
 
 module.exports = require("@aws-sdk/client-s3");
 
 /***/ }),
-/* 163 */
+/* 164 */
 /***/ ((module) => {
 
 module.exports = require("ali-oss");
 
 /***/ }),
-/* 164 */
+/* 165 */
 /***/ ((module) => {
 
 module.exports = require("cos-nodejs-sdk-v5");
 
 /***/ }),
-/* 165 */
+/* 166 */
 /***/ ((module) => {
 
 module.exports = require("form-data");
 
 /***/ }),
-/* 166 */
+/* 167 */
 /***/ ((module) => {
 
 module.exports = require("mime-types");
 
 /***/ }),
-/* 167 */
+/* 168 */
 /***/ ((module) => {
 
 module.exports = require("stream-to-buffer");
 
 /***/ }),
-/* 168 */
+/* 169 */
+/***/ (function(__unused_webpack_module, exports, __webpack_require__) {
+
+
+var __decorate = (this && this.__decorate) || function (decorators, target, key, desc) {
+    var c = arguments.length, r = c < 3 ? target : desc === null ? desc = Object.getOwnPropertyDescriptor(target, key) : desc, d;
+    if (typeof Reflect === "object" && typeof Reflect.decorate === "function") r = Reflect.decorate(decorators, target, key, desc);
+    else for (var i = decorators.length - 1; i >= 0; i--) if (d = decorators[i]) r = (c < 3 ? d(r) : c > 3 ? d(target, key, r) : d(target, key)) || r;
+    return c > 3 && r && Object.defineProperty(target, key, r), r;
+};
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.VoiceModule = void 0;
+const common_1 = __webpack_require__(2);
+const voice_controller_1 = __webpack_require__(170);
+const voice_service_1 = __webpack_require__(171);
+const globalConfig_module_1 = __webpack_require__(173);
+const upload_module_1 = __webpack_require__(178);
+let VoiceModule = class VoiceModule {
+};
+exports.VoiceModule = VoiceModule;
+exports.VoiceModule = VoiceModule = __decorate([
+    (0, common_1.Module)({
+        imports: [globalConfig_module_1.GlobalConfigModule, upload_module_1.UploadModule],
+        controllers: [voice_controller_1.VoiceController],
+        providers: [voice_service_1.VoiceService],
+        exports: [voice_service_1.VoiceService],
+    })
+], VoiceModule);
+
+
+/***/ }),
+/* 170 */
+/***/ (function(__unused_webpack_module, exports, __webpack_require__) {
+
+
+var __decorate = (this && this.__decorate) || function (decorators, target, key, desc) {
+    var c = arguments.length, r = c < 3 ? target : desc === null ? desc = Object.getOwnPropertyDescriptor(target, key) : desc, d;
+    if (typeof Reflect === "object" && typeof Reflect.decorate === "function") r = Reflect.decorate(decorators, target, key, desc);
+    else for (var i = decorators.length - 1; i >= 0; i--) if (d = decorators[i]) r = (c < 3 ? d(r) : c > 3 ? d(target, key, r) : d(target, key)) || r;
+    return c > 3 && r && Object.defineProperty(target, key, r), r;
+};
+var __metadata = (this && this.__metadata) || function (k, v) {
+    if (typeof Reflect === "object" && typeof Reflect.metadata === "function") return Reflect.metadata(k, v);
+};
+var __param = (this && this.__param) || function (paramIndex, decorator) {
+    return function (target, key) { decorator(target, key, paramIndex); }
+};
+var _a;
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.VoiceController = void 0;
+const jwtAuth_guard_1 = __webpack_require__(87);
+const common_1 = __webpack_require__(2);
+const swagger_1 = __webpack_require__(14);
+const voice_service_1 = __webpack_require__(171);
+let VoiceController = class VoiceController {
+    voiceService;
+    constructor(voiceService) {
+        this.voiceService = voiceService;
+    }
+    enroll(body) {
+        return this.voiceService.enroll(body);
+    }
+    list(query) {
+        return this.voiceService.list(query);
+    }
+    detail(voiceId) {
+        return this.voiceService.query(voiceId);
+    }
+    update(body) {
+        return this.voiceService.update(body);
+    }
+    remove(body) {
+        return this.voiceService.remove(body);
+    }
+    preview(body) {
+        return this.voiceService.preview(body);
+    }
+    getParams(voiceId) {
+        return this.voiceService.getVoiceParams(voiceId);
+    }
+    setParams(body) {
+        return this.voiceService.setVoiceParams(body);
+    }
+};
+exports.VoiceController = VoiceController;
+__decorate([
+    (0, common_1.Post)('enroll'),
+    (0, swagger_1.ApiOperation)({ summary: '声音复刻：创建音色' }),
+    (0, common_1.UseGuards)(jwtAuth_guard_1.JwtAuthGuard),
+    (0, swagger_1.ApiBearerAuth)(),
+    __param(0, (0, common_1.Body)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object]),
+    __metadata("design:returntype", void 0)
+], VoiceController.prototype, "enroll", null);
+__decorate([
+    (0, common_1.Get)('list'),
+    (0, swagger_1.ApiOperation)({ summary: '查询音色列表' }),
+    (0, common_1.UseGuards)(jwtAuth_guard_1.JwtAuthGuard),
+    (0, swagger_1.ApiBearerAuth)(),
+    __param(0, (0, common_1.Query)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object]),
+    __metadata("design:returntype", void 0)
+], VoiceController.prototype, "list", null);
+__decorate([
+    (0, common_1.Get)('detail/:voiceId'),
+    (0, swagger_1.ApiOperation)({ summary: '查询音色详情/状态' }),
+    (0, common_1.UseGuards)(jwtAuth_guard_1.JwtAuthGuard),
+    (0, swagger_1.ApiBearerAuth)(),
+    __param(0, (0, common_1.Param)('voiceId')),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [String]),
+    __metadata("design:returntype", void 0)
+], VoiceController.prototype, "detail", null);
+__decorate([
+    (0, common_1.Post)('update'),
+    (0, swagger_1.ApiOperation)({ summary: '更新音色（训练）' }),
+    (0, common_1.UseGuards)(jwtAuth_guard_1.JwtAuthGuard),
+    (0, swagger_1.ApiBearerAuth)(),
+    __param(0, (0, common_1.Body)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object]),
+    __metadata("design:returntype", void 0)
+], VoiceController.prototype, "update", null);
+__decorate([
+    (0, common_1.Post)('delete'),
+    (0, swagger_1.ApiOperation)({ summary: '删除音色' }),
+    (0, common_1.UseGuards)(jwtAuth_guard_1.JwtAuthGuard),
+    (0, swagger_1.ApiBearerAuth)(),
+    __param(0, (0, common_1.Body)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object]),
+    __metadata("design:returntype", void 0)
+], VoiceController.prototype, "remove", null);
+__decorate([
+    (0, common_1.Post)('preview'),
+    (0, swagger_1.ApiOperation)({ summary: '试听：根据音色合成音频并返回URL' }),
+    (0, common_1.UseGuards)(jwtAuth_guard_1.JwtAuthGuard),
+    (0, swagger_1.ApiBearerAuth)(),
+    __param(0, (0, common_1.Body)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object]),
+    __metadata("design:returntype", void 0)
+], VoiceController.prototype, "preview", null);
+__decorate([
+    (0, common_1.Get)('params/:voiceId'),
+    (0, swagger_1.ApiOperation)({ summary: '获取音色默认合成参数' }),
+    (0, common_1.UseGuards)(jwtAuth_guard_1.JwtAuthGuard),
+    (0, swagger_1.ApiBearerAuth)(),
+    __param(0, (0, common_1.Param)('voiceId')),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [String]),
+    __metadata("design:returntype", void 0)
+], VoiceController.prototype, "getParams", null);
+__decorate([
+    (0, common_1.Post)('params'),
+    (0, swagger_1.ApiOperation)({ summary: '设置音色默认合成参数' }),
+    (0, common_1.UseGuards)(jwtAuth_guard_1.JwtAuthGuard),
+    (0, swagger_1.ApiBearerAuth)(),
+    __param(0, (0, common_1.Body)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object]),
+    __metadata("design:returntype", void 0)
+], VoiceController.prototype, "setParams", null);
+exports.VoiceController = VoiceController = __decorate([
+    (0, swagger_1.ApiTags)('voice'),
+    (0, common_1.Controller)('voice'),
+    __metadata("design:paramtypes", [typeof (_a = typeof voice_service_1.VoiceService !== "undefined" && voice_service_1.VoiceService) === "function" ? _a : Object])
+], VoiceController);
+
+
+/***/ }),
+/* 171 */
+/***/ (function(__unused_webpack_module, exports, __webpack_require__) {
+
+
+var __decorate = (this && this.__decorate) || function (decorators, target, key, desc) {
+    var c = arguments.length, r = c < 3 ? target : desc === null ? desc = Object.getOwnPropertyDescriptor(target, key) : desc, d;
+    if (typeof Reflect === "object" && typeof Reflect.decorate === "function") r = Reflect.decorate(decorators, target, key, desc);
+    else for (var i = decorators.length - 1; i >= 0; i--) if (d = decorators[i]) r = (c < 3 ? d(r) : c > 3 ? d(target, key, r) : d(target, key)) || r;
+    return c > 3 && r && Object.defineProperty(target, key, r), r;
+};
+var __metadata = (this && this.__metadata) || function (k, v) {
+    if (typeof Reflect === "object" && typeof Reflect.metadata === "function") return Reflect.metadata(k, v);
+};
+var _a, _b;
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.VoiceService = void 0;
+const common_1 = __webpack_require__(2);
+const axios_1 = __webpack_require__(39);
+const globalConfig_service_1 = __webpack_require__(74);
+const upload_service_1 = __webpack_require__(162);
+const COSY_CUSTOMIZATION_URL = 'https://dashscope.aliyuncs.com/api/v1/services/audio/tts/customization';
+const COSY_WS_URL = 'wss://dashscope.aliyuncs.com/api-ws/v1/inference/';
+let VoiceService = class VoiceService {
+    globalConfigService;
+    uploadService;
+    constructor(globalConfigService, uploadService) {
+        this.globalConfigService = globalConfigService;
+        this.uploadService = uploadService;
+    }
+    async getApiKey() {
+        const dashscopeApiKey = await this.globalConfigService.getConfigs(['dashscopeApiKey']);
+        const apiKey = dashscopeApiKey || process.env.DASHSCOPE_API_KEY;
+        if (!apiKey) {
+            throw new common_1.HttpException('未配置阿里百炼 DashScope API Key。请在系统配置中设置 dashscopeApiKey，或在环境变量中设置 DASHSCOPE_API_KEY。', common_1.HttpStatus.BAD_REQUEST);
+        }
+        return apiKey;
+    }
+    getAxiosHeaders(apiKey) {
+        return {
+            Authorization: `Bearer ${apiKey}`,
+            'Content-Type': 'application/json',
+        };
+    }
+    async getDefaultModel() {
+        const cosyvoiceDefaultModel = await this.globalConfigService.getConfigs(['cosyvoiceDefaultModel']);
+        return cosyvoiceDefaultModel || 'cosyvoice-v2';
+    }
+    async enroll(body) {
+        const { prefix, url } = body;
+        const targetModel = body.targetModel || (await this.getDefaultModel());
+        if (!prefix || !url) {
+            throw new common_1.HttpException('prefix 与 url 为必填', common_1.HttpStatus.BAD_REQUEST);
+        }
+        const apiKey = await this.getApiKey();
+        const payload = {
+            model: 'voice-enrollment',
+            input: {
+                action: 'create_voice',
+                target_model: targetModel,
+                prefix,
+                url,
+            },
+        };
+        const res = await axios_1.default.post(COSY_CUSTOMIZATION_URL, payload, { headers: this.getAxiosHeaders(apiKey) });
+        return res.data;
+    }
+    async list(query) {
+        const { prefix = null, page_index = 0, page_size = 10 } = query || {};
+        const apiKey = await this.getApiKey();
+        const payload = {
+            model: 'voice-enrollment',
+            input: {
+                action: 'list_voice',
+                prefix,
+                page_index,
+                page_size,
+            },
+        };
+        const res = await axios_1.default.post(COSY_CUSTOMIZATION_URL, payload, { headers: this.getAxiosHeaders(apiKey) });
+        return res.data;
+    }
+    async query(voiceId) {
+        if (!voiceId)
+            throw new common_1.HttpException('voiceId 必填', common_1.HttpStatus.BAD_REQUEST);
+        const apiKey = await this.getApiKey();
+        const payload = {
+            model: 'voice-enrollment',
+            input: {
+                action: 'query_voice',
+                voice_id: voiceId,
+            },
+        };
+        const res = await axios_1.default.post(COSY_CUSTOMIZATION_URL, payload, { headers: this.getAxiosHeaders(apiKey) });
+        return res.data;
+    }
+    async update(body) {
+        const { voice_id, url } = body;
+        if (!voice_id || !url)
+            throw new common_1.HttpException('voice_id 与 url 必填', common_1.HttpStatus.BAD_REQUEST);
+        const apiKey = await this.getApiKey();
+        const payload = {
+            model: 'voice-enrollment',
+            input: {
+                action: 'update_voice',
+                voice_id,
+                url,
+            },
+        };
+        const res = await axios_1.default.post(COSY_CUSTOMIZATION_URL, payload, { headers: this.getAxiosHeaders(apiKey) });
+        return res.data;
+    }
+    async remove(body) {
+        const { voice_id } = body;
+        if (!voice_id)
+            throw new common_1.HttpException('voice_id 必填', common_1.HttpStatus.BAD_REQUEST);
+        const apiKey = await this.getApiKey();
+        const payload = {
+            model: 'voice-enrollment',
+            input: {
+                action: 'delete_voice',
+                voice_id,
+            },
+        };
+        const res = await axios_1.default.post(COSY_CUSTOMIZATION_URL, payload, { headers: this.getAxiosHeaders(apiKey) });
+        return res.data;
+    }
+    async getVoiceParams(voiceId) {
+        if (!voiceId)
+            return null;
+        const key = `voiceParams:${voiceId}`;
+        const raw = (await this.globalConfigService.getConfigs([key]));
+        if (!raw)
+            return null;
+        try {
+            return JSON.parse(raw);
+        }
+        catch {
+            return null;
+        }
+    }
+    async setVoiceParams(body) {
+        const { voice_id, params } = body;
+        if (!voice_id || !params)
+            throw new common_1.HttpException('voice_id 与 params 必填', common_1.HttpStatus.BAD_REQUEST);
+        const key = `voiceParams:${voice_id}`;
+        await this.globalConfigService.createOrUpdate({ configKey: key, configVal: JSON.stringify(params), status: 1 });
+        return { success: true };
+    }
+    async preview(body) {
+        const { voice_id, text } = body;
+        if (!voice_id || !text)
+            throw new common_1.HttpException('voice_id 与 text 必填', common_1.HttpStatus.BAD_REQUEST);
+        const saved = (await this.getVoiceParams(voice_id)) || {};
+        const format = (body.format || saved.format || 'mp3');
+        const sample_rate = Number(body.sample_rate ?? saved.sample_rate ?? 22050);
+        const volume = Number(body.volume ?? saved.volume ?? 50);
+        const rate = Number(body.rate ?? saved.rate ?? 1);
+        const pitch = Number(body.pitch ?? saved.pitch ?? 1);
+        const lowerId = (voice_id || '').toLowerCase();
+        let modelToUse;
+        if (lowerId.startsWith('cosyvoice-v3-plus-'))
+            modelToUse = 'cosyvoice-v3-plus';
+        else if (lowerId.startsWith('cosyvoice-v3-'))
+            modelToUse = 'cosyvoice-v3';
+        else if (lowerId.startsWith('cosyvoice-v2-'))
+            modelToUse = 'cosyvoice-v2';
+        else
+            modelToUse = body.model || (await this.getDefaultModel());
+        const apiKey = await this.getApiKey();
+        let WS;
+        try {
+            const WSMod = await Promise.resolve().then(() => __webpack_require__(172));
+            WS = WSMod?.default || WSMod;
+            if (!WS)
+                throw new Error('ws module not resolved');
+        }
+        catch (e) {
+            common_1.Logger.error('缺少依赖 ws，请先安装: pnpm add ws', 'VoiceService');
+            throw new common_1.HttpException('服务器未安装 ws 依赖，无法进行WebSocket试听。请联系管理员安装依赖后重试。', common_1.HttpStatus.NOT_IMPLEMENTED);
+        }
+        const taskId = cryptoRandomId();
+        const headers = {
+            Authorization: `Bearer ${apiKey}`,
+            'X-DashScope-DataInspection': 'enable',
+        };
+        const ws = new WS(COSY_WS_URL, { headers });
+        const audioBuffers = [];
+        const uploadOnFinish = new Promise((resolve, reject) => {
+            ws.on('open', () => {
+                const runTask = {
+                    header: { action: 'run-task', task_id: taskId, streaming: 'duplex' },
+                    payload: {
+                        task_group: 'audio',
+                        task: 'tts',
+                        function: 'SpeechSynthesizer',
+                        model: modelToUse,
+                        parameters: { text_type: 'PlainText', voice: voice_id, format, sample_rate, volume, rate, pitch },
+                        input: {},
+                    },
+                };
+                ws.send(JSON.stringify(runTask));
+            });
+            ws.on('message', (data, isBinary) => {
+                if (isBinary) {
+                    audioBuffers.push(Buffer.from(data));
+                    return;
+                }
+                try {
+                    const msg = JSON.parse(data.toString());
+                    const event = msg?.header?.event;
+                    if (event === 'task-started') {
+                        const continueTask = {
+                            header: { action: 'continue-task', task_id: taskId, streaming: 'duplex' },
+                            payload: { input: { text } },
+                        };
+                        ws.send(JSON.stringify(continueTask));
+                        const finishTask = {
+                            header: { action: 'finish-task', task_id: taskId, streaming: 'duplex' },
+                            payload: { input: {} },
+                        };
+                        ws.send(JSON.stringify(finishTask));
+                    }
+                    else if (event === 'task-finished') {
+                        ws.close();
+                    }
+                    else if (event === 'task-failed') {
+                        ws.close();
+                        reject(new common_1.HttpException(msg?.header?.error_message || 'TTS任务失败', common_1.HttpStatus.BAD_GATEWAY));
+                    }
+                }
+                catch (err) {
+                }
+            });
+            ws.on('close', async () => {
+                try {
+                    if (!audioBuffers.length)
+                        throw new Error('未收到音频数据');
+                    const buffer = Buffer.concat(audioBuffers);
+                    const mimetype = format === 'mp3' ? 'audio/mpeg' : (format === 'wav' ? 'audio/wav' : 'application/octet-stream');
+                    const url = await this.uploadService.uploadFile({ buffer, mimetype }, 'voicePreview');
+                    resolve(url);
+                }
+                catch (e) {
+                    if (e instanceof common_1.HttpException)
+                        return reject(e);
+                    reject(new common_1.HttpException(e?.message || '音频上传失败', common_1.HttpStatus.INTERNAL_SERVER_ERROR));
+                }
+            });
+            ws.on('error', (err) => {
+                reject(new common_1.HttpException(err?.message || 'WebSocket错误', common_1.HttpStatus.BAD_GATEWAY));
+            });
+        });
+        const url = await uploadOnFinish;
+        return { url };
+    }
+};
+exports.VoiceService = VoiceService;
+exports.VoiceService = VoiceService = __decorate([
+    (0, common_1.Injectable)(),
+    __metadata("design:paramtypes", [typeof (_a = typeof globalConfig_service_1.GlobalConfigService !== "undefined" && globalConfig_service_1.GlobalConfigService) === "function" ? _a : Object, typeof (_b = typeof upload_service_1.UploadService !== "undefined" && upload_service_1.UploadService) === "function" ? _b : Object])
+], VoiceService);
+function cryptoRandomId() {
+    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function (c) {
+        const r = (Math.random() * 16) | 0, v = c == 'x' ? r : (r & 0x3) | 0x8;
+        return v.toString(16);
+    });
+}
+
+
+/***/ }),
+/* 172 */
+/***/ ((module) => {
+
+module.exports = require("ws");
+
+/***/ }),
+/* 173 */
+/***/ (function(__unused_webpack_module, exports, __webpack_require__) {
+
+
+var __decorate = (this && this.__decorate) || function (decorators, target, key, desc) {
+    var c = arguments.length, r = c < 3 ? target : desc === null ? desc = Object.getOwnPropertyDescriptor(target, key) : desc, d;
+    if (typeof Reflect === "object" && typeof Reflect.decorate === "function") r = Reflect.decorate(decorators, target, key, desc);
+    else for (var i = decorators.length - 1; i >= 0; i--) if (d = decorators[i]) r = (c < 3 ? d(r) : c > 3 ? d(target, key, r) : d(target, key)) || r;
+    return c > 3 && r && Object.defineProperty(target, key, r), r;
+};
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.GlobalConfigModule = void 0;
+const common_1 = __webpack_require__(2);
+const typeorm_1 = __webpack_require__(33);
+const chatLog_entity_1 = __webpack_require__(75);
+const config_entity_1 = __webpack_require__(73);
+const globalConfig_controller_1 = __webpack_require__(174);
+const globalConfig_service_1 = __webpack_require__(74);
+let GlobalConfigModule = class GlobalConfigModule {
+};
+exports.GlobalConfigModule = GlobalConfigModule;
+exports.GlobalConfigModule = GlobalConfigModule = __decorate([
+    (0, common_1.Global)(),
+    (0, common_1.Module)({
+        imports: [typeorm_1.TypeOrmModule.forFeature([config_entity_1.ConfigEntity, chatLog_entity_1.ChatLogEntity])],
+        providers: [globalConfig_service_1.GlobalConfigService],
+        controllers: [globalConfig_controller_1.GlobalConfigController],
+        exports: [globalConfig_service_1.GlobalConfigService],
+    })
+], GlobalConfigModule);
+
+
+/***/ }),
+/* 174 */
+/***/ (function(__unused_webpack_module, exports, __webpack_require__) {
+
+
+var __decorate = (this && this.__decorate) || function (decorators, target, key, desc) {
+    var c = arguments.length, r = c < 3 ? target : desc === null ? desc = Object.getOwnPropertyDescriptor(target, key) : desc, d;
+    if (typeof Reflect === "object" && typeof Reflect.decorate === "function") r = Reflect.decorate(decorators, target, key, desc);
+    else for (var i = decorators.length - 1; i >= 0; i--) if (d = decorators[i]) r = (c < 3 ? d(r) : c > 3 ? d(target, key, r) : d(target, key)) || r;
+    return c > 3 && r && Object.defineProperty(target, key, r), r;
+};
+var __metadata = (this && this.__metadata) || function (k, v) {
+    if (typeof Reflect === "object" && typeof Reflect.metadata === "function") return Reflect.metadata(k, v);
+};
+var __param = (this && this.__param) || function (paramIndex, decorator) {
+    return function (target, key) { decorator(target, key, paramIndex); }
+};
+var _a, _b, _c, _d, _e, _f;
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.GlobalConfigController = void 0;
+const adminAuth_guard_1 = __webpack_require__(86);
+const superAuth_guard_1 = __webpack_require__(103);
+const common_1 = __webpack_require__(2);
+const swagger_1 = __webpack_require__(14);
+const express_1 = __webpack_require__(104);
+const queryConfig_dto_1 = __webpack_require__(175);
+const setConfig_dto_1 = __webpack_require__(177);
+const globalConfig_service_1 = __webpack_require__(74);
+let GlobalConfigController = class GlobalConfigController {
+    globalConfigService;
+    constructor(globalConfigService) {
+        this.globalConfigService = globalConfigService;
+    }
+    queryAllConfig(req) {
+        return this.globalConfigService.queryAllConfig(req);
+    }
+    queryFrontConfig(query, req) {
+        return this.globalConfigService.queryFrontConfig(query, req);
+    }
+    queryConfig(body, req) {
+        return this.globalConfigService.queryConfig(body, req);
+    }
+    setConfig(body) {
+        return this.globalConfigService.setConfig(body);
+    }
+    queryNotice() {
+        return this.globalConfigService.queryNotice();
+    }
+};
+exports.GlobalConfigController = GlobalConfigController;
+__decorate([
+    (0, swagger_1.ApiOperation)({ summary: '查询所有配置' }),
+    (0, common_1.Get)('queryAll'),
+    (0, common_1.UseGuards)(adminAuth_guard_1.AdminAuthGuard),
+    (0, swagger_1.ApiBearerAuth)(),
+    __param(0, (0, common_1.Req)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [typeof (_b = typeof express_1.Request !== "undefined" && express_1.Request) === "function" ? _b : Object]),
+    __metadata("design:returntype", void 0)
+], GlobalConfigController.prototype, "queryAllConfig", null);
+__decorate([
+    (0, swagger_1.ApiOperation)({ summary: '查询前端网站的所有配置' }),
+    (0, common_1.Get)('queryFront'),
+    __param(0, (0, common_1.Query)()),
+    __param(1, (0, common_1.Req)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object, typeof (_c = typeof express_1.Request !== "undefined" && express_1.Request) === "function" ? _c : Object]),
+    __metadata("design:returntype", void 0)
+], GlobalConfigController.prototype, "queryFrontConfig", null);
+__decorate([
+    (0, swagger_1.ApiOperation)({ summary: '查询所有配置' }),
+    (0, common_1.Post)('query'),
+    (0, common_1.UseGuards)(adminAuth_guard_1.AdminAuthGuard),
+    (0, swagger_1.ApiBearerAuth)(),
+    __param(0, (0, common_1.Body)()),
+    __param(1, (0, common_1.Req)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [typeof (_d = typeof queryConfig_dto_1.QueryConfigDto !== "undefined" && queryConfig_dto_1.QueryConfigDto) === "function" ? _d : Object, typeof (_e = typeof express_1.Request !== "undefined" && express_1.Request) === "function" ? _e : Object]),
+    __metadata("design:returntype", void 0)
+], GlobalConfigController.prototype, "queryConfig", null);
+__decorate([
+    (0, swagger_1.ApiOperation)({ summary: '设置配置信息' }),
+    (0, common_1.Post)('set'),
+    (0, common_1.UseGuards)(superAuth_guard_1.SuperAuthGuard),
+    (0, swagger_1.ApiBearerAuth)(),
+    __param(0, (0, common_1.Body)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [typeof (_f = typeof setConfig_dto_1.SetConfigDto !== "undefined" && setConfig_dto_1.SetConfigDto) === "function" ? _f : Object]),
+    __metadata("design:returntype", void 0)
+], GlobalConfigController.prototype, "setConfig", null);
+__decorate([
+    (0, swagger_1.ApiOperation)({ summary: '用户端查询公告信息' }),
+    (0, common_1.Get)('notice'),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", []),
+    __metadata("design:returntype", void 0)
+], GlobalConfigController.prototype, "queryNotice", null);
+exports.GlobalConfigController = GlobalConfigController = __decorate([
+    (0, swagger_1.ApiTags)('config'),
+    (0, common_1.Controller)('config'),
+    __metadata("design:paramtypes", [typeof (_a = typeof globalConfig_service_1.GlobalConfigService !== "undefined" && globalConfig_service_1.GlobalConfigService) === "function" ? _a : Object])
+], GlobalConfigController);
+
+
+/***/ }),
+/* 175 */
+/***/ (function(__unused_webpack_module, exports, __webpack_require__) {
+
+
+var __decorate = (this && this.__decorate) || function (decorators, target, key, desc) {
+    var c = arguments.length, r = c < 3 ? target : desc === null ? desc = Object.getOwnPropertyDescriptor(target, key) : desc, d;
+    if (typeof Reflect === "object" && typeof Reflect.decorate === "function") r = Reflect.decorate(decorators, target, key, desc);
+    else for (var i = decorators.length - 1; i >= 0; i--) if (d = decorators[i]) r = (c < 3 ? d(r) : c > 3 ? d(target, key, r) : d(target, key)) || r;
+    return c > 3 && r && Object.defineProperty(target, key, r), r;
+};
+var __metadata = (this && this.__metadata) || function (k, v) {
+    if (typeof Reflect === "object" && typeof Reflect.metadata === "function") return Reflect.metadata(k, v);
+};
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.QueryConfigDto = void 0;
+const class_validator_1 = __webpack_require__(111);
+const class_transformer_1 = __webpack_require__(176);
+const swagger_1 = __webpack_require__(14);
+class QueryConfigDto {
+    keys;
+}
+exports.QueryConfigDto = QueryConfigDto;
+__decorate([
+    (0, swagger_1.ApiProperty)({
+        example: ['siteName', 'qqNumber'],
+        description: '想要查询的配置key',
+    }),
+    (0, class_validator_1.IsArray)(),
+    (0, class_validator_1.ArrayNotEmpty)(),
+    (0, class_transformer_1.Type)(() => String),
+    __metadata("design:type", Array)
+], QueryConfigDto.prototype, "keys", void 0);
+
+
+/***/ }),
+/* 176 */
+/***/ ((module) => {
+
+module.exports = require("class-transformer");
+
+/***/ }),
+/* 177 */
+/***/ (function(__unused_webpack_module, exports, __webpack_require__) {
+
+
+var __decorate = (this && this.__decorate) || function (decorators, target, key, desc) {
+    var c = arguments.length, r = c < 3 ? target : desc === null ? desc = Object.getOwnPropertyDescriptor(target, key) : desc, d;
+    if (typeof Reflect === "object" && typeof Reflect.decorate === "function") r = Reflect.decorate(decorators, target, key, desc);
+    else for (var i = decorators.length - 1; i >= 0; i--) if (d = decorators[i]) r = (c < 3 ? d(r) : c > 3 ? d(target, key, r) : d(target, key)) || r;
+    return c > 3 && r && Object.defineProperty(target, key, r), r;
+};
+var __metadata = (this && this.__metadata) || function (k, v) {
+    if (typeof Reflect === "object" && typeof Reflect.metadata === "function") return Reflect.metadata(k, v);
+};
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.SetConfigDto = void 0;
+const swagger_1 = __webpack_require__(14);
+const class_transformer_1 = __webpack_require__(176);
+const class_validator_1 = __webpack_require__(111);
+class SetConfigDto {
+    settings;
+}
+exports.SetConfigDto = SetConfigDto;
+__decorate([
+    (0, swagger_1.ApiProperty)({
+        example: [{ configKey: 'siteName', configVal: 'AIWeb' }],
+        description: '设置配置信息',
+    }),
+    (0, class_validator_1.IsArray)(),
+    (0, class_validator_1.ArrayNotEmpty)(),
+    (0, class_validator_1.ValidateNested)({ each: true }),
+    (0, class_transformer_1.Type)(() => Object),
+    __metadata("design:type", Array)
+], SetConfigDto.prototype, "settings", void 0);
+
+
+/***/ }),
+/* 178 */
+/***/ (function(__unused_webpack_module, exports, __webpack_require__) {
+
+
+var __decorate = (this && this.__decorate) || function (decorators, target, key, desc) {
+    var c = arguments.length, r = c < 3 ? target : desc === null ? desc = Object.getOwnPropertyDescriptor(target, key) : desc, d;
+    if (typeof Reflect === "object" && typeof Reflect.decorate === "function") r = Reflect.decorate(decorators, target, key, desc);
+    else for (var i = decorators.length - 1; i >= 0; i--) if (d = decorators[i]) r = (c < 3 ? d(r) : c > 3 ? d(target, key, r) : d(target, key)) || r;
+    return c > 3 && r && Object.defineProperty(target, key, r), r;
+};
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.UploadModule = void 0;
+const common_1 = __webpack_require__(2);
+const redisCache_module_1 = __webpack_require__(26);
+const upload_controller_1 = __webpack_require__(179);
+const upload_service_1 = __webpack_require__(162);
+let UploadModule = class UploadModule {
+};
+exports.UploadModule = UploadModule;
+exports.UploadModule = UploadModule = __decorate([
+    (0, common_1.Global)(),
+    (0, common_1.Module)({
+        imports: [redisCache_module_1.RedisCacheModule],
+        providers: [upload_service_1.UploadService],
+        controllers: [upload_controller_1.UploadController],
+        exports: [upload_service_1.UploadService],
+    })
+], UploadModule);
+
+
+/***/ }),
+/* 179 */
+/***/ (function(__unused_webpack_module, exports, __webpack_require__) {
+
+
+var __decorate = (this && this.__decorate) || function (decorators, target, key, desc) {
+    var c = arguments.length, r = c < 3 ? target : desc === null ? desc = Object.getOwnPropertyDescriptor(target, key) : desc, d;
+    if (typeof Reflect === "object" && typeof Reflect.decorate === "function") r = Reflect.decorate(decorators, target, key, desc);
+    else for (var i = decorators.length - 1; i >= 0; i--) if (d = decorators[i]) r = (c < 3 ? d(r) : c > 3 ? d(target, key, r) : d(target, key)) || r;
+    return c > 3 && r && Object.defineProperty(target, key, r), r;
+};
+var __metadata = (this && this.__metadata) || function (k, v) {
+    if (typeof Reflect === "object" && typeof Reflect.metadata === "function") return Reflect.metadata(k, v);
+};
+var __param = (this && this.__param) || function (paramIndex, decorator) {
+    return function (target, key) { decorator(target, key, paramIndex); }
+};
+var _a, _b;
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.UploadController = void 0;
+const jwtAuth_guard_1 = __webpack_require__(87);
+const common_1 = __webpack_require__(2);
+const platform_express_1 = __webpack_require__(180);
+const swagger_1 = __webpack_require__(14);
+const express_1 = __webpack_require__(104);
+const upload_service_1 = __webpack_require__(162);
+let UploadController = class UploadController {
+    uploadService;
+    constructor(uploadService) {
+        this.uploadService = uploadService;
+    }
+    async uploadFile(file, req, dir) {
+        return this.uploadService.uploadFile(file, dir, req.user);
+    }
+};
+exports.UploadController = UploadController;
+__decorate([
+    (0, common_1.Post)('file'),
+    (0, swagger_1.ApiOperation)({ summary: '上传文件' }),
+    (0, common_1.UseGuards)(jwtAuth_guard_1.JwtAuthGuard),
+    (0, swagger_1.ApiBearerAuth)(),
+    (0, common_1.UseInterceptors)((0, platform_express_1.FileInterceptor)('file', {
+        limits: {
+            fileSize: 10 * 1024 * 1024,
+        },
+    })),
+    __param(0, (0, common_1.UploadedFile)()),
+    __param(1, (0, common_1.Req)()),
+    __param(2, (0, common_1.Query)('dir')),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object, typeof (_b = typeof express_1.Request !== "undefined" && express_1.Request) === "function" ? _b : Object, String]),
+    __metadata("design:returntype", Promise)
+], UploadController.prototype, "uploadFile", null);
+exports.UploadController = UploadController = __decorate([
+    (0, swagger_1.ApiTags)('upload'),
+    (0, common_1.Controller)('upload'),
+    __metadata("design:paramtypes", [typeof (_a = typeof upload_service_1.UploadService !== "undefined" && upload_service_1.UploadService) === "function" ? _a : Object])
+], UploadController);
+
+
+/***/ }),
+/* 180 */
+/***/ ((module) => {
+
+module.exports = require("@nestjs/platform-express");
+
+/***/ }),
+/* 181 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
@@ -11440,10 +12403,10 @@ Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.ChatController = void 0;
 const swagger_1 = __webpack_require__(14);
 const jwtAuth_guard_1 = __webpack_require__(87);
-const chat_service_1 = __webpack_require__(169);
+const chat_service_1 = __webpack_require__(182);
 const common_1 = __webpack_require__(2);
 const express_1 = __webpack_require__(104);
-const chatProcess_dto_1 = __webpack_require__(170);
+const chatProcess_dto_1 = __webpack_require__(183);
 let ChatController = class ChatController {
     chatService;
     constructor(chatService) {
@@ -11489,7 +12452,7 @@ exports.ChatController = ChatController = __decorate([
 
 
 /***/ }),
-/* 169 */
+/* 182 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
@@ -11505,29 +12468,32 @@ var __metadata = (this && this.__metadata) || function (k, v) {
 var __param = (this && this.__param) || function (paramIndex, decorator) {
     return function (target, key) { decorator(target, key, paramIndex); }
 };
-var _a, _b, _c, _d, _e, _f, _g, _h, _j, _k, _l, _m, _o;
+var _a, _b, _c, _d, _e, _f, _g, _h, _j, _k, _l, _m, _o, _p, _q;
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.ChatService = void 0;
 const utils_1 = __webpack_require__(36);
 const common_1 = __webpack_require__(2);
 const typeorm_1 = __webpack_require__(33);
-const openai_1 = __webpack_require__(153);
+const openai_1 = __webpack_require__(154);
 const typeorm_2 = __webpack_require__(3);
-const chat_service_1 = __webpack_require__(152);
+const chat_service_1 = __webpack_require__(153);
 const app_entity_1 = __webpack_require__(106);
 const app_service_1 = __webpack_require__(105);
-const autoReply_service_1 = __webpack_require__(135);
-const badWords_service_1 = __webpack_require__(143);
-const chatGroup_service_1 = __webpack_require__(156);
-const chatLog_service_1 = __webpack_require__(158);
+const appVoice_entity_1 = __webpack_require__(108);
+const autoReply_service_1 = __webpack_require__(136);
+const badWords_service_1 = __webpack_require__(144);
+const chatGroup_service_1 = __webpack_require__(157);
+const chatLog_service_1 = __webpack_require__(159);
 const globalConfig_service_1 = __webpack_require__(74);
 const models_service_1 = __webpack_require__(76);
-const plugin_entity_1 = __webpack_require__(160);
-const upload_service_1 = __webpack_require__(161);
+const plugin_entity_1 = __webpack_require__(161);
+const upload_service_1 = __webpack_require__(162);
 const user_service_1 = __webpack_require__(97);
 const userBalance_service_1 = __webpack_require__(34);
+const voice_service_1 = __webpack_require__(171);
 let ChatService = class ChatService {
     appEntity;
+    appVoiceRepo;
     pluginEntity;
     openAIChatService;
     chatLogService;
@@ -11540,8 +12506,10 @@ let ChatService = class ChatService {
     chatGroupService;
     modelsService;
     appService;
-    constructor(appEntity, pluginEntity, openAIChatService, chatLogService, userBalanceService, userService, uploadService, badWordsService, autoReplyService, globalConfigService, chatGroupService, modelsService, appService) {
+    voiceService;
+    constructor(appEntity, appVoiceRepo, pluginEntity, openAIChatService, chatLogService, userBalanceService, userService, uploadService, badWordsService, autoReplyService, globalConfigService, chatGroupService, modelsService, appService, voiceService) {
         this.appEntity = appEntity;
+        this.appVoiceRepo = appVoiceRepo;
         this.pluginEntity = pluginEntity;
         this.openAIChatService = openAIChatService;
         this.chatLogService = chatLogService;
@@ -11554,6 +12522,7 @@ let ChatService = class ChatService {
         this.chatGroupService = chatGroupService;
         this.modelsService = modelsService;
         this.appService = appService;
+        this.voiceService = voiceService;
     }
     async chatProcess(body, req, res) {
         await this.userBalanceService.checkUserCertification(req.user.id);
@@ -11907,6 +12876,7 @@ let ChatService = class ChatService {
                     res.write(`\n${JSON.stringify(chatId)}`);
                     response = await this.openAIChatService.chat(messagesHistory, {
                         chatId: assistantLogId,
+                        userId: req.user?.id,
                         extraParam,
                         deepThinkingType,
                         max_tokens: max_tokens,
@@ -12214,21 +13184,47 @@ let ChatService = class ChatService {
     }
     async ttsProcess(body, req, res) {
         const { chatId, prompt } = body;
-        const detailKeyInfo = await this.modelsService.getCurrentModelKeyInfo('tts-1');
-        const { openaiBaseUrl, openaiBaseKey, openaiVoice } = await this.globalConfigService.getConfigs(['openaiBaseUrl', 'openaiBaseKey', 'openaiVoice']);
-        const { key, proxyUrl, deduct, deductType, timeout } = detailKeyInfo;
-        const useKey = key || openaiBaseKey;
-        const useTimeout = timeout * 1000;
-        await this.userBalanceService.validateBalance(req, deductType, deduct);
         common_1.Logger.debug(`开始TTS处理: ${prompt.substring(0, 50)}${prompt.length > 50 ? '...' : ''}`, 'TTSService');
         try {
+            const chatLog = await this.chatLogService.findOneChatLog(chatId);
+            const appId = chatLog?.appId;
+            if (appId) {
+                const map = await this.appVoiceRepo.findOne({ where: { appId, isDefault: 1 } });
+                const voiceId = map?.voiceId;
+                if (voiceId) {
+                    common_1.Logger.debug(`检测到应用(${appId})绑定音色: ${voiceId}，使用角色音色进行TTS`, 'TTSService');
+                    const { url } = await this.voiceService.preview({ voice_id: voiceId, text: prompt });
+                    try {
+                        const detailKeyInfo = await this.modelsService.getCurrentModelKeyInfo('tts-1');
+                        const { deduct, deductType } = detailKeyInfo;
+                        await this.userBalanceService.validateBalance(req, deductType, deduct);
+                        await this.userBalanceService.deductFromBalance(req.user.id, deductType, deduct);
+                    }
+                    catch (e) {
+                        common_1.Logger.warn(`[TTSService] 扣费配置缺失或校验失败，已跳过扣费: ${e?.message || e}`, 'TTSService');
+                    }
+                    await this.chatLogService.updateChatLog(chatId, { ttsUrl: url });
+                    return res.status(200).send({ ttsUrl: url });
+                }
+            }
+        }
+        catch (e) {
+            common_1.Logger.warn(`[TTSService] 角色音色路径检查失败: ${e?.message || e}`, 'TTSService');
+        }
+        try {
+            const detailKeyInfo = await this.modelsService.getCurrentModelKeyInfo('tts-1');
+            const { key, proxyUrl, deduct, deductType, timeout } = detailKeyInfo;
+            const { openaiBaseUrl, openaiBaseKey, openaiVoice } = await this.globalConfigService.getConfigs([
+                'openaiBaseUrl',
+                'openaiBaseKey',
+                'openaiVoice',
+            ]);
+            const useKey = key || openaiBaseKey;
+            const useTimeout = timeout * 1000;
+            await this.userBalanceService.validateBalance(req, deductType, deduct);
             const formattedUrl = (0, utils_1.formatUrl)(proxyUrl || openaiBaseUrl);
             const correctedProxyUrl = await (0, utils_1.correctApiBaseUrl)(formattedUrl);
-            const openai = new openai_1.OpenAI({
-                apiKey: useKey,
-                baseURL: correctedProxyUrl,
-                timeout: useTimeout,
-            });
+            const openai = new openai_1.OpenAI({ apiKey: useKey, baseURL: correctedProxyUrl, timeout: useTimeout });
             const response = await openai.audio.speech.create({
                 model: 'tts-1',
                 input: prompt,
@@ -12246,11 +13242,11 @@ let ChatService = class ChatService {
                 this.chatLogService.updateChatLog(chatId, { ttsUrl }),
                 this.userBalanceService.deductFromBalance(req.user.id, deductType, deduct),
             ]);
-            res.status(200).send({ ttsUrl });
+            return res.status(200).send({ ttsUrl });
         }
         catch (error) {
             common_1.Logger.error('TTS处理失败', error, 'TTSService');
-            res.status(500).send({ error: '语音合成请求处理失败' });
+            return res.status(500).send({ message: error?.message || '语音合成请求处理失败' });
         }
     }
 };
@@ -12258,13 +13254,14 @@ exports.ChatService = ChatService;
 exports.ChatService = ChatService = __decorate([
     (0, common_1.Injectable)(),
     __param(0, (0, typeorm_1.InjectRepository)(app_entity_1.AppEntity)),
-    __param(1, (0, typeorm_1.InjectRepository)(plugin_entity_1.PluginEntity)),
-    __metadata("design:paramtypes", [typeof (_a = typeof typeorm_2.Repository !== "undefined" && typeorm_2.Repository) === "function" ? _a : Object, typeof (_b = typeof typeorm_2.Repository !== "undefined" && typeorm_2.Repository) === "function" ? _b : Object, typeof (_c = typeof chat_service_1.OpenAIChatService !== "undefined" && chat_service_1.OpenAIChatService) === "function" ? _c : Object, typeof (_d = typeof chatLog_service_1.ChatLogService !== "undefined" && chatLog_service_1.ChatLogService) === "function" ? _d : Object, typeof (_e = typeof userBalance_service_1.UserBalanceService !== "undefined" && userBalance_service_1.UserBalanceService) === "function" ? _e : Object, typeof (_f = typeof user_service_1.UserService !== "undefined" && user_service_1.UserService) === "function" ? _f : Object, typeof (_g = typeof upload_service_1.UploadService !== "undefined" && upload_service_1.UploadService) === "function" ? _g : Object, typeof (_h = typeof badWords_service_1.BadWordsService !== "undefined" && badWords_service_1.BadWordsService) === "function" ? _h : Object, typeof (_j = typeof autoReply_service_1.AutoReplyService !== "undefined" && autoReply_service_1.AutoReplyService) === "function" ? _j : Object, typeof (_k = typeof globalConfig_service_1.GlobalConfigService !== "undefined" && globalConfig_service_1.GlobalConfigService) === "function" ? _k : Object, typeof (_l = typeof chatGroup_service_1.ChatGroupService !== "undefined" && chatGroup_service_1.ChatGroupService) === "function" ? _l : Object, typeof (_m = typeof models_service_1.ModelsService !== "undefined" && models_service_1.ModelsService) === "function" ? _m : Object, typeof (_o = typeof app_service_1.AppService !== "undefined" && app_service_1.AppService) === "function" ? _o : Object])
+    __param(1, (0, typeorm_1.InjectRepository)(appVoice_entity_1.AppVoiceEntity)),
+    __param(2, (0, typeorm_1.InjectRepository)(plugin_entity_1.PluginEntity)),
+    __metadata("design:paramtypes", [typeof (_a = typeof typeorm_2.Repository !== "undefined" && typeorm_2.Repository) === "function" ? _a : Object, typeof (_b = typeof typeorm_2.Repository !== "undefined" && typeorm_2.Repository) === "function" ? _b : Object, typeof (_c = typeof typeorm_2.Repository !== "undefined" && typeorm_2.Repository) === "function" ? _c : Object, typeof (_d = typeof chat_service_1.OpenAIChatService !== "undefined" && chat_service_1.OpenAIChatService) === "function" ? _d : Object, typeof (_e = typeof chatLog_service_1.ChatLogService !== "undefined" && chatLog_service_1.ChatLogService) === "function" ? _e : Object, typeof (_f = typeof userBalance_service_1.UserBalanceService !== "undefined" && userBalance_service_1.UserBalanceService) === "function" ? _f : Object, typeof (_g = typeof user_service_1.UserService !== "undefined" && user_service_1.UserService) === "function" ? _g : Object, typeof (_h = typeof upload_service_1.UploadService !== "undefined" && upload_service_1.UploadService) === "function" ? _h : Object, typeof (_j = typeof badWords_service_1.BadWordsService !== "undefined" && badWords_service_1.BadWordsService) === "function" ? _j : Object, typeof (_k = typeof autoReply_service_1.AutoReplyService !== "undefined" && autoReply_service_1.AutoReplyService) === "function" ? _k : Object, typeof (_l = typeof globalConfig_service_1.GlobalConfigService !== "undefined" && globalConfig_service_1.GlobalConfigService) === "function" ? _l : Object, typeof (_m = typeof chatGroup_service_1.ChatGroupService !== "undefined" && chatGroup_service_1.ChatGroupService) === "function" ? _m : Object, typeof (_o = typeof models_service_1.ModelsService !== "undefined" && models_service_1.ModelsService) === "function" ? _o : Object, typeof (_p = typeof app_service_1.AppService !== "undefined" && app_service_1.AppService) === "function" ? _p : Object, typeof (_q = typeof voice_service_1.VoiceService !== "undefined" && voice_service_1.VoiceService) === "function" ? _q : Object])
 ], ChatService);
 
 
 /***/ }),
-/* 170 */
+/* 183 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
@@ -12279,9 +13276,9 @@ var __metadata = (this && this.__metadata) || function (k, v) {
 };
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.ChatProcessDto = exports.Options = void 0;
-const class_validator_1 = __webpack_require__(110);
+const class_validator_1 = __webpack_require__(111);
 const swagger_1 = __webpack_require__(14);
-const class_transformer_1 = __webpack_require__(171);
+const class_transformer_1 = __webpack_require__(176);
 class Options {
     parentMessageId;
     model;
@@ -12350,13 +13347,7 @@ __decorate([
 
 
 /***/ }),
-/* 171 */
-/***/ ((module) => {
-
-module.exports = require("class-transformer");
-
-/***/ }),
-/* 172 */
+/* 184 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
@@ -12369,8 +13360,8 @@ var __decorate = (this && this.__decorate) || function (decorators, target, key,
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.ChatGroupModule = void 0;
 const common_1 = __webpack_require__(2);
-const chatGroup_controller_1 = __webpack_require__(173);
-const chatGroup_service_1 = __webpack_require__(156);
+const chatGroup_controller_1 = __webpack_require__(185);
+const chatGroup_service_1 = __webpack_require__(157);
 const typeorm_1 = __webpack_require__(33);
 const chatGroup_entity_1 = __webpack_require__(82);
 const app_entity_1 = __webpack_require__(106);
@@ -12389,7 +13380,7 @@ exports.ChatGroupModule = ChatGroupModule = __decorate([
 
 
 /***/ }),
-/* 173 */
+/* 185 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
@@ -12409,13 +13400,13 @@ var _a, _b, _c, _d, _e, _f, _g, _h, _j;
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.ChatGroupController = void 0;
 const swagger_1 = __webpack_require__(14);
-const chatGroup_service_1 = __webpack_require__(156);
+const chatGroup_service_1 = __webpack_require__(157);
 const common_1 = __webpack_require__(2);
-const createGroup_dto_1 = __webpack_require__(174);
+const createGroup_dto_1 = __webpack_require__(186);
 const express_1 = __webpack_require__(104);
 const jwtAuth_guard_1 = __webpack_require__(87);
-const delGroup_dto_1 = __webpack_require__(175);
-const updateGroup_dto_1 = __webpack_require__(176);
+const delGroup_dto_1 = __webpack_require__(187);
+const updateGroup_dto_1 = __webpack_require__(188);
 let ChatGroupController = class ChatGroupController {
     chatGroupService;
     constructor(chatGroupService) {
@@ -12499,7 +13490,7 @@ exports.ChatGroupController = ChatGroupController = __decorate([
 
 
 /***/ }),
-/* 174 */
+/* 186 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
@@ -12515,7 +13506,7 @@ var __metadata = (this && this.__metadata) || function (k, v) {
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.CreateGroupDto = void 0;
 const swagger_1 = __webpack_require__(14);
-const class_validator_1 = __webpack_require__(110);
+const class_validator_1 = __webpack_require__(111);
 class CreateGroupDto {
     appId;
     modelConfig;
@@ -12546,7 +13537,7 @@ __decorate([
 
 
 /***/ }),
-/* 175 */
+/* 187 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
@@ -12573,7 +13564,7 @@ __decorate([
 
 
 /***/ }),
-/* 176 */
+/* 188 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
@@ -12589,7 +13580,7 @@ var __metadata = (this && this.__metadata) || function (k, v) {
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.UpdateGroupDto = void 0;
 const swagger_1 = __webpack_require__(14);
-const class_validator_1 = __webpack_require__(110);
+const class_validator_1 = __webpack_require__(111);
 class UpdateGroupDto {
     groupId;
     title;
@@ -12623,7 +13614,7 @@ __decorate([
 
 
 /***/ }),
-/* 177 */
+/* 189 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
@@ -12639,9 +13630,9 @@ const common_1 = __webpack_require__(2);
 const typeorm_1 = __webpack_require__(33);
 const chatGroup_entity_1 = __webpack_require__(82);
 const user_entity_1 = __webpack_require__(83);
-const chatLog_controller_1 = __webpack_require__(178);
+const chatLog_controller_1 = __webpack_require__(190);
 const chatLog_entity_1 = __webpack_require__(75);
-const chatLog_service_1 = __webpack_require__(158);
+const chatLog_service_1 = __webpack_require__(159);
 let ChatLogModule = class ChatLogModule {
 };
 exports.ChatLogModule = ChatLogModule;
@@ -12657,7 +13648,7 @@ exports.ChatLogModule = ChatLogModule = __decorate([
 
 
 /***/ }),
-/* 178 */
+/* 190 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
@@ -12682,16 +13673,16 @@ const superAuth_guard_1 = __webpack_require__(103);
 const common_1 = __webpack_require__(2);
 const swagger_1 = __webpack_require__(14);
 const express_1 = __webpack_require__(104);
-const chatLog_service_1 = __webpack_require__(158);
-const chatList_dto_1 = __webpack_require__(179);
-const del_dto_1 = __webpack_require__(180);
-const delByGroup_dto_1 = __webpack_require__(181);
-const exportExcelChatlog_dto_1 = __webpack_require__(182);
-const queryAllChatLog_dto_1 = __webpack_require__(183);
-const queryByAppId_dto_1 = __webpack_require__(184);
-const queryMyChatLog_dto_1 = __webpack_require__(185);
-const querySingleChat_dto_1 = __webpack_require__(186);
-const recDrawImg_dto_1 = __webpack_require__(187);
+const chatLog_service_1 = __webpack_require__(159);
+const chatList_dto_1 = __webpack_require__(191);
+const del_dto_1 = __webpack_require__(192);
+const delByGroup_dto_1 = __webpack_require__(193);
+const exportExcelChatlog_dto_1 = __webpack_require__(194);
+const queryAllChatLog_dto_1 = __webpack_require__(195);
+const queryByAppId_dto_1 = __webpack_require__(196);
+const queryMyChatLog_dto_1 = __webpack_require__(197);
+const querySingleChat_dto_1 = __webpack_require__(198);
+const recDrawImg_dto_1 = __webpack_require__(199);
 let ChatLogController = class ChatLogController {
     chatLogService;
     constructor(chatLogService) {
@@ -12845,7 +13836,7 @@ exports.ChatLogController = ChatLogController = __decorate([
 
 
 /***/ }),
-/* 179 */
+/* 191 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
@@ -12860,7 +13851,7 @@ var __metadata = (this && this.__metadata) || function (k, v) {
 };
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.ChatListDto = void 0;
-const class_validator_1 = __webpack_require__(110);
+const class_validator_1 = __webpack_require__(111);
 const swagger_1 = __webpack_require__(14);
 class ChatListDto {
     groupId;
@@ -12874,7 +13865,7 @@ __decorate([
 
 
 /***/ }),
-/* 180 */
+/* 192 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
@@ -12901,7 +13892,7 @@ __decorate([
 
 
 /***/ }),
-/* 181 */
+/* 193 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
@@ -12928,7 +13919,7 @@ __decorate([
 
 
 /***/ }),
-/* 182 */
+/* 194 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
@@ -12944,7 +13935,7 @@ var __metadata = (this && this.__metadata) || function (k, v) {
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.ExportExcelChatlogDto = void 0;
 const swagger_1 = __webpack_require__(14);
-const class_validator_1 = __webpack_require__(110);
+const class_validator_1 = __webpack_require__(111);
 class ExportExcelChatlogDto {
     page;
     size;
@@ -12983,7 +13974,7 @@ __decorate([
 
 
 /***/ }),
-/* 183 */
+/* 195 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
@@ -12999,7 +13990,7 @@ var __metadata = (this && this.__metadata) || function (k, v) {
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.QuerAllChatLogDto = void 0;
 const swagger_1 = __webpack_require__(14);
-const class_validator_1 = __webpack_require__(110);
+const class_validator_1 = __webpack_require__(111);
 class QuerAllChatLogDto {
     page;
     size;
@@ -13051,7 +14042,7 @@ __decorate([
 
 
 /***/ }),
-/* 184 */
+/* 196 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
@@ -13066,7 +14057,7 @@ var __metadata = (this && this.__metadata) || function (k, v) {
 };
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.QueryByAppIdDto = void 0;
-const class_validator_1 = __webpack_require__(110);
+const class_validator_1 = __webpack_require__(111);
 const swagger_1 = __webpack_require__(14);
 class QueryByAppIdDto {
     appId;
@@ -13092,7 +14083,7 @@ __decorate([
 
 
 /***/ }),
-/* 185 */
+/* 197 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
@@ -13107,7 +14098,7 @@ var __metadata = (this && this.__metadata) || function (k, v) {
 };
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.QuerMyChatLogDto = void 0;
-const class_validator_1 = __webpack_require__(110);
+const class_validator_1 = __webpack_require__(111);
 const swagger_1 = __webpack_require__(14);
 class QuerMyChatLogDto {
     model;
@@ -13121,7 +14112,7 @@ __decorate([
 
 
 /***/ }),
-/* 186 */
+/* 198 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
@@ -13137,7 +14128,7 @@ var __metadata = (this && this.__metadata) || function (k, v) {
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.QuerySingleChatDto = void 0;
 const swagger_1 = __webpack_require__(14);
-const class_validator_1 = __webpack_require__(110);
+const class_validator_1 = __webpack_require__(111);
 class QuerySingleChatDto {
     chatId;
 }
@@ -13150,7 +14141,7 @@ __decorate([
 
 
 /***/ }),
-/* 187 */
+/* 199 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
@@ -13177,7 +14168,7 @@ __decorate([
 
 
 /***/ }),
-/* 188 */
+/* 200 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
@@ -13200,9 +14191,9 @@ const balance_entity_1 = __webpack_require__(80);
 const fingerprint_entity_1 = __webpack_require__(84);
 const userBalance_entity_1 = __webpack_require__(81);
 const userBalance_service_1 = __webpack_require__(34);
-const crami_controller_1 = __webpack_require__(189);
-const crami_entity_1 = __webpack_require__(191);
-const crami_service_1 = __webpack_require__(190);
+const crami_controller_1 = __webpack_require__(201);
+const crami_entity_1 = __webpack_require__(203);
+const crami_service_1 = __webpack_require__(202);
 const cramiPackage_entity_1 = __webpack_require__(71);
 let CramiModule = class CramiModule {
 };
@@ -13232,7 +14223,7 @@ exports.CramiModule = CramiModule = __decorate([
 
 
 /***/ }),
-/* 189 */
+/* 201 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
@@ -13257,15 +14248,15 @@ const superAuth_guard_1 = __webpack_require__(103);
 const common_1 = __webpack_require__(2);
 const swagger_1 = __webpack_require__(14);
 const express_1 = __webpack_require__(104);
-const crami_service_1 = __webpack_require__(190);
-const batchDelCrami_dto_1 = __webpack_require__(192);
-const createCrami_dto_1 = __webpack_require__(193);
-const createPackage_dto_1 = __webpack_require__(194);
-const deletePackage_dto_1 = __webpack_require__(195);
-const queryAllCrami_dto_1 = __webpack_require__(196);
-const queryAllPackage_dto_1 = __webpack_require__(197);
-const updatePackage_dto_1 = __webpack_require__(198);
-const useCrami_dto_1 = __webpack_require__(199);
+const crami_service_1 = __webpack_require__(202);
+const batchDelCrami_dto_1 = __webpack_require__(204);
+const createCrami_dto_1 = __webpack_require__(205);
+const createPackage_dto_1 = __webpack_require__(206);
+const deletePackage_dto_1 = __webpack_require__(207);
+const queryAllCrami_dto_1 = __webpack_require__(208);
+const queryAllPackage_dto_1 = __webpack_require__(209);
+const updatePackage_dto_1 = __webpack_require__(210);
+const useCrami_dto_1 = __webpack_require__(211);
 let CramiController = class CramiController {
     cramiService;
     constructor(cramiService) {
@@ -13409,7 +14400,7 @@ exports.CramiController = CramiController = __decorate([
 
 
 /***/ }),
-/* 190 */
+/* 202 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
@@ -13435,7 +14426,7 @@ const typeorm_1 = __webpack_require__(33);
 const typeorm_2 = __webpack_require__(3);
 const user_entity_1 = __webpack_require__(83);
 const userBalance_service_1 = __webpack_require__(34);
-const crami_entity_1 = __webpack_require__(191);
+const crami_entity_1 = __webpack_require__(203);
 const cramiPackage_entity_1 = __webpack_require__(71);
 let CramiService = class CramiService {
     cramiEntity;
@@ -13653,7 +14644,7 @@ exports.CramiService = CramiService = __decorate([
 
 
 /***/ }),
-/* 191 */
+/* 203 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
@@ -13738,7 +14729,7 @@ exports.CramiEntity = CramiEntity = __decorate([
 
 
 /***/ }),
-/* 192 */
+/* 204 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
@@ -13754,7 +14745,7 @@ var __metadata = (this && this.__metadata) || function (k, v) {
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.BatchDelCramiDto = void 0;
 const swagger_1 = __webpack_require__(14);
-const class_validator_1 = __webpack_require__(110);
+const class_validator_1 = __webpack_require__(111);
 class BatchDelCramiDto {
     ids;
 }
@@ -13768,7 +14759,7 @@ __decorate([
 
 
 /***/ }),
-/* 193 */
+/* 205 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
@@ -13783,7 +14774,7 @@ var __metadata = (this && this.__metadata) || function (k, v) {
 };
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.CreatCramiDto = void 0;
-const class_validator_1 = __webpack_require__(110);
+const class_validator_1 = __webpack_require__(111);
 const swagger_1 = __webpack_require__(14);
 class CreatCramiDto {
     packageId;
@@ -13828,7 +14819,7 @@ __decorate([
 
 
 /***/ }),
-/* 194 */
+/* 206 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
@@ -13844,8 +14835,8 @@ var __metadata = (this && this.__metadata) || function (k, v) {
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.CreatePackageDto = void 0;
 const swagger_1 = __webpack_require__(14);
-const class_transformer_1 = __webpack_require__(171);
-const class_validator_1 = __webpack_require__(110);
+const class_transformer_1 = __webpack_require__(176);
+const class_validator_1 = __webpack_require__(111);
 class CreatePackageDto {
     name;
     des;
@@ -13949,7 +14940,7 @@ __decorate([
 
 
 /***/ }),
-/* 195 */
+/* 207 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
@@ -13965,7 +14956,7 @@ var __metadata = (this && this.__metadata) || function (k, v) {
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.DeletePackageDto = void 0;
 const swagger_1 = __webpack_require__(14);
-const class_validator_1 = __webpack_require__(110);
+const class_validator_1 = __webpack_require__(111);
 class DeletePackageDto {
     id;
 }
@@ -13978,7 +14969,7 @@ __decorate([
 
 
 /***/ }),
-/* 196 */
+/* 208 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
@@ -13993,7 +14984,7 @@ var __metadata = (this && this.__metadata) || function (k, v) {
 };
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.QuerAllCramiDto = void 0;
-const class_validator_1 = __webpack_require__(110);
+const class_validator_1 = __webpack_require__(111);
 const swagger_1 = __webpack_require__(14);
 class QuerAllCramiDto {
     page;
@@ -14029,7 +15020,7 @@ __decorate([
 
 
 /***/ }),
-/* 197 */
+/* 209 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
@@ -14044,7 +15035,7 @@ var __metadata = (this && this.__metadata) || function (k, v) {
 };
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.QuerAllPackageDto = void 0;
-const class_validator_1 = __webpack_require__(110);
+const class_validator_1 = __webpack_require__(111);
 const swagger_1 = __webpack_require__(14);
 class QuerAllPackageDto {
     page;
@@ -14090,7 +15081,7 @@ __decorate([
 
 
 /***/ }),
-/* 198 */
+/* 210 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
@@ -14105,9 +15096,9 @@ var __metadata = (this && this.__metadata) || function (k, v) {
 };
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.UpdatePackageDto = void 0;
-const class_validator_1 = __webpack_require__(110);
+const class_validator_1 = __webpack_require__(111);
 const swagger_1 = __webpack_require__(14);
-const createPackage_dto_1 = __webpack_require__(194);
+const createPackage_dto_1 = __webpack_require__(206);
 class UpdatePackageDto extends createPackage_dto_1.CreatePackageDto {
     id;
 }
@@ -14120,7 +15111,7 @@ __decorate([
 
 
 /***/ }),
-/* 199 */
+/* 211 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
@@ -14135,7 +15126,7 @@ var __metadata = (this && this.__metadata) || function (k, v) {
 };
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.UseCramiDto = void 0;
-const class_validator_1 = __webpack_require__(110);
+const class_validator_1 = __webpack_require__(111);
 const swagger_1 = __webpack_require__(14);
 class UseCramiDto {
     code;
@@ -14153,7 +15144,7 @@ __decorate([
 
 
 /***/ }),
-/* 200 */
+/* 212 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
@@ -14173,23 +15164,24 @@ exports.DatabaseModule = void 0;
 const common_1 = __webpack_require__(2);
 const typeorm_1 = __webpack_require__(33);
 const typeorm_2 = __webpack_require__(3);
-const database_service_1 = __webpack_require__(201);
+const database_service_1 = __webpack_require__(213);
 const app_entity_1 = __webpack_require__(106);
 const appCats_entity_1 = __webpack_require__(107);
-const userApps_entity_1 = __webpack_require__(108);
-const autoReply_entity_1 = __webpack_require__(136);
-const badWords_entity_1 = __webpack_require__(144);
-const violationLog_entity_1 = __webpack_require__(145);
+const appVoice_entity_1 = __webpack_require__(108);
+const userApps_entity_1 = __webpack_require__(109);
+const autoReply_entity_1 = __webpack_require__(137);
+const badWords_entity_1 = __webpack_require__(145);
+const violationLog_entity_1 = __webpack_require__(146);
 const chatGroup_entity_1 = __webpack_require__(82);
 const chatLog_entity_1 = __webpack_require__(75);
-const crami_entity_1 = __webpack_require__(191);
+const crami_entity_1 = __webpack_require__(203);
 const cramiPackage_entity_1 = __webpack_require__(71);
 const config_entity_1 = __webpack_require__(73);
 const models_entity_1 = __webpack_require__(78);
-const order_entity_1 = __webpack_require__(202);
-const plugin_entity_1 = __webpack_require__(160);
-const share_entity_1 = __webpack_require__(203);
-const signIn_entity_1 = __webpack_require__(204);
+const order_entity_1 = __webpack_require__(214);
+const plugin_entity_1 = __webpack_require__(161);
+const share_entity_1 = __webpack_require__(215);
+const signIn_entity_1 = __webpack_require__(216);
 const user_entity_1 = __webpack_require__(83);
 const accountLog_entity_1 = __webpack_require__(79);
 const balance_entity_1 = __webpack_require__(80);
@@ -14242,6 +15234,7 @@ exports.DatabaseModule = DatabaseModule = DatabaseModule_1 = __decorate([
                         appCats_entity_1.AppCatsEntity,
                         app_entity_1.AppEntity,
                         order_entity_1.OrderEntity,
+                        appVoice_entity_1.AppVoiceEntity,
                     ],
                     synchronize: false,
                     logging: false,
@@ -14257,7 +15250,7 @@ exports.DatabaseModule = DatabaseModule = DatabaseModule_1 = __decorate([
 
 
 /***/ }),
-/* 201 */
+/* 213 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
@@ -14442,7 +15435,7 @@ exports.DatabaseService = DatabaseService = __decorate([
 
 
 /***/ }),
-/* 202 */
+/* 214 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
@@ -14536,7 +15529,7 @@ exports.OrderEntity = OrderEntity = __decorate([
 
 
 /***/ }),
-/* 203 */
+/* 215 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
@@ -14582,7 +15575,7 @@ exports.Share = Share = __decorate([
 
 
 /***/ }),
-/* 204 */
+/* 216 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
@@ -14629,215 +15622,7 @@ exports.SigninEntity = SigninEntity = __decorate([
 
 
 /***/ }),
-/* 205 */
-/***/ (function(__unused_webpack_module, exports, __webpack_require__) {
-
-
-var __decorate = (this && this.__decorate) || function (decorators, target, key, desc) {
-    var c = arguments.length, r = c < 3 ? target : desc === null ? desc = Object.getOwnPropertyDescriptor(target, key) : desc, d;
-    if (typeof Reflect === "object" && typeof Reflect.decorate === "function") r = Reflect.decorate(decorators, target, key, desc);
-    else for (var i = decorators.length - 1; i >= 0; i--) if (d = decorators[i]) r = (c < 3 ? d(r) : c > 3 ? d(target, key, r) : d(target, key)) || r;
-    return c > 3 && r && Object.defineProperty(target, key, r), r;
-};
-Object.defineProperty(exports, "__esModule", ({ value: true }));
-exports.GlobalConfigModule = void 0;
-const common_1 = __webpack_require__(2);
-const typeorm_1 = __webpack_require__(33);
-const chatLog_entity_1 = __webpack_require__(75);
-const config_entity_1 = __webpack_require__(73);
-const globalConfig_controller_1 = __webpack_require__(206);
-const globalConfig_service_1 = __webpack_require__(74);
-let GlobalConfigModule = class GlobalConfigModule {
-};
-exports.GlobalConfigModule = GlobalConfigModule;
-exports.GlobalConfigModule = GlobalConfigModule = __decorate([
-    (0, common_1.Global)(),
-    (0, common_1.Module)({
-        imports: [typeorm_1.TypeOrmModule.forFeature([config_entity_1.ConfigEntity, chatLog_entity_1.ChatLogEntity])],
-        providers: [globalConfig_service_1.GlobalConfigService],
-        controllers: [globalConfig_controller_1.GlobalConfigController],
-        exports: [globalConfig_service_1.GlobalConfigService],
-    })
-], GlobalConfigModule);
-
-
-/***/ }),
-/* 206 */
-/***/ (function(__unused_webpack_module, exports, __webpack_require__) {
-
-
-var __decorate = (this && this.__decorate) || function (decorators, target, key, desc) {
-    var c = arguments.length, r = c < 3 ? target : desc === null ? desc = Object.getOwnPropertyDescriptor(target, key) : desc, d;
-    if (typeof Reflect === "object" && typeof Reflect.decorate === "function") r = Reflect.decorate(decorators, target, key, desc);
-    else for (var i = decorators.length - 1; i >= 0; i--) if (d = decorators[i]) r = (c < 3 ? d(r) : c > 3 ? d(target, key, r) : d(target, key)) || r;
-    return c > 3 && r && Object.defineProperty(target, key, r), r;
-};
-var __metadata = (this && this.__metadata) || function (k, v) {
-    if (typeof Reflect === "object" && typeof Reflect.metadata === "function") return Reflect.metadata(k, v);
-};
-var __param = (this && this.__param) || function (paramIndex, decorator) {
-    return function (target, key) { decorator(target, key, paramIndex); }
-};
-var _a, _b, _c, _d, _e, _f;
-Object.defineProperty(exports, "__esModule", ({ value: true }));
-exports.GlobalConfigController = void 0;
-const adminAuth_guard_1 = __webpack_require__(86);
-const superAuth_guard_1 = __webpack_require__(103);
-const common_1 = __webpack_require__(2);
-const swagger_1 = __webpack_require__(14);
-const express_1 = __webpack_require__(104);
-const queryConfig_dto_1 = __webpack_require__(207);
-const setConfig_dto_1 = __webpack_require__(208);
-const globalConfig_service_1 = __webpack_require__(74);
-let GlobalConfigController = class GlobalConfigController {
-    globalConfigService;
-    constructor(globalConfigService) {
-        this.globalConfigService = globalConfigService;
-    }
-    queryAllConfig(req) {
-        return this.globalConfigService.queryAllConfig(req);
-    }
-    queryFrontConfig(query, req) {
-        return this.globalConfigService.queryFrontConfig(query, req);
-    }
-    queryConfig(body, req) {
-        return this.globalConfigService.queryConfig(body, req);
-    }
-    setConfig(body) {
-        return this.globalConfigService.setConfig(body);
-    }
-    queryNotice() {
-        return this.globalConfigService.queryNotice();
-    }
-};
-exports.GlobalConfigController = GlobalConfigController;
-__decorate([
-    (0, swagger_1.ApiOperation)({ summary: '查询所有配置' }),
-    (0, common_1.Get)('queryAll'),
-    (0, common_1.UseGuards)(adminAuth_guard_1.AdminAuthGuard),
-    (0, swagger_1.ApiBearerAuth)(),
-    __param(0, (0, common_1.Req)()),
-    __metadata("design:type", Function),
-    __metadata("design:paramtypes", [typeof (_b = typeof express_1.Request !== "undefined" && express_1.Request) === "function" ? _b : Object]),
-    __metadata("design:returntype", void 0)
-], GlobalConfigController.prototype, "queryAllConfig", null);
-__decorate([
-    (0, swagger_1.ApiOperation)({ summary: '查询前端网站的所有配置' }),
-    (0, common_1.Get)('queryFront'),
-    __param(0, (0, common_1.Query)()),
-    __param(1, (0, common_1.Req)()),
-    __metadata("design:type", Function),
-    __metadata("design:paramtypes", [Object, typeof (_c = typeof express_1.Request !== "undefined" && express_1.Request) === "function" ? _c : Object]),
-    __metadata("design:returntype", void 0)
-], GlobalConfigController.prototype, "queryFrontConfig", null);
-__decorate([
-    (0, swagger_1.ApiOperation)({ summary: '查询所有配置' }),
-    (0, common_1.Post)('query'),
-    (0, common_1.UseGuards)(adminAuth_guard_1.AdminAuthGuard),
-    (0, swagger_1.ApiBearerAuth)(),
-    __param(0, (0, common_1.Body)()),
-    __param(1, (0, common_1.Req)()),
-    __metadata("design:type", Function),
-    __metadata("design:paramtypes", [typeof (_d = typeof queryConfig_dto_1.QueryConfigDto !== "undefined" && queryConfig_dto_1.QueryConfigDto) === "function" ? _d : Object, typeof (_e = typeof express_1.Request !== "undefined" && express_1.Request) === "function" ? _e : Object]),
-    __metadata("design:returntype", void 0)
-], GlobalConfigController.prototype, "queryConfig", null);
-__decorate([
-    (0, swagger_1.ApiOperation)({ summary: '设置配置信息' }),
-    (0, common_1.Post)('set'),
-    (0, common_1.UseGuards)(superAuth_guard_1.SuperAuthGuard),
-    (0, swagger_1.ApiBearerAuth)(),
-    __param(0, (0, common_1.Body)()),
-    __metadata("design:type", Function),
-    __metadata("design:paramtypes", [typeof (_f = typeof setConfig_dto_1.SetConfigDto !== "undefined" && setConfig_dto_1.SetConfigDto) === "function" ? _f : Object]),
-    __metadata("design:returntype", void 0)
-], GlobalConfigController.prototype, "setConfig", null);
-__decorate([
-    (0, swagger_1.ApiOperation)({ summary: '用户端查询公告信息' }),
-    (0, common_1.Get)('notice'),
-    __metadata("design:type", Function),
-    __metadata("design:paramtypes", []),
-    __metadata("design:returntype", void 0)
-], GlobalConfigController.prototype, "queryNotice", null);
-exports.GlobalConfigController = GlobalConfigController = __decorate([
-    (0, swagger_1.ApiTags)('config'),
-    (0, common_1.Controller)('config'),
-    __metadata("design:paramtypes", [typeof (_a = typeof globalConfig_service_1.GlobalConfigService !== "undefined" && globalConfig_service_1.GlobalConfigService) === "function" ? _a : Object])
-], GlobalConfigController);
-
-
-/***/ }),
-/* 207 */
-/***/ (function(__unused_webpack_module, exports, __webpack_require__) {
-
-
-var __decorate = (this && this.__decorate) || function (decorators, target, key, desc) {
-    var c = arguments.length, r = c < 3 ? target : desc === null ? desc = Object.getOwnPropertyDescriptor(target, key) : desc, d;
-    if (typeof Reflect === "object" && typeof Reflect.decorate === "function") r = Reflect.decorate(decorators, target, key, desc);
-    else for (var i = decorators.length - 1; i >= 0; i--) if (d = decorators[i]) r = (c < 3 ? d(r) : c > 3 ? d(target, key, r) : d(target, key)) || r;
-    return c > 3 && r && Object.defineProperty(target, key, r), r;
-};
-var __metadata = (this && this.__metadata) || function (k, v) {
-    if (typeof Reflect === "object" && typeof Reflect.metadata === "function") return Reflect.metadata(k, v);
-};
-Object.defineProperty(exports, "__esModule", ({ value: true }));
-exports.QueryConfigDto = void 0;
-const class_validator_1 = __webpack_require__(110);
-const class_transformer_1 = __webpack_require__(171);
-const swagger_1 = __webpack_require__(14);
-class QueryConfigDto {
-    keys;
-}
-exports.QueryConfigDto = QueryConfigDto;
-__decorate([
-    (0, swagger_1.ApiProperty)({
-        example: ['siteName', 'qqNumber'],
-        description: '想要查询的配置key',
-    }),
-    (0, class_validator_1.IsArray)(),
-    (0, class_validator_1.ArrayNotEmpty)(),
-    (0, class_transformer_1.Type)(() => String),
-    __metadata("design:type", Array)
-], QueryConfigDto.prototype, "keys", void 0);
-
-
-/***/ }),
-/* 208 */
-/***/ (function(__unused_webpack_module, exports, __webpack_require__) {
-
-
-var __decorate = (this && this.__decorate) || function (decorators, target, key, desc) {
-    var c = arguments.length, r = c < 3 ? target : desc === null ? desc = Object.getOwnPropertyDescriptor(target, key) : desc, d;
-    if (typeof Reflect === "object" && typeof Reflect.decorate === "function") r = Reflect.decorate(decorators, target, key, desc);
-    else for (var i = decorators.length - 1; i >= 0; i--) if (d = decorators[i]) r = (c < 3 ? d(r) : c > 3 ? d(target, key, r) : d(target, key)) || r;
-    return c > 3 && r && Object.defineProperty(target, key, r), r;
-};
-var __metadata = (this && this.__metadata) || function (k, v) {
-    if (typeof Reflect === "object" && typeof Reflect.metadata === "function") return Reflect.metadata(k, v);
-};
-Object.defineProperty(exports, "__esModule", ({ value: true }));
-exports.SetConfigDto = void 0;
-const swagger_1 = __webpack_require__(14);
-const class_transformer_1 = __webpack_require__(171);
-const class_validator_1 = __webpack_require__(110);
-class SetConfigDto {
-    settings;
-}
-exports.SetConfigDto = SetConfigDto;
-__decorate([
-    (0, swagger_1.ApiProperty)({
-        example: [{ configKey: 'siteName', configVal: 'AIWeb' }],
-        description: '设置配置信息',
-    }),
-    (0, class_validator_1.IsArray)(),
-    (0, class_validator_1.ArrayNotEmpty)(),
-    (0, class_validator_1.ValidateNested)({ each: true }),
-    (0, class_transformer_1.Type)(() => Object),
-    __metadata("design:type", Array)
-], SetConfigDto.prototype, "settings", void 0);
-
-
-/***/ }),
-/* 209 */
+/* 217 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
@@ -14850,7 +15635,7 @@ var __decorate = (this && this.__decorate) || function (decorators, target, key,
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.ModelsModule = void 0;
 const common_1 = __webpack_require__(2);
-const models_controller_1 = __webpack_require__(210);
+const models_controller_1 = __webpack_require__(218);
 const models_service_1 = __webpack_require__(76);
 const typeorm_1 = __webpack_require__(33);
 const models_entity_1 = __webpack_require__(78);
@@ -14869,7 +15654,7 @@ exports.ModelsModule = ModelsModule = __decorate([
 
 
 /***/ }),
-/* 210 */
+/* 218 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
@@ -14892,10 +15677,10 @@ const adminAuth_guard_1 = __webpack_require__(86);
 const superAuth_guard_1 = __webpack_require__(103);
 const common_1 = __webpack_require__(2);
 const swagger_1 = __webpack_require__(14);
-const queryModel_dto_1 = __webpack_require__(211);
-const queryModelType_dto_1 = __webpack_require__(212);
-const setModel_dto_1 = __webpack_require__(213);
-const setModelType_dto_1 = __webpack_require__(214);
+const queryModel_dto_1 = __webpack_require__(219);
+const queryModelType_dto_1 = __webpack_require__(220);
+const setModel_dto_1 = __webpack_require__(221);
+const setModelType_dto_1 = __webpack_require__(222);
 const models_service_1 = __webpack_require__(76);
 let ModelsController = class ModelsController {
     modelsService;
@@ -15009,7 +15794,7 @@ exports.ModelsController = ModelsController = __decorate([
 
 
 /***/ }),
-/* 211 */
+/* 219 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
@@ -15073,7 +15858,7 @@ __decorate([
 
 
 /***/ }),
-/* 212 */
+/* 220 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
@@ -15119,7 +15904,7 @@ __decorate([
 
 
 /***/ }),
-/* 213 */
+/* 221 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
@@ -15272,7 +16057,7 @@ __decorate([
 
 
 /***/ }),
-/* 214 */
+/* 222 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
@@ -15413,7 +16198,7 @@ __decorate([
 
 
 /***/ }),
-/* 215 */
+/* 223 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
@@ -15426,8 +16211,8 @@ var __decorate = (this && this.__decorate) || function (decorators, target, key,
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.OfficialModule = void 0;
 const common_1 = __webpack_require__(2);
-const official_controller_1 = __webpack_require__(216);
-const official_service_1 = __webpack_require__(219);
+const official_controller_1 = __webpack_require__(224);
+const official_service_1 = __webpack_require__(227);
 let OfficialModule = class OfficialModule {
 };
 exports.OfficialModule = OfficialModule;
@@ -15442,7 +16227,7 @@ exports.OfficialModule = OfficialModule = __decorate([
 
 
 /***/ }),
-/* 216 */
+/* 224 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
@@ -15467,9 +16252,9 @@ const utils_1 = __webpack_require__(36);
 const common_1 = __webpack_require__(2);
 const swagger_1 = __webpack_require__(14);
 const express_1 = __webpack_require__(104);
-const createMenu_dto_1 = __webpack_require__(217);
-const getQrCode_dto_1 = __webpack_require__(218);
-const official_service_1 = __webpack_require__(219);
+const createMenu_dto_1 = __webpack_require__(225);
+const getQrCode_dto_1 = __webpack_require__(226);
+const official_service_1 = __webpack_require__(227);
 let OfficialController = class OfficialController {
     officialService;
     constructor(officialService) {
@@ -15821,7 +16606,7 @@ exports.OfficialController = OfficialController = __decorate([
 
 
 /***/ }),
-/* 217 */
+/* 225 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
@@ -15837,8 +16622,8 @@ var __metadata = (this && this.__metadata) || function (k, v) {
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.CreateMenuDto = void 0;
 const swagger_1 = __webpack_require__(14);
-const class_transformer_1 = __webpack_require__(171);
-const class_validator_1 = __webpack_require__(110);
+const class_transformer_1 = __webpack_require__(176);
+const class_validator_1 = __webpack_require__(111);
 class ButtonBase {
     name;
 }
@@ -15957,7 +16742,7 @@ __decorate([
 
 
 /***/ }),
-/* 218 */
+/* 226 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
@@ -15972,7 +16757,7 @@ var __metadata = (this && this.__metadata) || function (k, v) {
 };
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.GetQrCodeDto = void 0;
-const class_validator_1 = __webpack_require__(110);
+const class_validator_1 = __webpack_require__(111);
 const swagger_1 = __webpack_require__(14);
 class GetQrCodeDto {
     sceneStr;
@@ -15990,7 +16775,7 @@ __decorate([
 
 
 /***/ }),
-/* 219 */
+/* 227 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
@@ -16010,8 +16795,8 @@ const utils_1 = __webpack_require__(36);
 const common_1 = __webpack_require__(2);
 const axios_1 = __webpack_require__(39);
 const crypto = __webpack_require__(16);
-const autoReply_service_1 = __webpack_require__(135);
-const chat_service_1 = __webpack_require__(169);
+const autoReply_service_1 = __webpack_require__(136);
+const chat_service_1 = __webpack_require__(182);
 const auth_service_1 = __webpack_require__(90);
 const globalConfig_service_1 = __webpack_require__(74);
 const user_service_1 = __webpack_require__(97);
@@ -16420,7 +17205,7 @@ exports.OfficialService = OfficialService = __decorate([
 
 
 /***/ }),
-/* 220 */
+/* 228 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
@@ -16434,9 +17219,9 @@ Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.OrderModule = void 0;
 const cramiPackage_entity_1 = __webpack_require__(71);
 const common_1 = __webpack_require__(2);
-const order_controller_1 = __webpack_require__(221);
-const order_service_1 = __webpack_require__(222);
-const order_entity_1 = __webpack_require__(202);
+const order_controller_1 = __webpack_require__(229);
+const order_service_1 = __webpack_require__(230);
+const order_entity_1 = __webpack_require__(214);
 const typeorm_1 = __webpack_require__(33);
 const user_entity_1 = __webpack_require__(83);
 let OrderModule = class OrderModule {
@@ -16452,7 +17237,7 @@ exports.OrderModule = OrderModule = __decorate([
 
 
 /***/ }),
-/* 221 */
+/* 229 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
@@ -16475,12 +17260,12 @@ const superAuth_guard_1 = __webpack_require__(103);
 const jwtAuth_guard_1 = __webpack_require__(87);
 const common_1 = __webpack_require__(2);
 const swagger_1 = __webpack_require__(14);
-const order_service_1 = __webpack_require__(222);
+const order_service_1 = __webpack_require__(230);
 const express_1 = __webpack_require__(104);
-const buy_dto_1 = __webpack_require__(224);
-const queryByOrder_dto_1 = __webpack_require__(225);
+const buy_dto_1 = __webpack_require__(232);
+const queryByOrder_dto_1 = __webpack_require__(233);
 const adminAuth_guard_1 = __webpack_require__(86);
-const queryAllOrder_dto_1 = __webpack_require__(226);
+const queryAllOrder_dto_1 = __webpack_require__(234);
 let OrderController = class OrderController {
     orderService;
     constructor(orderService) {
@@ -16560,7 +17345,7 @@ exports.OrderController = OrderController = __decorate([
 
 
 /***/ }),
-/* 222 */
+/* 230 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
@@ -16585,9 +17370,9 @@ const typeorm_1 = __webpack_require__(33);
 const typeorm_2 = __webpack_require__(3);
 const cramiPackage_entity_1 = __webpack_require__(71);
 const globalConfig_service_1 = __webpack_require__(74);
-const pay_service_1 = __webpack_require__(223);
+const pay_service_1 = __webpack_require__(231);
 const user_entity_1 = __webpack_require__(83);
-const order_entity_1 = __webpack_require__(202);
+const order_entity_1 = __webpack_require__(214);
 let OrderService = class OrderService {
     orderEntity;
     cramiPackageEntity;
@@ -16722,7 +17507,7 @@ exports.OrderService = OrderService = __decorate([
 
 
 /***/ }),
-/* 223 */
+/* 231 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
@@ -16749,7 +17534,7 @@ const crypto = __webpack_require__(16);
 const typeorm_2 = __webpack_require__(3);
 const cramiPackage_entity_1 = __webpack_require__(71);
 const globalConfig_service_1 = __webpack_require__(74);
-const order_entity_1 = __webpack_require__(202);
+const order_entity_1 = __webpack_require__(214);
 const user_service_1 = __webpack_require__(97);
 const userBalance_service_1 = __webpack_require__(34);
 let PayService = class PayService {
@@ -17444,7 +18229,7 @@ exports.PayService = PayService = __decorate([
 
 
 /***/ }),
-/* 224 */
+/* 232 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
@@ -17481,7 +18266,7 @@ __decorate([
 
 
 /***/ }),
-/* 225 */
+/* 233 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
@@ -17512,7 +18297,7 @@ __decorate([
 
 
 /***/ }),
-/* 226 */
+/* 234 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
@@ -17527,7 +18312,7 @@ var __metadata = (this && this.__metadata) || function (k, v) {
 };
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.QuerAllOrderDto = void 0;
-const class_validator_1 = __webpack_require__(110);
+const class_validator_1 = __webpack_require__(111);
 const swagger_1 = __webpack_require__(14);
 class QuerAllOrderDto {
     page;
@@ -17565,7 +18350,7 @@ __decorate([
 
 
 /***/ }),
-/* 227 */
+/* 235 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
@@ -17578,9 +18363,9 @@ var __decorate = (this && this.__decorate) || function (decorators, target, key,
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.PayModule = void 0;
 const common_1 = __webpack_require__(2);
-const pay_controller_1 = __webpack_require__(228);
-const pay_service_1 = __webpack_require__(223);
-const order_entity_1 = __webpack_require__(202);
+const pay_controller_1 = __webpack_require__(236);
+const pay_service_1 = __webpack_require__(231);
+const order_entity_1 = __webpack_require__(214);
 const cramiPackage_entity_1 = __webpack_require__(71);
 const typeorm_1 = __webpack_require__(33);
 let PayModule = class PayModule {
@@ -17598,7 +18383,7 @@ exports.PayModule = PayModule = __decorate([
 
 
 /***/ }),
-/* 228 */
+/* 236 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
@@ -17619,7 +18404,7 @@ Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.PayController = void 0;
 const common_1 = __webpack_require__(2);
 const swagger_1 = __webpack_require__(14);
-const pay_service_1 = __webpack_require__(223);
+const pay_service_1 = __webpack_require__(231);
 let PayController = class PayController {
     payService;
     constructor(payService) {
@@ -17683,7 +18468,7 @@ exports.PayController = PayController = __decorate([
 
 
 /***/ }),
-/* 229 */
+/* 237 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
@@ -17697,9 +18482,9 @@ Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.PluginModule = void 0;
 const common_1 = __webpack_require__(2);
 const typeorm_1 = __webpack_require__(33);
-const plugin_controller_1 = __webpack_require__(230);
-const plugin_entity_1 = __webpack_require__(160);
-const plugin_service_1 = __webpack_require__(231);
+const plugin_controller_1 = __webpack_require__(238);
+const plugin_entity_1 = __webpack_require__(161);
+const plugin_service_1 = __webpack_require__(239);
 let PluginModule = class PluginModule {
 };
 exports.PluginModule = PluginModule;
@@ -17713,7 +18498,7 @@ exports.PluginModule = PluginModule = __decorate([
 
 
 /***/ }),
-/* 230 */
+/* 238 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
@@ -17736,7 +18521,7 @@ const superAuth_guard_1 = __webpack_require__(103);
 const common_1 = __webpack_require__(2);
 const swagger_1 = __webpack_require__(14);
 const express_1 = __webpack_require__(104);
-const plugin_service_1 = __webpack_require__(231);
+const plugin_service_1 = __webpack_require__(239);
 let PluginController = class PluginController {
     pluginService;
     constructor(pluginService) {
@@ -17802,7 +18587,7 @@ exports.PluginController = PluginController = __decorate([
 
 
 /***/ }),
-/* 231 */
+/* 239 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
@@ -17825,7 +18610,7 @@ const common_1 = __webpack_require__(2);
 const typeorm_1 = __webpack_require__(33);
 const typeorm_2 = __webpack_require__(3);
 const models_service_1 = __webpack_require__(76);
-const plugin_entity_1 = __webpack_require__(160);
+const plugin_entity_1 = __webpack_require__(161);
 let PluginService = class PluginService {
     PluginEntity;
     modelsService;
@@ -17932,7 +18717,7 @@ exports.PluginService = PluginService = __decorate([
 
 
 /***/ }),
-/* 232 */
+/* 240 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
@@ -17946,9 +18731,9 @@ Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.ShareModule = void 0;
 const common_1 = __webpack_require__(2);
 const typeorm_1 = __webpack_require__(33);
-const share_controller_1 = __webpack_require__(233);
-const share_entity_1 = __webpack_require__(203);
-const share_service_1 = __webpack_require__(234);
+const share_controller_1 = __webpack_require__(241);
+const share_entity_1 = __webpack_require__(215);
+const share_service_1 = __webpack_require__(242);
 let ShareModule = class ShareModule {
 };
 exports.ShareModule = ShareModule;
@@ -17962,7 +18747,7 @@ exports.ShareModule = ShareModule = __decorate([
 
 
 /***/ }),
-/* 233 */
+/* 241 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
@@ -17984,7 +18769,7 @@ exports.ShareController = void 0;
 const jwtAuth_guard_1 = __webpack_require__(87);
 const common_1 = __webpack_require__(2);
 const swagger_1 = __webpack_require__(14);
-const share_service_1 = __webpack_require__(234);
+const share_service_1 = __webpack_require__(242);
 let ShareController = class ShareController {
     shareService;
     constructor(shareService) {
@@ -18032,7 +18817,7 @@ exports.ShareController = ShareController = __decorate([
 
 
 /***/ }),
-/* 234 */
+/* 242 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
@@ -18055,7 +18840,7 @@ const common_1 = __webpack_require__(2);
 const typeorm_1 = __webpack_require__(33);
 const typeorm_2 = __webpack_require__(3);
 const globalConfig_service_1 = __webpack_require__(74);
-const share_entity_1 = __webpack_require__(203);
+const share_entity_1 = __webpack_require__(215);
 let ShareService = class ShareService {
     shareRepository;
     globalConfigService;
@@ -18111,7 +18896,7 @@ exports.ShareService = ShareService = __decorate([
 
 
 /***/ }),
-/* 235 */
+/* 243 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
@@ -18124,10 +18909,10 @@ var __decorate = (this && this.__decorate) || function (decorators, target, key,
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.SigninModule = void 0;
 const common_1 = __webpack_require__(2);
-const signin_controller_1 = __webpack_require__(236);
-const signin_service_1 = __webpack_require__(237);
+const signin_controller_1 = __webpack_require__(244);
+const signin_service_1 = __webpack_require__(245);
 const typeorm_1 = __webpack_require__(33);
-const signIn_entity_1 = __webpack_require__(204);
+const signIn_entity_1 = __webpack_require__(216);
 const user_entity_1 = __webpack_require__(83);
 let SigninModule = class SigninModule {
 };
@@ -18144,7 +18929,7 @@ exports.SigninModule = SigninModule = __decorate([
 
 
 /***/ }),
-/* 236 */
+/* 244 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
@@ -18164,7 +18949,7 @@ var _a, _b, _c;
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.SigninController = void 0;
 const common_1 = __webpack_require__(2);
-const signin_service_1 = __webpack_require__(237);
+const signin_service_1 = __webpack_require__(245);
 const swagger_1 = __webpack_require__(14);
 const jwtAuth_guard_1 = __webpack_require__(87);
 const express_1 = __webpack_require__(104);
@@ -18209,7 +18994,7 @@ exports.SigninController = SigninController = __decorate([
 
 
 /***/ }),
-/* 237 */
+/* 245 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
@@ -18231,7 +19016,7 @@ exports.SigninService = void 0;
 const globalConfig_service_1 = __webpack_require__(74);
 const userBalance_service_1 = __webpack_require__(34);
 const common_1 = __webpack_require__(2);
-const signIn_entity_1 = __webpack_require__(204);
+const signIn_entity_1 = __webpack_require__(216);
 const typeorm_1 = __webpack_require__(33);
 const typeorm_2 = __webpack_require__(3);
 const date_1 = __webpack_require__(47);
@@ -18344,7 +19129,7 @@ exports.SigninService = SigninService = __decorate([
 
 
 /***/ }),
-/* 238 */
+/* 246 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
@@ -18357,7 +19142,7 @@ var __decorate = (this && this.__decorate) || function (decorators, target, key,
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.SpaModule = void 0;
 const common_1 = __webpack_require__(2);
-const spa_controller_1 = __webpack_require__(239);
+const spa_controller_1 = __webpack_require__(247);
 let SpaModule = class SpaModule {
 };
 exports.SpaModule = SpaModule;
@@ -18369,7 +19154,7 @@ exports.SpaModule = SpaModule = __decorate([
 
 
 /***/ }),
-/* 239 */
+/* 247 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
@@ -18440,7 +19225,7 @@ exports.SpaController = SpaController = SpaController_1 = __decorate([
 
 
 /***/ }),
-/* 240 */
+/* 248 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
@@ -18456,10 +19241,10 @@ const common_1 = __webpack_require__(2);
 const typeorm_1 = __webpack_require__(33);
 const chatLog_entity_1 = __webpack_require__(75);
 const config_entity_1 = __webpack_require__(73);
-const order_entity_1 = __webpack_require__(202);
+const order_entity_1 = __webpack_require__(214);
 const user_entity_1 = __webpack_require__(83);
-const statistic_controller_1 = __webpack_require__(241);
-const statistic_service_1 = __webpack_require__(243);
+const statistic_controller_1 = __webpack_require__(249);
+const statistic_service_1 = __webpack_require__(251);
 let StatisticModule = class StatisticModule {
 };
 exports.StatisticModule = StatisticModule;
@@ -18473,7 +19258,7 @@ exports.StatisticModule = StatisticModule = __decorate([
 
 
 /***/ }),
-/* 241 */
+/* 249 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
@@ -18495,8 +19280,8 @@ exports.StatisticController = void 0;
 const adminAuth_guard_1 = __webpack_require__(86);
 const common_1 = __webpack_require__(2);
 const swagger_1 = __webpack_require__(14);
-const queryStatisticDto_dto_1 = __webpack_require__(242);
-const statistic_service_1 = __webpack_require__(243);
+const queryStatisticDto_dto_1 = __webpack_require__(250);
+const statistic_service_1 = __webpack_require__(251);
 let StatisticController = class StatisticController {
     statisticService;
     constructor(statisticService) {
@@ -18550,7 +19335,7 @@ exports.StatisticController = StatisticController = __decorate([
 
 
 /***/ }),
-/* 242 */
+/* 250 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
@@ -18577,7 +19362,7 @@ __decorate([
 
 
 /***/ }),
-/* 243 */
+/* 251 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
@@ -18605,7 +19390,7 @@ const typeorm_2 = __webpack_require__(3);
 const chatLog_entity_1 = __webpack_require__(75);
 const config_entity_1 = __webpack_require__(73);
 const globalConfig_service_1 = __webpack_require__(74);
-const order_entity_1 = __webpack_require__(202);
+const order_entity_1 = __webpack_require__(214);
 const user_entity_1 = __webpack_require__(83);
 let StatisticService = class StatisticService {
     userEntity;
@@ -18861,7 +19646,7 @@ exports.StatisticService = StatisticService = __decorate([
 
 
 /***/ }),
-/* 244 */
+/* 252 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
@@ -18874,12 +19659,12 @@ var __decorate = (this && this.__decorate) || function (decorators, target, key,
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.TaskModule = void 0;
 const common_1 = __webpack_require__(2);
-const schedule_1 = __webpack_require__(245);
+const schedule_1 = __webpack_require__(253);
 const typeorm_1 = __webpack_require__(33);
-const globalConfig_module_1 = __webpack_require__(205);
-const models_module_1 = __webpack_require__(209);
+const globalConfig_module_1 = __webpack_require__(173);
+const models_module_1 = __webpack_require__(217);
 const userBalance_entity_1 = __webpack_require__(81);
-const task_service_1 = __webpack_require__(246);
+const task_service_1 = __webpack_require__(254);
 let TaskModule = class TaskModule {
 };
 exports.TaskModule = TaskModule;
@@ -18897,13 +19682,13 @@ exports.TaskModule = TaskModule = __decorate([
 
 
 /***/ }),
-/* 245 */
+/* 253 */
 /***/ ((module) => {
 
 module.exports = require("@nestjs/schedule");
 
 /***/ }),
-/* 246 */
+/* 254 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
@@ -18923,7 +19708,7 @@ var _a, _b, _c;
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.TaskService = void 0;
 const common_1 = __webpack_require__(2);
-const schedule_1 = __webpack_require__(245);
+const schedule_1 = __webpack_require__(253);
 const typeorm_1 = __webpack_require__(33);
 const fs = __webpack_require__(18);
 const path = __webpack_require__(20);
@@ -19003,104 +19788,7 @@ exports.TaskService = TaskService = __decorate([
 
 
 /***/ }),
-/* 247 */
-/***/ (function(__unused_webpack_module, exports, __webpack_require__) {
-
-
-var __decorate = (this && this.__decorate) || function (decorators, target, key, desc) {
-    var c = arguments.length, r = c < 3 ? target : desc === null ? desc = Object.getOwnPropertyDescriptor(target, key) : desc, d;
-    if (typeof Reflect === "object" && typeof Reflect.decorate === "function") r = Reflect.decorate(decorators, target, key, desc);
-    else for (var i = decorators.length - 1; i >= 0; i--) if (d = decorators[i]) r = (c < 3 ? d(r) : c > 3 ? d(target, key, r) : d(target, key)) || r;
-    return c > 3 && r && Object.defineProperty(target, key, r), r;
-};
-Object.defineProperty(exports, "__esModule", ({ value: true }));
-exports.UploadModule = void 0;
-const common_1 = __webpack_require__(2);
-const redisCache_module_1 = __webpack_require__(26);
-const upload_controller_1 = __webpack_require__(248);
-const upload_service_1 = __webpack_require__(161);
-let UploadModule = class UploadModule {
-};
-exports.UploadModule = UploadModule;
-exports.UploadModule = UploadModule = __decorate([
-    (0, common_1.Global)(),
-    (0, common_1.Module)({
-        imports: [redisCache_module_1.RedisCacheModule],
-        providers: [upload_service_1.UploadService],
-        controllers: [upload_controller_1.UploadController],
-        exports: [upload_service_1.UploadService],
-    })
-], UploadModule);
-
-
-/***/ }),
-/* 248 */
-/***/ (function(__unused_webpack_module, exports, __webpack_require__) {
-
-
-var __decorate = (this && this.__decorate) || function (decorators, target, key, desc) {
-    var c = arguments.length, r = c < 3 ? target : desc === null ? desc = Object.getOwnPropertyDescriptor(target, key) : desc, d;
-    if (typeof Reflect === "object" && typeof Reflect.decorate === "function") r = Reflect.decorate(decorators, target, key, desc);
-    else for (var i = decorators.length - 1; i >= 0; i--) if (d = decorators[i]) r = (c < 3 ? d(r) : c > 3 ? d(target, key, r) : d(target, key)) || r;
-    return c > 3 && r && Object.defineProperty(target, key, r), r;
-};
-var __metadata = (this && this.__metadata) || function (k, v) {
-    if (typeof Reflect === "object" && typeof Reflect.metadata === "function") return Reflect.metadata(k, v);
-};
-var __param = (this && this.__param) || function (paramIndex, decorator) {
-    return function (target, key) { decorator(target, key, paramIndex); }
-};
-var _a, _b;
-Object.defineProperty(exports, "__esModule", ({ value: true }));
-exports.UploadController = void 0;
-const jwtAuth_guard_1 = __webpack_require__(87);
-const common_1 = __webpack_require__(2);
-const platform_express_1 = __webpack_require__(249);
-const swagger_1 = __webpack_require__(14);
-const express_1 = __webpack_require__(104);
-const upload_service_1 = __webpack_require__(161);
-let UploadController = class UploadController {
-    uploadService;
-    constructor(uploadService) {
-        this.uploadService = uploadService;
-    }
-    async uploadFile(file, req, dir) {
-        return this.uploadService.uploadFile(file, dir, req.user);
-    }
-};
-exports.UploadController = UploadController;
-__decorate([
-    (0, common_1.Post)('file'),
-    (0, swagger_1.ApiOperation)({ summary: '上传文件' }),
-    (0, common_1.UseGuards)(jwtAuth_guard_1.JwtAuthGuard),
-    (0, swagger_1.ApiBearerAuth)(),
-    (0, common_1.UseInterceptors)((0, platform_express_1.FileInterceptor)('file', {
-        limits: {
-            fileSize: 10 * 1024 * 1024,
-        },
-    })),
-    __param(0, (0, common_1.UploadedFile)()),
-    __param(1, (0, common_1.Req)()),
-    __param(2, (0, common_1.Query)('dir')),
-    __metadata("design:type", Function),
-    __metadata("design:paramtypes", [Object, typeof (_b = typeof express_1.Request !== "undefined" && express_1.Request) === "function" ? _b : Object, String]),
-    __metadata("design:returntype", Promise)
-], UploadController.prototype, "uploadFile", null);
-exports.UploadController = UploadController = __decorate([
-    (0, swagger_1.ApiTags)('upload'),
-    (0, common_1.Controller)('upload'),
-    __metadata("design:paramtypes", [typeof (_a = typeof upload_service_1.UploadService !== "undefined" && upload_service_1.UploadService) === "function" ? _a : Object])
-], UploadController);
-
-
-/***/ }),
-/* 249 */
-/***/ ((module) => {
-
-module.exports = require("@nestjs/platform-express");
-
-/***/ }),
-/* 250 */
+/* 255 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
@@ -19117,12 +19805,13 @@ const typeorm_1 = __webpack_require__(33);
 const app_entity_1 = __webpack_require__(106);
 const app_service_1 = __webpack_require__(105);
 const appCats_entity_1 = __webpack_require__(107);
-const userApps_entity_1 = __webpack_require__(108);
+const appVoice_entity_1 = __webpack_require__(108);
+const userApps_entity_1 = __webpack_require__(109);
 const chatGroup_entity_1 = __webpack_require__(82);
 const chatLog_entity_1 = __webpack_require__(75);
 const cramiPackage_entity_1 = __webpack_require__(71);
 const config_entity_1 = __webpack_require__(73);
-const globalConfig_module_1 = __webpack_require__(205);
+const globalConfig_module_1 = __webpack_require__(173);
 const redisCache_service_1 = __webpack_require__(28);
 const user_entity_1 = __webpack_require__(83);
 const verification_entity_1 = __webpack_require__(101);
@@ -19130,7 +19819,7 @@ const verification_service_1 = __webpack_require__(100);
 const accountLog_entity_1 = __webpack_require__(79);
 const balance_entity_1 = __webpack_require__(80);
 const fingerprint_entity_1 = __webpack_require__(84);
-const userBalance_controller_1 = __webpack_require__(251);
+const userBalance_controller_1 = __webpack_require__(256);
 const userBalance_entity_1 = __webpack_require__(81);
 const userBalance_service_1 = __webpack_require__(34);
 let UserBalanceModule = class UserBalanceModule {
@@ -19154,6 +19843,7 @@ exports.UserBalanceModule = UserBalanceModule = __decorate([
                 user_entity_1.UserEntity,
                 verification_entity_1.VerificationEntity,
                 fingerprint_entity_1.FingerprintLogEntity,
+                appVoice_entity_1.AppVoiceEntity,
             ]),
             globalConfig_module_1.GlobalConfigModule,
         ],
@@ -19165,7 +19855,7 @@ exports.UserBalanceModule = UserBalanceModule = __decorate([
 
 
 /***/ }),
-/* 251 */
+/* 256 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
@@ -19272,7 +19962,7 @@ exports.UserBalanceController = UserBalanceController = __decorate([
 
 
 /***/ }),
-/* 252 */
+/* 257 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
@@ -19301,7 +19991,7 @@ exports.VerificationModule = VerificationModule = __decorate([
 
 
 /***/ }),
-/* 253 */
+/* 258 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
@@ -19351,7 +20041,7 @@ exports.AllExceptionsFilter = AllExceptionsFilter = __decorate([
 
 
 /***/ }),
-/* 254 */
+/* 259 */
 /***/ ((__unused_webpack_module, exports, __webpack_require__) => {
 
 
@@ -19359,24 +20049,25 @@ Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.initDatabase = initDatabase;
 const common_1 = __webpack_require__(2);
 const dotenv_1 = __webpack_require__(17);
-const mysql = __webpack_require__(255);
+const mysql = __webpack_require__(260);
 const typeorm_1 = __webpack_require__(3);
 const app_entity_1 = __webpack_require__(106);
 const appCats_entity_1 = __webpack_require__(107);
-const userApps_entity_1 = __webpack_require__(108);
-const autoReply_entity_1 = __webpack_require__(136);
-const badWords_entity_1 = __webpack_require__(144);
-const violationLog_entity_1 = __webpack_require__(145);
+const appVoice_entity_1 = __webpack_require__(108);
+const userApps_entity_1 = __webpack_require__(109);
+const autoReply_entity_1 = __webpack_require__(137);
+const badWords_entity_1 = __webpack_require__(145);
+const violationLog_entity_1 = __webpack_require__(146);
 const chatGroup_entity_1 = __webpack_require__(82);
 const chatLog_entity_1 = __webpack_require__(75);
-const crami_entity_1 = __webpack_require__(191);
+const crami_entity_1 = __webpack_require__(203);
 const cramiPackage_entity_1 = __webpack_require__(71);
 const config_entity_1 = __webpack_require__(73);
 const models_entity_1 = __webpack_require__(78);
-const order_entity_1 = __webpack_require__(202);
-const plugin_entity_1 = __webpack_require__(160);
-const share_entity_1 = __webpack_require__(203);
-const signIn_entity_1 = __webpack_require__(204);
+const order_entity_1 = __webpack_require__(214);
+const plugin_entity_1 = __webpack_require__(161);
+const share_entity_1 = __webpack_require__(215);
+const signIn_entity_1 = __webpack_require__(216);
 const user_entity_1 = __webpack_require__(83);
 const accountLog_entity_1 = __webpack_require__(79);
 const balance_entity_1 = __webpack_require__(80);
@@ -19413,6 +20104,7 @@ const dataSourceOptions = {
         userApps_entity_1.UserAppsEntity,
         appCats_entity_1.AppCatsEntity,
         app_entity_1.AppEntity,
+        appVoice_entity_1.AppVoiceEntity,
         order_entity_1.OrderEntity,
     ],
     synchronize: false,
@@ -19566,7 +20258,7 @@ async function initDatabase() {
 
 
 /***/ }),
-/* 255 */
+/* 260 */
 /***/ ((module) => {
 
 module.exports = require("mysql2/promise");
@@ -19620,7 +20312,7 @@ const ioredis_1 = __webpack_require__(19);
 const path = __webpack_require__(20);
 __webpack_require__(21);
 const app_module_1 = __webpack_require__(22);
-const allExceptions_filter_1 = __webpack_require__(253);
+const allExceptions_filter_1 = __webpack_require__(258);
 Dotenv.config({ path: '.env' });
 function findFilePath(filename) {
     const possiblePaths = [
@@ -19654,7 +20346,7 @@ async function bootstrap() {
         common_1.Logger.log('Generating and setting new JWT_SECRET');
         await redis.set('JWT_SECRET', jwtSecret);
     }
-    const { initDatabase } = __webpack_require__(254);
+    const { initDatabase } = __webpack_require__(259);
     const app = await core_1.NestFactory.create(app_module_1.AppModule, {
         bufferLogs: true,
         logger: ['log', 'error', 'warn', 'debug', 'verbose'],

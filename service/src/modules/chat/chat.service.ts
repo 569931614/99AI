@@ -1,19 +1,21 @@
 import {
-  convertUrlToBase64,
-  correctApiBaseUrl,
-  formatUrl,
-  getClientIp,
-  getTokenCount,
-  removeThinkTags,
+    convertUrlToBase64,
+    correctApiBaseUrl,
+    formatUrl,
+    getClientIp,
+    getTokenCount,
+    removeThinkTags,
 } from '@/common/utils';
 import { HttpException, HttpStatus, Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Request, Response } from 'express';
 import { OpenAI } from 'openai';
 import { In, Repository } from 'typeorm';
+import { AffectionService } from '../affection/affection.service';
 import { OpenAIChatService } from '../aiTool/chat/chat.service';
 import { AppEntity } from '../app/app.entity';
 import { AppService } from '../app/app.service';
+import { AppVoiceEntity } from '../app/appVoice.entity';
 import { AutoReplyService } from '../autoReply/autoReply.service';
 import { BadWordsService } from '../badWords/badWords.service';
 import { ChatGroupService } from '../chatGroup/chatGroup.service';
@@ -24,12 +26,15 @@ import { PluginEntity } from '../plugin/plugin.entity';
 import { UploadService } from '../upload/upload.service';
 import { UserService } from '../user/user.service';
 import { UserBalanceService } from '../userBalance/userBalance.service';
+import { VoiceService } from '../voice/voice.service';
 
 @Injectable()
 export class ChatService {
   constructor(
     @InjectRepository(AppEntity)
     private readonly appEntity: Repository<AppEntity>,
+    @InjectRepository(AppVoiceEntity)
+    private readonly appVoiceRepo: Repository<AppVoiceEntity>,
     @InjectRepository(PluginEntity)
     private readonly pluginEntity: Repository<PluginEntity>,
     private readonly openAIChatService: OpenAIChatService,
@@ -43,7 +48,84 @@ export class ChatService {
     private readonly chatGroupService: ChatGroupService,
     private readonly modelsService: ModelsService,
     private readonly appService: AppService,
+    private readonly voiceService: VoiceService,
+    private readonly affectionService: AffectionService,
   ) {}
+
+  // 情绪标准化：将中英文/同义词映射为统一标签
+  private normalizeEmotionLabel(raw?: string | null): string | null {
+    if (!raw) return null;
+    const s = String(raw).toLowerCase().trim();
+    if (!s) return null;
+    const table: Record<string, string[]> = {
+      happy: ['happy','joy','cheer','delight','excited','积极','开心','高兴','喜悦','愉快','欢快','喜欢','太棒','棒极了','兴奋','激动'],
+      sad: ['sad','depress','blue','down','伤心','难过','悲伤','低落','沮丧','忧郁','哭'],
+      angry: ['angry','mad','furious','rage','生气','愤怒','恼火','气愤','火大','气死'],
+      calm: ['calm','neutral','plain','平静','冷静','沉着','镇定','中性','自然','平稳'],
+      gentle: ['gentle','soft','温柔','柔和','亲切','体贴','暖','治愈'],
+      serious: ['serious','formal','authority','严肃','正式','权威','庄重','成熟','稳重'],
+      cute: ['cute','lovely','萌','可爱','萝莉','甜美','sweet'],
+      energetic: ['energetic','lively','vivid','元气','活力','朝气','热情','激情'],
+      narrative: ['narrative','announcer','commentator','旁白','解说','播音','主持','讲述','讲解'],
+      friendly: ['friendly','kind','友好','亲和'],
+      cold: ['cold','cool','冷淡','冷酷','疏离'],
+    };
+    // 优先直接命中键
+    if (table[s]) return s;
+    // 包含匹配
+    for (const [label, arr] of Object.entries(table)) {
+      if (arr.some(k => s.includes(k))) return label;
+    }
+    return null;
+  }
+
+  // 基于文本的轻量情绪推断（关键词/标点启发式）
+  private detectEmotionFromText(text?: string | null): string | null {
+    if (!text) return null;
+    const s = String(text).toLowerCase();
+    const hit = (arr: string[]) => arr.some(k => s.includes(k));
+    if (hit(['太棒','喜欢','great','awesome','真好','开心','高兴','excited','兴奋','!','！'])) return 'happy';
+    if (hit(['伤心','难过','悲伤','哭','失望','遗憾','沮丧'])) return 'sad';
+    if (hit(['生气','愤怒','太过分','气死','恼火','怒'])) return 'angry';
+    if (hit(['严肃','郑重','正式','注意','请注意'])) return 'serious';
+    if (hit(['温柔','轻声','放松','别担心','安慰','暖'])) return 'gentle';
+    if (hit(['旁白','解说','播音','主持','讲述','讲解'])) return 'narrative';
+    if (hit(['元气','活力','激情','热情'])) return 'energetic';
+    if (hit(['可爱','萌','甜美'])) return 'cute';
+    if (hit(['冷静','平静','理性','中性'])) return 'calm';
+    return null;
+  }
+
+  // 读取全局/应用级 情绪→音色 映射并解析
+  private async resolveEmotionVoiceId(appId: number | null, emotion?: string | null): Promise<string | null> {
+    const label = this.normalizeEmotionLabel(emotion || '')
+    if (!label) return null;
+    const readMap = async (key: string): Promise<Record<string, string> | null> => {
+      try {
+        const raw = (await this.globalConfigService.getConfigs([key])) as any;
+        if (!raw) return null;
+        const obj = JSON.parse(raw);
+        if (obj && typeof obj === 'object') return obj;
+        return null;
+      } catch { return null; }
+    };
+    // 优先应用级
+    if (appId) {
+      const appMap = await readMap(`emotionVoiceMap:app:${appId}`);
+      if (appMap) {
+        const v = appMap[label] || appMap[label.toLowerCase()] || appMap[label.toUpperCase()];
+        if (v && typeof v === 'string') return v;
+      }
+    }
+    // 退回全局
+    const globalMap = await readMap('emotionVoiceMap:global');
+    if (globalMap) {
+      const v = globalMap[label] || globalMap[label.toLowerCase()] || globalMap[label.toUpperCase()];
+      if (v && typeof v === 'string') return v;
+    }
+    return null;
+  }
+
 
   async chatProcess(body: any, req?: Request, res?: Response) {
     await this.userBalanceService.checkUserCertification(req.user.id);
@@ -504,6 +586,7 @@ export class ChatService {
           /* 普通对话 */
           response = await this.openAIChatService.chat(messagesHistory, {
             chatId: assistantLogId,
+            userId: req.user?.id,
             extraParam,
             deepThinkingType,
             max_tokens: max_tokens,
@@ -645,6 +728,16 @@ export class ChatService {
           response.userBalance = userBalance;
           response.chatId = assistantLogId;
           response.promptReference = promptReference;
+
+          //       Increase affection upon successful chat
+          try {
+            if (appId) {
+              await this.affectionService.increment(req.user.id, Number(appId));
+            }
+          } catch (e) {
+            Logger.warn(`Affection increment failed: ${e?.message || e}`, 'ChatService');
+          }
+
           return res.write(`\n${JSON.stringify(response)}`);
         } catch (error) {
           // 在这里处理错误，例如打印错误消息到控制台或向用户发送错误响应
@@ -971,51 +1064,97 @@ export class ChatService {
   }
 
   async ttsProcess(body: any, req: any, res?: any) {
-    const { chatId, prompt } = body;
-
-    const detailKeyInfo = await this.modelsService.getCurrentModelKeyInfo('tts-1');
-    const { openaiBaseUrl, openaiBaseKey, openaiVoice } = await this.globalConfigService.getConfigs(
-      ['openaiBaseUrl', 'openaiBaseKey', 'openaiVoice'],
-    );
-
-    // 从 detailKeyInfo 对象中解构赋值并设置默认值
-    const { key, proxyUrl, deduct, deductType, timeout } = detailKeyInfo;
-    const useKey = key || openaiBaseKey;
-    const useTimeout = timeout * 1000;
-
-    // 用户余额检测
-    await this.userBalanceService.validateBalance(req, deductType, deduct);
+    const { chatId, prompt, emotion } = body;
 
     Logger.debug(
-      `开始TTS处理: ${prompt.substring(0, 50)}${prompt.length > 50 ? '...' : ''}`,
+      `开始TTS处理: ${String(prompt || '').substring(0, 50)}${(prompt || '').length > 50 ? '...' : ''}`,
       'TTSService',
     );
 
+    // 小工具：使用指定 voiceId 进行合成 + 记录 + 尝试扣费
+    const doTtsWithVoice = async (voiceId: string) => {
+      const { url } = await this.voiceService.preview({ voice_id: voiceId, text: prompt });
+      try {
+        const detailKeyInfo = await this.modelsService.getCurrentModelKeyInfo('tts-1');
+        const { deduct, deductType } = detailKeyInfo;
+        await this.userBalanceService.validateBalance(req, deductType, deduct);
+        await this.userBalanceService.deductFromBalance(req.user.id, deductType, deduct);
+      } catch (e: any) {
+        Logger.warn(`[TTSService] 扣费配置缺失或校验失败，已跳过扣费: ${e?.message || e}`, 'TTSService');
+      }
+      await this.chatLogService.updateChatLog(chatId, { ttsUrl: url });
+      return res.status(200).send({ ttsUrl: url });
+    };
+
+    // 1) 读取聊天所属 appId，并优先根据 情绪→音色 映射选择音色
     try {
-      // 使用OpenAI SDK进行TTS请求
+      const chatLog = await this.chatLogService.findOneChatLog(chatId);
+      const appId = (chatLog as any)?.appId ?? null;
+
+      // 优先使用入参 emotion，否则从文本启发式推断
+      const detected = this.normalizeEmotionLabel(
+        emotion || this.detectEmotionFromText(prompt) || ''
+      );
+
+      if (detected) {
+        const mappedVoice = await this.resolveEmotionVoiceId(appId, detected);
+        if (mappedVoice) {
+          Logger.debug(
+            `命中情绪映射: emotion=${detected}, voice=${mappedVoice} (appId=${appId ?? 'global'})`,
+            'TTSService',
+          );
+          return await doTtsWithVoice(mappedVoice);
+        }
+      }
+
+      // 2) 若未命中情绪映射，则回退到应用绑定的默认音色
+      if (appId) {
+        try {
+          const map = await this.appVoiceRepo.findOne({ where: { appId, isDefault: 1 } });
+          const voiceId = map?.voiceId;
+          if (voiceId) {
+            Logger.debug(`检测到应用(${appId})绑定默认音色: ${voiceId}，使用角色音色进行TTS`, 'TTSService');
+            return await doTtsWithVoice(voiceId);
+          }
+        } catch (e: any) {
+          Logger.warn(`[TTSService] 读取应用默认音色失败: ${e?.message || e}`, 'TTSService');
+        }
+      }
+    } catch (e: any) {
+      Logger.warn(`[TTSService] 情绪/角色音色路径检查失败: ${e?.message || e}`, 'TTSService');
+    }
+
+    // 3) 最终回退：OpenAI TTS
+    try {
+      const detailKeyInfo = await this.modelsService.getCurrentModelKeyInfo('tts-1');
+      const { key, proxyUrl, deduct, deductType, timeout } = detailKeyInfo;
+      const { openaiBaseUrl, openaiBaseKey, openaiVoice } = await this.globalConfigService.getConfigs([
+        'openaiBaseUrl',
+        'openaiBaseKey',
+        'openaiVoice',
+      ]);
+      const useKey = key || openaiBaseKey;
+      const useTimeout = timeout * 1000;
+
+      // 用户余额检测（仅在走 OpenAI TTS 时强制校验）
+      await this.userBalanceService.validateBalance(req, deductType, deduct);
+
       const formattedUrl = formatUrl(proxyUrl || openaiBaseUrl);
       const correctedProxyUrl = await correctApiBaseUrl(formattedUrl);
-      const openai = new OpenAI({
-        apiKey: useKey,
-        baseURL: correctedProxyUrl,
-        timeout: useTimeout,
-      });
+      const openai = new OpenAI({ apiKey: useKey, baseURL: correctedProxyUrl, timeout: useTimeout });
 
-      // 获取音频数据
       const response = await openai.audio.speech.create({
         model: 'tts-1',
         input: prompt,
         voice: openaiVoice || 'onyx',
       });
 
-      // 将响应转换为buffer
       const buffer = Buffer.from(await response.arrayBuffer());
       Logger.debug('TTS音频数据生成成功', 'TTSService');
 
-      // 使用 Date 对象获取当前日期并格式化为 YYYYMM/DD
       const now = new Date();
       const year = now.getFullYear();
-      const month = String(now.getMonth() + 1).padStart(2, '0'); // 月份从0开始，所以+1
+      const month = String(now.getMonth() + 1).padStart(2, '0');
       const day = String(now.getDate()).padStart(2, '0');
       const currentDate = `${year}${month}/${day}`;
 
@@ -1024,16 +1163,15 @@ export class ChatService {
         `audio/openai/${currentDate}`,
       );
 
-      // 更新聊天记录并扣除余额
       await Promise.all([
         this.chatLogService.updateChatLog(chatId, { ttsUrl }),
         this.userBalanceService.deductFromBalance(req.user.id, deductType, deduct),
       ]);
 
-      res.status(200).send({ ttsUrl });
+      return res.status(200).send({ ttsUrl });
     } catch (error) {
       Logger.error('TTS处理失败', error, 'TTSService');
-      res.status(500).send({ error: '语音合成请求处理失败' });
+      return res.status(500).send({ message: error?.message || '语音合成请求处理失败' });
     }
   }
 }

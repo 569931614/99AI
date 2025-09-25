@@ -10,7 +10,7 @@ const routes: RouteRecordRaw = {
   redirect: '/package/list',
   name: 'packageMenu',
   meta: {
-    title: '套餐管理',
+    title: '套餐与计费',
     icon: 'icon-park-outline:buy',
   },
   children: [

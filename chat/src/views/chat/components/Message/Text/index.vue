@@ -1103,10 +1103,14 @@ function openSingleImagePreview(src: string) {
         <!-- 只读模式 -->
         <div
           v-else
-          class="p-3 rounded-2xl text-base bg-opacity dark:bg-gray-750 break-words whitespace-pre-wrap text-gray-950 dark:text-gray-100"
-          v-text="text"
+          class="p-3 rounded-2xl text-base bg-opacity dark:bg-gray-750 text-gray-950 dark:text-gray-100"
           style="max-width: 100%"
-        />
+        >
+          <div v-if="audioUrl" class="mb-2">
+            <audio :src="audioUrl" controls preload="metadata"></audio>
+          </div>
+          <div v-if="text" class="break-words whitespace-pre-wrap">{{ text }}</div>
+        </div>
       </div>
     </div>
 

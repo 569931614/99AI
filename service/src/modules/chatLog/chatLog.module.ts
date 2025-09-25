@@ -5,11 +5,12 @@ import { UserEntity } from '../user/user.entity';
 import { ChatLogController } from './chatLog.controller';
 import { ChatLogEntity } from './chatLog.entity';
 import { ChatLogService } from './chatLog.service';
+import { OpenChatLogController } from './open-chatLog.controller';
 
 @Global()
 @Module({
   imports: [TypeOrmModule.forFeature([ChatLogEntity, UserEntity, ChatGroupEntity])],
-  controllers: [ChatLogController],
+  controllers: [ChatLogController, OpenChatLogController],
   providers: [ChatLogService],
   exports: [ChatLogService],
 })

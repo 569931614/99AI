@@ -1,6 +1,7 @@
 import generatedRoutes from 'virtual:generated-pages';
 import { setupLayouts } from 'virtual:meta-layouts';
 import type { RouteRecordRaw } from 'vue-router';
+import AffectionMenu from './modules/affection.menu';
 import AppMenu from './modules/app.menu';
 import ChatMenu from './modules/chat.menu';
 import AiMenu from './modules/model.menu';
@@ -10,6 +11,7 @@ import SecureMenu from './modules/secure.menu';
 import StorageMenu from './modules/storage.menu';
 import SystemMenu from './modules/system.menu';
 import UserMenu from './modules/user.menu';
+import VoiceMenu from './modules/voice.menu';
 
 import type { Route } from '#/global';
 import useSettingsStore from '@/store/modules/settings';
@@ -97,6 +99,8 @@ const asyncRoutes: Route.recordMainRaw[] = [
       AiMenu,
       ChatMenu,
       AppMenu,
+      VoiceMenu,
+      AffectionMenu,
       SecureMenu,
       StorageMenu,
       PackageMenu,

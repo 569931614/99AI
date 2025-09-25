@@ -3,6 +3,7 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { AppEntity } from '../app/app.entity';
 import { AppService } from '../app/app.service';
 import { AppCatsEntity } from '../app/appCats.entity';
+import { AppVoiceEntity } from '../app/appVoice.entity';
 import { UserAppsEntity } from '../app/userApps.entity';
 import { ChatGroupEntity } from '../chatGroup/chatGroup.entity';
 import { ChatLogEntity } from '../chatLog/chatLog.entity';
@@ -37,6 +38,7 @@ import { UserBalanceService } from './userBalance.service';
       UserEntity,
       VerificationEntity,
       FingerprintLogEntity,
+      AppVoiceEntity,
     ]),
     GlobalConfigModule,
   ],

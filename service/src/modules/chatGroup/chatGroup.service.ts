@@ -128,14 +128,16 @@ export class ChatGroupService {
         where: params,
         order: { isSticky: 'DESC', updatedAt: 'DESC' },
       });
-      return res;
-      // const res = await this.chatGroupEntity.find({ where: params, order: { isSticky: 'DESC', id: 'DESC' } });
       const appIds = res.filter(t => t.appId).map(t => t.appId);
-      const appInfos = await this.appEntity.find({ where: { id: In(appIds) } });
-      return res.map((item: any) => {
-        item.appLogo = appInfos.find(t => t.id === item.appId)?.coverImg;
-        return item;
-      });
+      let mapped = res as any[];
+      if (appIds.length) {
+        const appInfos = await this.appEntity.find({ where: { id: In(appIds) } });
+        mapped = res.map((item: any) => {
+          item.appLogo = appInfos.find(t => t.id === item.appId)?.coverImg;
+          return item;
+        });
+      }
+      return mapped;
     } catch (error) {
       console.log('error: ', error);
     }

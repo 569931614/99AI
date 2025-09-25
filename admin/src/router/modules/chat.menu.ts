@@ -10,7 +10,7 @@ const routes: RouteRecordRaw = {
   redirect: '/chat/chat',
   name: 'chatMenu',
   meta: {
-    title: '数据管理',
+    title: '对话管理',
     icon: 'majesticons:data-line',
   },
   children: [
@@ -37,7 +37,7 @@ const routes: RouteRecordRaw = {
       name: 'ReplyMenuList',
       component: () => import('@/views/sensitive/autpReply.vue'),
       meta: {
-        title: '内容预设',
+        title: 'Prompt 片段',
         icon: 'ic:outline-question-answer',
       },
     },

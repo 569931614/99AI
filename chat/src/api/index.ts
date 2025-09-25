@@ -8,7 +8,8 @@ export function fetchChatAPIProcess<T = any>(params: {
   modelName: string
   modelType: number
   modelAvatar?: string
-  prompt: string
+  prompt?: string
+  audioUrl?: string
   sslUrl?: string
   chatId?: string
   fileInfo?: string
@@ -34,7 +35,8 @@ export function fetchChatAPIProcess<T = any>(params: {
     model: params.model,
     modelName: params.modelName,
     modelType: params.modelType,
-    prompt: params.prompt,
+    prompt: params?.prompt || '',
+    audioUrl: params?.audioUrl,
     fileInfo: params?.fileInfo,
     imageUrl: params?.imageUrl,
     fileUrl: params?.fileUrl,
@@ -101,6 +103,71 @@ export function fetchChatAPIProcess<T = any>(params: {
       .catch(error => {
         reject(error)
       })
+  })
+}
+
+/* 语音对话（服务端ASR后再对话，流式） */
+export function fetchChatAPIVoiceProcess<T = any>(params: {
+  audioUrl?: string
+  audioBase64?: string
+  model?: string
+  modelName?: string
+  modelType?: number
+  modelAvatar?: string
+  appId?: number
+  extraParam?: { size?: string }
+  usingPluginId?: number
+  options?: {
+    groupId: number
+    usingNetwork: boolean
+    usingMcpTool?: boolean
+  }
+  signal?: GenericAbortSignal
+  onDownloadProgress?: (progressEvent: AxiosProgressEvent) => void
+  taskId?: string
+}) {
+  const data = {
+    audioUrl: params.audioUrl,
+    audioBase64: params.audioBase64,
+    model: params.model,
+    modelName: params.modelName,
+    modelType: params.modelType,
+    appId: params.appId,
+    options: params.options,
+    usingPluginId: params.usingPluginId,
+    extraParam: params.extraParam,
+    modelAvatar: params?.modelAvatar,
+    taskId: params?.taskId,
+  }
+
+  if (!params.onDownloadProgress) {
+    return post<T>({ url: '/chatgpt/chat-process-voice', data, signal: params.signal })
+  }
+
+  return new Promise((resolve, reject) => {
+    const fetchOptions: RequestInit = {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    }
+    if (params.signal) fetchOptions.signal = params.signal as any
+    fetchStream('/chatgpt/chat-process-voice', fetchOptions, chunk => {
+      if (params.onDownloadProgress) {
+        const progressEvent: AxiosProgressEvent = {
+          event: {
+            target: { responseText: chunk, getResponseHeader: (name: string) => null },
+          } as any,
+          loaded: chunk.length,
+          total: 0,
+          bytes: chunk.length,
+          lengthComputable: false,
+          progress: 0,
+        }
+        params.onDownloadProgress(progressEvent)
+      }
+    })
+      .then(response => resolve({ data: response } as any))
+      .catch(error => reject(error))
   })
 }
 

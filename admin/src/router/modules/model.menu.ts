@@ -10,7 +10,7 @@ const routes: RouteRecordRaw = {
   redirect: '/ai/chat-key-list',
   name: 'AiMenu',
   meta: {
-    title: '模型管理',
+    title: '模型与API',
     icon: 'hugeicons:ai-book',
   },
   children: [

@@ -7,6 +7,7 @@ import { APP_INTERCEPTOR } from '@nestjs/core';
 import { ServeStaticModule } from '@nestjs/serve-static';
 // import * as fetch from 'isomorphic-fetch'; // Disable isomorphic-fetch polyfill
 import { join } from 'path';
+import { AffectionModule } from './modules/affection/affection.module';
 import { AppModule as ApplicationModule } from './modules/app/app.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { AutoReplyModule } from './modules/autoReply/autoReply.module';
@@ -32,6 +33,9 @@ import { UploadModule } from './modules/upload/upload.module';
 import { UserModule } from './modules/user/user.module';
 import { UserBalanceModule } from './modules/userBalance/userBalance.module';
 import { VerificationModule } from './modules/verification/verification.module';
+import { VoiceModule } from './modules/voice/voice.module';
+
+
 // global.fetch = fetch; // Disable isomorphic-fetch polyfill
 
 @Global()
@@ -93,6 +97,9 @@ import { VerificationModule } from './modules/verification/verification.module';
     ChatGroupModule,
     SigninModule,
     ModelsModule,
+    VoiceModule,
+    AffectionModule,
+
     ShareModule,
     SpaModule,
   ],

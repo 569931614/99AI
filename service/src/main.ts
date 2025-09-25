@@ -14,6 +14,8 @@ import * as path from 'path';
 import 'reflect-metadata';
 import { AppModule } from './app.module';
 import { AllExceptionsFilter } from './common/filters/allExceptions.filter';
+import { OpenAIChatService } from './modules/aiTool/chat/chat.service';
+import { VoiceService } from './modules/voice/voice.service';
 Dotenv.config({ path: '.env' });
 
 /**
@@ -123,9 +125,14 @@ async function bootstrap() {
   if (process.env.ISDEV === 'true') {
     const config = new DocumentBuilder()
       .setTitle('99AI API')
-      .setDescription('99AI服务API文档')
+      .setDescription('99AI服务API文档（含 /api/open/* 开放接口：对外可直接调用）')
       .setVersion('1.0')
       .addBearerAuth()
+      .addTag('open-app', '开放的角色管理接口（读写）：角色列表/详情、分类CRUD、App CRUD、全局情绪映射')
+      .addTag('open-voice', '开放的语音管理接口（读写）：音色列表/详情、复刻/更新/删除、参数/元信息、试听、ASR')
+      .addTag('open-affection', '开放的好感度接口（读写）：规则查询/维护、用户状态查询')
+      .addTag('open-chat', '开放的前端聊天接口（读写）：文字对话、语音对话、TTS 播报（需显式 userId）')
+      .addTag('open-chatLog', '开放的聊天记录接口（读）：查询我的对话列表、按应用查询、查询单条消息（需显式 userId）')
       .build();
 
     const document = SwaggerModule.createDocument(app, config);
@@ -174,6 +181,149 @@ async function bootstrap() {
   });
 
   server.timeout = 5 * 60 * 1000;
+
+  // Realtime Voice Call WS server (push-to-talk): /api/realtime/voice-call
+  try {
+    const voiceService = app.get(VoiceService);
+    const openAIChatService = app.get(OpenAIChatService);
+
+    // Dynamically import ws to avoid build issues
+    const WSMod: any = await import('ws');
+    const WSServer = WSMod?.Server || WSMod?.WebSocketServer;
+    if (!WSServer) {
+      Logger.warn('ws Server not available, skip realtime voice-call');
+      return;
+    }
+
+    const wss = new WSServer({ server, path: '/api/realtime/voice-call' });
+    Logger.log('Realtime WS ready at /api/realtime/voice-call', 'Main');
+
+    wss.on('connection', (socket: any, req: any) => {
+      Logger.debug('WS client connected', 'VoiceCall');
+      let audioChunks: Buffer[] = [];
+      let cfg = { sampleRate: 16000, format: 'wav' as 'wav'|'pcm'|'mp3'|'opus'|'speex'|'aac'|'amr', voice_id: '' };
+
+      const sendJson = (obj: any) => {
+        try { socket.send(JSON.stringify(obj)); } catch {}
+      };
+
+      socket.on('message', async (data: any, isBinary: boolean) => {
+        try {
+          if (isBinary) {
+            audioChunks.push(Buffer.from(data));
+            return;
+          }
+          const text = data.toString('utf8');
+          let msg: any;
+          try { msg = JSON.parse(text); } catch { return; }
+
+          if (msg?.type === 'start') {
+            audioChunks = [];
+            cfg.sampleRate = Number(msg.sampleRate || 16000);
+            cfg.format = (msg.format || 'wav');
+            cfg.voice_id = msg.voice_id || '';
+            sendJson({ type: 'started', sampleRate: cfg.sampleRate, format: cfg.format });
+          } else if (msg?.type === 'cancel') {
+            audioChunks = [];
+            sendJson({ type: 'canceled' });
+          } else if (msg?.type === 'stop') {
+            const buf = Buffer.concat(audioChunks);
+            audioChunks = [];
+            if (!buf.length) {
+              sendJson({ type: 'error', message: 'no audio received' });
+              return;
+            }
+
+            const mime = cfg.format === 'wav' ? 'audio/wav'
+              : cfg.format === 'mp3' ? 'audio/mpeg'
+              : cfg.format === 'pcm' ? 'application/octet-stream' : `audio/${cfg.format}`;
+            const audioBase64 = `data:${mime};base64,${buf.toString('base64')}`;
+
+            // 1) ASR (streaming partials)
+            sendJson({ type: 'asr.start' });
+            let asrText = '';
+            try {
+              const asrRes = await voiceService.asr(
+                { audioBase64, format: cfg.format as any, sample_rate: cfg.sampleRate },
+                { onPartial: (t: string, b?: number, e?: number|null) => sendJson({ type: 'asr.partial', text: t, begin: b, end: e }) },
+              );
+              asrText = (asrRes?.text || '').trim();
+              sendJson({ type: 'asr.final', text: asrText });
+            } catch (e: any) {
+              sendJson({ type: 'error', stage: 'asr', message: e?.message || 'ASR failed' });
+              return;
+            }
+            if (!asrText) return;
+
+            // 2) LLM chat (streaming text)
+            sendJson({ type: 'llm.start' });
+            const abortController = new AbortController();
+            let llmFull = '';
+            try {
+              await openAIChatService.chat(
+                [ { role: 'user', content: asrText } ],
+                {
+                  chatId: 'realtime',
+                  apiKey: '',
+                  model: 'gpt-4o-mini',
+                  modelName: 'AI助手',
+                  temperature: 1,
+                  prompt: asrText,
+                  timeout: 300000,
+                  proxyUrl: '',
+                  abortController,
+                  usingDeepThinking: false,
+                  usingNetwork: false,
+                  extraParam: null,
+                  deepThinkingType: 0,
+                  isFileUpload: 0,
+                  isImageUpload: 0,
+                  onProgress: (delta: any) => {
+                    const t = delta?.content?.[0]?.text || '';
+                    if (t) {
+                      llmFull += t;
+                      sendJson({ type: 'llm.partial', text: t });
+                    }
+                  },
+                },
+              );
+              sendJson({ type: 'llm.final', text: llmFull });
+            } catch (e: any) {
+              sendJson({ type: 'error', stage: 'llm', message: e?.message || 'LLM failed' });
+              return;
+            }
+
+            // 3) TTS (streaming audio frames)
+            if (cfg.voice_id && llmFull) {
+              sendJson({ type: 'tts.start' });
+              try {
+                await voiceService.ttsStream(
+                  { voice_id: cfg.voice_id, text: llmFull, format: 'mp3', sample_rate: 22050 },
+                  {
+                    onStart: info => sendJson({ type: 'tts.info', format: info.format, sample_rate: info.sample_rate }),
+                    onData: chunk => { try { socket.send(chunk, { binary: true }); } catch {} },
+                    onEnd: () => sendJson({ type: 'tts.end' }),
+                  },
+                );
+              } catch (e: any) {
+                sendJson({ type: 'error', stage: 'tts', message: e?.message || 'TTS failed' });
+                return;
+              }
+            }
+
+            sendJson({ type: 'done' });
+          }
+        } catch (err: any) {
+          sendJson({ type: 'error', message: err?.message || 'unexpected error' });
+        }
+      });
+
+      socket.on('close', () => Logger.debug('WS client disconnected', 'VoiceCall'));
+      socket.on('error', (e: any) => Logger.warn(`WS client error: ${e?.message || e}`, 'VoiceCall'));
+    });
+  } catch (e: any) {
+    Logger.warn(`Failed to init realtime WS: ${e?.message || e}`, 'Main');
+  }
 }
 
 bootstrap();

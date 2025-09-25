@@ -5,11 +5,13 @@ import { AppController } from './app.controller';
 import { AppEntity } from './app.entity';
 import { AppService } from './app.service';
 import { AppCatsEntity } from './appCats.entity';
+import { AppVoiceEntity } from './appVoice.entity';
+import { OpenAppController } from './open-app.controller';
 import { UserAppsEntity } from './userApps.entity';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([AppCatsEntity, AppEntity, UserAppsEntity])],
-  controllers: [AppController],
+  imports: [TypeOrmModule.forFeature([AppCatsEntity, AppEntity, UserAppsEntity, AppVoiceEntity])],
+  controllers: [AppController, OpenAppController],
   providers: [AppService, UserBalanceService],
 })
 export class AppModule {}

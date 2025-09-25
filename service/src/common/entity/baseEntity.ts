@@ -1,9 +1,9 @@
 import {
-  Entity,
-  PrimaryGeneratedColumn,
-  CreateDateColumn,
-  UpdateDateColumn,
-  DeleteDateColumn,
+    CreateDateColumn,
+    DeleteDateColumn,
+    Entity,
+    PrimaryGeneratedColumn,
+    UpdateDateColumn,
 } from 'typeorm';
 
 @Entity()
@@ -32,9 +32,9 @@ export class BaseEntity {
   @DeleteDateColumn({
     type: 'datetime',
     length: 0,
-    nullable: false,
+    nullable: true,
     name: 'deletedAt',
     comment: '删除时间',
   })
-  deletedAt: Date;
+  deletedAt: Date | null;
 }

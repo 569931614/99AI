@@ -1,12 +1,13 @@
 <route lang="yaml">
 meta:
-  title: 应用管理
+  title: 角色管理
 </route>
 
 <script lang="ts" setup>
   import ApiApp from '@/api/modules/app';
   import ApiModels from '@/api/modules/models';
   import uploadApi from '@/api/modules/upload';
+  import ApiVoice from '@/api/modules/voice';
   import { utcToShanghaiTime } from '@/utils/utcFormatTime';
   import { Plus, Refresh } from '@element-plus/icons-vue';
   import type {
@@ -60,6 +61,7 @@ meta:
     flowithKey: '',
     backgroundImg: '',
     prompt: '',
+    voiceId: '',
   });
 
   // 添加特殊模型类型
@@ -80,24 +82,8 @@ meta:
   });
 
   const rules = reactive<FormRules>({
-    catId: [{ required: true, message: '请选择App分类', trigger: 'change' }],
-    name: [{ required: true, message: '请填写App名称', trigger: 'blur' }],
-    preset: [{ required: false, message: '请填写App预设信息', trigger: 'blur' }],
-    des: [{ required: true, message: '请填写App描述', trigger: 'blur' }],
-    coverImg: [{ required: false, message: '请填写App封面图片地址', trigger: 'blur' }],
-    demoData: [{ required: false, message: '请填写App演示数据', trigger: 'blur' }],
-    isGPTs: [{ required: true, message: '是否GPTs', trigger: 'blur' }],
-    gizmoID: [{ required: false, message: 'GPTs 的ID', trigger: 'blur' }],
-    order: [{ required: false, message: '请填写排序ID', trigger: 'blur' }],
-    status: [{ required: true, message: '请选择App状态', trigger: 'change' }],
-    isFixedModel: [{ required: true, message: '请选择App是否固定模型', trigger: 'blur' }],
-    appModel: [{ required: false, message: '请选择App使用的模型', trigger: 'change' }],
-    isFlowith: [{ required: true, message: '请选择是否使用flowith模型', trigger: 'blur' }],
-    flowithId: [{ required: false, message: '请填写flowith模型ID', trigger: 'blur' }],
-    flowithName: [{ required: false, message: '请填写flowith模型名称', trigger: 'blur' }],
-    flowithKey: [{ required: false, message: '请填写flowith模型密钥', trigger: 'blur' }],
-    backgroundImg: [{ required: false, message: '请填写App背景图URL', trigger: 'blur' }],
-    prompt: [{ required: false, message: '请填写App提问模版', trigger: 'blur' }],
+    name: [{ required: true, message: '请填写角色名称', trigger: 'blur' }],
+    preset: [{ required: false, message: '请填写角色设定', trigger: 'blur' }],
   });
 
   const tableData = ref([]);
@@ -117,6 +103,111 @@ meta:
   });
 
   const modelOptions = ref<string[]>([]);
+  const voiceOptions = ref<Array<{ label: string; value: string }>>([]);
+  const voiceLoading = ref(false);
+
+  async function queryVoiceList() {
+    try {
+      voiceLoading.value = true;
+      const res: any = await ApiVoice.list({ page_index: 0, page_size: 200 });
+      const body: any = res || {};
+      // 兼容多种返回结构：voices / voice_list
+      const rawList =
+        body?.data?.voices ??
+        body?.voices ??
+        body?.data?.output?.voices ??
+        body?.output?.voices ??
+        body?.data?.output?.voice_list ??
+        body?.data?.voice_list ??
+        body?.output?.voice_list ??
+        body?.voice_list ??
+        body?.list ??
+        (Array.isArray(body) ? body : []);
+
+      const arr = Array.isArray(rawList) ? rawList : [];
+      voiceOptions.value = arr.map((v: any) => {
+        const id = v?.voice_id || v?.id || '';
+        const name = v?.name || '';
+        return { value: id, label: name ? `${name} (${id})` : id };
+      });
+    } catch (e) {
+      // ignore
+    } finally {
+      voiceLoading.value = false;
+    }
+  }
+
+  // 统一角色情绪配置（应用到所有角色）
+  const emotionDialog = reactive({
+    visible: false,
+    saving: false,
+    list: [] as Array<{ emotion: string; voiceId?: string }>,
+  });
+
+  function openEmotionDialog() {
+    emotionDialog.visible = true;
+    loadGlobalEmotions();
+  }
+
+  async function loadGlobalEmotions() {
+    try {
+      const res: any = await ApiApp.getGlobalEmotions();
+      const list = res?.data?.emotions || [];
+      emotionDialog.list = Array.isArray(list)
+        ? list.map((i: any) => ({
+            emotion: String(i?.emotion || ''),
+            voiceId: i?.voiceId ? String(i.voiceId) : '',
+          }))
+        : [];
+    } catch (_) {
+      emotionDialog.list = [];
+    }
+  }
+
+  function addEmotionRow() {
+    emotionDialog.list.push({ emotion: '', voiceId: '' });
+  }
+
+  function removeEmotionRow(index: number) {
+    emotionDialog.list.splice(index, 1);
+  }
+
+  async function saveGlobalEmotions() {
+    try {
+      emotionDialog.saving = true;
+      const cleaned = emotionDialog.list
+        .map((i) => ({
+          emotion: String(i.emotion || '').trim(),
+          voiceId: i.voiceId ? String(i.voiceId) : '',
+        }))
+        .filter((i) => i.emotion);
+      await ApiApp.setGlobalEmotions({ emotions: cleaned });
+      ElMessage.success('已保存统一情绪配置');
+      emotionDialog.visible = false;
+    } catch (e) {
+      ElMessage.error('保存失败');
+    } finally {
+      emotionDialog.saving = false;
+    }
+  }
+
+  onMounted(() => {
+    queryVoiceList();
+  });
+
+  // 打开编辑弹窗时若未加载过音色，再次尝试加载，保证下拉有值
+  watch(visible, (val) => {
+    if (val && voiceOptions.value.length === 0 && !voiceLoading.value) {
+      queryVoiceList();
+    }
+
+    // 选项加载完成后，强制触发一次回显刷新
+    watch(voiceOptions, () => {
+      if (visible.value && formPackage.voiceId) {
+        formPackage.voiceId = String(formPackage.voiceId);
+      }
+    });
+  });
 
   async function queryAppList() {
     try {
@@ -162,6 +253,10 @@ meta:
   }
 
   function handleUpdatePackage(row: any) {
+    // 确保弹窗打开前已有音色选项（否则回显看不到标签）
+    if (voiceOptions.value.length === 0 && !voiceLoading.value) {
+      queryVoiceList();
+    }
     activeAppCatId.value = row.id;
     isUserApp.value = row.role === 'user';
     userAppStatus.value = row.status;
@@ -184,6 +279,7 @@ meta:
       flowithKey,
       backgroundImg,
       prompt,
+      voiceId,
     } = row;
 
     // 设置特殊模型类型
@@ -228,6 +324,7 @@ meta:
         flowithKey,
         backgroundImg,
         prompt,
+        voiceId,
       });
 
       // --- 新增：处理 prompt 模板 ---
@@ -463,15 +560,31 @@ meta:
         }
         // --- 结束：处理 prompt 模板提交 ---
 
+        // 注入后端必需的默认字段以简化表单
+        const ensureDefaults = (obj: any) => {
+          const firstCat = catList.value?.[0]?.id?.toString();
+          if (!obj.des) obj.des = obj.name || '';
+          if (obj.status === undefined || obj.status === null) obj.status = 1;
+          if (!obj.catId || (Array.isArray(obj.catId) && obj.catId.length === 0)) {
+            obj.catId = firstCat ? [firstCat] : ['1'];
+          }
+        };
+
         if (activeAppCatId.value) {
-          const params = { ...formPackage, prompt: finalPrompt, id: activeAppCatId.value }; // 使用处理后的 prompt
-          params.catId = params.catId.join(',') as any;
-          isUserApp.value && Object.assign(params, { status: userAppStatus.value });
+          const params: any = { ...formPackage, prompt: finalPrompt, id: activeAppCatId.value };
+          ensureDefaults(params);
+          params.catId = (Array.isArray(params.catId) ? params.catId : [params.catId]).join(
+            ',',
+          ) as any;
+          if (isUserApp.value) Object.assign(params, { status: userAppStatus.value });
           await ApiApp.updateApp(params);
           ElMessage({ type: 'success', message: '更新应用成功！' });
         } else {
-          const newApp = { ...formPackage, prompt: finalPrompt }; // 使用处理后的 prompt
-          newApp.catId = newApp.catId.join(',') as any;
+          const newApp: any = { ...formPackage, prompt: finalPrompt };
+          ensureDefaults(newApp);
+          newApp.catId = (Array.isArray(newApp.catId) ? newApp.catId : [newApp.catId]).join(
+            ',',
+          ) as any;
           await ApiApp.createApp(newApp);
           ElMessage({ type: 'success', message: '创建新的应用成功！' });
         }
@@ -733,20 +846,21 @@ meta:
   <div>
     <PageHeader>
       <template #title>
-        <div class="flex items-center gap-4">应用配置</div>
+        <div class="flex items-center gap-4">角色管理</div>
       </template>
       <template #content>
         <div class="text-sm/6">
-          <div>应用一旦创建，可能会被多处使用，请保持规范命名分类，后续尽量变更而不是删除。</div>
-          <div>
-            可自行选择应用是否固定模型。GPTs 需单独在特殊模型中配置 gpts 模型，并自行搜索填写
-            gizmoID（例如：g-alKfVrz9K）。
-          </div>
+          <div>请按星尘API规范维护角色信息（名称、设定、可选特质Traits），建议规范命名与分类。</div>
+          <div>模型可固定或不固定；如无特殊需要，保持默认即可。</div>
         </div>
       </template>
       <HButton outline @click="visible = true">
         <SvgIcon name="ic:baseline-plus" />
         新增应用
+      </HButton>
+      <HButton outline class="ml-2" @click="openEmotionDialog">
+        <SvgIcon name="mdi:emoticon-outline" />
+        统一情绪设置
       </HButton>
     </PageHeader>
 
@@ -786,12 +900,12 @@ meta:
 
     <page-main style="width: 100%">
       <el-table v-loading="loading" border :data="tableData" style="width: 100%" size="large">
-        <el-table-column prop="coverImg" label="应用封面" width="100">
+        <el-table-column prop="coverImg" label="角色封面" width="100">
           <template #default="scope">
             <el-image style="height: 50px" :src="scope.row.coverImg" fit="fill" />
           </template>
         </el-table-column>
-        <el-table-column prop="catName" label="应用分类" width="120">
+        <el-table-column prop="catName" label="分类" width="120">
           <template #default="scope">
             <el-tooltip
               v-if="scope.row.catName && scope.row.catName.includes(',')"
@@ -811,8 +925,8 @@ meta:
             <span v-else>{{ scope.row.catName }}</span>
           </template>
         </el-table-column>
-        <el-table-column prop="name" label="应用名称" width="120" />
-        <el-table-column prop="status" label="应用状态" width="100">
+        <el-table-column prop="name" label="角色名称" width="120" />
+        <el-table-column prop="status" label="状态" width="100">
           <template #default="scope">
             <el-tag :type="scope.row.status === 1 ? 'success' : 'danger'">
               {{ QUESTION_STATUS_MAP[scope.row.status] }}
@@ -834,7 +948,7 @@ meta:
           </template>
         </el-table-column> -->
         <el-table-column prop="order" label="排序ID" /> />
-        <el-table-column prop="preset" label="预设信息" width="400">
+        <el-table-column prop="preset" label="角色设定" width="400">
           <template #default="scope">
             <el-tooltip class="box-item" effect="dark" placement="top-start">
               <template #content>
@@ -849,7 +963,7 @@ meta:
           </template>
         </el-table-column>
 
-        <el-table-column prop="des" label="描述信息" width="300">
+        <el-table-column prop="des" label="角色描述" width="300">
           <template #default="scope">
             <el-tooltip class="box-item" effect="dark" placement="top-start">
               <template #content>
@@ -923,18 +1037,18 @@ meta:
       >
         <el-row :gutter="20">
           <el-col :span="10">
-            <el-form-item label="App名称" prop="name">
+            <el-form-item label="角色名称" prop="name">
               <el-input v-model="formPackage.name" placeholder="请填写App名称" />
             </el-form-item>
-            <el-form-item v-if="!isUserApp" label="App状态" prop="status">
+            <el-form-item v-if="false" label="App状态" prop="status">
               <el-switch v-model="formPackage.status" :active-value="1" :inactive-value="0" />
             </el-form-item>
-            <el-form-item label="排序ID" prop="order">
+            <el-form-item v-if="false" label="排序ID" prop="order">
               <el-input v-model.number="formPackage.order" placeholder="排序ID" />
             </el-form-item>
           </el-col>
           <el-col :span="14">
-            <el-form-item label="App分类" prop="catId">
+            <el-form-item v-if="false" label="App分类" prop="catId">
               <div class="category-selector" style="height: 100%">
                 <div class="selected-categories mb-2">
                   <el-tag
@@ -967,9 +1081,53 @@ meta:
                 </div>
               </div>
             </el-form-item>
+            <!-- 角色头像放到第一行 -->
+            <el-form-item label="角色头像" prop="coverImg">
+              <el-input v-model="formPackage.coverImg" placeholder="填写或上传角色头像" clearable>
+                <template #append>
+                  <!-- Upload Component -->
+                  <el-upload
+                    class="avatar-uploader"
+                    :http-request="customUpload"
+                    :show-file-list="false"
+                    :on-success="handleAvatarSuccess"
+                    :before-upload="beforeAvatarUpload"
+                    style="
+                      display: inline-flex;
+                      align-items: center;
+                      justify-content: center;
+                      vertical-align: middle;
+                    "
+                  >
+                    <img
+                      v-if="formPackage.coverImg"
+                      :src="formPackage.coverImg"
+                      style="
+                        max-width: 1.5rem;
+                        max-height: 1.5rem;
+                        margin: 5px 0;
+                        object-fit: contain;
+                      "
+                    />
+                    <el-icon v-else style="width: 1rem">
+                      <Plus />
+                    </el-icon>
+                  </el-upload>
+                  <!-- Re-upload Icon (Separate) -->
+                  <el-icon
+                    v-if="formPackage.coverImg"
+                    @click="reuploadAppAvatar"
+                    style="margin-left: 10px; width: 1rem; cursor: pointer; vertical-align: middle"
+                    class="hover:text-primary"
+                  >
+                    <Refresh />
+                  </el-icon>
+                </template>
+              </el-input>
+            </el-form-item>
           </el-col>
           <el-col :span="12">
-            <el-form-item label="App描述" prop="des">
+            <el-form-item v-if="false" label="角色描述" prop="des">
               <el-input
                 v-model="formPackage.des"
                 type="textarea"
@@ -979,7 +1137,7 @@ meta:
             </el-form-item>
           </el-col>
           <el-col :span="12">
-            <el-form-item label="示例内容" prop="demoData">
+            <el-form-item v-if="false" label="示例内容" prop="demoData">
               <el-input
                 v-model="formPackage.demoData"
                 type="textarea"
@@ -989,7 +1147,7 @@ meta:
             </el-form-item>
           </el-col>
           <el-col :span="24">
-            <el-form-item v-if="specialModelType !== 'gpts'" label="App预设" prop="preset">
+            <el-form-item v-if="specialModelType !== 'gpts'" label="角色设定" prop="preset">
               <el-input
                 v-model="formPackage.preset"
                 type="textarea"
@@ -999,7 +1157,7 @@ meta:
             </el-form-item>
           </el-col>
           <el-col :span="12">
-            <el-form-item v-if="!isUserApp" label="特殊模型" prop="specialModel">
+            <el-form-item v-if="false" label="特殊模型" prop="specialModel">
               <el-radio-group v-model="specialModelType">
                 <el-radio label="none">不使用</el-radio>
                 <el-radio label="gpts">GPTs</el-radio>
@@ -1048,61 +1206,36 @@ meta:
               </el-col>
             </el-row>
           </el-col>
+          <el-col :span="12">
+            <el-form-item label="角色音色" prop="voiceId">
+              <el-select
+                v-model="formPackage.voiceId"
+                filterable
+                clearable
+                :loading="voiceLoading"
+                placeholder="选择音色"
+              >
+                <el-option
+                  v-for="opt in voiceOptions"
+                  :key="opt.value"
+                  :label="opt.label"
+                  :value="opt.value"
+                />
+              </el-select>
+            </el-form-item>
+          </el-col>
+
           <el-col :span="12" v-if="specialModelType === 'gpts'">
-            <el-form-item label="gizmoID" prop="gizmoID">
+            <el-form-item v-if="false" label="gizmoID" prop="gizmoID">
               <el-input v-model="formPackage.gizmoID" placeholder="请填写 GPTs 使用的 gizmoID" />
             </el-form-item>
           </el-col>
           <el-col :span="12" v-if="specialModelType === 'gpts'">
             <!-- Placeholder Column -->
           </el-col>
+
           <el-col :span="12">
-            <el-form-item label="应用图标" prop="coverImg">
-              <el-input v-model="formPackage.coverImg" placeholder="填写或上传图标" clearable>
-                <template #append>
-                  <!-- Upload Component -->
-                  <el-upload
-                    class="avatar-uploader"
-                    :http-request="customUpload"
-                    :show-file-list="false"
-                    :on-success="handleAvatarSuccess"
-                    :before-upload="beforeAvatarUpload"
-                    style="
-                      display: inline-flex;
-                      align-items: center;
-                      justify-content: center;
-                      vertical-align: middle;
-                    "
-                  >
-                    <img
-                      v-if="formPackage.coverImg"
-                      :src="formPackage.coverImg"
-                      style="
-                        max-width: 1.5rem;
-                        max-height: 1.5rem;
-                        margin: 5px 0;
-                        object-fit: contain;
-                      "
-                    />
-                    <el-icon v-else style="width: 1rem">
-                      <Plus />
-                    </el-icon>
-                  </el-upload>
-                  <!-- Re-upload Icon (Separate) -->
-                  <el-icon
-                    v-if="formPackage.coverImg"
-                    @click="reuploadAppAvatar"
-                    style="margin-left: 10px; width: 1rem; cursor: pointer; vertical-align: middle"
-                    class="hover:text-primary"
-                  >
-                    <Refresh />
-                  </el-icon>
-                </template>
-              </el-input>
-            </el-form-item>
-          </el-col>
-          <el-col :span="12">
-            <el-form-item label="App背景图" prop="backgroundImg">
+            <el-form-item v-if="false" label="App背景图" prop="backgroundImg">
               <el-input
                 v-model="formPackage.backgroundImg"
                 placeholder="填写或上传背景图"
@@ -1151,7 +1284,7 @@ meta:
             </el-form-item>
           </el-col>
           <el-col :span="24">
-            <el-form-item label="提问模版" prop="prompt">
+            <el-form-item v-if="false" label="提问模版" prop="prompt">
               <el-radio-group v-model="usePromptTemplate" size="small" class="mb-2">
                 <el-radio-button label="plain">普通模式</el-radio-button>
                 <el-radio-button label="template">模板模式</el-radio-button>
@@ -1187,6 +1320,52 @@ meta:
             {{ dialogButton }}
           </el-button>
         </span>
+      </template>
+    </el-dialog>
+
+    <!-- 统一情绪设置弹窗 -->
+    <el-dialog v-model="emotionDialog.visible" title="统一情绪设置" width="720px">
+      <div>
+        <el-table :data="emotionDialog.list" border size="small" style="width: 100%">
+          <el-table-column label="情绪名称" min-width="200">
+            <template #default="scope">
+              <el-input v-model="scope.row.emotion" placeholder="例如：开心、伤心、严肃..." />
+            </template>
+          </el-table-column>
+          <el-table-column label="默认音色" min-width="360">
+            <template #default="scope">
+              <el-select
+                v-model="scope.row.voiceId"
+                filterable
+                clearable
+                :loading="voiceLoading"
+                placeholder="选择音色"
+                style="width: 100%"
+              >
+                <el-option
+                  v-for="opt in voiceOptions"
+                  :key="opt.value"
+                  :label="opt.label"
+                  :value="opt.value"
+                />
+              </el-select>
+            </template>
+          </el-table-column>
+          <el-table-column label="操作" width="120">
+            <template #default="scope">
+              <el-button link type="danger" @click="removeEmotionRow(scope.$index)">删除</el-button>
+            </template>
+          </el-table-column>
+        </el-table>
+        <div class="mt-3">
+          <el-button type="primary" plain @click="addEmotionRow">新增情绪</el-button>
+        </div>
+      </div>
+      <template #footer>
+        <el-button @click="emotionDialog.visible = false">取消</el-button>
+        <el-button type="primary" :loading="emotionDialog.saving" @click="saveGlobalEmotions"
+          >保存</el-button
+        >
       </template>
     </el-dialog>
   </div>

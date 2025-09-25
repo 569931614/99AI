@@ -1,10 +1,12 @@
 <script lang="ts" setup>
+import { fetchAffectionStatus } from '@/api/affection'
 import { fetchQueryOneCatAPI } from '@/api/appStore'
 import { fetchUpdateGroupAPI } from '@/api/group'
 import { fetchQueryModelsListAPI } from '@/api/models'
+
 import { DropdownMenu } from '@/components/common/DropdownMenu'
 import { useBasicLayout } from '@/hooks/useBasicLayout'
-import { useAppStore, useChatStore, useGlobalStoreWithOut } from '@/store'
+import { useAppStore, useAuthStore, useChatStore, useGlobalStoreWithOut } from '@/store'
 import {
   Brightness,
   CheckOne,
@@ -14,7 +16,7 @@ import {
   ExpandLeft,
   Right,
 } from '@icon-park/vue-next'
-import { computed, inject, onMounted, ref, Ref, watch } from 'vue'
+import { computed, inject, onMounted, onUnmounted, ref, Ref, watch } from 'vue'
 
 interface ModelOption {
   label: string
@@ -104,6 +106,57 @@ watch(
   { immediate: true }
 )
 
+// Affection (好感度) display state
+const authStore = useAuthStore()
+const affectionScore = ref<number | null>(null)
+const affectionStageName = ref<string>('')
+const affectionLoading = ref(false)
+
+async function loadAffection() {
+  try {
+    affectionLoading.value = true
+    const appId = Number(activeAppId.value || 0)
+    const userId = (authStore as any)?.userInfo?.id
+    if (!authStore.isLogin || !userId || !appId) {
+      affectionScore.value = null
+      affectionStageName.value = ''
+      return
+    }
+    const res: any = await fetchAffectionStatus<{ score: number; stage: { name?: string } | null }>(
+      { userId, appId }
+    )
+    if (res?.success) {
+      const { score, stage } = res.data || {}
+      affectionScore.value = typeof score === 'number' ? score : null
+      affectionStageName.value = stage?.name || ''
+    } else {
+      affectionScore.value = null
+      affectionStageName.value = ''
+    }
+  } finally {
+    affectionLoading.value = false
+  }
+}
+
+function handleAffectionRefresh() {
+  void loadAffection()
+}
+
+onMounted(() => {
+  watch(
+    [() => activeAppId.value, () => (authStore as any)?.userInfo?.id],
+    () => {
+      void loadAffection()
+    },
+    { immediate: true }
+  )
+  window.addEventListener('affection:refresh', handleAffectionRefresh)
+})
+
+onUnmounted(() => {
+  window.removeEventListener('affection:refresh', handleAffectionRefresh)
+})
+
 /* 查询当前app详情提示用户使用 */
 async function queryAppDetail(id: number) {
   const res: any = await fetchQueryOneCatAPI({ id })
@@ -169,6 +222,7 @@ async function switchModel(option: any) {
     groupId: chatGroupId.value,
     config: JSON.stringify(config),
   }
+
   await fetchUpdateGroupAPI(params)
   await chatStore.queryMyGroup()
   // useGlobalStore.updateModelDialog(false);
@@ -366,6 +420,20 @@ function openSettings(tab?: number) {
           </div>
 
           <div class="flex items-center">
+            <!-- 好感度展示 -->
+            <div v-if="!externalLinkActive && !isPreviewerVisible" class="relative group mx-1">
+              <span
+                class="px-2 py-1 rounded-full text-xs bg-gray-100 dark:bg-neutral-800 text-gray-700 dark:text-gray-300"
+              >
+                <template v-if="affectionLoading">好感度 加载中…</template>
+                <template v-else-if="affectionStageName || affectionScore !== null">
+                  好感度 {{ affectionScore ?? '--'
+                  }}<template v-if="affectionStageName"> · {{ affectionStageName }}</template>
+                </template>
+                <template v-else>好感度 --</template>
+              </span>
+            </div>
+
             <!-- 主题切换按钮，仅在非外部链接和非预览器状态下显示 -->
             <div v-if="!externalLinkActive && !isPreviewerVisible" class="relative group mx-1">
               <button
@@ -382,7 +450,7 @@ function openSettings(tab?: number) {
             </div>
 
             <!-- 工具链接组件，在非预览器状态、非外部链接状态、非应用广场状态下显示 -->
-            <ToolLinks v-if="!externalLinkActive && !isPreviewerVisible && !isAppListVisible" />
+            <!-- ToolLinks removed: component unavailable -->
 
             <!-- 文本编辑器按钮 -->
             <div v-if="false" class="relative group mx-1">

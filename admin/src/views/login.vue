@@ -6,8 +6,8 @@ meta:
 </route>
 
 <script lang="ts" setup name="Login">
-  import type { FormInstance, FormRules } from 'element-plus';
   import useUserStore from '@/store/modules/user';
+  import type { FormInstance, FormRules } from 'element-plus';
 
   const route = useRoute();
   const router = useRouter();
@@ -82,7 +82,7 @@ meta:
         autocomplete="on"
       >
         <div class="mb-6 text-center">
-          <h3 class="text-xl text-gray-900 font-bold">欢迎来到 {{ title }}</h3>
+          <h3 class="text-xl text-gray-900 font-bold">欢迎来到 {{ title }} · 角色扮演平台</h3>
         </div>
         <div>
           <el-form-item prop="username" class="py-2">

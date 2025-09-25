@@ -127,6 +127,7 @@ declare namespace Chat {
     chatId?: number
     taskId?: string
     imageUrl?: string
+    audioUrl?: string
   }
 
   interface SearchAppsResponse {}

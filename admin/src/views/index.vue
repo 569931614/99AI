@@ -10,12 +10,10 @@ meta:
   import * as echarts from 'echarts';
   // import { ElNotification } from 'element-plus';
   import { ChatDotRound, Picture, ShoppingCart, TrendCharts, User } from '@element-plus/icons-vue';
-  import { marked } from 'marked';
+
   import ResizeObserver from 'resize-observer-polyfill';
   import { computed, nextTick, onBeforeMount, onMounted, ref, watch } from 'vue';
   import { useRouter } from 'vue-router';
-  // 导入CHANGELOG.md文件内容
-  import changelogMd from '@/assets/CHANGELOG.md?raw';
 
   const settingsStore = useSettingsStore();
   const router = useRouter();
@@ -24,19 +22,7 @@ meta:
     return settingsStore.settings.app.colorScheme;
   });
 
-  const feedbackUrl = 'https://github.com/vastxie/99AI';
-
-  // 在新窗口打开问题反馈链接
-  const openFeedbackInNewWindow = () => {
-    window.open(feedbackUrl, '_blank');
-  };
-
   const { pkg } = __SYSTEM_INFO__;
-
-  // 处理更新日志内容
-  const changelogHtml = computed(() => {
-    return marked(changelogMd);
-  });
 
   const baseInfo = ref({
     userCount: 0,
@@ -68,7 +54,7 @@ meta:
     },
     legend: {
       top: '10px',
-      data: ['对话数量', '绘画数量'],
+      data: ['对话数量', '通话次数(占位)'],
     },
     grid: {
       top: '50px',
@@ -118,7 +104,7 @@ meta:
         data: [],
       },
       {
-        name: '绘画数量',
+        name: '通话次数(占位)',
         type: 'bar',
         itemStyle: {
           color: 'rgba(0, 215, 255, 0.8)',
@@ -341,38 +327,12 @@ meta:
               >{{ pkg.version }}</span
             >
           </div>
-          <div
-            class="flex-1 p-5 overflow-y-auto overflow-x-hidden markdown-body hide-h1"
-            v-html="changelogHtml"
-          ></div>
-        </div>
-
-        <!-- 问题反馈 -->
-        <div class="h-20 flex justify-start">
-          <div
-            class="w-full h-full bg-white dark:bg-gray-800 rounded-lg shadow-md cursor-pointer relative overflow-hidden group"
-            @click="openFeedbackInNewWindow"
-          >
-            <div class="p-4 flex flex-col justify-between h-full">
-              <div class="flex justify-between items-center mb-2">
-                <span class="text-sm font-medium text-gray-800 dark:text-gray-200">开源地址</span>
-                <el-icon class="text-blue-500 text-lg"><ChatDotRound /></el-icon>
-              </div>
-              <div class="flex justify-between items-center">
-                <span class="text-xs text-gray-600 dark:text-gray-400"
-                  >https://github.com/vastxie/99AI</span
-                >
-                <span class="text-xs text-blue-500 font-medium">点击</span>
-              </div>
-            </div>
-            <div
-              class="absolute inset-0 bg-black bg-opacity-10 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-300"
-            >
-              <div class="flex flex-col items-center gap-2 text-white">
-                <el-icon class="text-4xl"><ChatDotRound /></el-icon>
-                <span class="text-sm font-medium">新窗口打开</span>
-              </div>
-            </div>
+          <div class="flex-1 p-5 overflow-y-auto overflow-x-hidden markdown-body">
+            <h2>产品简介</h2>
+            <p>本平台用于创建角色扮演的角色，并与角色进行聊天对话与语音通话。</p>
+            <p>
+              管理后台包含：角色管理、对话管理、模型与API、用户与访问、内容与安全、存储与系统配置等模块。
+            </p>
           </div>
         </div>
       </div>
@@ -422,7 +382,7 @@ meta:
               <el-icon><Picture /></el-icon>
             </div>
             <div class="flex-1">
-              <div class="text-xs text-gray-600 dark:text-gray-400 mb-1">今日绘画</div>
+              <div class="text-xs text-gray-600 dark:text-gray-400 mb-1">今日通话(占位)</div>
               <div class="text-2xl font-bold text-gray-800 dark:text-gray-200 mb-0.5">
                 {{ baseInfo.newDrawCount || 0 }}
               </div>
@@ -474,6 +434,14 @@ meta:
                   </div>
                 </template>
               </el-tab-pane>
+              <el-tab-pane label="通话统计(占位)" name="call">
+                <template #label>
+                  <div class="flex items-center justify-center gap-2 px-2">
+                    <el-icon><TrendCharts /></el-icon>
+                    <span>通话统计(占位)</span>
+                  </div>
+                </template>
+              </el-tab-pane>
             </el-tabs>
 
             <el-radio-group
@@ -487,7 +455,12 @@ meta:
               </el-radio-button>
             </el-radio-group>
 
-            <el-radio-group v-else v-model="baiduDays" @change="getBaiduVisitInfo" size="small">
+            <el-radio-group
+              v-else-if="activeTab === 'visitor'"
+              v-model="baiduDays"
+              @change="getBaiduVisitInfo"
+              size="small"
+            >
               <el-radio-button v-for="item in daysList" :key="item.value" :label="item.label">
                 {{ item.value }}
               </el-radio-button>
@@ -497,6 +470,12 @@ meta:
           <div class="flex-1 p-5 relative">
             <div id="chat" class="w-full h-full" v-show="activeTab === 'chat'" />
             <div id="baidu" class="w-full h-full" v-show="activeTab === 'visitor'" />
+            <div
+              v-show="activeTab === 'call'"
+              class="w-full h-full flex items-center justify-center text-gray-500"
+            >
+              暂未接入通话统计接口
+            </div>
           </div>
         </div>
       </div>

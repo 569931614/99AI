@@ -10,7 +10,7 @@ const routes: RouteRecordRaw = {
   redirect: '/user/dashboard',
   name: 'userMenu',
   meta: {
-    title: '访问管理',
+    title: '用户与访问',
     icon: 'mdi:user-outline',
   },
   children: [

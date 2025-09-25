@@ -1,6 +1,6 @@
-import { IsNotEmpty, IsString, IsOptional } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
+import { IsOptional, IsString } from 'class-validator';
 
 export class Options {
   @IsString()
@@ -12,9 +12,13 @@ export class Options {
 }
 
 export class ChatProcessDto {
-  @ApiProperty({ example: 'hello, Who are you', description: '对话信息' })
-  @IsNotEmpty({ message: '提问信息不能为空！' })
-  prompt: string;
+  @ApiProperty({ example: 'hello, Who are you', description: '对话信息（当存在audioUrl时可为空，由服务端识别后填充）', required: false })
+  @IsOptional()
+  prompt?: string;
+
+  @ApiProperty({ example: 'https://oss/xxx.wav', description: '语音文件URL（可选）', required: false })
+  @IsOptional()
+  audioUrl?: string;
 
   @ApiProperty({
     example: 'https://aiweb.com',

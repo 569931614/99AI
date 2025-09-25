@@ -1,6 +1,7 @@
 import { handleError } from '@/common/utils';
 import { correctApiBaseUrl } from '@/common/utils/correctApiBaseUrl';
 import { Injectable, Logger } from '@nestjs/common';
+import axios from 'axios';
 import OpenAI from 'openai';
 import { GlobalConfigService } from '../../globalConfig/globalConfig.service';
 import { NetSearchService } from '../search/netSearch.service';
@@ -405,6 +406,7 @@ export class OpenAIChatService {
       extraParam?: any;
       searchResults?: any[];
       images?: string[];
+      userId?: any;
       abortController: AbortController;
       onProgress?: (data: any) => void;
     },
@@ -419,6 +421,7 @@ export class OpenAIChatService {
       max_tokens,
       searchResults,
       images,
+      userId,
       abortController,
       onProgress,
     } = inputs;
@@ -443,6 +446,7 @@ export class OpenAIChatService {
         timeout,
         temperature,
         max_tokens,
+        userId,
         abortController,
         onProgress,
       },
@@ -454,6 +458,7 @@ export class OpenAIChatService {
     messagesHistory: any,
     inputs: {
       chatId: any;
+      userId?: any;
       maxModelTokens?: any;
       max_tokens?: any;
       apiKey: any;
@@ -491,6 +496,7 @@ export class OpenAIChatService {
   ) {
     const {
       chatId,
+      userId,
       maxModelTokens,
       max_tokens,
       apiKey,
@@ -608,75 +614,71 @@ export class OpenAIChatService {
   }
 
   async chatFree(prompt: string, systemMessage?: string, messagesHistory?: any[], imageUrl?: any) {
-    const {
-      openaiBaseUrl = '',
-      openaiBaseKey = '',
-      openaiBaseModel,
-    } = await this.globalConfigService.getConfigs([
-      'openaiBaseKey',
-      'openaiBaseUrl',
-      'openaiBaseModel',
-    ]);
-
-    const key = openaiBaseKey;
-    const proxyUrl = openaiBaseUrl;
-
-    let requestData = [];
-
-    if (systemMessage) {
-      requestData.push({
-        role: 'system',
-        content: systemMessage,
-      });
-    }
+    // 构造消息与 botProfile
+    let botContent = systemMessage || '';
+    const messages: any[] = [];
 
     if (messagesHistory && messagesHistory.length > 0) {
-      requestData = requestData.concat(messagesHistory);
-    } else {
-      if (imageUrl) {
-        requestData.push({
-          role: 'user',
-          content: [
-            {
-              type: 'text',
-              text: prompt,
-            },
-            {
-              type: 'image_url',
-              image_url: {
-                url: imageUrl,
-              },
-            },
-          ],
-        });
-      } else {
-        requestData.push({
-          role: 'user',
-          content: prompt,
-        });
+      for (const msg of messagesHistory) {
+        if (msg?.role === 'system' && !botContent) {
+          botContent = typeof msg.content === 'string' ? msg.content : botContent;
+          continue;
+        }
+        messages.push(msg);
       }
+    } else {
+      // 简单单轮
+      messages.push({ role: 'user', content: prompt });
     }
 
+    // 读取星尘 Key（getConfigs 单键时返回字符串，兼容处理）
+    const cfgKey: any = await this.globalConfigService.getConfigs(['xingchenApiKey']);
+    const xingchenApiKey = typeof cfgKey === 'string' ? cfgKey : cfgKey?.xingchenApiKey;
+    const useKey = xingchenApiKey || process.env.XINGCHEN_API_KEY || '';
+
+    const url = 'https://nlp.aliyuncs.com/v2/api/chat/send';
+    const headers: any = {
+      'Content-Type': 'application/json',
+      'x-fag-servicename': 'aca-chat-send',
+      'x-fag-appcode': 'aca',
+      Authorization: `Bearer ${useKey}`,
+      'X-AcA-DataInspection': 'enable',
+    };
+
+    const payload: any = {
+      input: {
+        messages,
+        aca: {
+          botProfile: {
+            name: 'AI助手',
+            content: botContent || '',
+          },
+          userProfile: {
+            userId: 'system',
+          },
+        },
+      },
+    };
+
     try {
-      const openai = new OpenAI({
-        apiKey: key,
-        baseURL: await correctApiBaseUrl(proxyUrl),
-      });
+      const resp = await axios.post(url, payload, { headers, timeout: 30000 });
+      const data = resp.data || {};
 
-      const response = await openai.chat.completions.create(
-        {
-          model: openaiBaseModel || 'gpt-4o-mini',
-          messages: requestData,
-        },
-        {
-          timeout: 30000,
-        },
-      );
+      let text = '';
+      try {
+        const choices = data?.data?.choices || data?.choices;
+        if (choices?.length) {
+          const msgs = choices[0]?.messages;
+          if (Array.isArray(msgs) && msgs.length) text = msgs[0]?.content || '';
+        }
+        if (!text && typeof data?.output === 'string') text = data.output;
+        if (!text && typeof data?.content === 'string') text = data.content;
+      } catch (_) {}
 
-      return response.choices[0].message.content;
+      return text;
     } catch (error) {
       const errorMessage = handleError(error);
-      Logger.error(`全局模型调用失败: ${errorMessage}`, 'OpenAIChatService');
+      Logger.error(`星尘全局模型调用失败: ${errorMessage}`, 'OpenAIChatService');
       return;
     }
   }
@@ -785,82 +787,136 @@ export class OpenAIChatService {
       timeout: any;
       temperature: any;
       max_tokens?: any;
+      userId?: any;
       abortController: AbortController;
       onProgress?: (data: any) => void;
     },
     result: any,
   ): Promise<void> {
-    const {
-      apiKey,
-      model,
-      proxyUrl,
-      timeout,
-      temperature,
-      max_tokens,
-      abortController,
-      onProgress,
-    } = inputs;
+    const { apiKey, model, timeout, onProgress, userId } = inputs;
 
-    // 准备请求数据
-    const streamData = {
-      model,
-      messages: messagesHistory,
-      stream: true,
-      temperature,
-    };
+    // 提取 system 提示作为星尘 botProfile.content，其余作为对话消息
+    let botContent = '';
+    const filteredMessages = [] as any[];
+    for (const msg of messagesHistory || []) {
+      if (msg?.role === 'system' && !botContent) {
+        botContent = typeof msg.content === 'string' ? msg.content : '';
+        continue;
+      }
+      filteredMessages.push(msg);
+    }
 
-    // 创建OpenAI实例
-    const openai = new OpenAI({
-      apiKey: apiKey,
-      baseURL: await correctApiBaseUrl(proxyUrl),
-      timeout: timeout,
+    // 规范化消息：将数组内容压缩为纯文本，移除 image_url（星尘仅接受纯文本content）
+    const normalizedMessages = filteredMessages.map((m: any) => {
+      if (Array.isArray(m?.content)) {
+        const text = m.content
+          .map((it: any) => {
+            if (typeof it === 'string') return it;
+            if (it?.type === 'image_url') return '';
+            return it?.text ?? '';
+          })
+          .join('');
+        return { ...m, content: text };
+      }
+      return m;
     });
 
+    // 读取星尘 API Key（优先全局配置，其次环境变量，最后使用传入的 apiKey 兜底；单键返回字符串需兼容）
+    const cfgKey2: any = await this.globalConfigService.getConfigs(['xingchenApiKey']);
+    const xingchenApiKey = typeof cfgKey2 === 'string' ? cfgKey2 : cfgKey2?.xingchenApiKey;
+    const useKey = xingchenApiKey || process.env.XINGCHEN_API_KEY || apiKey;
+
+    const url = 'https://nlp.aliyuncs.com/v2/api/chat/send';
+    const headers: any = {
+      'Content-Type': 'application/json',
+      'x-fag-servicename': 'aca-chat-send-sse',
+      'x-fag-appcode': 'aca',
+      Authorization: `Bearer ${useKey}`,
+      'X-AcA-DataInspection': 'enable',
+      'X-AcA-SSE': 'enable',
+    };
+
+    const payload: any = {
+      input: {
+        messages: normalizedMessages,
+        aca: {
+          botProfile: {
+            name: model || 'AI助手',
+            content: botContent || '',
+          },
+          userProfile: {
+            userId: userId || 'anonymous',
+          },
+        },
+      },
+      parameters: { incrementalOutput: true },
+    };
+    // 不强制携带 model，避免向星尘接口传递不支持的模型名导致 400
+
     try {
-      Logger.debug(
-        `对话请求 - Messages: ${JSON.stringify(streamData.messages)}`,
-        'OpenAIChatService',
-      );
+      Logger.debug(`星尘SSE请求 - Payload: ${JSON.stringify(payload)}`, 'OpenAIChatService');
+      const resp = await axios.post(url, payload, {
+        headers,
+        timeout,
+        responseType: 'stream',
+        // @ts-ignore axios v1 supports AbortController signal
+        signal: inputs.abortController?.signal,
+      });
 
-      // 发送流式请求
-      const stream = await openai.chat.completions.create(
-        {
-          model: streamData.model,
-          messages: streamData.messages,
-          stream: true,
-          max_tokens: max_tokens,
-          temperature: streamData.temperature,
-        },
-        {
-          signal: abortController.signal,
-        },
-      );
+      const stream = resp.data as NodeJS.ReadableStream;
+      let buffer = '';
 
-      // 处理流式响应
-      for await (const chunk of stream) {
-        if (abortController.signal.aborted) {
-          break;
-        }
+      await new Promise<void>((resolve, reject) => {
+        stream.on('data', (chunk: Buffer | string) => {
+          if (inputs.abortController?.signal.aborted) return;
+          const textChunk = typeof chunk === 'string' ? chunk : chunk.toString('utf8');
+          buffer += textChunk;
+          let idx: number;
+          while ((idx = buffer.indexOf('\n')) >= 0) {
+            let line = buffer.slice(0, idx);
+            buffer = buffer.slice(idx + 1);
+            line = line.trim();
+            if (!line) continue;
 
-        const content = chunk.choices[0]?.delta?.content || '';
+            // 过滤SSE控制行，避免将 id/event/retry 当作内容透传
+            if (line.startsWith('id:') || line.startsWith('event:') || line.startsWith('retry:')) {
+              continue;
+            }
 
-        if (content) {
-          // 处理流式内容
-          result.content = [
-            {
-              type: 'text',
-              text: content,
-            },
-          ];
+            // 兼容以 data: 开头
+            if (line.startsWith('data:')) line = line.slice(5).trim();
 
-          result.full_content += content;
-          onProgress?.({
-            content: result.content,
-          });
-        }
-      }
+            // 尝试解析 JSON，提取文本
+            let deltaText = '';
+            try {
+              const obj = JSON.parse(line);
+              // 常见结构尝试顺序
+              // 1) choices[0].messages[0].content
+              const choices = obj?.data?.choices || obj?.choices;
+              if (choices?.length) {
+                const msgs = choices[0]?.messages;
+                if (Array.isArray(msgs) && msgs.length) deltaText = msgs[0]?.content || '';
+              }
+              // 2) delta/content 字段
+              if (!deltaText) deltaText = obj?.delta?.content || obj?.content || '';
+              if (!deltaText && typeof obj === 'string') deltaText = obj;
+            } catch {
+              // 非JSON纯文本（当作 data 的文本内容）
+              deltaText = line;
+            }
+
+            if (deltaText) {
+              result.content = [{ type: 'text', text: deltaText }];
+              result.full_content += deltaText;
+              onProgress?.({ content: result.content });
+            }
+          }
+        });
+        stream.on('end', () => resolve());
+        stream.on('error', err => reject(err));
+      });
     } catch (error) {
-      Logger.error(`OpenAI请求失败: ${handleError(error)}`, 'OpenAIChatService');
+      Logger.error(`星尘SSE请求失败: ${handleError(error)}`, 'OpenAIChatService');
       throw error;
     }
   }

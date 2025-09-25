@@ -108,4 +108,13 @@ export class CreateAppDto {
     required: false,
   })
   flowithKey: string;
+
+  @ApiProperty({
+    example: 'cosyvoice-v2-xxxxxxxx',
+    description: '角色默认音色ID（DashScope/CosyVoice voice_id）',
+    required: false,
+  })
+  @IsOptional()
+  voiceId: string;
+
 }

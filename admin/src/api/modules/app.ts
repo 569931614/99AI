@@ -9,4 +9,9 @@ export default {
   deleteApp: (data: { id: number }) => api.post('app/delApp', data),
   createApp: (data: any) => api.post('app/createApp', data),
   updateApp: (data: any) => api.post('app/updateApp', data),
+
+  // 统一角色情绪配置
+  getGlobalEmotions: () => api.get('app/emotions'),
+  setGlobalEmotions: (data: { emotions: Array<{ emotion: string; voiceId?: string }> }) =>
+    api.post('app/emotions', data),
 };

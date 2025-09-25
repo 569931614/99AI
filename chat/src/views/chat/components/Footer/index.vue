@@ -20,7 +20,8 @@ import PinyinMatch from 'pinyin-match'
 // import { getDocument } from 'pdfjs-dist';
 import { uploadFile } from '@/api/upload'
 import { message } from '@/utils/message'
-import { computed, inject, nextTick, onMounted, onUnmounted, Ref, ref, watch } from 'vue'
+import { computed, inject, nextTick, onMounted, onUnmounted, reactive, Ref, ref, watch } from 'vue'
+import VoiceCall from '../VoiceCall.vue'
 import FilePreview from './components/FilePreview.vue'
 
 interface Emit {
@@ -1367,6 +1368,165 @@ const uploadButtonTooltip = computed(() => {
 const shouldShowButtonText = computed(() => {
   return availableWidth.value > 300 // 当宽度大于300px时显示按钮文字
 })
+
+// 语音通话面板开关（独立于现有语音录入按钮）
+const showVoiceCall = ref(false)
+
+// === 语音录音与识别（ASR） ===
+const isRecording = ref(false)
+const isASRBusy = ref(false)
+const recorder = reactive<{
+  ctx: AudioContext | null
+  stream: MediaStream | null
+  source: MediaStreamAudioSourceNode | null
+  processor: ScriptProcessorNode | null
+  buffers: Float32Array[]
+  inputSampleRate: number
+}>({ ctx: null, stream: null, source: null, processor: null, buffers: [], inputSampleRate: 48000 })
+
+async function startRecording() {
+  if (isRecording.value || isASRBusy.value) return
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+    const ctx = new (window.AudioContext || (window as any).webkitAudioContext)()
+    const source = ctx.createMediaStreamSource(stream)
+    const processor = ctx.createScriptProcessor(4096, 1, 1)
+    recorder.ctx = ctx
+    recorder.stream = stream
+    recorder.source = source
+    recorder.processor = processor
+    recorder.buffers = []
+    recorder.inputSampleRate = ctx.sampleRate
+    processor.onaudioprocess = e => {
+      const input = e.inputBuffer.getChannelData(0)
+      // 拷贝一份，避免被复用的 ArrayBuffer 造成数据污染
+      recorder.buffers.push(new Float32Array(input))
+    }
+    source.connect(processor)
+    processor.connect(ctx.destination)
+    isRecording.value = true
+  } catch (e) {
+    ms.error('无法访问麦克风权限')
+  }
+}
+
+function stopRecording() {
+  if (!isRecording.value) return
+  try {
+    recorder.processor && recorder.processor.disconnect()
+    recorder.source && recorder.source.disconnect()
+    recorder.ctx && recorder.ctx.close()
+    recorder.stream?.getTracks().forEach(t => t.stop())
+  } catch {
+  } finally {
+    isRecording.value = false
+  }
+  void encodeAndSend()
+}
+
+function floatTo16BitPCM(float32Array: Float32Array) {
+  const len = float32Array.length
+  const result = new Int16Array(len)
+  for (let i = 0; i < len; i++) {
+    const s = Math.max(-1, Math.min(1, float32Array[i]))
+    result[i] = s < 0 ? s * 0x8000 : s * 0x7fff
+  }
+  return result
+}
+
+function downsampleBuffer(buffer: Float32Array, inSampleRate: number, outSampleRate: number) {
+  if (outSampleRate === inSampleRate) return buffer
+  const ratio = inSampleRate / outSampleRate
+  const newLen = Math.floor(buffer.length / ratio)
+  const result = new Float32Array(newLen)
+  let offsetResult = 0
+  let offsetBuffer = 0
+  while (offsetResult < result.length) {
+    result[offsetResult++] = buffer[Math.floor(offsetBuffer)]
+    offsetBuffer += ratio
+  }
+  return result
+}
+
+function encodeWAV(samples: Int16Array, sampleRate: number) {
+  const buffer = new ArrayBuffer(44 + samples.length * 2)
+  const view = new DataView(buffer)
+  const writeString = (offset: number, str: string) => {
+    for (let i = 0; i < str.length; i++) view.setUint8(offset + i, str.charCodeAt(i))
+  }
+  let offset = 0
+  writeString(offset, 'RIFF')
+  offset += 4
+  view.setUint32(offset, 36 + samples.length * 2, true)
+  offset += 4
+  writeString(offset, 'WAVE')
+  offset += 4
+  writeString(offset, 'fmt ')
+  offset += 4
+  view.setUint32(offset, 16, true)
+  offset += 4 // PCM
+  view.setUint16(offset, 1, true)
+  offset += 2 // PCM
+  view.setUint16(offset, 1, true)
+  offset += 2 // mono
+  view.setUint32(offset, sampleRate, true)
+  offset += 4
+  view.setUint32(offset, sampleRate * 2, true)
+  offset += 4 // byte rate
+  view.setUint16(offset, 2, true)
+  offset += 2 // block align
+  view.setUint16(offset, 16, true)
+  offset += 2 // bits per sample
+  writeString(offset, 'data')
+  offset += 4
+  view.setUint32(offset, samples.length * 2, true)
+  offset += 4
+  // PCM samples
+  for (let i = 0; i < samples.length; i++, offset += 2) view.setInt16(offset, samples[i], true)
+  return new Blob([view], { type: 'audio/wav' })
+}
+
+async function encodeAndSend() {
+  if (!recorder.buffers.length) return
+  isASRBusy.value = true
+  try {
+    // 合并 buffer
+    const totalLength = recorder.buffers.reduce((sum, b) => sum + b.length, 0)
+    const merged = new Float32Array(totalLength)
+    let offset = 0
+    for (const b of recorder.buffers) {
+      merged.set(b, offset)
+      offset += b.length
+    }
+    // 降采样至 16k mono
+    const ds = downsampleBuffer(merged, recorder.inputSampleRate, 16000)
+    const pcm16 = floatTo16BitPCM(ds)
+    const wavBlob = encodeWAV(pcm16, 16000)
+    // 直接发送录音：上传音频并作为语音消息插入对话
+    const file = new File([wavBlob], `voice_${Date.now()}.wav`, { type: 'audio/wav' })
+    const uploadRes = await uploadFile<string>(file, 'voice')
+    const url = (uploadRes as any)?.data?.data || (uploadRes as any)?.data
+    console.log('[voice] 上传完成，得到音频URL:', url)
+    if (!url) {
+      ms.error('音频上传失败')
+      return
+    }
+    console.log('[voice] 准备调用对话接口，携带 audioUrl')
+    await onConversation({ msg: '语音消息', audioUrl: url })
+    ms.success('语音已发送')
+  } catch (e) {
+    console.error(e)
+    ms.error('语音发送失败，请重试')
+  } finally {
+    isASRBusy.value = false
+    recorder.buffers = []
+  }
+}
+
+function toggleRecording() {
+  if (isRecording.value) stopRecording()
+  else void startRecording()
+}
 </script>
 
 <template>
@@ -1575,6 +1735,37 @@ const shouldShowButtonText = computed(() => {
                 @change="handleImageSelect"
               />
 
+              <!-- 语音录入按钮（常驻显示） -->
+              <div class="group relative">
+                <button
+                  type="button"
+                  class="btn-pill mx-1"
+                  :class="[isRecording ? 'btn-pill-active' : '']"
+                  :disabled="isASRBusy"
+                  @click="toggleRecording"
+                  aria-label="语音输入"
+                >
+                  <span v-if="!isRecording">🎤</span>
+                  <span v-else>⏹</span>
+                </button>
+                <div v-if="!isMobile" class="tooltip tooltip-top">
+                  {{ isRecording ? '结束录音' : '语音输入' }}
+                </div>
+              </div>
+
+              <!-- 新增：语音通话按钮（独立，不改动原语音录入） -->
+              <div class="group relative">
+                <button
+                  type="button"
+                  class="btn-pill mx-1"
+                  @click="showVoiceCall = true"
+                  aria-label="语音通话"
+                >
+                  📞
+                </button>
+                <div v-if="!isMobile" class="tooltip tooltip-top">语音通话</div>
+              </div>
+
               <div v-if="shouldShowDeepThinking" class="group relative">
                 <div
                   class="btn-pill btn-md mx-1"
@@ -1665,5 +1856,8 @@ const shouldShowButtonText = computed(() => {
 
     <!-- after-footer slot -->
     <slot name="after-footer"></slot>
+
+    <!-- 语音通话面板（独立于现有语音录入） -->
+    <VoiceCall v-if="showVoiceCall" @close="showVoiceCall = false" />
   </div>
 </template>

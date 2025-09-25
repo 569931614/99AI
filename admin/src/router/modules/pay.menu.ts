@@ -10,7 +10,7 @@ const routes: RouteRecordRaw = {
   redirect: '/pay/hupijiao',
   name: 'PayMenu',
   meta: {
-    title: '支付管理',
+    title: '支付配置',
     icon: 'mingcute:card-pay-line',
   },
   children: [

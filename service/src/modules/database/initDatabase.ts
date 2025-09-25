@@ -4,7 +4,10 @@ import * as mysql from 'mysql2/promise';
 import { DataSource, DataSourceOptions } from 'typeorm';
 import { AppEntity } from '../app/app.entity';
 import { AppCatsEntity } from '../app/appCats.entity';
+import { AppVoiceEntity } from '../app/appVoice.entity';
 import { UserAppsEntity } from '../app/userApps.entity';
+
+
 import { AutoReplyEntity } from '../autoReply/autoReply.entity';
 import { BadWordsEntity } from '../badWords/badWords.entity';
 import { ViolationLogEntity } from '../badWords/violationLog.entity';
@@ -56,6 +59,7 @@ const dataSourceOptions: DataSourceOptions = {
     UserAppsEntity,
     AppCatsEntity,
     AppEntity,
+    AppVoiceEntity,
     OrderEntity,
   ],
   synchronize: false, // 禁用自动同步，改为根据情况动态开启

@@ -24,7 +24,7 @@ function useDemo(item: string) {
   onConversation({
     msg: item,
     model: appDetail?.value?.model,
-    modelAvatar: appDetail.value.modelAvatar,
+    modelAvatar: appDetail.value?.coverImg,
   })
 }
 

@@ -4,8 +4,10 @@ import { DataSource, DataSourceOptions } from 'typeorm';
 import { DatabaseService } from './database.service';
 
 // Import all entities explicitly
+import { AffectionRuleEntity, UserAppAffectionEntity } from '../affection/affection.entity';
 import { AppEntity } from '../app/app.entity';
 import { AppCatsEntity } from '../app/appCats.entity';
+import { AppVoiceEntity } from '../app/appVoice.entity';
 import { UserAppsEntity } from '../app/userApps.entity';
 import { AutoReplyEntity } from '../autoReply/autoReply.entity';
 import { BadWordsEntity } from '../badWords/badWords.entity';
@@ -63,6 +65,9 @@ import { VerificationEntity } from '../verification/verification.entity';
             AppCatsEntity,
             AppEntity,
             OrderEntity,
+            AppVoiceEntity,
+            AffectionRuleEntity,
+            UserAppAffectionEntity,
           ],
           synchronize: false,
           logging: false,

@@ -434,7 +434,8 @@ const onConversation = async ({
   chatId,
   taskId,
   imageUrl,
-}: Chat.ConversationParams) => {
+  audioUrl,
+}: Chat.ConversationParams & { audioUrl?: string }) => {
   if (groupSources.value.length === 0) {
     await createNewChatGroup()
     await chatStore.queryMyGroup()
@@ -469,6 +470,7 @@ const onConversation = async ({
     role: 'user',
     fileUrl: fileUrl || activeFileUrl.value || '',
     imageUrl: imageUrl || '',
+    audioUrl: audioUrl || '',
   })
 
   let options: any = {
@@ -789,11 +791,14 @@ const onConversation = async ({
     }
 
     try {
+      console.log('[chat] 调用 /chatgpt/chat-process', { hasAudioUrl: !!audioUrl, prompt: msg })
       await fetchChatAPIProcess({
+        // 若包含音频，则让服务端进行ASR，此处不传文字
+        prompt: audioUrl ? '' : msg,
+        audioUrl,
         model: useModel,
         modelName: useModelName,
         modelType: useModelType,
-        prompt: msg,
         usingPluginId: usingPlugin.value?.parameters ? 999 : 0,
         imageUrl: imageUrl || '',
         fileUrl: fileUrl || activeFileUrl.value || '',
@@ -978,8 +983,12 @@ const onConversation = async ({
         })
       }
 
-      // 确保显示完整文本
-      displayedText = fullText
+      // 确保显示完整文本；语音对话无内容时给出友好提示
+      if (!fullText && audioUrl) {
+        displayedText = '（未识别到有效语音内容）'
+      } else {
+        displayedText = fullText
+      }
       displayedReasoningText = fullReasoningText
 
       updateGroupChat(dataSources.value.length - 1, {
@@ -1086,6 +1095,9 @@ const onConversation = async ({
   }
 
   await fetchChatAPIOnce()
+  try {
+    window.dispatchEvent(new CustomEvent('affection:refresh'))
+  } catch {}
   chatStore.setStreamIn(false)
 
   // 延迟5秒
@@ -1312,7 +1324,7 @@ provide('tryParseJson', tryParseJson)
 
       <!-- Conditional Content - Keep original non-transparent backgrounds for these -->
       <template v-if="useGlobalStore.externalLinkDialog">
-        <ExternalLinkComponent class="relative z-10 flex-1 bg-white dark:bg-gray-900" />
+        <div class="relative z-10 flex-1 bg-white dark:bg-gray-900"></div>
       </template>
       <template v-else-if="useGlobalStore.showAppListComponent">
         <AppList

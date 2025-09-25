@@ -10,7 +10,7 @@ const routes: RouteRecordRaw = {
   redirect: '/secure/sensitive-baidu',
   name: 'SecureMenu',
   meta: {
-    title: '风控管理',
+    title: '内容与安全',
     icon: 'ri:secure-payment-line',
   },
   children: [

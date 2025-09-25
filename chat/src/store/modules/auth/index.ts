@@ -52,10 +52,20 @@ export const useAuthStore = defineStore('auth-store', {
     },
 
     async getGlobalConfig(domain = '') {
-      const res = await fetchQueryConfigAPI({ domain })
-      this.globalConfig = res.data as GlobalConfig
-      this.globalConfigLoading = false
-      this.loadInit = true
+      try {
+        const res = await fetchQueryConfigAPI({ domain })
+        this.globalConfig = (res?.data || {}) as GlobalConfig
+      } catch (error) {
+        console.warn('[auth] getGlobalConfig failed, using defaults:', error)
+        // 兜底默认配置，避免启动中断
+        this.globalConfig = {
+          siteName: '99AI',
+          siteUrl: domain || window.location.origin,
+        } as Partial<GlobalConfig> as GlobalConfig
+      } finally {
+        this.globalConfigLoading = false
+        this.loadInit = true
+      }
     },
 
     setToken(token: string) {

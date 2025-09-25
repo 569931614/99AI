@@ -16,6 +16,8 @@ meta:
     aliOssRegion: '',
     aliOssBucket: '',
     aliOssAcceleratedDomain: '',
+    dashscopeApiKey: '',
+    cosyvoiceDefaultModel: 'cosyvoice-v2',
   });
 
   const formRef = ref<FormInstance>();
@@ -29,6 +31,8 @@ meta:
         'aliOssAccessKeyId',
         'aliOssStatus',
         'aliOssAcceleratedDomain',
+        'dashscopeApiKey',
+        'cosyvoiceDefaultModel',
       ],
     });
     Object.assign(formInline, res.data);
@@ -161,6 +165,34 @@ meta:
                 placeholder="如您是国外服务器可开启全球加速域名得到更快响应速度、同理也会更高计费！"
                 clearable
               />
+            </el-form-item>
+          </el-col>
+        </el-row>
+        <el-row>
+          <el-col :xs="24" :md="20" :lg="15" :xl="12">
+            <el-form-item label="DashScope API Key" prop="dashscopeApiKey">
+              <el-input
+                v-model="formInline.dashscopeApiKey"
+                placeholder="填写阿里百炼 DashScope sk-xxx"
+                type="password"
+                show-password
+                clearable
+              />
+            </el-form-item>
+          </el-col>
+        </el-row>
+        <el-row>
+          <el-col :xs="24" :md="20" :lg="15" :xl="12">
+            <el-form-item label="CosyVoice默认模型" prop="cosyvoiceDefaultModel">
+              <el-select
+                v-model="formInline.cosyvoiceDefaultModel"
+                placeholder="选择默认模型"
+                style="width: 100%"
+              >
+                <el-option label="cosyvoice-v2" value="cosyvoice-v2" />
+                <el-option label="cosyvoice-v3" value="cosyvoice-v3" />
+                <el-option label="cosyvoice-v3-plus" value="cosyvoice-v3-plus" />
+              </el-select>
             </el-form-item>
           </el-col>
         </el-row>

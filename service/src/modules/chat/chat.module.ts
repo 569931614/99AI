@@ -1,10 +1,12 @@
 import { Global, Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
+import { AffectionModule } from '../affection/affection.module';
 import { OpenAIChatService } from '../aiTool/chat/chat.service';
 import { NetSearchService } from '../aiTool/search/netSearch.service';
 import { AppEntity } from '../app/app.entity';
 import { AppService } from '../app/app.service';
 import { AppCatsEntity } from '../app/appCats.entity';
+import { AppVoiceEntity } from '../app/appVoice.entity';
 import { UserAppsEntity } from '../app/userApps.entity';
 import { AutoReplyEntity } from '../autoReply/autoReply.entity';
 import { AutoReplyService } from '../autoReply/autoReply.service';
@@ -33,8 +35,10 @@ import { UserBalanceEntity } from '../userBalance/userBalance.entity';
 import { UserBalanceService } from '../userBalance/userBalance.service';
 import { VerificationEntity } from '../verification/verification.entity';
 import { VerificationService } from '../verification/verification.service';
+import { VoiceModule } from '../voice/voice.module';
 import { ChatController } from './chat.controller';
 import { ChatService } from './chat.service';
+import { OpenChatController } from './open-chat.controller';
 
 @Global()
 @Module({
@@ -59,9 +63,12 @@ import { ChatService } from './chat.service';
       BadWordsEntity,
       ViolationLogEntity,
       ModelsEntity,
+      AppVoiceEntity,
     ]),
+    VoiceModule,
+    AffectionModule,
   ],
-  controllers: [ChatController],
+  controllers: [ChatController, OpenChatController],
   providers: [
     ChatService,
     UserBalanceService,

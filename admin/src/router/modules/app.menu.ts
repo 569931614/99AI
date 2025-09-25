@@ -10,8 +10,8 @@ const routes: RouteRecordRaw = {
   redirect: '/app/classify',
   name: 'AppMenu',
   meta: {
-    title: '插件应用',
-    icon: 'tdesign:app',
+    title: '角色管理',
+    icon: 'mdi:account-outline',
   },
   children: [
     {
@@ -19,7 +19,7 @@ const routes: RouteRecordRaw = {
       name: 'AppMenuClassify',
       component: () => import('@/views/app/classify.vue'),
       meta: {
-        title: '分类列表',
+        title: '角色分类',
         icon: 'ph:list-fill',
       },
     },
@@ -28,8 +28,8 @@ const routes: RouteRecordRaw = {
       name: 'Application',
       component: () => import('@/views/app/application.vue'),
       meta: {
-        title: '应用列表',
-        icon: 'clarity:vmw-app-line',
+        title: '角色列表',
+        icon: 'mdi:account-multiple-outline',
       },
     },
   ],

@@ -1,10 +1,12 @@
-import { HttpException, HttpStatus, Injectable } from '@nestjs/common';
+import { HttpException, HttpStatus, Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Request } from 'express';
 import { In, IsNull, Like, MoreThan, Not, Repository } from 'typeorm';
+import { GlobalConfigService } from '../globalConfig/globalConfig.service';
 import { UserBalanceService } from '../userBalance/userBalance.service';
 import { AppEntity } from './app.entity';
 import { AppCatsEntity } from './appCats.entity';
+import { AppVoiceEntity } from './appVoice.entity';
 import { CollectAppDto } from './dto/collectApp.dto';
 import { CreateAppDto } from './dto/createApp.dto';
 import { CreateCatsDto } from './dto/createCats.dto';
@@ -25,7 +27,10 @@ export class AppService {
     private readonly appEntity: Repository<AppEntity>,
     @InjectRepository(UserAppsEntity)
     private readonly userAppsEntity: Repository<UserAppsEntity>,
+    @InjectRepository(AppVoiceEntity)
+    private readonly appVoiceRepo: Repository<AppVoiceEntity>,
     private readonly userBalanceService: UserBalanceService,
+    private readonly globalConfigService: GlobalConfigService,
   ) {}
 
   async createAppCat(body: CreateCatsDto) {
@@ -82,6 +87,13 @@ export class AppService {
     }
 
     const appData = app as any;
+    // 关联默认音色（如果存在）
+    let voiceId: string | null = null;
+    try {
+      const v = await this.appVoiceRepo.findOne({ where: { appId: Number(id), isDefault: 1 } });
+      voiceId = v?.voiceId || null;
+    } catch (_) {}
+
     return {
       demoData: appData.demoData ? appData.demoData.split('\n') : [],
       coverImg: appData.coverImg,
@@ -96,6 +108,8 @@ export class AppService {
       appModel: appData.appModel,
       backgroundImg: appData.backgroundImg,
       prompt: appData.prompt,
+
+      voiceId,
     };
   }
 
@@ -207,6 +221,27 @@ export class AppService {
       item.backgroundImg = item.backgroundImg;
       item.prompt = item.prompt;
     });
+
+    // 关联默认音色（通过关联表）
+    try {
+      const appIds = rows.map(r => r.id);
+      if (appIds.length > 0) {
+        const maps = await this.appVoiceRepo.find({ where: { appId: In(appIds), isDefault: 1 } });
+        const mapByApp = new Map(maps.map(m => [m.appId, m.voiceId]));
+        // 显式设置为可枚举，避免序列化时被忽略
+        rows.forEach((item: any) => {
+          const v = mapByApp.get(item.id) ?? null;
+          try {
+            Object.defineProperty(item, 'voiceId', { value: v, enumerable: true, configurable: true, writable: true });
+          } catch (_) {
+            (item as any).voiceId = v;
+          }
+        });
+      }
+    } catch (e) {
+      // 忽略关联失败，避免影响列表返回
+    }
+
 
     if (req?.user?.role !== 'super') {
       rows.forEach((item: any) => {
@@ -458,6 +493,9 @@ export class AppService {
       // 添加必要的默认字段
       const saveData: any = { ...body };
 
+      // voice 与角色仅通过关联表，不写入 app 表
+      if ('voiceId' in saveData) delete saveData.voiceId;
+
       // 检查ID是否有效，如果无效则删除
       if (!saveData.id || isNaN(Number(saveData.id))) {
         delete saveData.id;
@@ -479,7 +517,24 @@ export class AppService {
       saveData.prompt = saveData.prompt || '';
 
       // 保存应用
-      return await this.appEntity.save(saveData);
+      const saved = await this.appEntity.save(saveData);
+
+      // 处理角色音色关联（默认一对一，可扩展多音色）
+      try {
+        const delRes = await this.appVoiceRepo.delete({ appId: saved.id });
+        Logger.log(`[AppService] 删除旧音色映射 appId=${saved.id} affected=${delRes.affected ?? 0}`);
+        const voiceId = (body as any)?.voiceId;
+        if (voiceId) {
+          await this.appVoiceRepo.save({ appId: saved.id, voiceId: String(voiceId), isDefault: 1 } as any);
+          Logger.log(`[AppService] 写入默认音色成功 appId=${saved.id} voiceId=${voiceId}`);
+        } else {
+          Logger.log(`[AppService] 未提供 voiceId, 跳过写入 app_voice appId=${saved.id}`);
+        }
+      } catch (e) {
+        Logger.warn(`[AppService] 写入/删除 app_voice 失败 appId=${saved.id} err=${e?.message || e}`);
+      }
+
+      return saved;
     } catch (error) {
       throw new HttpException(`保存应用失败`, HttpStatus.BAD_REQUEST);
     }
@@ -512,6 +567,10 @@ export class AppService {
     const curApp = await this.appEntity.findOne({ where: { id } });
     const curAppData = curApp as any;
 
+    // 从 body 中取 voiceId，但不直接写入 app 表
+    const newVoiceId = (body as any)?.voiceId;
+    if ('voiceId' in updateData) delete updateData.voiceId;
+
     // 设置默认值
     updateData.appModel = updateData.appModel ?? (curAppData.appModel || '');
     updateData.order = isNaN(Number(updateData.order)) ? 100 : updateData.order;
@@ -528,7 +587,20 @@ export class AppService {
       await this.userAppsEntity.update({ appId: id }, { status: updateData.status });
     }
     const res = await this.appEntity.update({ id }, updateData);
-    if (res.affected > 0) return '修改App信息成功';
+    if (res.affected > 0) {
+      // 同步角色音色关联（仅当提供了 voiceId 且不为空时才更新）
+      if (typeof newVoiceId !== 'undefined' && newVoiceId !== null && String(newVoiceId).trim() !== '') {
+        try {
+          const delRes2 = await this.appVoiceRepo.delete({ appId: id });
+          Logger.log(`[AppService] 更新时删除旧映射 appId=${id} affected=${delRes2.affected ?? 0}`);
+          await this.appVoiceRepo.save({ appId: id, voiceId: String(newVoiceId), isDefault: 1 } as any);
+          Logger.log(`[AppService] 更新写入默认音色成功 appId=${id} voiceId=${String(newVoiceId)}`);
+        } catch (e) {
+          Logger.warn(`[AppService] 更新写入/删除 app_voice 失败 appId=${id} err=${e?.message || e}`);
+        }
+      }
+      return '修改App信息成功';
+    }
     throw new HttpException('修改App信息失败！', HttpStatus.BAD_REQUEST);
   }
 
@@ -712,5 +784,35 @@ export class AppService {
     } catch (error) {
       return false; // 出错时默认返回非会员专属
     }
+  }
+
+  // 全局：统一角色情绪配置（应用到所有角色）
+  async getGlobalRoleEmotions() {
+    try {
+      const key = 'globalRoleEmotions';
+      const raw = (await this.globalConfigService.getConfigs([key])) as any;
+      if (!raw) return { emotions: [] };
+      const parsed = JSON.parse(raw);
+      // 兜底结构
+      if (!parsed || typeof parsed !== 'object') return { emotions: [] };
+      const emotions = Array.isArray(parsed.emotions) ? parsed.emotions : [];
+      return { emotions };
+    } catch (e) {
+      return { emotions: [] };
+    }
+  }
+
+  async setGlobalRoleEmotions(body: { emotions: Array<{ emotion: string; voiceId?: string }> }) {
+    const arr = Array.isArray(body?.emotions) ? body.emotions : [];
+    // 规范化：去空行、去重 emotion
+    const seen = new Set<string>();
+    const cleaned = arr
+      .map((i) => ({ emotion: String(i?.emotion || '').trim(), voiceId: i?.voiceId ? String(i.voiceId) : '' }))
+      .filter((i) => i.emotion)
+      .filter((i) => (seen.has(i.emotion) ? false : (seen.add(i.emotion), true)));
+
+    const key = 'globalRoleEmotions';
+    await this.globalConfigService.createOrUpdate({ configKey: key, configVal: JSON.stringify({ emotions: cleaned }), status: 1 });
+    return { success: true };
   }
 }

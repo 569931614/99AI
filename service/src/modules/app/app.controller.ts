@@ -133,4 +133,21 @@ export class AppController {
   mineApps(@Req() req: Request) {
     return this.appService.mineApps(req);
   }
+
+  @Get('emotions')
+  @ApiOperation({ summary: '获取统一角色情绪配置（应用到所有角色）' })
+  @UseGuards(AdminAuthGuard)
+  @ApiBearerAuth()
+  getGlobalRoleEmotions() {
+    return this.appService.getGlobalRoleEmotions();
+  }
+
+  @Post('emotions')
+  @ApiOperation({ summary: '设置统一角色情绪配置（应用到所有角色）' })
+  @UseGuards(SuperAuthGuard)
+  @ApiBearerAuth()
+  setGlobalRoleEmotions(@Body() body: { emotions: Array<{ emotion: string; voiceId?: string }> }) {
+    return this.appService.setGlobalRoleEmotions(body);
+  }
+
 }

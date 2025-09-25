@@ -151,8 +151,9 @@ export const useChatStore = defineStore('chat-store', {
     /* 查询我的对话组 */
     async queryMyGroup() {
       const res: any = await fetchQueryGroupAPI()
+      const list: any[] = Array.isArray(res?.data) ? res.data : []
       this.groupList = [
-        ...res.data.map((item: any) => {
+        ...list.map((item: any) => {
           const {
             id: uuid,
             title,

@@ -65,4 +65,8 @@ export class AppEntity extends BaseEntity {
 
   @Column({ comment: 'App提问模版', nullable: true, type: 'text' })
   prompt: string;
+
+  // 角色默认音色ID（用于TTS），来自 DashScope/CosyVoice voice_id
+  @Column({ comment: '角色默认音色ID', nullable: true })
+  voiceId: string;
 }

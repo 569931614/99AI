@@ -6193,6 +6193,7 @@ exports.OpenAffectionController = OpenAffectionController;
 __decorate([
     (0, common_1.Get)('rules'),
     (0, swagger_1.ApiOperation)({ summary: '【开放】列出好感度规则（按app优先，其次全局）（无鉴权）' }),
+    (0, swagger_1.ApiQuery)({ name: 'appId', type: Number, required: false, description: '可选：传入App ID时优先返回该App规则，其次全局；不传返回全部规则' }),
     __param(0, (0, common_1.Query)('appId')),
     __metadata("design:type", Function),
     __metadata("design:paramtypes", [String]),

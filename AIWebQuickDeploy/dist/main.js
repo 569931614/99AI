@@ -6361,6 +6361,12 @@ let AppController = class AppController {
     setGlobalRoleEmotions(body) {
         return this.appService.setGlobalRoleEmotions(body);
     }
+    getEmotionVoices(appId) {
+        return this.appService.getAppEmotionVoices(Number(appId));
+    }
+    setEmotionVoices(body) {
+        return this.appService.setAppEmotionVoices(body);
+    }
 };
 exports.AppController = AppController;
 __decorate([
@@ -6528,6 +6534,26 @@ __decorate([
     __metadata("design:paramtypes", [Object]),
     __metadata("design:returntype", void 0)
 ], AppController.prototype, "setGlobalRoleEmotions", null);
+__decorate([
+    (0, common_1.Get)('emotionVoices'),
+    (0, swagger_1.ApiOperation)({ summary: '获取指定角色的情绪-音色映射' }),
+    (0, common_1.UseGuards)(adminAuth_guard_1.AdminAuthGuard),
+    (0, swagger_1.ApiBearerAuth)(),
+    __param(0, (0, common_1.Query)('appId')),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Number]),
+    __metadata("design:returntype", void 0)
+], AppController.prototype, "getEmotionVoices", null);
+__decorate([
+    (0, common_1.Post)('emotionVoices'),
+    (0, swagger_1.ApiOperation)({ summary: '设置指定角色的情绪-音色映射' }),
+    (0, common_1.UseGuards)(superAuth_guard_1.SuperAuthGuard),
+    (0, swagger_1.ApiBearerAuth)(),
+    __param(0, (0, common_1.Body)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object]),
+    __metadata("design:returntype", void 0)
+], AppController.prototype, "setEmotionVoices", null);
 exports.AppController = AppController = __decorate([
     (0, swagger_1.ApiTags)('app'),
     (0, common_1.Controller)('app'),
@@ -6733,18 +6759,23 @@ let AppService = class AppService {
     }
     async appCatsList(query, req) {
         const { page = 1, size = 10, name, status } = query;
+        const pageNum = Math.max(1, Number(page) || 1);
+        const sizeNum = Math.max(1, Number(size) || 10);
         const where = {};
-        name && (where.name = (0, typeorm_2.Like)(`%${name}%`));
-        [0, 1, '0', '1'].includes(status) && (where.status = status);
+        if (typeof name === 'string' && name.length > 0)
+            where.name = (0, typeorm_2.Like)(`%${name}%`);
+        if ([0, 1, '0', '1'].includes(status))
+            where.status = Number(status);
         const [rows, count] = await this.appCatsEntity.findAndCount({
             where,
             order: { order: 'DESC' },
-            skip: (page - 1) * size,
-            take: size,
+            skip: (pageNum - 1) * sizeNum,
+            take: sizeNum,
         });
         let filteredRows = [...rows];
         if (req?.user?.role !== 'super') {
-            const userCatIds = await this.userBalanceService.getUserApps(Number(req.user.id));
+            const userId = Number(req?.user?.id || 0);
+            const userCatIds = userId ? await this.userBalanceService.getUserApps(userId) : [];
             const userCatIdsSet = new Set(userCatIds);
             filteredRows = rows.filter(cat => {
                 if (userCatIdsSet.has(cat.id.toString())) {
@@ -6773,15 +6804,18 @@ let AppService = class AppService {
     }
     async appList(req, query, orderKey = 'id') {
         const { page = 1, size = 10, name, status, catId, role } = query;
+        const pageNum = Math.max(1, Number(page) || 1);
+        const sizeNum = Math.max(1, Number(size) || 10);
         const where = {};
-        name && (where.name = (0, typeorm_2.Like)(`%${name}%`));
+        if (typeof name === 'string' && name.length > 0)
+            where.name = (0, typeorm_2.Like)(`%${name}%`);
         let filteredByCategory = null;
         if (catId) {
             const apps = await this.appEntity.find();
             filteredByCategory = apps
                 .filter(app => {
                 const appCatIds = app.catId.split(',');
-                return appCatIds.includes(catId.toString());
+                return appCatIds.includes(String(catId));
             })
                 .map(app => app.id);
             if (filteredByCategory.length === 0) {
@@ -6789,13 +6823,15 @@ let AppService = class AppService {
             }
             where.id = (0, typeorm_2.In)(filteredByCategory);
         }
-        role && (where.role = role);
-        status && (where.status = status);
+        if (role)
+            where.role = role;
+        if ([0, 1, '0', '1', '4', 4].includes(status))
+            where.status = Number(status);
         const [rows, count] = await this.appEntity.findAndCount({
             where,
             order: { [orderKey]: 'DESC' },
-            skip: (page - 1) * size,
-            take: size,
+            skip: (pageNum - 1) * sizeNum,
+            take: sizeNum,
         });
         const allCats = await this.appCatsEntity.find();
         const catsMap = {};
@@ -7278,6 +7314,38 @@ let AppService = class AppService {
             .filter((i) => (seen.has(i.emotion) ? false : (seen.add(i.emotion), true)));
         const key = 'globalRoleEmotions';
         await this.globalConfigService.createOrUpdate({ configKey: key, configVal: JSON.stringify({ emotions: cleaned }), status: 1 });
+        return { success: true };
+    }
+    async getAppEmotionVoices(appId) {
+        const key = `appEmotionVoices:${Number(appId) || 0}`;
+        try {
+            const raw = (await this.globalConfigService.getConfigs([key]));
+            if (!raw)
+                return { items: [] };
+            const parsed = JSON.parse(raw);
+            const items = Array.isArray(parsed?.items) ? parsed.items : [];
+            return { items };
+        }
+        catch (e) {
+            return { items: [] };
+        }
+    }
+    async setAppEmotionVoices(body) {
+        const appIdNum = Number(body?.appId || 0);
+        if (!appIdNum)
+            throw new common_1.HttpException('appId 必填', common_1.HttpStatus.BAD_REQUEST);
+        const arr = Array.isArray(body?.items) ? body.items : [];
+        const seen = new Set();
+        const cleaned = arr
+            .map((i) => ({ emotion: String(i?.emotion || '').trim(), voiceId: String(i?.voiceId || '') }))
+            .filter((i) => i.emotion)
+            .filter((i) => (seen.has(i.emotion) ? false : (seen.add(i.emotion), true)));
+        const key = `appEmotionVoices:${appIdNum}`;
+        await this.globalConfigService.createOrUpdate({
+            configKey: key,
+            configVal: JSON.stringify({ items: cleaned }),
+            status: 1,
+        });
         return { success: true };
     }
 };
@@ -13412,8 +13480,58 @@ let VoiceController = class VoiceController {
     enroll(body) {
         return this.voiceService.enroll(body);
     }
-    list(query) {
-        return this.voiceService.list(query);
+    async list(query) {
+        const raw = await this.voiceService.list(query);
+        const body = raw || {};
+        const rows = body?.rows ??
+            body?.data?.voices ??
+            body?.voices ??
+            body?.data?.output?.voices ??
+            body?.output?.voices ??
+            body?.data?.output?.voice_list ??
+            body?.output?.voice_list ??
+            (Array.isArray(body) ? body : []);
+        const totalCandidate = Number(body?.count ??
+            body?.data?.count ??
+            body?.data?.total ??
+            body?.total ??
+            body?.data?.output?.total ??
+            body?.output?.total ??
+            body?.data?.total_count ??
+            body?.total_count ??
+            body?.data?.output?.total_count ??
+            body?.output?.total_count ??
+            body?.data?.totalSize ??
+            body?.totalSize ??
+            body?.data?.totalElements ??
+            body?.totalElements ??
+            0);
+        const pageIndex = Number(query?.page_index ?? 0);
+        const pageSize = Number(query?.page_size ?? 10);
+        const est = Math.max(0, pageIndex) * Math.max(1, pageSize) + (Array.isArray(rows) ? rows.length : 0);
+        let count = est;
+        if (Number.isFinite(totalCandidate) && totalCandidate > 0) {
+            if (totalCandidate <= est && (Array.isArray(rows) ? rows.length : 0) === Math.max(1, pageSize)) {
+                count = est + 1;
+            }
+            else {
+                count = Math.max(totalCandidate, est);
+            }
+        }
+        const list = Array.isArray(rows) ? [...rows] : [];
+        try {
+            await Promise.all(list.map(async (v) => {
+                try {
+                    const meta = await this.voiceService.getVoiceMeta(String(v?.voice_id || v?.id || ''));
+                    const name = meta?.name || meta?.data?.name || '';
+                    if (name)
+                        v.name = name;
+                }
+                catch { }
+            }));
+        }
+        catch { }
+        return { rows: list, count };
     }
     detail(voiceId) {
         return this.voiceService.query(voiceId);
@@ -13462,7 +13580,7 @@ __decorate([
     __param(0, (0, common_1.Query)()),
     __metadata("design:type", Function),
     __metadata("design:paramtypes", [Object]),
-    __metadata("design:returntype", void 0)
+    __metadata("design:returntype", Promise)
 ], VoiceController.prototype, "list", null);
 __decorate([
     (0, common_1.Get)('detail/:voiceId'),

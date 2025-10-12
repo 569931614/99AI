@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>99AI 控制台</title>
+  <style>
+    html,body{height:100%;margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,Cantarell,Helvetica Neue,Arial,Noto Sans,"PingFang SC","Hiragino Sans GB","Microsoft Yahei",sans-serif;background:#0b0f1a;color:#e6eaf2}
+    .wrap{min-height:100%;display:flex;align-items:center;justify-content:center;padding:24px}
+    .card{max-width:720px;width:100%;background:linear-gradient(180deg,#11182a,#0d1424);border:1px solid #22304a;border-radius:14px;padding:24px}
+    h1{margin:0 0 8px;font-size:24px}
+    p{margin:8px 0;color:#9aa4b2}
+    a{color:#4da3ff;text-decoration:none}
+    a:hover{text-decoration:underline}
+    .links{display:flex;gap:12px;flex-wrap:wrap;margin-top:12px}
+    .pill{display:inline-block;border:1px solid #22304a;border-radius:999px;padding:8px 12px;background:rgba(255,255,255,.02)}
+  </style>
+  </head>
+<body>
+  <div class="wrap">
+    <div class="card">
+      <h1>前端入口未部署</h1>
+      <p>当前未检测到打包后的聊天前端资源（public/chat/index.html）。</p>
+      <p>如果你仅需对外文档，请访问：</p>
+      <div class="links">
+        <a class="pill" href="/open-api-docs">开放接口 Swagger</a>
+        <a class="pill" href="/open-api.json">开放接口 JSON</a>
+        <a class="pill" href="/open-docs/index.html">字段说明页面</a>
+      </div>
+      <p style="margin-top:16px">如需部署聊天前端，请将打包产物放到 <code>public/chat/</code> 目录并覆盖本页。</p>
+    </div>
+  </div>
+</body>
+</html>
+
+

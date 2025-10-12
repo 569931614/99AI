@@ -1,0 +1,322 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>99AI 开放接口说明</title>
+  <style>
+    :root {
+      --bg: #0b0f1a; /* 深色背景 */
+      --card: #11182a;
+      --card-2: #0d1424;
+      --text: #e6eaf2;
+      --muted: #9aa4b2;
+      --brand: #4da3ff;
+      --accent: #7bd88a;
+      --border: #22304a;
+      --code-bg: #0a1326;
+    }
+    html,body { margin:0; padding:0; background:var(--bg); color:var(--text); font: 14px/1.6 system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Helvetica Neue, Arial, Noto Sans, "PingFang SC", "Hiragino Sans GB", "Microsoft Yahei", sans-serif; }
+    a{ color:var(--brand); text-decoration:none; }
+    a:hover{ text-decoration:underline; }
+    .container{ max-width:1040px; margin:40px auto; padding:0 20px; }
+    header{ margin-bottom:24px; }
+    h1{ font-size:28px; margin:0 0 8px; }
+    .sub{ color:var(--muted); }
+    .cards{ display:grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap:16px; margin:24px 0; }
+    .card{ background:linear-gradient(180deg, var(--card), var(--card-2)); border:1px solid var(--border); border-radius:14px; padding:16px 18px; }
+    .card h3{ margin:0 0 8px; font-size:16px; }
+    .nav{ display:flex; gap:12px; flex-wrap:wrap; margin:16px 0 28px; }
+    .pill{ display:inline-block; padding:8px 12px; border:1px solid var(--border); border-radius:999px; background:rgba(255,255,255,0.02); }
+    section{ margin:28px 0; }
+    h2{ font-size:20px; margin:18px 0 10px; }
+    h3{ font-size:16px; margin:14px 0 8px; }
+    table{ width:100%; border-collapse:collapse; background:linear-gradient(180deg, var(--card), var(--card-2)); border:1px solid var(--border); border-radius:12px; overflow:hidden; }
+    th, td{ text-align:left; padding:12px 14px; border-bottom:1px solid var(--border); vertical-align:top; }
+    th{ color:var(--muted); font-weight:600; background:rgba(255,255,255,0.02); }
+    tbody tr:hover{ background:rgba(255,255,255,0.02); }
+    code{ background:var(--code-bg); border:1px solid var(--border); padding:2px 6px; border-radius:6px; color:#a8c5ff; }
+    .tip{ color:var(--muted); font-size:13px; }
+    .footer{ margin:36px 0 12px; color:var(--muted); font-size:12px; }
+  </style>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>开放接口说明</h1>
+      <div class="sub">/api/open/* 对外开放接口的请求与返回字段说明</div>
+      <div class="cards">
+        <div class="card">
+          <h3>OpenAPI JSON</h3>
+          <div class="tip">机器可读文档</div>
+          <div><a href="/open-api.json" target="_blank">/open-api.json</a></div>
+        </div>
+        <div class="card">
+          <h3>Swagger UI</h3>
+          <div class="tip">在线调试与示例</div>
+          <div><a href="/open-api-docs" target="_blank">/open-api-docs</a></div>
+        </div>
+      </div>
+      <div class="nav">
+        <a class="pill" href="#create">角色创建</a>
+        <a class="pill" href="#update">角色更新</a>
+        <a class="pill" href="#list">角色列表</a>
+        <a class="pill" href="#open-chat">开放·聊天</a>
+        <a class="pill" href="#open-voice">开放·音色</a>
+        <a class="pill" href="#open-affection">开放·好感度</a>
+        <a class="pill" href="#open-chatlog">开放·聊天记录</a>
+      </div>
+    </header>
+
+    <section id="create">
+      <h2>角色创建（POST <code>/api/open/app/createApp</code>）</h2>
+      <h3>请求体字段</h3>
+      <table>
+        <thead>
+          <tr><th>字段</th><th>说明</th><th>是否必填</th></tr>
+        </thead>
+        <tbody>
+          <tr><td><code>name</code></td><td>App 应用名称</td><td>是</td></tr>
+          <tr><td><code>catId</code></td><td>分类 ID 列表（逗号分隔）</td><td>是</td></tr>
+          <tr><td><code>preset</code></td><td>角色设定/预设场景信息</td><td>推荐</td></tr>
+          <tr><td><code>coverImg</code></td><td>封面图片 URL</td><td>否</td></tr>
+          <tr><td><code>voiceId</code></td><td>角色默认音色 ID（DashScope/CosyVoice voice_id）</td><td>否</td></tr>
+          <tr><td><code>emotionVoices</code></td><td>情绪-音色映射数组；元素仅传 <code>{ emotionId, voiceId }</code> 且 <code>voiceId</code> 非空</td><td>否</td></tr>
+        </tbody>
+      </table>
+      <h3>返回体</h3>
+      <table>
+        <thead><tr><th>字段</th><th>说明</th></tr></thead>
+        <tbody>
+          <tr><td><code>code</code></td><td>状态码，200 表示成功</td></tr>
+          <tr><td><code>message</code></td><td>消息文本</td></tr>
+          <tr><td><code>data</code></td><td>创建后的角色对象</td></tr>
+        </tbody>
+      </table>
+      <h3>data 对象字段</h3>
+      <table>
+        <thead><tr><th>字段</th><th>说明</th></tr></thead>
+        <tbody>
+          <tr><td><code>id</code></td><td>角色ID</td></tr>
+          <tr><td><code>name</code></td><td>App 应用名称</td></tr>
+          <tr><td><code>catId</code></td><td>分类 ID 列表（逗号分隔）</td></tr>
+          <tr><td><code>preset</code></td><td>角色设定/预设场景信息</td></tr>
+          <tr><td><code>coverImg</code></td><td>封面图片 URL</td></tr>
+          <tr><td><code>status</code></td><td>状态：1 启用，0 禁用</td></tr>
+          <tr><td><code>order</code></td><td>排序值（数字越大越靠前）</td></tr>
+          <tr><td><code>createdAt</code>/<code>updatedAt</code></td><td>创建/更新时间</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section id="open-chat">
+      <h2>开放·聊天</h2>
+      <h3>聊天对话（POST <code>/api/open/chat/chat-process</code>）</h3>
+      <table><thead><tr><th>字段</th><th>说明</th><th>必填</th></tr></thead><tbody>
+        <tr><td><code>userId</code></td><td>外部用户ID（系统内有效）</td><td>是</td></tr>
+        <tr><td><code>prompt</code></td><td>用户提问内容；传 <code>audioUrl</code> 时将自动进行 ASR 转文本</td><td>否</td></tr>
+        <tr><td><code>audioUrl</code></td><td>音频URL，自动进行 ASR（与 <code>audioBase64</code> 二选一）</td><td>否</td></tr>
+        <tr><td><code>imageUrl</code></td><td>图片URL</td><td>否</td></tr>
+        <tr><td><code>fileUrl</code></td><td>文件URL</td><td>否</td></tr>
+        <tr><td><code>appId</code></td><td>角色ID</td><td>否</td></tr>
+        <tr><td><code>model / modelName / modelType / modelAvatar</code></td><td>模型相关参数</td><td>否</td></tr>
+        <tr><td><code>options / extraParam / usingPluginId</code></td><td>附加选项/插件/扩展参数</td><td>否</td></tr>
+      </tbody></table>
+      <h3>语音对话（POST <code>/api/open/chat/chat-process-voice</code>）</h3>
+      <div class="tip">需传 <code>userId</code>，并提供 <code>audioUrl</code> 或 <code>audioBase64</code> 其一</div>
+
+      <h3>TTS 文字转语音（POST <code>/api/open/chat/tts-process</code>）</h3>
+      <table><thead><tr><th>字段</th><th>说明</th><th>必填</th></tr></thead><tbody>
+        <tr><td><code>userId</code></td><td>外部用户ID</td><td>是</td></tr>
+        <tr><td><code>prompt</code></td><td>要合成的文本</td><td>是</td></tr>
+        <tr><td><code>chatId</code></td><td>继续会话ID（可选）</td><td>否</td></tr>
+      </tbody></table>
+    </section>
+
+    <section id="open-voice">
+      <h2>开放·音色</h2>
+      <h3>查询列表（GET <code>/api/open/voice/list</code>）</h3>
+      <table><thead><tr><th>参数</th><th>说明</th><th>是否必填</th></tr></thead><tbody>
+        <tr><td><code>prefix</code></td><td>按前缀过滤，如 <code>cosyvoice-v2</code></td><td>否</td></tr>
+        <tr><td><code>page_index</code></td><td>页码（从1开始），默认 1</td><td>否</td></tr>
+        <tr><td><code>page_size</code></td><td>每页数量，默认 10</td><td>否</td></tr>
+      </tbody></table>
+      <h3>详情（GET <code>/api/open/voice/detail/:voiceId</code>）</h3>
+      <table><thead><tr><th>参数</th><th>说明</th><th>是否必填</th></tr></thead><tbody>
+        <tr><td><code>voiceId</code></td><td>音色ID</td><td>是</td></tr>
+      </tbody></table>
+      <h3>默认参数（GET <code>/api/open/voice/params/:voiceId</code>）</h3>
+      <table><thead><tr><th>参数</th><th>说明</th><th>是否必填</th></tr></thead><tbody>
+        <tr><td><code>voiceId</code></td><td>音色ID</td><td>是</td></tr>
+      </tbody></table>
+      <h3>元信息（GET <code>/api/open/voice/meta/:voiceId</code>）</h3>
+      <table><thead><tr><th>参数</th><th>说明</th><th>是否必填</th></tr></thead><tbody>
+        <tr><td><code>voiceId</code></td><td>音色ID</td><td>是</td></tr>
+      </tbody></table>
+      <h3>声音复刻（POST <code>/api/open/voice/enroll</code>）</h3>
+      <table><thead><tr><th>字段</th><th>说明</th><th>是否必填</th></tr></thead><tbody>
+        <tr><td><code>prefix</code></td><td>目标模型前缀，如 cosyvoice-v2</td><td>是</td></tr>
+        <tr><td><code>url</code></td><td>训练音频URL</td><td>是</td></tr>
+        <tr><td><code>targetModel</code></td><td>具体目标模型</td><td>否</td></tr>
+        <tr><td><code>name</code></td><td>音色名称</td><td>否</td></tr>
+      </tbody></table>
+      <h3>更新音色（POST <code>/api/open/voice/update</code>）</h3>
+      <table><thead><tr><th>字段</th><th>说明</th><th>是否必填</th></tr></thead><tbody>
+        <tr><td><code>voice_id</code></td><td>音色ID</td><td>是</td></tr>
+        <tr><td><code>url</code></td><td>追加训练音频URL</td><td>是</td></tr>
+      </tbody></table>
+      <h3>更新状态（POST <code>/api/open/voice/update-status</code>）</h3>
+      <table><thead><tr><th>字段</th><th>说明</th><th>是否必填</th></tr></thead><tbody>
+        <tr><td><code>voiceId</code></td><td>音色ID</td><td>是</td></tr>
+        <tr><td><code>status</code></td><td>状态（PENDING/SUCCEEDED/FAILED 等）</td><td>是</td></tr>
+      </tbody></table>
+      <h3>删除（POST <code>/api/open/voice/delete</code>）</h3>
+      <table><thead><tr><th>字段</th><th>说明</th><th>是否必填</th></tr></thead><tbody>
+        <tr><td><code>voice_id</code></td><td>音色ID</td><td>是</td></tr>
+      </tbody></table>
+      <h3>设置默认参数（POST <code>/api/open/voice/params</code>）</h3>
+      <table><thead><tr><th>字段</th><th>说明</th><th>是否必填</th></tr></thead><tbody>
+        <tr><td><code>voice_id</code></td><td>音色ID</td><td>是</td></tr>
+        <tr><td><code>params</code></td><td>合成参数，如 { rate, pitch, volume, sample_rate, format }</td><td>是</td></tr>
+      </tbody></table>
+      <h3>ASR（POST <code>/api/open/voice/asr</code>）</h3>
+      <table><thead><tr><th>字段</th><th>说明</th><th>是否必填</th></tr></thead><tbody>
+        <tr><td><code>audioBase64</code></td><td>音频 Base64（dataURL 或纯base64）</td><td>是</td></tr>
+        <tr><td><code>format</code></td><td>音频格式（wav/mp3/pcm/…）</td><td>否</td></tr>
+        <tr><td><code>sample_rate</code></td><td>采样率</td><td>否</td></tr>
+        <tr><td><code>model</code></td><td>ASR 模型</td><td>否</td></tr>
+        <tr><td><code>language_hints</code></td><td>语言提示</td><td>否</td></tr>
+        <tr><td><code>disfluency_removal_enabled</code></td><td>口吃去除</td><td>否</td></tr>
+      </tbody></table>
+      <h3>试听（POST <code>/api/open/voice/preview</code>）</h3>
+      <table><thead><tr><th>字段</th><th>说明</th><th>是否必填</th></tr></thead><tbody>
+        <tr><td><code>voice_id</code></td><td>音色ID</td><td>是</td></tr>
+        <tr><td><code>text</code></td><td>要合成的文本</td><td>是</td></tr>
+        <tr><td><code>format</code></td><td>输出格式：mp3/wav/pcm</td><td>否</td></tr>
+        <tr><td><code>sample_rate</code></td><td>采样率</td><td>否</td></tr>
+        <tr><td><code>volume</code></td><td>音量</td><td>否</td></tr>
+        <tr><td><code>rate</code></td><td>语速</td><td>否</td></tr>
+        <tr><td><code>pitch</code></td><td>音调</td><td>否</td></tr>
+      </tbody></table>
+    </section>
+
+    <section id="open-affection">
+      <h2>开放·好感度</h2>
+      <h3>列出规则（GET <code>/api/open/affection/rules</code>）</h3>
+      <table><thead><tr><th>参数</th><th>说明</th><th>是否必填</th></tr></thead><tbody>
+        <tr><td><code>appId</code></td><td>角色ID；传入则优先该角色规则，否则返回全局与全部</td><td>否</td></tr>
+      </tbody></table>
+      <h3>获取用户好感度（GET <code>/api/open/affection/status</code>）</h3>
+      <table><thead><tr><th>参数</th><th>说明</th><th>是否必填</th></tr></thead><tbody>
+        <tr><td><code>userId</code></td><td>用户ID</td><td>是</td></tr>
+        <tr><td><code>appId</code></td><td>角色ID</td><td>是</td></tr>
+      </tbody></table>
+      <h3>新增/更新规则（POST <code>/api/open/affection/rule</code>）</h3>
+      <table><thead><tr><th>字段</th><th>说明</th><th>是否必填</th></tr></thead><tbody>
+        <tr><td><code>appId</code></td><td>角色ID</td><td>否</td></tr>
+        <tr><td><code>stageName</code></td><td>阶段名</td><td>是</td></tr>
+        <tr><td><code>minScore</code></td><td>最小分</td><td>是</td></tr>
+        <tr><td><code>maxScore</code></td><td>最大分</td><td>否</td></tr>
+        <tr><td><code>behaviors</code></td><td>行为 JSON 字符串</td><td>是</td></tr>
+      </tbody></table>
+      <h3>删除规则（DELETE <code>/api/open/affection/rule/:id</code>）</h3>
+      <table><thead><tr><th>参数</th><th>说明</th><th>是否必填</th></tr></thead><tbody>
+        <tr><td><code>id</code></td><td>规则ID</td><td>是</td></tr>
+      </tbody></table>
+    </section>
+
+    <section id="open-chatlog">
+      <h2>开放·聊天记录</h2>
+      <h3>我的问答记录（GET <code>/api/open/chatLog/chatList</code>）</h3>
+      <table><thead><tr><th>参数</th><th>说明</th><th>是否必填</th></tr></thead><tbody>
+        <tr><td><code>userId</code></td><td>用户ID</td><td>是</td></tr>
+        <tr><td><code>groupId</code></td><td>会话分组ID</td><td>否</td></tr>
+      </tbody></table>
+      <h3>单条消息（GET <code>/api/open/chatLog/querySingleChat</code>）</h3>
+      <table><thead><tr><th>参数</th><th>说明</th><th>是否必填</th></tr></thead><tbody>
+        <tr><td><code>userId</code></td><td>用户ID</td><td>是</td></tr>
+        <tr><td><code>chatId</code></td><td>消息ID</td><td>是</td></tr>
+      </tbody></table>
+      <h3>按角色查询（GET <code>/api/open/chatLog/byAppId</code>）</h3>
+      <table><thead><tr><th>参数</th><th>说明</th><th>是否必填</th></tr></thead><tbody>
+        <tr><td><code>userId</code></td><td>用户ID</td><td>是</td></tr>
+        <tr><td><code>appId</code></td><td>角色ID</td><td>是</td></tr>
+        <tr><td><code>page</code></td><td>页码</td><td>否</td></tr>
+        <tr><td><code>size</code></td><td>每页数量</td><td>否</td></tr>
+      </tbody></table>
+    </section>
+
+    <section id="update">
+      <h2>角色更新（POST <code>/api/open/app/updateApp</code>）</h2>
+      <h3>请求体字段</h3>
+      <table>
+        <thead><tr><th>字段</th><th>说明</th><th>是否必填</th></tr></thead>
+        <tbody>
+          <tr><td><code>id</code></td><td>角色 ID</td><td>是</td></tr>
+          <tr><td><code>name</code></td><td>App 应用名称</td><td>否</td></tr>
+          <tr><td><code>catId</code></td><td>分类 ID 列表（逗号分隔）</td><td>否</td></tr>
+          <tr><td><code>preset</code></td><td>角色设定/预设场景信息</td><td>否</td></tr>
+          <tr><td><code>coverImg</code></td><td>封面图片 URL</td><td>否</td></tr>
+          <tr><td><code>voiceId</code></td><td>角色默认音色 ID</td><td>否</td></tr>
+          <tr><td><code>emotionVoices</code></td><td>情绪-音色映射数组；元素仅传 <code>{ emotionId, voiceId }</code> 且 <code>voiceId</code> 非空</td><td>否</td></tr>
+        </tbody>
+      </table>
+      <h3>返回体</h3>
+      <table>
+        <thead><tr><th>字段</th><th>说明</th></tr></thead>
+        <tbody>
+          <tr><td><code>code</code></td><td>状态码</td></tr>
+          <tr><td><code>message</code></td><td>消息文本（如“修改角色信息成功”）</td></tr>
+          <tr><td><code>data</code></td><td>无或变更后的信息</td></tr>
+        </tbody>
+      </table>
+      <div class="tip">说明：当仅更新情绪音色映射而主表无字段变更时，也会返回成功。</div>
+    </section>
+
+    <section id="list">
+      <h2>角色列表（GET <code>/api/open/app/list</code>）</h2>
+      <h3>查询参数</h3>
+      <table>
+        <thead><tr><th>字段</th><th>说明</th><th>是否必填</th></tr></thead>
+        <tbody>
+          <tr><td><code>page</code></td><td>页码</td><td>否</td></tr>
+          <tr><td><code>size</code></td><td>每页数量</td><td>否</td></tr>
+          <tr><td><code>name</code></td><td>按名称模糊搜索</td><td>否</td></tr>
+          <tr><td><code>status</code></td><td>状态过滤（1 启用，0 禁用）</td><td>否</td></tr>
+          <tr><td><code>catId</code></td><td>分类 ID 过滤</td><td>否</td></tr>
+        </tbody>
+      </table>
+      <h3>返回体</h3>
+      <table>
+        <thead><tr><th>字段</th><th>说明</th></tr></thead>
+        <tbody>
+          <tr><td><code>code</code></td><td>状态码</td></tr>
+          <tr><td><code>message</code></td><td>消息文本</td></tr>
+          <tr><td><code>data</code></td><td><code>{ rows, count }</code></td></tr>
+        </tbody>
+      </table>
+      <h3>data.rows 对象字段</h3>
+      <table>
+        <thead><tr><th>字段</th><th>说明</th></tr></thead>
+        <tbody>
+          <tr><td><code>id</code></td><td>角色ID</td></tr>
+          <tr><td><code>name</code></td><td>App 应用名称</td></tr>
+          <tr><td><code>catId</code></td><td>分类 ID 列表（逗号分隔）</td></tr>
+          <tr><td><code>catName</code></td><td>分类名称（逗号分隔）</td></tr>
+          <tr><td><code>coverImg</code></td><td>封面图片 URL</td></tr>
+          <tr><td><code>status</code></td><td>状态：1 启用，0 禁用</td></tr>
+          <tr><td><code>order</code></td><td>排序值</td></tr>
+          <tr><td><code>voiceId</code></td><td>默认音色ID（若已为该角色绑定）</td></tr>
+          <tr><td><code>createdAt</code>/<code>updatedAt</code></td><td>创建/更新时间</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <div class="footer">© 99AI Open APIs — 如需更多模块的字段详细说明，请前往 <a href="/open-api-docs" target="_blank">/open-api-docs</a></div>
+  </div>
+</body>
+</html>
+
+

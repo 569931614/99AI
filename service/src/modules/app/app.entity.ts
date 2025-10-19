@@ -95,7 +95,8 @@ export class AppEntity extends BaseEntity {
   knowledgeBaseIds: string;
 
   @Column({
-    comment: '对话示例（星尘API），JSON格式: [{"role":"user","content":"..."},{"role":"assistant","content":"..."}]',
+    comment:
+      '对话示例（星尘API），JSON格式: [{"role":"user","content":"..."},{"role":"assistant","content":"..."}]',
     type: 'text',
     nullable: true,
   })

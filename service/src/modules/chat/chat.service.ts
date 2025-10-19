@@ -19,6 +19,7 @@ import { AppEmotionVoiceEntity } from '../app/appEmotionVoice.entity';
 import { AppVoiceEntity } from '../app/appVoice.entity';
 import { RoleEmotionEntity } from '../app/roleEmotion.entity';
 import { AutoReplyService } from '../autoReply/autoReply.service';
+import { UserAppSettingsService } from '../userAppSettings/userAppSettings.service';
 import { BadWordsService } from '../badWords/badWords.service';
 import { ChatGroupService } from '../chatGroup/chatGroup.service';
 import { ChatLogService } from '../chatLog/chatLog.service';
@@ -30,6 +31,8 @@ import { UserEntity } from '../user/user.entity';
 import { UserService } from '../user/user.service';
 import { UserBalanceService } from '../userBalance/userBalance.service';
 import { VoiceService } from '../voice/voice.service';
+import { ConversationSummaryService } from '../conversationSummary/conversationSummary.service';
+
 
 @Injectable()
 export class ChatService {
@@ -55,6 +58,8 @@ export class ChatService {
     private readonly appService: AppService,
     private readonly voiceService: VoiceService,
     private readonly affectionService: AffectionService,
+    private readonly userAppSettingsService: UserAppSettingsService,
+    private readonly conversationSummaryService: ConversationSummaryService,
     @InjectRepository(AppEmotionVoiceEntity)
     private readonly appEmotionVoiceRepo: Repository<AppEmotionVoiceEntity>,
     @InjectRepository(RoleEmotionEntity)
@@ -414,56 +419,207 @@ export class ChatService {
   }
 
   // 从选项中选择最匹配情绪：若 initial 在选项中则直接用，否则按关键词打分选择最高分
-  private chooseEmotionFromOptions(
+  /**
+   * 使用AI识别情绪
+   */
+  private async detectEmotionByAI(
+    text: string,
+    options: string[],
+    psychologicalDesc: string | null,
+  ): Promise<string | null> {
+    if (!text || !options || options.length === 0) return null;
+
+    try {
+      const dashscopeApiKey =
+        (await this.globalConfigService.getConfigs(['dashscopeApiKey'])) ||
+        process.env.DASHSCOPE_API_KEY;
+
+      if (!dashscopeApiKey) {
+        Logger.warn('[AI情绪识别] 未配置DashScope API Key，跳过AI识别', 'ChatService');
+        return null;
+      }
+
+      const analysisText = psychologicalDesc
+        ? `心理描述：${psychologicalDesc}\n对话内容：${text}`
+        : text;
+
+      Logger.debug(
+        `[AI情绪识别] 开始分析 - 文本: ${text.substring(0, 50)}..., 候选数: ${options.length}`,
+        'ChatService',
+      );
+      Logger.debug(`[AI情绪识别] 候选情绪: ${options.join(' | ')}`, 'ChatService');
+
+      const numberedOptions = options.map((opt, idx) => `${idx + 1}. ${opt}`).join('\n');
+      const prompt = `你是一个专业的语音情绪分析专家。请分析角色说话时的语气情绪，从给定的候选情绪中选择最合适的音色。
+
+文本内容：
+${analysisText}
+
+候选情绪列表：
+${numberedOptions}
+0. 无合适情绪（如果候选列表中都不匹配）
+
+重要说明：
+- 你的任务是为角色的**说话内容**选择合适的音色
+- 应该根据**对话内容的语气**来判断，而不是角色的内心情绪
+- 如果文本包含"心理描述"和"对话内容"，请**只根据对话内容的语气**来判断说话时应该用什么音色
+- 例如：角色内心紧张害羞，但说话时装作冷静，那么应该选择"冷静"而不是"紧张"
+- 心理描述仅供参考背景，不应直接决定说话的音色
+
+要求：
+1. 仔细分析对话内容的语气，如果候选列表中有匹配的，返回对应的编号（如：1）或完整的情绪名称
+2. 如果候选列表中的情绪都不合适，返回 0 或"无合适情绪"
+3. 注意：有些情绪名称可能包含顿号（、），表示组合情绪，请完整匹配
+4. 只返回编号或名称，不要任何解释
+
+示例：
+- 对话内容"太开心了！"，候选有"开心"，返回：1
+- 对话内容"没关系的..."（内心生气，但说话时装作平静），候选有"平静、生气"，返回：1（平静）
+- 对话内容"该死的混蛋！"，候选只有"开心、温柔"，返回：0
+
+请返回：`;
+
+      const axios = require('axios');
+      const response = await axios.post(
+        'https://dashscope.aliyuncs.com/api/v1/services/aigc/text-generation/generation',
+        {
+          model: 'qwen-turbo',
+          input: {
+            messages: [
+              {
+                role: 'user',
+                content: prompt,
+              },
+            ],
+          },
+          parameters: {
+            max_tokens: 30,
+            temperature: 0.1,
+          },
+        },
+        {
+          headers: {
+            Authorization: `Bearer ${dashscopeApiKey}`,
+            'Content-Type': 'application/json',
+          },
+          timeout: 8000,
+        },
+      );
+
+      const result = response.data?.output?.text?.trim() || '';
+      Logger.debug(`[AI情绪识别] AI原始返回: "${result}"`, 'ChatService');
+
+      // 检查是否为"无合适"
+      if (
+        result === '0' ||
+        result.toLowerCase().includes('无合适') ||
+        result.toLowerCase().includes('不合适') ||
+        result.toLowerCase().includes('无匹配') ||
+        result.toLowerCase().includes('none') ||
+        result.toLowerCase().includes('no match')
+      ) {
+        Logger.debug(`[AI情绪识别] ⚠ AI判断候选中无合适情绪，将使用默认音色`, 'ChatService');
+        return null;
+      }
+
+      // 尝试解析编号
+      const numberMatch = result.match(/^(\d+)/);
+      if (numberMatch) {
+        const index = parseInt(numberMatch[1]) - 1;
+        if (index >= 0 && index < options.length) {
+          const matchedEmotion = options[index];
+          Logger.debug(`[AI情绪识别] ✓ 通过编号匹配成功: ${matchedEmotion}`, 'ChatService');
+          return matchedEmotion;
+        }
+      }
+
+      // 尝试直接匹配名称
+      for (const opt of options) {
+        if (result.includes(opt)) {
+          Logger.debug(`[AI情绪识别] ✓ 通过名称匹配成功: ${opt}`, 'ChatService');
+          return opt;
+        }
+      }
+
+      Logger.warn(
+        `[AI情绪识别] ✗ 未能匹配 - AI返回: "${result}", 候选: [${options.join(' | ')}]`,
+        'ChatService',
+      );
+      return null;
+    } catch (error: any) {
+      Logger.error(
+        `[AI情绪识别] ✗ 调用失败: ${error?.message || error}`,
+        error?.stack || '',
+        'ChatService',
+      );
+      return null;
+    }
+  }
+
+  /**
+   * 从候选情绪列表中选择最合适的情绪
+   */
+  private async chooseEmotionFromOptions(
     psychologicalDesc: string | null,
     fullText: string,
     options: string[],
     initial?: string | null,
-  ): { emotion: string; scores: Record<string, number> } | null {
-    if (!options || options.length === 0) return null;
-    const normInitial = this.normalizeEmotionLabel(initial || '');
-    if (normInitial && options.includes(normInitial)) {
-      return { emotion: normInitial, scores: { [normInitial]: 1 } };
+  ): Promise<{ emotion: string; method: string } | null> {
+    if (!options || options.length === 0) {
+      Logger.warn(`[情绪选择] 候选情绪列表为空`, 'ChatService');
+      return null;
     }
 
-    const text = `${psychologicalDesc || ''} ${fullText || ''}`.toLowerCase();
-    const keywords = this.getEmotionKeywords();
-    const scores: Record<string, number> = {};
+    Logger.debug(
+      `[情绪选择] 开始选择情绪 - 候选数: ${options.length}, 指定情绪: ${initial || '无'}`,
+      'ChatService',
+    );
 
-    const exclamations = (text.match(/[!！]/g) || []).length;
-    const questions = (text.match(/[?？]/g) || []).length;
-    const hasShout = /大喊|大叫|怒吼|吼道|喊道/.test(text);
-
-    for (const emo of options) {
-      const ks = keywords[emo] || [];
-      let score = 0;
-      for (const k of ks) {
-        const count = (text.match(new RegExp(this.escapeRegex(k), 'g')) || []).length;
-        score += count;
+    // 1. 如果有指定情绪，优先使用
+    const initialEmotion = String(initial || '').trim();
+    if (initialEmotion) {
+      // 精确匹配
+      if (options.includes(initialEmotion)) {
+        Logger.debug(`[情绪选择] ✓ 使用指定情绪(精确匹配): ${initialEmotion}`, 'ChatService');
+        return { emotion: initialEmotion, method: 'initial' };
       }
-      // 通用加权
-      if (emo === 'happy' || emo === 'energetic') score += Math.max(0, exclamations - 0); // 感叹号偏向积极
-      if (emo === 'angry' && hasShout) score += 2;
-      if (emo === 'calm' && questions >= 2 && exclamations === 0) score += 1;
-      scores[emo] = score;
-    }
-
-    // 选择最高分
-    let best: string | null = null;
-    let bestScore = -Infinity;
-    for (const emo of options) {
-      const s = scores[emo] ?? 0;
-      if (s > bestScore) {
-        bestScore = s;
-        best = emo;
+      // 模糊匹配
+      const matchedOption = options.find(opt => opt.includes(initialEmotion));
+      if (matchedOption) {
+        Logger.debug(
+          `[情绪选择] ✓ 使用指定情绪(模糊匹配): ${matchedOption} (指定: ${initialEmotion})`,
+          'ChatService',
+        );
+        return { emotion: matchedOption, method: 'initial' };
       }
+      Logger.debug(
+        `[情绪选择] 指定情绪"${initialEmotion}"不在候选列表中，将使用AI识别`,
+        'ChatService',
+      );
     }
 
-    if (!best) return null;
-    // 若所有分数为0，则放弃，交给默认情绪
-    const allZero = Object.values(scores).every(v => (v ?? 0) <= 0);
-    if (allZero) return null;
-    return { emotion: best, scores };
+    // 2. 使用AI识别
+    try {
+      Logger.debug(`[情绪选择] 调用AI识别...`, 'ChatService');
+      const aiEmotion = await this.detectEmotionByAI(fullText, options, psychologicalDesc);
+
+      if (aiEmotion && options.includes(aiEmotion)) {
+        Logger.debug(`[情绪选择] ✓ AI识别成功: ${aiEmotion}`, 'ChatService');
+        return { emotion: aiEmotion, method: 'ai' };
+      } else if (aiEmotion) {
+        Logger.warn(
+          `[情绪选择] AI返回的情绪"${aiEmotion}"不在候选列表中，将使用默认情绪`,
+          'ChatService',
+        );
+        return null;
+      } else {
+        Logger.debug(`[情绪选择] ⚠ AI判断候选中无合适情绪，将使用默认音色`, 'ChatService');
+        return null;
+      }
+    } catch (error: any) {
+      Logger.error(`[情绪选择] AI识别异常: ${error?.message}，将使用默认情绪`, 'ChatService');
+      return null;
+    }
   }
 
   private escapeRegex(s: string): string {
@@ -992,6 +1148,44 @@ export class ChatService {
       }
     }
 
+    // 心理描述开关逻辑
+    if (appId && setSystemMessage && this.userAppSettingsService) {
+      try {
+        const enablePsychologicalDesc = await this.userAppSettingsService.getEnablePsychologicalDesc(
+          req.user.id,
+          appId,
+        );
+        if (enablePsychologicalDesc) {
+          const psychologicalDescPrompt =
+            '\n\n【重要】请在回复时使用（）表示角色的心理描述或内心活动，例如：（他心里想着...）、（她感到有些紧张）等。心理描述应自然融入对话中，体现角色的情感和思考。';
+          setSystemMessage = setSystemMessage + psychologicalDescPrompt;
+          Logger.debug(`用户已启用角色${appId}的心理描述功能`, 'ChatService');
+        } else {
+          const psychologicalDescPrompt =
+            '【重要】回复的内容中，不添加任何心理描述、内心活动或动作描述';
+          setSystemMessage = setSystemMessage + psychologicalDescPrompt;
+        }
+      } catch (error) {
+        Logger.warn(`获取心理描述开关失败: ${error?.message || error}`, 'ChatService');
+      }
+    }
+
+    // 对话总结：获取历史总结并添加到system message
+    if (groupId) {
+      try {
+        const historySummary = await this.conversationSummaryService.getSummary(groupId);
+        if (historySummary) {
+          setSystemMessage = `【对话历史总结】\n${historySummary}\n\n${setSystemMessage}`;
+          Logger.debug(
+            `[对话总结] 已添加历史总结到system message，长度=${historySummary.length}字`,
+            'ChatService',
+          );
+        }
+      } catch (error: any) {
+        Logger.warn(`[对话总结] 获取历史总结失败: ${error?.message || error}`, 'ChatService');
+      }
+    }
+
     /* 获取历史消息 */
     const { messagesHistory } = await this.buildMessageFromParentMessageId(
       {
@@ -1241,6 +1435,30 @@ export class ChatService {
             }
           } catch (error) {
             Logger.debug(`生成相关问题推荐失败: ${error}`);
+          }
+
+          // 对话总结：异步更新总结
+          if (groupId) {
+            try {
+              const previousSummary = await this.conversationSummaryService.getSummary(groupId);
+              const newMessages = [
+                { role: 'user', content: prompt || '' },
+                { role: 'assistant', content: response.full_content || '' },
+              ];
+
+              this.conversationSummaryService
+                .summarizeConversationAsync(groupId, req?.user?.id, appId, previousSummary, newMessages)
+                .catch(err => {
+                  Logger.error(
+                    `[对话总结] 异步总结任务异常: ${err?.message || err}`,
+                    'ChatService',
+                  );
+                });
+
+              Logger.debug(`[对话总结] 已触发异步总结任务 - groupId=${groupId}`, 'ChatService');
+            } catch (error: any) {
+              Logger.warn(`[对话总结] 触发异步总结失败: ${error?.message || error}`, 'ChatService');
+            }
           }
 
           if (isTokenBased === true) {
@@ -1981,9 +2199,9 @@ export class ChatService {
           'TTSService',
         );
       } catch {}
-      // 从选项中择优选择情绪：优先用检测值命中，否则按关键词打分；若无命中则回退默认
+      // 从选项中择优选择情绪：优先用检测值命中，否则使用AI识别；若无命中则回退默认
       let normalizedEmotion = this.normalizeEmotionLabel(detectedEmotion || '');
-      let chosen = this.chooseEmotionFromOptions(
+      let chosen = await this.chooseEmotionFromOptions(
         psychologicalDesc,
         prompt,
         options,
@@ -1991,13 +2209,13 @@ export class ChatService {
       );
       if (!chosen) {
         const fallback = await this.getAppDefaultEmotion(appId, options);
-        chosen = { emotion: fallback, scores: {} };
+        chosen = { emotion: fallback, method: 'default' };
         Logger.debug(`未从内容中命中候选情绪，使用应用默认情绪: ${fallback}`, 'TTSService');
       }
       normalizedEmotion = chosen.emotion;
       try {
         Logger.debug(
-          `最终情绪: ${normalizedEmotion}，打分: ${JSON.stringify(chosen.scores || {})}`,
+          `最终情绪: ${normalizedEmotion}，识别方法: ${chosen.method || 'unknown'}`,
           'TTSService',
         );
       } catch {}

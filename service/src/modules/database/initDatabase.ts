@@ -8,6 +8,8 @@ import { AppEmotionVoiceEntity } from '../app/appEmotionVoice.entity';
 import { AppVoiceEntity } from '../app/appVoice.entity';
 import { RoleEmotionEntity } from '../app/roleEmotion.entity';
 import { UserAppsEntity } from '../app/userApps.entity';
+import { UserAppSettingsEntity } from '../userAppSettings/userAppSettings.entity';
+import { ConversationSummaryEntity } from '../conversationSummary/conversationSummary.entity';
 
 import { AutoReplyEntity } from '../autoReply/autoReply.entity';
 import { BadWordsEntity } from '../badWords/badWords.entity';
@@ -66,6 +68,8 @@ const dataSourceOptions: DataSourceOptions = {
     AppEmotionVoiceEntity,
     VoiceEntity,
     OrderEntity,
+    UserAppSettingsEntity,
+    ConversationSummaryEntity,
   ],
   synchronize: false, // 禁用自动同步，改为根据情况动态开启
   charset: 'utf8mb4',

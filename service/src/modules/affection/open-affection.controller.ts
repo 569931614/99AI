@@ -1,6 +1,7 @@
-import { Body, Controller, Delete, Get, Param, Post, Query } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Post, Put, Query } from '@nestjs/common';
 import { ApiBody, ApiOperation, ApiQuery, ApiTags } from '@nestjs/swagger';
 import { AffectionService } from './affection.service';
+import { IncrementAffectionDto, SetAffectionDto } from './dto/openAffection.dto';
 
 @ApiTags('open-affection')
 @Controller('open/affection')
@@ -9,15 +10,9 @@ export class OpenAffectionController {
 
   // 读
   @Get('rules')
-  @ApiOperation({ summary: '【开放】列出好感度规则（按角色优先，其次全局）（无鉴权）' })
-  @ApiQuery({
-    name: 'appId',
-    type: Number,
-    required: false,
-    description: '可选：传入角色ID时优先返回该角色规则，其次全局；不传返回全部规则',
-  })
-  listRules(@Query('appId') appId?: string) {
-    return this.affectionService.listRules(appId ? Number(appId) : undefined);
+  @ApiOperation({ summary: '【开放】列出好感度规则（无鉴权）' })
+  listRules() {
+    return this.affectionService.listRules();
   }
 
   @Get('status')
@@ -42,11 +37,9 @@ export class OpenAffectionController {
     schema: {
       type: 'object',
       properties: {
-        appId: { type: 'number', nullable: true },
         stageName: { type: 'string' },
         minScore: { type: 'number' },
         maxScore: { type: 'number', nullable: true },
-        sentenceCount: { type: 'number', default: 0 },
         behaviors: { type: 'string' },
       },
       required: ['stageName', 'minScore', 'behaviors'],
@@ -54,11 +47,9 @@ export class OpenAffectionController {
     examples: {
       demo: {
         value: {
-          appId: 123,
           stageName: '初见',
           minScore: 0,
           maxScore: 30,
-          sentenceCount: 10,
           behaviors: '...',
         },
       },
@@ -72,5 +63,95 @@ export class OpenAffectionController {
   @ApiOperation({ summary: '【开放】删除 好感度规则（无鉴权）' })
   removeRule(@Param('id') id: string) {
     return this.affectionService.removeRule(Number(id));
+  }
+
+  @Post('increment')
+  @ApiOperation({
+    summary: '【开放】增加好感度',
+    description: `
+增加或减少用户在指定角色的好感度
+
+参数说明：
+- userId（必填）：用户ID
+- appId（必填）：角色ID
+- amount：增加的分数（正数增加，负数减少，默认+1）
+
+返回：当前好感度分数和阶段信息
+    `,
+  })
+  @ApiBody({
+    type: IncrementAffectionDto,
+    examples: {
+      increase: {
+        summary: '增加好感度（推荐）',
+        description: '增加5分好感度',
+        value: {
+          userId: 1,
+          appId: 101,
+          amount: 5,
+        },
+      },
+      decrease: {
+        summary: '减少好感度',
+        description: '减少3分好感度',
+        value: {
+          userId: 1,
+          appId: 101,
+          amount: -3,
+        },
+      },
+      default: {
+        summary: '默认增加',
+        description: '不传amount则默认+1',
+        value: {
+          userId: 1,
+          appId: 101,
+        },
+      },
+    },
+  })
+  increment(@Body() body: IncrementAffectionDto) {
+    return this.affectionService.increment(body.userId, body.appId, body.amount);
+  }
+
+  @Put('score')
+  @ApiOperation({
+    summary: '【开放】设置好感度',
+    description: `
+直接设置用户在指定角色的好感度分数
+
+参数说明：
+- userId（必填）：用户ID
+- appId（必填）：角色ID
+- score（必填）：要设置的分数（最小为0）
+
+返回：当前好感度分数和阶段信息
+    `,
+  })
+  @ApiBody({
+    type: SetAffectionDto,
+    examples: {
+      set: {
+        summary: '设置好感度（推荐）',
+        description: '直接设置为50分',
+        value: {
+          userId: 1,
+          appId: 101,
+          score: 50,
+        },
+      },
+      reset: {
+        summary: '重置好感度',
+        description: '重置为0分',
+        value: {
+          userId: 1,
+          appId: 101,
+          score: 0,
+        },
+      },
+    },
+  })
+  setScore(@Body() body: SetAffectionDto) {
+    return this.affectionService.setScore(body.userId, body.appId, body.score);
   }
 }

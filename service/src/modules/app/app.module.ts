@@ -1,6 +1,8 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { UserBalanceService } from '../userBalance/userBalance.service';
+import { UserAppSettingsEntity } from '../userAppSettings/userAppSettings.entity';
+import { UserAppSettingsService } from '../userAppSettings/userAppSettings.service';
 import { AppController } from './app.controller';
 import { AppEntity } from './app.entity';
 import { AppService } from './app.service';
@@ -20,9 +22,11 @@ import { UserAppsEntity } from './userApps.entity';
       AppVoiceEntity,
       RoleEmotionEntity,
       AppEmotionVoiceEntity,
+      UserAppSettingsEntity,
     ]),
   ],
   controllers: [AppController, OpenAppController],
-  providers: [AppService, UserBalanceService],
+  providers: [AppService, UserBalanceService, UserAppSettingsService],
+  exports: [UserAppSettingsService],
 })
 export class AppModule {}

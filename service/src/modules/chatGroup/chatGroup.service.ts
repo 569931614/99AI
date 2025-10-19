@@ -6,6 +6,7 @@ import * as pdf from 'pdf-parse';
 import { In, Repository } from 'typeorm';
 import { AppEntity } from '../app/app.entity';
 import { ModelsService } from '../models/models.service';
+import { AffectionService } from '../affection/affection.service';
 import { ChatGroupEntity } from './chatGroup.entity';
 import { CreateGroupDto } from './dto/createGroup.dto';
 import { DelGroupDto } from './dto/delGroup.dto';
@@ -18,6 +19,7 @@ export class ChatGroupService {
     @InjectRepository(AppEntity)
     private readonly appEntity: Repository<AppEntity>,
     private readonly modelsService: ModelsService,
+    private readonly affectionService: AffectionService,
   ) {}
 
   async create(body: CreateGroupDto, req: Request) {
@@ -213,6 +215,10 @@ export class ChatGroupService {
     }
     const r = await this.chatGroupEntity.update({ id: groupId }, { isDelete: true });
     if (r.affected) {
+      // 删除对话时清空该角色的好感度
+      if (g.appId) {
+        await this.affectionService.clearUserAffection(id, g.appId);
+      }
       return '删除成功';
     } else {
       throw new HttpException('删除失败！', HttpStatus.BAD_REQUEST);
@@ -222,11 +228,20 @@ export class ChatGroupService {
   /* 删除非置顶开启的所有对话记录 */
   async delAll(req: Request) {
     const { id } = req.user;
+    // 先查询所有要删除的对话组，提取appId
+    const groups = await this.chatGroupEntity.find({
+      where: { userId: id, isSticky: false, isDelete: false },
+    });
     const r = await this.chatGroupEntity.update(
       { userId: id, isSticky: false, isDelete: false },
       { isDelete: true },
     );
     if (r.affected) {
+      // 删除所有对话时，清空所有涉及角色的好感度
+      const appIds = [...new Set(groups.filter(g => g.appId).map(g => g.appId))];
+      for (const appId of appIds) {
+        await this.affectionService.clearUserAffection(id, appId);
+      }
       return '删除成功';
     } else {
       throw new HttpException('删除失败！', HttpStatus.BAD_REQUEST);

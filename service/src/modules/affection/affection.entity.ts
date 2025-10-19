@@ -12,11 +12,6 @@ export class AffectionRuleEntity {
   @PrimaryGeneratedColumn()
   id: number;
 
-  // 可选：按角色/应用粒度配置，null 表示全局规则
-  @Column({ type: 'int', nullable: true })
-  @Index()
-  appId: number | null;
-
   @Column({ type: 'varchar', length: 50 })
   stageName: string; // 初见/暧昧/恋人
 
@@ -25,9 +20,6 @@ export class AffectionRuleEntity {
 
   @Column({ type: 'int', nullable: true })
   maxScore: number | null; // null 表示无上限
-
-  @Column({ type: 'int', default: 0 })
-  sentenceCount: number; // 需要聊满多少句才能达到该阶段
 
   @Column({ type: 'text' })
   behaviors: string; // 阶段行为规范，支持多行

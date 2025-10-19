@@ -1,11 +1,15 @@
 import { Body, Controller, Delete, Get, Param, Post, Query } from '@nestjs/common';
 import { ApiBody, ApiOperation, ApiParam, ApiQuery, ApiTags } from '@nestjs/swagger';
+import { UserAppSettingsService } from '../userAppSettings/userAppSettings.service';
 import { AppService } from './app.service';
 
 @ApiTags('open-app')
 @Controller('open/app')
 export class OpenAppController {
-  constructor(private readonly appService: AppService) {}
+  constructor(
+    private readonly appService: AppService,
+    private readonly userAppSettingsService: UserAppSettingsService,
+  ) {}
 
   // 读
   @Get('list')
@@ -293,5 +297,43 @@ export class OpenAppController {
   })
   setEmotions(@Body() body: any) {
     return this.appService.setGlobalRoleEmotions(body);
+  }
+
+  // 心理描述开关
+  @Get('psychologicalDesc')
+  @ApiOperation({ summary: '【开放】获取用户对某角色的心理描述开关状态（无鉴权）' })
+  @ApiQuery({ name: 'userId', type: Number, required: true, description: '用户ID' })
+  @ApiQuery({ name: 'appId', type: Number, required: true, description: '角色(App) ID' })
+  async getPsychologicalDesc(@Query('userId') userId: string, @Query('appId') appId: string) {
+    const enable = await this.userAppSettingsService.getEnablePsychologicalDesc(
+      Number(userId),
+      Number(appId),
+    );
+    return { enable };
+  }
+
+  @Post('psychologicalDesc')
+  @ApiOperation({ summary: '【开放】设置用户对某角色的心理描述开关（无鉴权）' })
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        userId: { type: 'number', description: '用户ID' },
+        appId: { type: 'number', description: '角色(App) ID' },
+        enable: { type: 'boolean', description: '是否启用心理描述' },
+      },
+      required: ['userId', 'appId', 'enable'],
+    },
+    examples: {
+      demo: { value: { userId: 1, appId: 10000, enable: true } },
+    },
+  })
+  async setPsychologicalDesc(@Body() body: { userId: number; appId: number; enable: boolean }) {
+    await this.userAppSettingsService.setEnablePsychologicalDesc(
+      body.userId,
+      body.appId,
+      body.enable,
+    );
+    return { success: true };
   }
 }

@@ -4,12 +4,14 @@ import { AffectionModule } from '../affection/affection.module';
 import { OpenAIChatService } from '../aiTool/chat/chat.service';
 import { NetSearchService } from '../aiTool/search/netSearch.service';
 import { AppEntity } from '../app/app.entity';
+import { AppModule } from '../app/app.module';
 import { AppService } from '../app/app.service';
 import { AppCatsEntity } from '../app/appCats.entity';
 import { AppEmotionVoiceEntity } from '../app/appEmotionVoice.entity';
 import { AppVoiceEntity } from '../app/appVoice.entity';
 import { RoleEmotionEntity } from '../app/roleEmotion.entity';
 import { UserAppsEntity } from '../app/userApps.entity';
+import { UserAppSettingsEntity } from '../userAppSettings/userAppSettings.entity';
 import { AutoReplyEntity } from '../autoReply/autoReply.entity';
 import { AutoReplyService } from '../autoReply/autoReply.service';
 import { BadWordsEntity } from '../badWords/badWords.entity';
@@ -38,6 +40,7 @@ import { UserBalanceService } from '../userBalance/userBalance.service';
 import { VerificationEntity } from '../verification/verification.entity';
 import { VerificationService } from '../verification/verification.service';
 import { VoiceModule } from '../voice/voice.module';
+import { ConversationSummaryModule } from '../conversationSummary/conversationSummary.module';
 import { ChatController } from './chat.controller';
 import { ChatService } from './chat.service';
 import { OpenChatController } from './open-chat.controller';
@@ -68,9 +71,12 @@ import { OpenChatController } from './open-chat.controller';
       AppVoiceEntity,
       AppEmotionVoiceEntity,
       RoleEmotionEntity,
+      UserAppSettingsEntity,
     ]),
     VoiceModule,
     AffectionModule,
+    AppModule,
+    ConversationSummaryModule,
   ],
   controllers: [ChatController, OpenChatController],
   providers: [

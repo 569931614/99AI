@@ -15,6 +15,7 @@ import { BadWordsModule } from './modules/badWords/badWords.module';
 import { ChatModule } from './modules/chat/chat.module';
 import { ChatGroupModule } from './modules/chatGroup/chatGroup.module';
 import { ChatLogModule } from './modules/chatLog/chatLog.module';
+import { ConversationSummaryModule } from './modules/conversationSummary/conversationSummary.module';
 import { CramiModule } from './modules/crami/crami.module';
 import { DatabaseModule } from './modules/database/database.module';
 import { GlobalConfigModule } from './modules/globalConfig/globalConfig.module';
@@ -113,6 +114,7 @@ import { VoiceModule } from './modules/voice/voice.module';
     CramiModule,
     UserBalanceModule,
     ChatLogModule,
+    ConversationSummaryModule,
     UploadModule,
     RedisCacheModule,
     GlobalConfigModule,

@@ -1,6 +1,6 @@
 <script lang="ts" setup>
 import { fetchAffectionStatus } from '@/api/affection'
-import { fetchQueryOneCatAPI } from '@/api/appStore'
+import { fetchGetPsychologicalDescAPI, fetchQueryOneCatAPI, fetchSetPsychologicalDescAPI } from '@/api/appStore'
 import { fetchUpdateGroupAPI } from '@/api/group'
 import { fetchQueryModelsListAPI } from '@/api/models'
 
@@ -149,6 +149,7 @@ onMounted(() => {
     [() => activeAppId.value, () => (authStore as any)?.userInfo?.id],
     () => {
       void loadAffection()
+      void loadPsychologicalDesc()
     },
     { immediate: true }
   )
@@ -158,6 +159,49 @@ onMounted(() => {
 onUnmounted(() => {
   window.removeEventListener('affection:refresh', handleAffectionRefresh)
 })
+
+// Psychological Description (心理描述) toggle state
+const psychologicalDescEnabled = ref<boolean>(false)
+const psychologicalDescLoading = ref(false)
+
+async function loadPsychologicalDesc() {
+  try {
+    psychologicalDescLoading.value = true
+    const appId = Number(activeAppId.value || 0)
+    const userId = (authStore as any)?.userInfo?.id
+    if (!authStore.isLogin || !userId || !appId) {
+      psychologicalDescEnabled.value = false
+      return
+    }
+    const res: any = await fetchGetPsychologicalDescAPI<{ enable: boolean }>({ userId, appId })
+    if (res?.enable !== undefined) {
+      psychologicalDescEnabled.value = res.enable
+    } else {
+      psychologicalDescEnabled.value = false
+    }
+  } catch (error) {
+    psychologicalDescEnabled.value = false
+  } finally {
+    psychologicalDescLoading.value = false
+  }
+}
+
+async function togglePsychologicalDesc() {
+  try {
+    const appId = Number(activeAppId.value || 0)
+    const userId = (authStore as any)?.userInfo?.id
+    if (!userId || !appId) return
+
+    psychologicalDescLoading.value = true
+    const newValue = !psychologicalDescEnabled.value
+    await fetchSetPsychologicalDescAPI({ userId, appId, enable: newValue })
+    psychologicalDescEnabled.value = newValue
+  } catch (error) {
+    console.error('设置心理描述开关失败:', error)
+  } finally {
+    psychologicalDescLoading.value = false
+  }
+}
 
 /* 查询当前app详情提示用户使用 */
 async function queryAppDetail(id: number) {
@@ -440,6 +484,28 @@ function toggleMembers() {
                 </template>
                 <template v-else>好感度 --</template>
               </span>
+            </div>
+
+            <!-- 心理描述开关 -->
+            <div v-if="!externalLinkActive && !isPreviewerVisible && activeAppId" class="relative group mx-1">
+              <button
+                type="button"
+                class="px-2 py-1 rounded-full text-xs transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                :class="{
+                  'bg-primary-500 text-white': psychologicalDescEnabled,
+                  'bg-gray-100 dark:bg-neutral-800 text-gray-700 dark:text-gray-300': !psychologicalDescEnabled
+                }"
+                @click="togglePsychologicalDesc"
+                :disabled="psychologicalDescLoading"
+                aria-label="切换心理描述"
+              >
+                <template v-if="psychologicalDescLoading">心理描述 ···</template>
+                <template v-else>心理描述 {{ psychologicalDescEnabled ? '开' : '关' }}</template>
+              </button>
+              <!-- 悬停提示 -->
+              <div v-if="!isMobile" class="tooltip tooltip-bottom">
+                {{ psychologicalDescEnabled ? '关闭心理描述' : '开启心理描述' }}
+              </div>
             </div>
 
             <!-- 主题切换按钮，仅在非外部链接和非预览器状态下显示 -->

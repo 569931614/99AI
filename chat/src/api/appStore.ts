@@ -38,3 +38,19 @@ export function fetchQueryOneCatAPI<T>(data): Promise<T> {
     data,
   })
 }
+
+/* 获取心理描述开关状态（无鉴权） */
+export function fetchGetPsychologicalDescAPI<T>(params: { userId: number; appId: number }): Promise<T> {
+  return get<T>({
+    url: '/open/app/psychologicalDesc',
+    data: params,
+  })
+}
+
+/* 设置心理描述开关（无鉴权） */
+export function fetchSetPsychologicalDescAPI<T>(data: { userId: number; appId: number; enable: boolean }): Promise<T> {
+  return post<T>({
+    url: '/open/app/psychologicalDesc',
+    data,
+  })
+}

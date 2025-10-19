@@ -9,11 +9,11 @@ export class AffectionController {
   constructor(private readonly affectionService: AffectionService) {}
 
   @Get('rules')
-  @ApiOperation({ summary: '列出好感度规则（按app优先，其次全局）' })
+  @ApiOperation({ summary: '列出好感度规则' })
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
-  listRules(@Query('appId') appId?: string) {
-    return this.affectionService.listRules(appId ? Number(appId) : undefined);
+  listRules() {
+    return this.affectionService.listRules();
   }
 
   @Post('rule')
@@ -24,11 +24,9 @@ export class AffectionController {
     @Body()
     body: {
       id?: number;
-      appId?: number | null;
       stageName: string;
       minScore: number;
       maxScore?: number | null;
-      sentenceCount?: number;
       behaviors: string;
     },
   ) {

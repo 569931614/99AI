@@ -167,4 +167,46 @@ export class AppController {
   ) {
     return this.appService.setAppEmotionVoices(body);
   }
+
+  /* ========== 用户创建角色相关接口 ========== */
+
+  @Post('user/createRole')
+  @ApiOperation({ summary: '用户创建自己的角色' })
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  userCreateRole(@Body() body: CreateAppDto, @Req() req: Request) {
+    return this.appService.userCreateRole(body, req);
+  }
+
+  @Get('user/myRoles')
+  @ApiOperation({ summary: '获取用户自己创建的角色列表' })
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  userMyRoles(@Req() req: Request, @Query() query: QuerAppDto) {
+    return this.appService.userMyRoles(req, query);
+  }
+
+  @Post('user/updateRole')
+  @ApiOperation({ summary: '用户更新自己的角色' })
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  userUpdateRole(@Body() body: UpdateAppDto, @Req() req: Request) {
+    return this.appService.userUpdateRole(body, req);
+  }
+
+  @Post('user/delRole')
+  @ApiOperation({ summary: '用户删除自己的角色' })
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  userDelRole(@Body() body: OperateAppDto, @Req() req: Request) {
+    return this.appService.userDelRole(body, req);
+  }
+
+  @Post('user/togglePublic')
+  @ApiOperation({ summary: '用户切换角色公开状态' })
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  userTogglePublic(@Body() body: { id: number }, @Req() req: Request) {
+    return this.appService.userTogglePublic(body, req);
+  }
 }

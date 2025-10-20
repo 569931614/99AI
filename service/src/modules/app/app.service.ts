@@ -1036,4 +1036,183 @@ export class AppService {
     }
     return { success: true };
   }
+
+  /* ========== 用户创建角色相关方法 ========== */
+
+  async userCreateRole(body: CreateAppDto, req: Request) {
+    const { name, catId } = body;
+    const userId = req.user.id;
+
+    // 检查该用户是否已创建同名角色
+    const existingRole = await this.appEntity.findOne({
+      where: { name, userId },
+    });
+    if (existingRole) {
+      throw new HttpException('您已经创建了同名的角色！', HttpStatus.BAD_REQUEST);
+    }
+
+    // 验证分类ID是否存在
+    if (typeof (catId as any) === 'string' && String(catId).trim().length > 0) {
+      const catIds = String(catId).split(',');
+      for (const id of catIds) {
+        const c = await this.appCatsEntity.findOne({ where: { id: Number(id) } });
+        if (!c) {
+          throw new HttpException(`分类ID ${id} 不存在！`, HttpStatus.BAD_REQUEST);
+        }
+      }
+    }
+
+    const saveData = { ...body } as any;
+    saveData.userId = userId;
+    saveData.public = false; // 用户角色默认私有
+    saveData.role = 'user'; // 标记为用户创建
+    saveData.status = 1; // 默认启用
+
+    try {
+      const saved = await this.appEntity.save(saveData);
+      return { success: true, data: saved };
+    } catch (error) {
+      throw new HttpException(
+        `创建角色失败: ${error?.message || '未知错误'}`,
+        HttpStatus.BAD_REQUEST,
+      );
+    }
+  }
+
+  async userMyRoles(req: Request, query: QuerAppDto) {
+    const userId = req.user.id;
+    const { page = 1, size = 10, name, status } = query;
+
+    const where: any = { userId };
+
+    if (name) {
+      where.name = Like(`%${name}%`);
+    }
+
+    if (status !== undefined && status !== null) {
+      where.status = status;
+    }
+
+    try {
+      const pageNum = Math.max(1, Number(page) || 1);
+      const sizeNum = Math.max(1, Math.min(100, Number(size) || 10));
+
+      const [rows, count] = await this.appEntity.findAndCount({
+        where,
+        order: { id: 'DESC' },
+        skip: (pageNum - 1) * sizeNum,
+        take: sizeNum,
+      });
+
+      return {
+        success: true,
+        data: {
+          rows,
+          count,
+          page: pageNum,
+          size: sizeNum,
+        },
+      };
+    } catch (error) {
+      throw new HttpException('查询角色列表失败', HttpStatus.BAD_REQUEST);
+    }
+  }
+
+  async userUpdateRole(body: UpdateAppDto, req: Request) {
+    const { id, name, catId } = body;
+    const userId = req.user.id;
+
+    if (!id) {
+      throw new HttpException('角色ID不能为空！', HttpStatus.BAD_REQUEST);
+    }
+
+    // 验证角色所有权
+    const role = await this.appEntity.findOne({ where: { id } });
+    if (!role) {
+      throw new HttpException('角色不存在！', HttpStatus.NOT_FOUND);
+    }
+    if (role.userId !== userId) {
+      throw new HttpException('无权修改此角色！', HttpStatus.FORBIDDEN);
+    }
+
+    // 检查同名（排除自己）
+    if (name) {
+      const existing = await this.appEntity.findOne({
+        where: { name, userId, id: Not(id) },
+      });
+      if (existing) {
+        throw new HttpException('您已有同名的角色！', HttpStatus.BAD_REQUEST);
+      }
+    }
+
+    // 验证分类ID
+    if (typeof (catId as any) === 'string' && String(catId).trim().length > 0) {
+      const catIds = String(catId).split(',');
+      for (const cid of catIds) {
+        const c = await this.appCatsEntity.findOne({ where: { id: Number(cid) } });
+        if (!c) {
+          throw new HttpException(`分类ID ${cid} 不存在！`, HttpStatus.BAD_REQUEST);
+        }
+      }
+    }
+
+    try {
+      const updateData = { ...body } as any;
+      delete updateData.userId; // 禁止修改userId
+      await this.appEntity.update(id, updateData);
+
+      const updated = await this.appEntity.findOne({ where: { id } });
+      return { success: true, data: updated };
+    } catch (error) {
+      throw new HttpException('更新角色失败', HttpStatus.BAD_REQUEST);
+    }
+  }
+
+  async userDelRole(body: OperateAppDto, req: Request) {
+    const { id } = body;
+    const userId = req.user.id;
+
+    const role = await this.appEntity.findOne({ where: { id } });
+    if (!role) {
+      throw new HttpException('角色不存在！', HttpStatus.NOT_FOUND);
+    }
+
+    if (role.userId !== userId) {
+      throw new HttpException('无权删除此角色！', HttpStatus.FORBIDDEN);
+    }
+
+    try {
+      await this.appEntity.delete(id);
+      return { success: true, message: '删除成功' };
+    } catch (error) {
+      throw new HttpException('删除角色失败', HttpStatus.BAD_REQUEST);
+    }
+  }
+
+  async userTogglePublic(body: { id: number }, req: Request) {
+    const { id } = body;
+    const userId = req.user.id;
+
+    const role = await this.appEntity.findOne({ where: { id } });
+    if (!role) {
+      throw new HttpException('角色不存在！', HttpStatus.NOT_FOUND);
+    }
+
+    if (role.userId !== userId) {
+      throw new HttpException('无权修改此角色！', HttpStatus.FORBIDDEN);
+    }
+
+    try {
+      const newPublic = !role.public;
+      await this.appEntity.update(id, { public: newPublic });
+
+      return {
+        success: true,
+        data: { public: newPublic },
+        message: newPublic ? '已设为公开' : '已设为私有',
+      };
+    } catch (error) {
+      throw new HttpException('切换公开状态失败', HttpStatus.BAD_REQUEST);
+    }
+  }
 }

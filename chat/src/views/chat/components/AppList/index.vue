@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { fetchCollectAppAPI, fetchQueryAppCatsAPI, fetchQueryAppsAPI } from '@/api/appStore'
+import { fetchCollectAppAPI, fetchQueryAppCatsAPI, fetchQueryAppsAPI, fetchUserMyRolesAPI } from '@/api/appStore'
 // import { fetchQueryMenuAPI } from '@/api/config';
 import type { ResData } from '@/api/types'
 // 移除DynamicFormModal组件的导入
@@ -61,6 +61,7 @@ const activeList = ref<App[]>([])
 const mineApps = computed(() => appCatStore.mineApps)
 const catList = ref<AppCat[]>([])
 const activeCatId = ref(0)
+const myRoles = ref<App[]>([]) // 用户创建的角色列表
 
 // 从chatBase inject弹窗相关方法
 const showAppConfigModal = inject('showAppConfigModal') as
@@ -87,6 +88,16 @@ async function queryApps() {
 }
 
 const list = computed(() => {
+  // 如果是"我的角色"分类（ID为-1）
+  if (activeCatId.value === -1) {
+    if (keyword.value) {
+      const keywordLower = keyword.value.toLowerCase()
+      return myRoles.value.filter(item => PinyinMatch.match(item.name, keywordLower))
+    }
+    return myRoles.value
+  }
+
+  // 正常分类逻辑
   if (keyword.value) {
     const keywordLower = keyword.value.toLowerCase()
     return appList.value.filter(item => PinyinMatch.match(item.name, keywordLower))
@@ -175,7 +186,28 @@ async function queryCats() {
     coverImg: '',
     des: '',
   }
-  catList.value = [defaultCat, ...res?.data?.rows]
+  const myRolesCat = {
+    id: -1,
+    name: '我的角色',
+    coverImg: '',
+    des: '',
+  }
+  catList.value = [defaultCat, myRolesCat, ...res?.data?.rows]
+}
+
+// 加载用户创建的角色
+async function loadMyRoles() {
+  try {
+    const res: ResData = await fetchUserMyRolesAPI()
+    if (res.success) {
+      myRoles.value = res.data.rows.map((item: App) => {
+        item.loading = false
+        return item
+      })
+    }
+  } catch (error) {
+    console.error('加载我的角色失败:', error)
+  }
 }
 
 function handleChangeCatId(id: number) {
@@ -234,9 +266,18 @@ function isMemberCategory(catName: string): boolean {
   return category ? category.isMember === 1 : false
 }
 
+function openMyRolesSettings() {
+  if (isMobile.value) {
+    useGlobalStore.updateMobileSettingsDialog(true, 'myroles')
+  } else {
+    useGlobalStore.updateSettingsDialog(true, DIALOG_TABS.MY_ROLES)
+  }
+}
+
 onMounted(() => {
   queryCats()
   queryApps()
+  loadMyRoles() // 加载用户创建的角色
 })
 </script>
 
@@ -283,7 +324,7 @@ onMounted(() => {
         class="btn-icon btn-md flex-shrink-0 mx-1"
         @click="scrollRight"
       />
-      <div class="ml-1 flex relative" :class="[isMobile ? 'w-full mr-2' : 'w-[35%]']">
+      <div class="ml-1 flex relative gap-2" :class="[isMobile ? 'w-full mr-2' : 'w-[35%]']">
         <div class="relative flex flex-1 w-full items-center">
           <label for="app-search-field" class="sr-only">
             {{ t('app.searchAppNameQuickFind') }}
@@ -300,6 +341,19 @@ onMounted(() => {
             name="app-search"
           />
         </div>
+        <!-- 创建角色按钮 - 只在"我的角色"分类显示 -->
+        <button
+          v-if="activeCatId === -1"
+          @click="openMyRolesSettings"
+          class="btn btn-primary btn-md flex-shrink-0 flex items-center gap-1"
+          :class="[isMobile ? 'px-3' : 'px-4']"
+          title="创建角色"
+        >
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+          </svg>
+          <span v-if="!isMobile">创建</span>
+        </button>
       </div>
     </div>
 
@@ -329,7 +383,31 @@ onMounted(() => {
     </div>
 
     <div class="w-full flex-grow items-start overflow-hidden">
+      <!-- 空状态提示 - 我的角色 -->
+      <div
+        v-if="activeCatId === -1 && list.length === 0"
+        class="flex flex-col items-center justify-center h-full text-center p-8"
+      >
+        <div class="text-gray-400 dark:text-gray-500 mb-4">
+          <svg class="w-16 h-16 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+          </svg>
+        </div>
+        <p class="text-lg font-medium text-gray-600 dark:text-gray-400 mb-2">还没有创建任何角色</p>
+        <p class="text-sm text-gray-500 dark:text-gray-500 mb-4">点击下方按钮，创建您的第一个专属角色</p>
+        <button
+          @click="openMyRolesSettings"
+          class="btn btn-primary btn-md flex items-center gap-2"
+        >
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+          </svg>
+          创建角色
+        </button>
+      </div>
+
       <transition-group
+        v-else
         name="list"
         tag="div"
         class="w-full h-full overflow-y-auto overflow-x-hidden custom-scrollbar grid p-1 mt-4 pb-5"

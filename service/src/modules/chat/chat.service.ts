@@ -33,7 +33,6 @@ import { UserBalanceService } from '../userBalance/userBalance.service';
 import { VoiceService } from '../voice/voice.service';
 import { ConversationSummaryService } from '../conversationSummary/conversationSummary.service';
 
-
 @Injectable()
 export class ChatService {
   constructor(
@@ -1151,10 +1150,8 @@ ${numberedOptions}
     // 心理描述开关逻辑
     if (appId && setSystemMessage && this.userAppSettingsService) {
       try {
-        const enablePsychologicalDesc = await this.userAppSettingsService.getEnablePsychologicalDesc(
-          req.user.id,
-          appId,
-        );
+        const enablePsychologicalDesc =
+          await this.userAppSettingsService.getEnablePsychologicalDesc(req.user.id, appId);
         if (enablePsychologicalDesc) {
           const psychologicalDescPrompt =
             '\n\n【重要】请在回复时使用（）表示角色的心理描述或内心活动，例如：（他心里想着...）、（她感到有些紧张）等。心理描述应自然融入对话中，体现角色的情感和思考。';
@@ -1447,7 +1444,13 @@ ${numberedOptions}
               ];
 
               this.conversationSummaryService
-                .summarizeConversationAsync(groupId, req?.user?.id, appId, previousSummary, newMessages)
+                .summarizeConversationAsync(
+                  groupId,
+                  req?.user?.id,
+                  appId,
+                  previousSummary,
+                  newMessages,
+                )
                 .catch(err => {
                   Logger.error(
                     `[对话总结] 异步总结任务异常: ${err?.message || err}`,

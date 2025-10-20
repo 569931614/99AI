@@ -46,9 +46,6 @@ export class UserAppAffectionEntity {
   @Column({ type: 'int', default: 0 })
   score: number;
 
-  @Column({ type: 'int', default: 0 })
-  sentenceCount: number; // 用户已经聊了多少句
-
   @CreateDateColumn()
   createdAt: Date;
 

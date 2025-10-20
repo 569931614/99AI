@@ -1857,7 +1857,16 @@ function toggleRecording() {
     <!-- after-footer slot -->
     <slot name="after-footer"></slot>
 
-    <!-- 语音通话面板（独立于现有语音录入） -->
-    <VoiceCall v-if="showVoiceCall" @close="showVoiceCall = false" />
+    <!-- 语音通话面板（独立于现有语音录入），传递当前角色配置 -->
+    <VoiceCall
+      v-if="showVoiceCall"
+      :app-id="activeGroupInfo?.appId"
+      :model="chatStore?.activeModel"
+      :model-name="activeModelName"
+      :prompt="configObj?.prompt || ''"
+      :temperature="configObj?.temperature || 1"
+      :config="configObj"
+      @close="showVoiceCall = false"
+    />
   </div>
 </template>

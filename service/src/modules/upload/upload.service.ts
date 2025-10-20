@@ -55,7 +55,11 @@ export class UploadService implements OnModuleInit {
       dir = `dev/${dir}`;
     }
     // 使用 mime-types 库获取文件扩展名
-    const fileExtension = mime.extension(mimetype) || '';
+    let fileExtension = mime.extension(mimetype) || '';
+    // 特殊处理：audio/mpeg 使用 mp3 扩展名而不是 mpga
+    if (mimetype === 'audio/mpeg' && fileExtension === 'mpga') {
+      fileExtension = 'mp3';
+    }
     if (!fileExtension) {
       Logger.error('无法识别文件类型，请检查文件', 'UploadService');
 

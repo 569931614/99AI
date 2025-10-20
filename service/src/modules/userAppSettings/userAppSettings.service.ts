@@ -25,11 +25,7 @@ export class UserAppSettingsService {
     }
   }
 
-  async setEnablePsychologicalDesc(
-    userId: number,
-    appId: number,
-    enable: boolean,
-  ): Promise<void> {
+  async setEnablePsychologicalDesc(userId: number, appId: number, enable: boolean): Promise<void> {
     try {
       this.logger.debug(`设置心理描述: userId=${userId}, appId=${appId}, enable=${enable}`);
 

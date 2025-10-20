@@ -166,4 +166,16 @@ export class CreateAppDto {
   })
   @IsOptional()
   openingRemark: string;
+
+  @ApiProperty({
+    example: [
+      { emotion: '开心', emotionId: 1, voiceId: 'cosyvoice-v2-xxx' },
+      { emotion: '伤心', emotionId: 2, voiceId: 'cosyvoice-v2-yyy' },
+    ],
+    description: '情绪音色映射列表',
+    required: false,
+    type: 'array',
+  })
+  @IsOptional()
+  emotionVoices: Array<{ emotion: string; emotionId: number; voiceId: string }>;
 }

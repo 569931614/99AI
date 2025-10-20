@@ -71,7 +71,10 @@ export class ConversationSummaryService {
         }
 
         await this.saveSummary(groupId, userId, appId, newSummary, validMessages.length);
-        Logger.debug(`[对话总结] ✓ 总结完成并保存 - groupId=${groupId}`, 'ConversationSummaryService');
+        Logger.debug(
+          `[对话总结] ✓ 总结完成并保存 - groupId=${groupId}`,
+          'ConversationSummaryService',
+        );
       } catch (error: any) {
         Logger.error(
           `[对话总结] 异步总结失败: ${error?.message || error}`,

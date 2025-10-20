@@ -206,6 +206,9 @@ async function bootstrap() {
   try {
     const voiceService = app.get(VoiceService);
     const openAIChatService = app.get(OpenAIChatService);
+    // 获取 ChatService 用于情绪识别
+    const { ChatService } = await import('./modules/chat/chat.service');
+    const chatService = app.get(ChatService);
 
     // Dynamically import ws to avoid build issues
     const WSMod: any = await import('ws');
@@ -442,7 +445,85 @@ async function bootstrap() {
         }
       };
 
-      // 流式LLM处理 - 使用真正的流式TTS会话
+      // 情绪识别辅助函数：从文本中提取心理描述
+      const extractPsychologicalDesc = (text: string): string | null => {
+        const match = text.match(/（([^）]+)）/);
+        return match ? match[1] : null;
+      };
+
+      // 情绪识别辅助函数：移除括号内容，得到实际要朗读的文本
+      const removeBracketedContent = (text: string): string => {
+        return text
+          .replace(/（[^）]*）/g, '')
+          .replace(/\([^)]*\)/g, '')
+          .trim();
+      };
+
+      // 情绪识别辅助函数：基于关键词的简单情绪检测
+      const detectEmotionFromText = (text: string): string | null => {
+        const s = text.toLowerCase();
+        const patterns: Record<string, string[]> = {
+          happy: ['开心', '高兴', '快乐', '哈哈', '嘻嘻', '太好了', '真棒', '！！', '!!'],
+          sad: ['难过', '伤心', '哭', '呜呜', '悲伤', '失落', '…'],
+          angry: ['生气', '愤怒', '可恶', '讨厌', '气死', '烦'],
+          excited: ['激动', '兴奋', '哇', '天哪', '!!!', '！！！'],
+          calm: ['平静', '冷静', '好的', '嗯', '知道了'],
+          shy: ['害羞', '不好意思', '///'],
+        };
+
+        for (const [emotion, keywords] of Object.entries(patterns)) {
+          if (keywords.some(k => s.includes(k))) return emotion;
+        }
+        return null;
+      };
+
+      // 从应用的情绪配置中选择音色
+      const selectVoiceByEmotion = async (
+        appId: number | null,
+        detectedEmotion: string | null,
+      ): Promise<{ voiceId: string | null; emotion: string | null }> => {
+        if (!appId) return { voiceId: cfg.voice_id || null, emotion: null };
+
+        try {
+          // 获取该应用的情绪-音色映射
+          const { Repository } = await import('typeorm');
+          const { AppEmotionVoiceEntity } = await import('./modules/app/appEmotionVoice.entity');
+          const dataSource = app.get('default_DataSource');
+          const emotionRepo: any = dataSource.getRepository(AppEmotionVoiceEntity);
+
+          // 如果检测到情绪，先尝试精确匹配
+          if (detectedEmotion) {
+            const rec = await emotionRepo.findOne({
+              where: { appId: Number(appId), emotion: detectedEmotion, status: 1 },
+            });
+            if (rec?.voiceId) {
+              Logger.debug(
+                `[情绪识别] 检测到情绪: ${detectedEmotion}, 使用音色: ${rec.voiceId}`,
+                'VoiceCall',
+              );
+              sendJson({ type: 'emotion.detected', emotion: detectedEmotion });
+              return { voiceId: rec.voiceId, emotion: detectedEmotion };
+            }
+          }
+
+          // 如果没有匹配，使用默认音色
+          const defaultRec = await emotionRepo.findOne({
+            where: { appId: Number(appId), status: 1 },
+            order: { id: 'ASC' },
+          });
+
+          if (defaultRec?.voiceId) {
+            Logger.debug(`[情绪识别] 使用应用默认音色: ${defaultRec.voiceId}`, 'VoiceCall');
+            return { voiceId: defaultRec.voiceId, emotion: defaultRec.emotion };
+          }
+        } catch (error: any) {
+          Logger.warn(`[情绪识别] 查询情绪音色失败: ${error?.message}, 使用原始音色`, 'VoiceCall');
+        }
+
+        return { voiceId: cfg.voice_id || null, emotion: null };
+      };
+
+      // 流式LLM处理 - 先收集完整回复，再根据情绪选择音色进行TTS
       const processLLMStream = async (text: string) => {
         if (session.ttsCanceled) return;
 
@@ -450,40 +531,8 @@ async function bootstrap() {
         const abortController = new AbortController();
         session.llmAbort = abortController;
 
-        // 如果配置了音色，建立流式TTS会话（一次连接，多次发送）
-        let ttsSession: any = null;
-        if (cfg.voice_id) {
-          try {
-            Logger.debug('创建流式TTS会话', 'VoiceCall');
-            ttsSession = await voiceService.createTTSStreamSession({
-              voice_id: cfg.voice_id,
-              format: 'mp3',
-              sample_rate: 22050,
-              onStart: info => {
-                sendJson({ type: 'tts.start', format: info.format, sample_rate: info.sample_rate });
-                Logger.debug('TTS会话已启动', 'VoiceCall');
-              },
-              onData: chunk => {
-                if (session.ttsCanceled) return;
-                try {
-                  socket.send(chunk, { binary: true });
-                } catch {}
-              },
-              onEnd: () => {
-                sendJson({ type: 'tts.end' });
-                Logger.debug('TTS会话已结束', 'VoiceCall');
-              },
-              onError: err => {
-                Logger.error(`TTS会话错误: ${err?.message}`, 'VoiceCall');
-                sendJson({ type: 'error', stage: 'tts', message: err?.message || 'TTS错误' });
-              },
-            });
-          } catch (e: any) {
-            Logger.error(`创建TTS会话失败: ${e?.message}`, 'VoiceCall');
-            sendJson({ type: 'error', stage: 'tts', message: e?.message || 'TTS初始化失败' });
-          }
-        }
-
+        // 先收集完整的LLM回复
+        llmBuffer = ''; // 重置缓冲区
         try {
           const chatConfig = {
             chatId: 'realtime',
@@ -508,15 +557,6 @@ async function bootstrap() {
               if (t) {
                 llmBuffer += t;
                 sendJson({ type: 'llm.partial', text: t });
-
-                // 通过同一个TTS会话流式发送文本（不阻塞LLM输出）
-                if (ttsSession && !session.ttsCanceled) {
-                  try {
-                    ttsSession.sendText(t);
-                  } catch (e: any) {
-                    Logger.warn(`TTS发送文本失败: ${e?.message}`, 'VoiceCall');
-                  }
-                }
               }
             },
           };
@@ -524,23 +564,85 @@ async function bootstrap() {
           await openAIChatService.chat([{ role: 'user', content: text }], chatConfig);
           sendJson({ type: 'llm.final', text: llmBuffer });
 
-          // LLM完成后，结束TTS会话
-          if (ttsSession && !session.ttsCanceled) {
-            try {
-              Logger.debug('结束TTS会话', 'VoiceCall');
-              await ttsSession.finish();
-            } catch (e: any) {
-              Logger.warn(`结束TTS会话失败: ${e?.message}`, 'VoiceCall');
+          // LLM完成后，进行情绪识别并选择音色
+          if (!session.ttsCanceled && llmBuffer) {
+            Logger.debug(
+              `[情绪识别] 开始分析LLM回复: ${llmBuffer.substring(0, 50)}...`,
+              'VoiceCall',
+            );
+
+            // 1. 提取心理描述（如果有括号）
+            const psychologicalDesc = extractPsychologicalDesc(llmBuffer);
+            if (psychologicalDesc) {
+              Logger.debug(`[情绪识别] 提取到心理描述: ${psychologicalDesc}`, 'VoiceCall');
+            }
+
+            // 2. 从心理描述或完整文本中检测情绪
+            let detectedEmotion = psychologicalDesc
+              ? detectEmotionFromText(psychologicalDesc)
+              : null;
+            if (!detectedEmotion) {
+              detectedEmotion = detectEmotionFromText(llmBuffer);
+            }
+
+            Logger.debug(`[情绪识别] 检测到的情绪: ${detectedEmotion || '无'}`, 'VoiceCall');
+
+            // 3. 根据情绪选择音色
+            const { voiceId: selectedVoiceId, emotion: selectedEmotion } =
+              await selectVoiceByEmotion(session.chatConfig?.appId || null, detectedEmotion);
+
+            // 4. 移除括号内容，得到实际要朗读的文本
+            const textToSpeak = removeBracketedContent(llmBuffer);
+
+            // 5. 使用选择的音色进行TTS
+            if (selectedVoiceId && textToSpeak) {
+              Logger.debug(
+                `[TTS] 使用音色 ${selectedVoiceId} (情绪: ${selectedEmotion || '默认'}) 播报文本`,
+                'VoiceCall',
+              );
+
+              sendJson({ type: 'tts.start' });
+              session.ttsActive = true;
+
+              try {
+                await voiceService.ttsStream(
+                  {
+                    voice_id: selectedVoiceId,
+                    text: textToSpeak,
+                    format: 'mp3',
+                    sample_rate: 22050,
+                  },
+                  {
+                    onStart: info =>
+                      sendJson({
+                        type: 'tts.info',
+                        format: info.format,
+                        sample_rate: info.sample_rate,
+                      }),
+                    onData: chunk => {
+                      if (session.ttsCanceled) return;
+                      try {
+                        socket.send(chunk, { binary: true });
+                      } catch {}
+                    },
+                    onEnd: () => {
+                      if (!session.ttsCanceled) sendJson({ type: 'tts.end' });
+                      session.ttsActive = false;
+                      Logger.debug('[TTS] 播报完成', 'VoiceCall');
+                    },
+                  },
+                );
+              } catch (e: any) {
+                Logger.error(`[TTS] 播报失败: ${e?.message}`, 'VoiceCall');
+                sendJson({ type: 'error', stage: 'tts', message: e?.message || 'TTS failed' });
+                session.ttsActive = false;
+              }
+            } else {
+              Logger.debug('[TTS] 未配置音色或文本为空，跳过播报', 'VoiceCall');
             }
           }
         } catch (e: any) {
           sendJson({ type: 'error', stage: 'llm', message: e?.message || 'LLM failed' });
-          // 出错时也要关闭TTS会话
-          if (ttsSession) {
-            try {
-              ttsSession.cancel();
-            } catch {}
-          }
         }
       };
 

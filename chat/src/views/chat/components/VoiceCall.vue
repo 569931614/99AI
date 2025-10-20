@@ -4,10 +4,29 @@ import { useChatStore } from '@/store'
 import { message } from '@/utils/message'
 import { onMounted, onUnmounted, reactive, ref } from 'vue'
 
-// 简易“按住说话”语音通话组件（不改动原有语音上传按钮）
+// 简易"按住说话"语音通话组件（不改动原有语音上传按钮）
 // - 连接后端 WS: /api/realtime/voice-call
-// - start → 发送音频帧 → stop → 服务端 ASR→LLM→TTS，期间流式返回事件
-// - 先将 TTS 二进制帧缓存，结束后一次性播放（后续可升级为真正流式播放）
+// - start_call → 发送音频帧 → 服务端 ASR→LLM→TTS（带情绪识别），期间流式返回事件
+// - 使用 MediaSource 实现边收边播的流式TTS播放
+
+// 接收从父组件传来的角色配置
+interface Props {
+  appId?: number
+  model?: string
+  modelName?: string
+  prompt?: string
+  temperature?: number
+  config?: any
+}
+
+const props = withDefaults(defineProps<Props>(), {
+  appId: undefined,
+  model: 'gpt-4o-mini',
+  modelName: 'AI助手',
+  prompt: '',
+  temperature: 1,
+  config: () => ({}),
+})
 
 const emit = defineEmits<{ (e: 'close'): void }>()
 const ms = message()
@@ -17,6 +36,7 @@ const connecting = ref(false)
 const wsRef = ref<WebSocket | null>(null)
 const status = ref('未连接')
 const logs = ref<string[]>([])
+const currentEmotion = ref<string>('') // 当前检测到的情绪
 
 // 语音参数
 const voiceId = ref('') // 可手填，留空则只展示 ASR/LLM，不播报
@@ -274,7 +294,20 @@ async function connectWS() {
         connecting.value = false
         status.value = '已连接'
         log('WS 已连接')
-        safeSendJSON({ type: 'start', sampleRate, format, voice_id: voiceId.value || '' })
+        // 发送开始通话消息，包含角色配置信息（用于情绪识别）
+        safeSendJSON({
+          type: 'start_call',
+          sampleRate,
+          format,
+          voice_id: voiceId.value || '',
+          appId: props.appId,
+          model: props.model || 'gpt-4o-mini',
+          modelName: props.modelName || 'AI助手',
+          prompt: props.prompt || '',
+          temperature: props.temperature || 1,
+          config: props.config || {},
+        })
+        log(`角色配置已发送: appId=${props.appId}, model=${props.model}`)
         resolve()
       }
 
@@ -317,6 +350,10 @@ async function connectWS() {
         if (msg.type === 'asr.final') log('[ASR.final] ' + msg.text)
         if (msg.type === 'llm.partial') log('[LLM] ' + msg.text)
         if (msg.type === 'llm.final') log('[LLM.final] ' + msg.text)
+        if (msg.type === 'emotion.detected') {
+          currentEmotion.value = msg.emotion || ''
+          log(`[情绪] 检测到: ${msg.emotion}`)
+        }
         if (msg.type === 'tts.start') {
           ttsChunks.length = 0
           log('[TTS] start')
@@ -454,66 +491,136 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div class="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4">
-    <div class="bg-white dark:bg-gray-800 w-full max-w-md rounded-2xl p-4 shadow-xl">
-      <div class="flex items-center justify-between mb-2">
-        <h3 class="text-lg font-semibold">语音通话（按住说话）</h3>
-        <button class="btn-pill" @click="closePanel">✖</button>
+  <div class="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4">
+    <div class="bg-white dark:bg-gray-800 w-full max-w-md rounded-3xl shadow-2xl overflow-hidden">
+      <!-- 顶部标题栏 -->
+      <div class="bg-gradient-to-r from-primary-500 to-primary-600 px-6 py-4">
+        <div class="flex items-center justify-between text-white">
+          <div class="flex items-center space-x-3">
+            <div class="w-12 h-12 rounded-full bg-white/20 flex items-center justify-center text-2xl">
+              🎙️
+            </div>
+            <div>
+              <h3 class="text-lg font-semibold">{{ props.modelName || '语音通话' }}</h3>
+              <p class="text-xs opacity-90">{{ status }}</p>
+            </div>
+          </div>
+          <button
+            class="w-8 h-8 rounded-full bg-white/20 hover:bg-white/30 transition-colors flex items-center justify-center"
+            @click="closePanel"
+          >
+            ✖
+          </button>
+        </div>
       </div>
 
-      <div class="space-y-3">
-        <div class="flex items-center space-x-2">
-          <label class="text-sm text-gray-500">音色 voice_id：</label>
-          <input
-            v-model="voiceId"
-            placeholder="留空仅文字，不播报"
-            class="flex-1 px-2 py-1 rounded border border-gray-300 dark:bg-gray-700"
-          />
+      <!-- 中间内容区 -->
+      <div class="p-6 space-y-4">
+        <!-- 当前情绪显示 -->
+        <div
+          v-if="currentEmotion"
+          class="bg-primary-50 dark:bg-primary-900/20 rounded-2xl px-4 py-3 text-center"
+        >
+          <p class="text-sm text-gray-600 dark:text-gray-400">当前情绪</p>
+          <p class="text-lg font-semibold text-primary-600 dark:text-primary-400">
+            {{ currentEmotion }}
+          </p>
         </div>
 
-        <div class="text-xs text-gray-500">状态：{{ status }}</div>
+        <!-- 状态指示 -->
+        <div class="flex justify-center items-center py-8">
+          <div
+            class="relative w-32 h-32 rounded-full flex items-center justify-center"
+            :class="[
+              isRecording
+                ? 'bg-red-100 dark:bg-red-900/30'
+                : 'bg-gray-100 dark:bg-gray-700',
+            ]"
+          >
+            <div
+              v-if="isRecording"
+              class="absolute inset-0 rounded-full bg-red-500/20 animate-ping"
+            ></div>
+            <span class="text-5xl relative z-10">
+              {{ isRecording ? '🎤' : '⏸️' }}
+            </span>
+          </div>
+        </div>
 
-        <div class="flex items-center space-x-2">
+        <!-- 主按钮 -->
+        <div class="flex flex-col items-center space-y-3">
           <button
-            class="btn-pill"
-            :class="[isRecording ? 'btn-pill-active' : '']"
+            class="w-full py-4 rounded-2xl font-semibold text-lg transition-all transform active:scale-95"
+            :class="[
+              isRecording
+                ? 'bg-red-500 hover:bg-red-600 text-white shadow-lg shadow-red-500/50'
+                : 'bg-primary-500 hover:bg-primary-600 text-white shadow-lg shadow-primary-500/50',
+            ]"
             @mousedown.prevent="startRec"
             @mouseup.prevent="stopRec"
             @mouseleave.prevent="stopRec"
             @touchstart.prevent="startRec"
             @touchend.prevent="stopRec"
           >
-            按住说话
+            {{ isRecording ? '松开发送' : '按住说话' }}
           </button>
-          <button
-            class="btn-pill"
-            @click="connected ? wsRef?.send(JSON.stringify({ type: 'cancel' })) : connectWS()"
-          >
-            {{ connected ? '取消当前轮次' : '连接通话' }}
-          </button>
-          <button
-            class="btn-pill"
-            @click="
-              () => {
-                if (!connected) return
-                isRecording ? stopRec() : startRec()
-              }
-            "
-          >
-            连续通话
-          </button>
-          <button class="btn-pill" @click="wsRef?.send(JSON.stringify({ type: 'probe' }))">
-            诊断
-          </button>
+
+          <!-- 辅助按钮 -->
+          <div class="flex items-center space-x-2 w-full">
+            <button
+              v-if="!connected"
+              class="flex-1 btn-pill py-2"
+              @click="connectWS"
+            >
+              连接通话
+            </button>
+            <button
+              v-else
+              class="flex-1 btn-pill py-2"
+              @click="wsRef?.send(JSON.stringify({ type: 'cancel' }))"
+            >
+              取消当前
+            </button>
+          </div>
         </div>
 
-        <div class="h-40 overflow-auto text-xs bg-gray-50 dark:bg-gray-900 p-2 rounded">
-          <div v-for="(l, i) in logs" :key="i">{{ l }}</div>
+        <!-- 音频播放器（隐藏控件） -->
+        <div class="hidden">
+          <audio ref="(el)=>{audioEl=el as HTMLAudioElement}"></audio>
         </div>
 
-        <div class="mt-2">
-          <audio ref="(el)=>{audioEl=el as HTMLAudioElement}" controls class="w-full"></audio>
-        </div>
+        <!-- 调试日志（可折叠） -->
+        <details class="mt-4">
+          <summary class="text-sm text-gray-500 cursor-pointer hover:text-gray-700 dark:hover:text-gray-300">
+            调试日志 ({{ logs.length }})
+          </summary>
+          <div class="mt-2 h-40 overflow-auto text-xs bg-gray-50 dark:bg-gray-900 p-3 rounded-lg font-mono">
+            <div v-for="(l, i) in logs" :key="i" class="py-0.5">{{ l }}</div>
+          </div>
+        </details>
+
+        <!-- 高级设置（可折叠） -->
+        <details>
+          <summary class="text-sm text-gray-500 cursor-pointer hover:text-gray-700 dark:hover:text-gray-300">
+            高级设置
+          </summary>
+          <div class="mt-2 space-y-2">
+            <div class="flex items-center space-x-2">
+              <label class="text-sm text-gray-600 dark:text-gray-400">音色 ID：</label>
+              <input
+                v-model="voiceId"
+                placeholder="自动选择"
+                class="flex-1 px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 dark:bg-gray-700 text-sm"
+              />
+            </div>
+            <button
+              class="btn-pill text-xs w-full"
+              @click="wsRef?.send(JSON.stringify({ type: 'probe' }))"
+            >
+              发送诊断信息
+            </button>
+          </div>
+        </details>
       </div>
     </div>
   </div>

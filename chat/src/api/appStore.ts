@@ -54,3 +54,45 @@ export function fetchSetPsychologicalDescAPI<T>(data: { userId: number; appId: n
     data,
   })
 }
+
+/* ========== 用户创建角色相关接口 ========== */
+
+/* 用户创建自己的角色 */
+export function fetchUserCreateRoleAPI<T>(data: any): Promise<T> {
+  return post<T>({
+    url: '/app/user/createRole',
+    data,
+  })
+}
+
+/* 获取用户自己创建的角色列表 */
+export function fetchUserMyRolesAPI<T>(params?: { page?: number; size?: number; name?: string; status?: number }): Promise<T> {
+  return get<T>({
+    url: '/app/user/myRoles',
+    data: params,
+  })
+}
+
+/* 用户更新自己的角色 */
+export function fetchUserUpdateRoleAPI<T>(data: any): Promise<T> {
+  return post<T>({
+    url: '/app/user/updateRole',
+    data,
+  })
+}
+
+/* 用户删除自己的角色 */
+export function fetchUserDelRoleAPI<T>(data: { id: number }): Promise<T> {
+  return post<T>({
+    url: '/app/user/delRole',
+    data,
+  })
+}
+
+/* 用户切换角色公开状态 */
+export function fetchUserTogglePublicRoleAPI<T>(data: { id: number }): Promise<T> {
+  return post<T>({
+    url: '/app/user/togglePublic',
+    data,
+  })
+}

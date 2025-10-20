@@ -8,8 +8,9 @@ import type { GlobalState } from './helper'
 export const DIALOG_TABS = {
   ACCOUNT: 0, // 账户管理
   MEMBER: 1, // 会员中心
-  NOTICE: 2, // 网站公告
-  AGREEMENT: 3, // 用户协议
+  MY_ROLES: 2, // 我的角色
+  NOTICE: 3, // 网站公告
+  AGREEMENT: 4, // 用户协议
 }
 
 export const useGlobalStore = defineStore('global-store', {
@@ -214,7 +215,7 @@ export const useGlobalStore = defineStore('global-store', {
       if (activeTab !== undefined) {
         // 如果是数字索引，转换为对应的tabId
         if (typeof activeTab === 'number') {
-          const tabIds = ['account', 'member', 'notice', 'agreement']
+          const tabIds = ['account', 'member', 'myroles', 'notice', 'agreement']
           this.mobileInitialTab = tabIds[activeTab] || undefined
         } else {
           // 如果直接传入了tabId字符串

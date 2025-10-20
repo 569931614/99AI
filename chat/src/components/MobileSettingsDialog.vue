@@ -97,6 +97,7 @@ import { computed, markRaw, ref, watch } from 'vue'
 // Import setting components directly
 import AccountManagement from './Settings/AccountManagement.vue'
 import MemberCenter from './Settings/MemberCenter.vue'
+import MyRoles from './Settings/MyRoles.vue'
 import NoticeDialog from './Settings/NoticeDialog.vue'
 import UserAgreement from './Settings/UserAgreement.vue'
 
@@ -117,6 +118,7 @@ const tabs = computed(() => {
   const baseTabs = [
     { name: '账户管理', component: markRaw(AccountManagement), id: 'account' },
     { name: '会员中心', component: markRaw(MemberCenter), id: 'member' },
+    { name: '我的角色', component: markRaw(MyRoles), id: 'myroles' },
     // { name: '数据管理', component: markRaw(DataManagement), id: 'data' },
     { name: '网站公告', component: markRaw(NoticeDialog), id: 'notice' },
   ]

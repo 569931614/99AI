@@ -1,5 +1,10 @@
 <script setup lang="ts">
-import { fetchCollectAppAPI, fetchQueryAppCatsAPI, fetchQueryAppsAPI, fetchUserMyRolesAPI } from '@/api/appStore'
+import {
+  fetchCollectAppAPI,
+  fetchQueryAppCatsAPI,
+  fetchQueryAppsAPI,
+  fetchUserMyRolesAPI,
+} from '@/api/appStore'
 // import { fetchQueryMenuAPI } from '@/api/config';
 import type { ResData } from '@/api/types'
 // 移除DynamicFormModal组件的导入
@@ -350,7 +355,12 @@ onMounted(() => {
           title="创建角色"
         >
           <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+            <path
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              d="M12 4v16m8-8H4"
+            />
           </svg>
           <span v-if="!isMobile">创建</span>
         </button>
@@ -390,17 +400,26 @@ onMounted(() => {
       >
         <div class="text-gray-400 dark:text-gray-500 mb-4">
           <svg class="w-16 h-16 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+            <path
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="1.5"
+              d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"
+            />
           </svg>
         </div>
         <p class="text-lg font-medium text-gray-600 dark:text-gray-400 mb-2">还没有创建任何角色</p>
-        <p class="text-sm text-gray-500 dark:text-gray-500 mb-4">点击下方按钮，创建您的第一个专属角色</p>
-        <button
-          @click="openMyRolesSettings"
-          class="btn btn-primary btn-md flex items-center gap-2"
-        >
+        <p class="text-sm text-gray-500 dark:text-gray-500 mb-4">
+          点击下方按钮，创建您的第一个专属角色
+        </p>
+        <button @click="openMyRolesSettings" class="btn btn-primary btn-md flex items-center gap-2">
           <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+            <path
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              d="M12 4v16m8-8H4"
+            />
           </svg>
           创建角色
         </button>

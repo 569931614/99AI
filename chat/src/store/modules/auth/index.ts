@@ -59,7 +59,7 @@ export const useAuthStore = defineStore('auth-store', {
         console.warn('[auth] getGlobalConfig failed, using defaults:', error)
         // 兜底默认配置，避免启动中断
         this.globalConfig = {
-          siteName: '99AI',
+          siteName: 'AI智能助手',
           siteUrl: domain || window.location.origin,
         } as Partial<GlobalConfig> as GlobalConfig
       } finally {

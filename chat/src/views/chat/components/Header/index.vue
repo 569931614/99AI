@@ -1,6 +1,10 @@
 <script lang="ts" setup>
 import { fetchAffectionStatus } from '@/api/affection'
-import { fetchGetPsychologicalDescAPI, fetchQueryOneCatAPI, fetchSetPsychologicalDescAPI } from '@/api/appStore'
+import {
+  fetchGetPsychologicalDescAPI,
+  fetchQueryOneCatAPI,
+  fetchSetPsychologicalDescAPI,
+} from '@/api/appStore'
 import { fetchUpdateGroupAPI } from '@/api/group'
 import { fetchQueryModelsListAPI } from '@/api/models'
 
@@ -118,23 +122,39 @@ async function loadAffection() {
   try {
     affectionLoading.value = true
     const appId = Number(activeAppId.value || 0)
-    const userId = (authStore as any)?.userInfo?.id
-    if (!authStore.isLogin || !userId || !appId) {
+    console.log('[好感度] 开始加载:', {
+      isLogin: authStore.isLogin,
+      appId,
+      activeAppId: activeAppId.value,
+    })
+    if (!authStore.isLogin || !appId) {
+      console.log('[好感度] 跳过加载（未登录或缺少参数）')
       affectionScore.value = null
       affectionStageName.value = ''
       return
     }
+    console.log('[好感度] 调用API:', { appId })
     const res: any = await fetchAffectionStatus<{ score: number; stage: { name?: string } | null }>(
-      { userId, appId }
+      { appId }
     )
+    console.log('[好感度] API返回:', res)
     if (res?.success) {
       const { score, stage } = res.data || {}
       affectionScore.value = typeof score === 'number' ? score : null
       affectionStageName.value = stage?.name || ''
+      console.log('[好感度] 设置值:', {
+        score: affectionScore.value,
+        stageName: affectionStageName.value,
+      })
     } else {
+      console.log('[好感度] API返回失败:', res)
       affectionScore.value = null
       affectionStageName.value = ''
     }
+  } catch (error) {
+    console.error('[好感度] 加载失败:', error)
+    affectionScore.value = null
+    affectionStageName.value = ''
   } finally {
     affectionLoading.value = false
   }
@@ -146,7 +166,7 @@ function handleAffectionRefresh() {
 
 onMounted(() => {
   watch(
-    [() => activeAppId.value, () => (authStore as any)?.userInfo?.id],
+    () => activeAppId.value,
     () => {
       void loadAffection()
       void loadPsychologicalDesc()
@@ -487,13 +507,17 @@ function toggleMembers() {
             </div>
 
             <!-- 心理描述开关 -->
-            <div v-if="!externalLinkActive && !isPreviewerVisible && activeAppId" class="relative group mx-1">
+            <div
+              v-if="!externalLinkActive && !isPreviewerVisible && activeAppId"
+              class="relative group mx-1"
+            >
               <button
                 type="button"
                 class="px-2 py-1 rounded-full text-xs transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 :class="{
                   'bg-primary-500 text-white': psychologicalDescEnabled,
-                  'bg-gray-100 dark:bg-neutral-800 text-gray-700 dark:text-gray-300': !psychologicalDescEnabled
+                  'bg-gray-100 dark:bg-neutral-800 text-gray-700 dark:text-gray-300':
+                    !psychologicalDescEnabled,
                 }"
                 @click="togglePsychologicalDesc"
                 :disabled="psychologicalDescLoading"

@@ -711,7 +711,10 @@ export class OpenAIChatService {
       dialogueExamples?: string;
       openingRemark?: string;
     },
-  ) {
+  ): Promise<{
+    text: string;
+    usage?: { userTokens?: number; inputTokens?: number; outputTokens?: number };
+  }> {
     // 构造消息与 botProfile
     let botContent = systemMessage || '';
     const messages: any[] = [];
@@ -741,10 +744,26 @@ export class OpenAIChatService {
       } catch (_) {}
     }
 
+    // 确保 botContent 不为空（星尘API要求 botProfile.content 不能为空）
+    if (!botContent || botContent.trim() === '') {
+      botContent = '你是一个友好、乐于助人的AI助手。请用简洁、自然的方式回答用户的问题。';
+      Logger.debug('使用默认角色预设（botProfile.content不能为空）', 'OpenAIChatService');
+    }
+
     // 读取星尘 Key（getConfigs 单键时返回字符串，兼容处理）
     const cfgKey: any = await this.globalConfigService.getConfigs(['xingchenApiKey']);
     const xingchenApiKey = typeof cfgKey === 'string' ? cfgKey : cfgKey?.xingchenApiKey;
     const useKey = xingchenApiKey || process.env.XINGCHEN_API_KEY || '';
+
+    if (!useKey) {
+      Logger.error(
+        '星尘API Key未配置！请在系统配置中设置 xingchenApiKey，或在环境变量中设置 XINGCHEN_API_KEY',
+        'OpenAIChatService',
+      );
+      throw new Error('星尘API Key未配置');
+    }
+
+    Logger.debug(`星尘API Key已配置: ${useKey ? '已设置' : '未设置'}`, 'OpenAIChatService');
 
     const url = 'https://nlp.aliyuncs.com/v2/api/chat/send';
     const isStreaming = !!options?.onProgress;
@@ -869,16 +888,33 @@ export class OpenAIChatService {
         signal,
       } as any);
 
+      Logger.debug(
+        `星尘API响应状态: ${response.status} ${response.statusText}`,
+        'OpenAIChatService',
+      );
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        Logger.error(`星尘API请求失败: ${response.status} ${errorText}`, 'OpenAIChatService');
+        throw new Error(`星尘API请求失败: ${response.status} ${errorText}`);
+      }
+
       const contentType = response.headers.get('content-type') || '';
       const isSse = contentType.includes('text/event-stream');
       const supportsStream =
         !!(response as any).body && typeof (response as any).body.getReader === 'function';
+
+      Logger.debug(
+        `星尘API响应类型: contentType=${contentType}, isSse=${isSse}, supportsStream=${supportsStream}`,
+        'OpenAIChatService',
+      );
 
       if (options?.onProgress && (isSse || supportsStream)) {
         const reader = (response as any).body.getReader();
         const decoder = new TextDecoder('utf-8');
         let buffer = '';
         let full = '';
+        let usage: any = null;
         while (true) {
           const { done, value } = await reader.read();
           if (done) break;
@@ -914,6 +950,11 @@ export class OpenAIChatService {
                     options.onProgress(delta);
                   } catch {}
                 }
+                // 提取usage信息（星尘API在最后一个分块返回usage）
+                if (obj?.usage) {
+                  usage = obj.usage;
+                  Logger.debug(`星尘API返回usage: ${JSON.stringify(usage)}`, 'OpenAIChatService');
+                }
               } catch {}
             }
           } else {
@@ -935,6 +976,11 @@ export class OpenAIChatService {
                 if (!delta && typeof obj?.content === 'string') delta = obj.content;
                 if (!delta && typeof obj?.delta === 'string') delta = obj.delta;
                 if (!delta && typeof obj?.text === 'string') delta = obj.text;
+                // 提取usage信息
+                if (obj?.usage) {
+                  usage = obj.usage;
+                  Logger.debug(`星尘API返回usage: ${JSON.stringify(usage)}`, 'OpenAIChatService');
+                }
               } catch {
                 // 不是JSON，按纯文本增量
                 delta = line;
@@ -968,6 +1014,11 @@ export class OpenAIChatService {
                 options.onProgress(tail);
               } catch {}
             }
+            // 提取usage信息
+            if (obj?.usage) {
+              usage = obj.usage;
+              Logger.debug(`星尘API返回usage: ${JSON.stringify(usage)}`, 'OpenAIChatService');
+            }
           } catch {
             // 残留纯文本
             full += buffer;
@@ -976,12 +1027,22 @@ export class OpenAIChatService {
             } catch {}
           }
         }
-        // 返回聚合文本
-        return full;
+        // 返回聚合文本和usage
+        return {
+          text: full,
+          usage: usage
+            ? {
+                userTokens: usage.userTokens,
+                inputTokens: usage.inputTokens,
+                outputTokens: usage.outputTokens,
+              }
+            : undefined,
+        };
       }
 
       // 非流式：一次性解析
       let text = '';
+      let usage: any = null;
       try {
         const data = await response.json();
         const choices = data?.data?.choices || data?.choices;
@@ -991,6 +1052,11 @@ export class OpenAIChatService {
         }
         if (!text && typeof data?.output === 'string') text = data.output;
         if (!text && typeof data?.content === 'string') text = data.content;
+        // 提取usage信息
+        if (data?.usage) {
+          usage = data.usage;
+          Logger.debug(`星尘API返回usage: ${JSON.stringify(usage)}`, 'OpenAIChatService');
+        }
       } catch {
         // 回退到纯文本
         try {
@@ -999,11 +1065,21 @@ export class OpenAIChatService {
         } catch {}
       }
 
-      return text;
+      return {
+        text,
+        usage: usage
+          ? {
+              userTokens: usage.userTokens,
+              inputTokens: usage.inputTokens,
+              outputTokens: usage.outputTokens,
+            }
+          : undefined,
+      };
     } catch (error) {
       const errorMessage = handleError(error);
       Logger.error(`星尘全局模型调用失败: ${errorMessage}`, 'OpenAIChatService');
-      return;
+      Logger.error(`错误详情: ${JSON.stringify(error)}`, 'OpenAIChatService');
+      throw error; // 抛出错误而不是返回undefined
     }
   }
 

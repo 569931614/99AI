@@ -1,9 +1,9 @@
 {
-  "name": "99ai-chat",
+  "name": "ai-chat",
   "version": "4.3.0",
   "private": true,
-  "description": "99AI chat",
-  "author": "vastxie",
+  "description": "AI Chat Platform",
+  "author": "",
   "keywords": [
     "AIWeb",
     "chatgpt",

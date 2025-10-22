@@ -427,33 +427,33 @@ const serve_static_1 = __webpack_require__(31);
 const path_1 = __webpack_require__(20);
 const affection_module_1 = __webpack_require__(32);
 const app_module_1 = __webpack_require__(107);
-const auth_module_1 = __webpack_require__(133);
-const autoReply_module_1 = __webpack_require__(147);
-const badWords_module_1 = __webpack_require__(155);
-const chat_module_1 = __webpack_require__(165);
-const chatGroup_module_1 = __webpack_require__(203);
-const chatLog_module_1 = __webpack_require__(208);
-const conversationSummary_module_1 = __webpack_require__(220);
-const crami_module_1 = __webpack_require__(221);
-const database_module_1 = __webpack_require__(233);
-const globalConfig_module_1 = __webpack_require__(183);
-const models_module_1 = __webpack_require__(238);
-const official_module_1 = __webpack_require__(244);
-const order_module_1 = __webpack_require__(249);
-const pay_module_1 = __webpack_require__(256);
-const plugin_module_1 = __webpack_require__(258);
+const auth_module_1 = __webpack_require__(131);
+const autoReply_module_1 = __webpack_require__(145);
+const badWords_module_1 = __webpack_require__(153);
+const chat_module_1 = __webpack_require__(163);
+const chatGroup_module_1 = __webpack_require__(202);
+const chatLog_module_1 = __webpack_require__(207);
+const conversationSummary_module_1 = __webpack_require__(195);
+const crami_module_1 = __webpack_require__(219);
+const database_module_1 = __webpack_require__(231);
+const globalConfig_module_1 = __webpack_require__(181);
+const models_module_1 = __webpack_require__(236);
+const official_module_1 = __webpack_require__(242);
+const order_module_1 = __webpack_require__(247);
+const pay_module_1 = __webpack_require__(254);
+const plugin_module_1 = __webpack_require__(256);
 const redisCache_module_1 = __webpack_require__(26);
-const share_module_1 = __webpack_require__(261);
-const signin_module_1 = __webpack_require__(264);
-const spa_module_1 = __webpack_require__(267);
-const statistic_module_1 = __webpack_require__(269);
-const task_module_1 = __webpack_require__(273);
-const test_module_1 = __webpack_require__(276);
-const upload_module_1 = __webpack_require__(187);
-const user_module_1 = __webpack_require__(136);
-const userBalance_module_1 = __webpack_require__(278);
-const verification_module_1 = __webpack_require__(280);
-const voice_module_1 = __webpack_require__(182);
+const share_module_1 = __webpack_require__(259);
+const signin_module_1 = __webpack_require__(262);
+const spa_module_1 = __webpack_require__(265);
+const statistic_module_1 = __webpack_require__(267);
+const task_module_1 = __webpack_require__(271);
+const test_module_1 = __webpack_require__(274);
+const upload_module_1 = __webpack_require__(186);
+const user_module_1 = __webpack_require__(134);
+const userBalance_module_1 = __webpack_require__(276);
+const verification_module_1 = __webpack_require__(278);
+const voice_module_1 = __webpack_require__(180);
 let AppModule = class AppModule {
     configure(consumer) {
         consumer;
@@ -1057,6 +1057,10 @@ var __decorate = (this && this.__decorate) || function (decorators, target, key,
     else for (var i = decorators.length - 1; i >= 0; i--) if (d = decorators[i]) r = (c < 3 ? d(r) : c > 3 ? d(target, key, r) : d(target, key)) || r;
     return c > 3 && r && Object.defineProperty(target, key, r), r;
 };
+var __metadata = (this && this.__metadata) || function (k, v) {
+    if (typeof Reflect === "object" && typeof Reflect.metadata === "function") return Reflect.metadata(k, v);
+};
+var _a;
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.AffectionModule = void 0;
 const common_1 = __webpack_require__(2);
@@ -1066,6 +1070,47 @@ const affection_entity_1 = __webpack_require__(103);
 const affection_service_1 = __webpack_require__(102);
 const open_affection_controller_1 = __webpack_require__(104);
 let AffectionModule = class AffectionModule {
+    service;
+    constructor(service) {
+        this.service = service;
+    }
+    async onModuleInit() {
+        const existing = await this.service.listRules();
+        if (!existing || existing.length === 0) {
+            await this.service.upsertRule({
+                stageName: '初见',
+                minScore: 0,
+                maxScore: 30,
+                behaviors: [
+                    '保持一定的距离感，通过对话主动了解用户信息和爱好，逐渐与用户熟悉',
+                    '保持人物设定，不做轻薄、过分的行为和语言，禁止辱骂贬低用户',
+                    '好感度达到30后进入暧昧阶段，在此之前不可越阶',
+                ].join('\n'),
+            });
+            await this.service.upsertRule({
+                stageName: '暧昧',
+                minScore: 30,
+                maxScore: 100,
+                behaviors: [
+                    '主动接触了解用户状况，帮助用户解决问题',
+                    '不能过分顺从，要有自己的个性，禁止辱骂贬低用户',
+                    '所有互动都带着明显的在意，却从不说破 "喜欢"，每一次试探都留有余地，让双方都在 "TA 是不是对我有意思" 的猜测里心动。',
+                    '无意的制造身体接触，用户希望进行下一步时要转移话题',
+                    '好感度达到100后解锁恋人阶段，在此之前不可越阶',
+                ].join('\n'),
+            });
+            await this.service.upsertRule({
+                stageName: '恋人',
+                minScore: 100,
+                maxScore: null,
+                behaviors: [
+                    '支持关心用户，用户生气伤心时及时安慰，开心分享时给予肯定',
+                    '用户意图身体接触，要主动大胆热烈，描述更加详细',
+                    '保持人物设定，不无条件顺从，禁止辱骂贬低用户',
+                ].join('\n'),
+            });
+        }
+    }
 };
 exports.AffectionModule = AffectionModule;
 exports.AffectionModule = AffectionModule = __decorate([
@@ -1074,7 +1119,8 @@ exports.AffectionModule = AffectionModule = __decorate([
         controllers: [affection_controller_1.AffectionController, open_affection_controller_1.OpenAffectionController],
         providers: [affection_service_1.AffectionService],
         exports: [affection_service_1.AffectionService],
-    })
+    }),
+    __metadata("design:paramtypes", [typeof (_a = typeof affection_service_1.AffectionService !== "undefined" && affection_service_1.AffectionService) === "function" ? _a : Object])
 ], AffectionModule);
 
 
@@ -1122,9 +1168,18 @@ let AffectionController = class AffectionController {
     remove(id) {
         return this.affectionService.removeRule(Number(id));
     }
-    status(userId, appId, req) {
-        const uid = req?.user?.id ?? userId;
-        return this.affectionService.getUserAffection(uid, Number(appId));
+    async status(userId, appId, req) {
+        const uid = userId ? userId : req?.user?.id;
+        console.log('[AffectionController] status接口被调用:', {
+            queryUserId: userId,
+            queryAppId: appId,
+            jwtUserId: req?.user?.id,
+            finalUserId: uid,
+            finalAppId: Number(appId),
+        });
+        const result = await this.affectionService.getUserAffection(uid, Number(appId));
+        console.log('[AffectionController] getUserAffection返回:', result);
+        return result;
     }
 };
 exports.AffectionController = AffectionController;
@@ -1167,7 +1222,7 @@ __decorate([
     __param(2, (0, common_1.Req)()),
     __metadata("design:type", Function),
     __metadata("design:paramtypes", [String, String, Object]),
-    __metadata("design:returntype", void 0)
+    __metadata("design:returntype", Promise)
 ], AffectionController.prototype, "status", null);
 exports.AffectionController = AffectionController = __decorate([
     (0, swagger_1.ApiTags)('affection'),
@@ -4656,17 +4711,7 @@ let UserBalanceService = class UserBalanceService {
             b = await this.createBaseUserBalance(userId);
         }
         if (role === 'visitor') {
-            common_1.Logger.debug(`visitor 用户跳过余额检查`, 'UserBalanceService');
-            return {
-                userId,
-                model3Count: 999999,
-                model4Count: 999999,
-                drawMjCount: 999999,
-                memberModel3Count: 999999,
-                memberModel4Count: 999999,
-                memberDrawMjCount: 999999,
-                packageId: null,
-            };
+            return this.validateVisitorBalance(req, type, amount);
         }
         const memberKey = type === 1
             ? 'memberModel3Count'
@@ -5645,7 +5690,7 @@ __decorate([
     __metadata("design:type", String)
 ], UserEntity.prototype, "nickname", void 0);
 __decorate([
-    (0, typeorm_1.Column)({ length: 64, unique: true, comment: '用户邮箱', nullable: true }),
+    (0, typeorm_1.Column)({ length: 64, unique: true, comment: '用户邮箱' }),
     __metadata("design:type", String)
 ], UserEntity.prototype, "email", void 0);
 __decorate([
@@ -6242,7 +6287,7 @@ var __metadata = (this && this.__metadata) || function (k, v) {
 var __param = (this && this.__param) || function (paramIndex, decorator) {
     return function (target, key) { decorator(target, key, paramIndex); }
 };
-var _a, _b, _c, _d;
+var _a, _b, _c;
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.OpenAffectionController = void 0;
 const common_1 = __webpack_require__(2);
@@ -6260,17 +6305,17 @@ let OpenAffectionController = class OpenAffectionController {
     status(userId, appId) {
         return this.affectionService.getUserAffection(userId, Number(appId));
     }
-    increment(body) {
-        return this.affectionService.increment(body.userId, body.appId, body.amount);
-    }
-    setScore(body) {
-        return this.affectionService.setScore(body.userId, body.appId, body.score);
-    }
     upsertRule(body) {
         return this.affectionService.upsertRule(body);
     }
     removeRule(id) {
         return this.affectionService.removeRule(Number(id));
+    }
+    increment(body) {
+        return this.affectionService.increment(body.userId, body.appId, body.amount);
+    }
+    setScore(body) {
+        return this.affectionService.setScore(body.userId, body.appId, body.score);
     }
 };
 exports.OpenAffectionController = OpenAffectionController;
@@ -6299,6 +6344,44 @@ __decorate([
     __metadata("design:paramtypes", [String, String]),
     __metadata("design:returntype", void 0)
 ], OpenAffectionController.prototype, "status", null);
+__decorate([
+    (0, common_1.Post)('rule'),
+    (0, swagger_1.ApiOperation)({ summary: '【开放】新增/更新 好感度规则（无鉴权）' }),
+    (0, swagger_1.ApiBody)({
+        schema: {
+            type: 'object',
+            properties: {
+                stageName: { type: 'string' },
+                minScore: { type: 'number' },
+                maxScore: { type: 'number', nullable: true },
+                behaviors: { type: 'string' },
+            },
+            required: ['stageName', 'minScore', 'behaviors'],
+        },
+        examples: {
+            demo: {
+                value: {
+                    stageName: '初见',
+                    minScore: 0,
+                    maxScore: 30,
+                    behaviors: '...',
+                },
+            },
+        },
+    }),
+    __param(0, (0, common_1.Body)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object]),
+    __metadata("design:returntype", void 0)
+], OpenAffectionController.prototype, "upsertRule", null);
+__decorate([
+    (0, common_1.Delete)('rule/:id'),
+    (0, swagger_1.ApiOperation)({ summary: '【开放】删除 好感度规则（无鉴权）' }),
+    __param(0, (0, common_1.Param)('id')),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [String]),
+    __metadata("design:returntype", void 0)
+], OpenAffectionController.prototype, "removeRule", null);
 __decorate([
     (0, common_1.Post)('increment'),
     (0, swagger_1.ApiOperation)({
@@ -6393,48 +6476,6 @@ __decorate([
     __metadata("design:paramtypes", [typeof (_c = typeof openAffection_dto_1.SetAffectionDto !== "undefined" && openAffection_dto_1.SetAffectionDto) === "function" ? _c : Object]),
     __metadata("design:returntype", void 0)
 ], OpenAffectionController.prototype, "setScore", null);
-__decorate([
-    (0, common_1.Post)('rule'),
-    (0, swagger_1.ApiOperation)({
-        summary: '【开放】新增/更新好感度规则',
-        description: '创建或更新好感度阶段规则',
-    }),
-    (0, swagger_1.ApiBody)({
-        type: openAffection_dto_1.AffectionRuleDto,
-        examples: {
-            create: {
-                summary: '创建规则（推荐）',
-                value: {
-                    stageName: '初见',
-                    minScore: 0,
-                    maxScore: 30,
-                    behaviors: '保持礼貌和距离\n使用正式称呼\n回答简洁专业',
-                },
-            },
-            lastStage: {
-                summary: '最后阶段（无上限）',
-                value: {
-                    stageName: '挚友',
-                    minScore: 90,
-                    maxScore: null,
-                    behaviors: '亲密无间\n分享私密话题\n主动关心对方',
-                },
-            },
-        },
-    }),
-    __param(0, (0, common_1.Body)()),
-    __metadata("design:type", Function),
-    __metadata("design:paramtypes", [typeof (_d = typeof openAffection_dto_1.AffectionRuleDto !== "undefined" && openAffection_dto_1.AffectionRuleDto) === "function" ? _d : Object]),
-    __metadata("design:returntype", void 0)
-], OpenAffectionController.prototype, "upsertRule", null);
-__decorate([
-    (0, common_1.Delete)('rule/:id'),
-    (0, swagger_1.ApiOperation)({ summary: '【开放】删除好感度规则' }),
-    __param(0, (0, common_1.Param)('id')),
-    __metadata("design:type", Function),
-    __metadata("design:paramtypes", [String]),
-    __metadata("design:returntype", void 0)
-], OpenAffectionController.prototype, "removeRule", null);
 exports.OpenAffectionController = OpenAffectionController = __decorate([
     (0, swagger_1.ApiTags)('open-affection'),
     (0, common_1.Controller)('open/affection'),
@@ -6457,31 +6498,9 @@ var __metadata = (this && this.__metadata) || function (k, v) {
     if (typeof Reflect === "object" && typeof Reflect.metadata === "function") return Reflect.metadata(k, v);
 };
 Object.defineProperty(exports, "__esModule", ({ value: true }));
-exports.AffectionRuleDto = exports.SetAffectionDto = exports.IncrementAffectionDto = exports.GetAffectionStatusDto = void 0;
+exports.SetAffectionDto = exports.IncrementAffectionDto = void 0;
 const swagger_1 = __webpack_require__(14);
 const class_validator_1 = __webpack_require__(106);
-class GetAffectionStatusDto {
-    userId;
-    appId;
-}
-exports.GetAffectionStatusDto = GetAffectionStatusDto;
-__decorate([
-    (0, swagger_1.ApiProperty)({
-        description: '用户ID',
-        example: 1,
-    }),
-    (0, class_validator_1.IsNotEmpty)({ message: 'userId不能为空' }),
-    __metadata("design:type", Object)
-], GetAffectionStatusDto.prototype, "userId", void 0);
-__decorate([
-    (0, swagger_1.ApiProperty)({
-        description: '角色应用ID',
-        example: 101,
-    }),
-    (0, class_validator_1.IsNotEmpty)({ message: 'appId不能为空' }),
-    (0, class_validator_1.IsNumber)({}, { message: 'appId必须为数字' }),
-    __metadata("design:type", Number)
-], GetAffectionStatusDto.prototype, "appId", void 0);
 class IncrementAffectionDto {
     userId;
     appId;
@@ -6506,10 +6525,10 @@ __decorate([
     __metadata("design:type", Number)
 ], IncrementAffectionDto.prototype, "appId", void 0);
 __decorate([
-    (0, swagger_1.ApiPropertyOptional)({
-        description: '增加的好感度值（正数增加，负数减少），默认为1',
+    (0, swagger_1.ApiProperty)({
+        description: '增加的分数（正数增加，负数减少，默认+1）',
         example: 5,
-        default: 1,
+        required: false,
     }),
     (0, class_validator_1.IsOptional)(),
     (0, class_validator_1.IsNumber)({}, { message: 'amount必须为数字' }),
@@ -6540,60 +6559,13 @@ __decorate([
 ], SetAffectionDto.prototype, "appId", void 0);
 __decorate([
     (0, swagger_1.ApiProperty)({
-        description: '设置的好感度分数（0-100）',
+        description: '要设置的分数（最小为0）',
         example: 50,
-        minimum: 0,
     }),
     (0, class_validator_1.IsNotEmpty)({ message: 'score不能为空' }),
     (0, class_validator_1.IsNumber)({}, { message: 'score必须为数字' }),
-    (0, class_validator_1.Min)(0, { message: 'score不能小于0' }),
     __metadata("design:type", Number)
 ], SetAffectionDto.prototype, "score", void 0);
-class AffectionRuleDto {
-    stageName;
-    minScore;
-    maxScore;
-    behaviors;
-}
-exports.AffectionRuleDto = AffectionRuleDto;
-__decorate([
-    (0, swagger_1.ApiProperty)({
-        description: '阶段名称',
-        example: '初见',
-    }),
-    (0, class_validator_1.IsNotEmpty)({ message: 'stageName不能为空' }),
-    (0, class_validator_1.IsString)(),
-    __metadata("design:type", String)
-], AffectionRuleDto.prototype, "stageName", void 0);
-__decorate([
-    (0, swagger_1.ApiProperty)({
-        description: '最小分数',
-        example: 0,
-    }),
-    (0, class_validator_1.IsNotEmpty)({ message: 'minScore不能为空' }),
-    (0, class_validator_1.IsNumber)({}, { message: 'minScore必须为数字' }),
-    (0, class_validator_1.Min)(0, { message: 'minScore不能小于0' }),
-    __metadata("design:type", Number)
-], AffectionRuleDto.prototype, "minScore", void 0);
-__decorate([
-    (0, swagger_1.ApiPropertyOptional)({
-        description: '最大分数（可选，最后一个阶段可不设上限）',
-        example: 30,
-        nullable: true,
-    }),
-    (0, class_validator_1.IsOptional)(),
-    (0, class_validator_1.IsNumber)({}, { message: 'maxScore必须为数字' }),
-    __metadata("design:type", Number)
-], AffectionRuleDto.prototype, "maxScore", void 0);
-__decorate([
-    (0, swagger_1.ApiProperty)({
-        description: '该阶段的行为描述',
-        example: '保持礼貌和距离\n使用正式称呼\n回答简洁专业',
-    }),
-    (0, class_validator_1.IsNotEmpty)({ message: 'behaviors不能为空' }),
-    (0, class_validator_1.IsString)(),
-    __metadata("design:type", String)
-], AffectionRuleDto.prototype, "behaviors", void 0);
 
 
 /***/ }),
@@ -6618,17 +6590,17 @@ exports.AppModule = void 0;
 const common_1 = __webpack_require__(2);
 const typeorm_1 = __webpack_require__(33);
 const userBalance_service_1 = __webpack_require__(91);
-const app_controller_1 = __webpack_require__(108);
-const app_entity_1 = __webpack_require__(113);
-const app_service_1 = __webpack_require__(112);
-const appCats_entity_1 = __webpack_require__(114);
-const appEmotionVoice_entity_1 = __webpack_require__(115);
-const appVoice_entity_1 = __webpack_require__(116);
-const open_app_controller_1 = __webpack_require__(132);
-const roleEmotion_entity_1 = __webpack_require__(117);
+const userAppSettings_entity_1 = __webpack_require__(108);
+const userAppSettings_service_1 = __webpack_require__(109);
+const app_controller_1 = __webpack_require__(110);
+const app_entity_1 = __webpack_require__(115);
+const app_service_1 = __webpack_require__(114);
+const appCats_entity_1 = __webpack_require__(116);
+const appEmotionVoice_entity_1 = __webpack_require__(117);
+const appVoice_entity_1 = __webpack_require__(118);
+const open_app_controller_1 = __webpack_require__(130);
+const roleEmotion_entity_1 = __webpack_require__(119);
 const userApps_entity_1 = __webpack_require__(120);
-const userAppSettings_entity_1 = __webpack_require__(119);
-const userAppSettings_service_1 = __webpack_require__(118);
 let AppModule = class AppModule {
 };
 exports.AppModule = AppModule;
@@ -6666,19 +6638,141 @@ var __decorate = (this && this.__decorate) || function (decorators, target, key,
 var __metadata = (this && this.__metadata) || function (k, v) {
     if (typeof Reflect === "object" && typeof Reflect.metadata === "function") return Reflect.metadata(k, v);
 };
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.UserAppSettingsEntity = void 0;
+const baseEntity_1 = __webpack_require__(73);
+const typeorm_1 = __webpack_require__(3);
+let UserAppSettingsEntity = class UserAppSettingsEntity extends baseEntity_1.BaseEntity {
+    userId;
+    appId;
+    enablePsychologicalDesc;
+};
+exports.UserAppSettingsEntity = UserAppSettingsEntity;
+__decorate([
+    (0, typeorm_1.Column)({ type: 'int', comment: '用户ID' }),
+    __metadata("design:type", Number)
+], UserAppSettingsEntity.prototype, "userId", void 0);
+__decorate([
+    (0, typeorm_1.Column)({ type: 'int', comment: '应用ID（角色ID）' }),
+    __metadata("design:type", Number)
+], UserAppSettingsEntity.prototype, "appId", void 0);
+__decorate([
+    (0, typeorm_1.Column)({ comment: '是否启用心理描述（AI回复时使用括号展示心理活动）', default: false }),
+    __metadata("design:type", Boolean)
+], UserAppSettingsEntity.prototype, "enablePsychologicalDesc", void 0);
+exports.UserAppSettingsEntity = UserAppSettingsEntity = __decorate([
+    (0, typeorm_1.Entity)({ name: 'user_app_settings' }),
+    (0, typeorm_1.Index)(['userId', 'appId'], { unique: true })
+], UserAppSettingsEntity);
+
+
+/***/ }),
+/* 109 */
+/***/ (function(__unused_webpack_module, exports, __webpack_require__) {
+
+
+var __decorate = (this && this.__decorate) || function (decorators, target, key, desc) {
+    var c = arguments.length, r = c < 3 ? target : desc === null ? desc = Object.getOwnPropertyDescriptor(target, key) : desc, d;
+    if (typeof Reflect === "object" && typeof Reflect.decorate === "function") r = Reflect.decorate(decorators, target, key, desc);
+    else for (var i = decorators.length - 1; i >= 0; i--) if (d = decorators[i]) r = (c < 3 ? d(r) : c > 3 ? d(target, key, r) : d(target, key)) || r;
+    return c > 3 && r && Object.defineProperty(target, key, r), r;
+};
+var __metadata = (this && this.__metadata) || function (k, v) {
+    if (typeof Reflect === "object" && typeof Reflect.metadata === "function") return Reflect.metadata(k, v);
+};
 var __param = (this && this.__param) || function (paramIndex, decorator) {
     return function (target, key) { decorator(target, key, paramIndex); }
 };
-var _a, _b, _c, _d, _e, _f, _g, _h, _j, _k, _l, _m, _o, _p, _q, _r, _s, _t, _u, _v, _w, _x, _y, _z, _0, _1, _2, _3, _4, _5, _6, _7, _8, _9;
+var UserAppSettingsService_1;
+var _a;
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.UserAppSettingsService = void 0;
+const common_1 = __webpack_require__(2);
+const typeorm_1 = __webpack_require__(33);
+const typeorm_2 = __webpack_require__(3);
+const userAppSettings_entity_1 = __webpack_require__(108);
+let UserAppSettingsService = UserAppSettingsService_1 = class UserAppSettingsService {
+    userAppSettingsEntity;
+    logger = new common_1.Logger(UserAppSettingsService_1.name);
+    constructor(userAppSettingsEntity) {
+        this.userAppSettingsEntity = userAppSettingsEntity;
+    }
+    async getEnablePsychologicalDesc(userId, appId) {
+        if (!userId || !appId)
+            return false;
+        try {
+            const setting = await this.userAppSettingsEntity.findOne({
+                where: { userId, appId },
+            });
+            return setting?.enablePsychologicalDesc ?? false;
+        }
+        catch (error) {
+            return false;
+        }
+    }
+    async setEnablePsychologicalDesc(userId, appId, enable) {
+        try {
+            this.logger.debug(`设置心理描述: userId=${userId}, appId=${appId}, enable=${enable}`);
+            const existing = await this.userAppSettingsEntity.findOne({
+                where: { userId, appId },
+            });
+            if (existing) {
+                this.logger.debug(`更新已有记录: id=${existing.id}`);
+                existing.enablePsychologicalDesc = enable;
+                await this.userAppSettingsEntity.save(existing);
+            }
+            else {
+                this.logger.debug('创建新记录');
+                const newSetting = this.userAppSettingsEntity.create({
+                    userId,
+                    appId,
+                    enablePsychologicalDesc: enable,
+                });
+                await this.userAppSettingsEntity.save(newSetting);
+            }
+            this.logger.debug('设置成功');
+        }
+        catch (error) {
+            this.logger.error(`设置心理描述失败: userId=${userId}, appId=${appId}, error=${error.message}`, error.stack);
+            throw error;
+        }
+    }
+};
+exports.UserAppSettingsService = UserAppSettingsService;
+exports.UserAppSettingsService = UserAppSettingsService = UserAppSettingsService_1 = __decorate([
+    (0, common_1.Injectable)(),
+    __param(0, (0, typeorm_1.InjectRepository)(userAppSettings_entity_1.UserAppSettingsEntity)),
+    __metadata("design:paramtypes", [typeof (_a = typeof typeorm_2.Repository !== "undefined" && typeorm_2.Repository) === "function" ? _a : Object])
+], UserAppSettingsService);
+
+
+/***/ }),
+/* 110 */
+/***/ (function(__unused_webpack_module, exports, __webpack_require__) {
+
+
+var __decorate = (this && this.__decorate) || function (decorators, target, key, desc) {
+    var c = arguments.length, r = c < 3 ? target : desc === null ? desc = Object.getOwnPropertyDescriptor(target, key) : desc, d;
+    if (typeof Reflect === "object" && typeof Reflect.decorate === "function") r = Reflect.decorate(decorators, target, key, desc);
+    else for (var i = decorators.length - 1; i >= 0; i--) if (d = decorators[i]) r = (c < 3 ? d(r) : c > 3 ? d(target, key, r) : d(target, key)) || r;
+    return c > 3 && r && Object.defineProperty(target, key, r), r;
+};
+var __metadata = (this && this.__metadata) || function (k, v) {
+    if (typeof Reflect === "object" && typeof Reflect.metadata === "function") return Reflect.metadata(k, v);
+};
+var __param = (this && this.__param) || function (paramIndex, decorator) {
+    return function (target, key) { decorator(target, key, paramIndex); }
+};
+var _a, _b, _c, _d, _e, _f, _g, _h, _j, _k, _l, _m, _o, _p, _q, _r, _s, _t, _u, _v, _w, _x, _y, _z, _0, _1, _2, _3;
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.AppController = void 0;
-const adminAuth_guard_1 = __webpack_require__(109);
+const adminAuth_guard_1 = __webpack_require__(111);
 const jwtAuth_guard_1 = __webpack_require__(35);
-const superAuth_guard_1 = __webpack_require__(110);
+const superAuth_guard_1 = __webpack_require__(112);
 const common_1 = __webpack_require__(2);
 const swagger_1 = __webpack_require__(14);
-const express_1 = __webpack_require__(111);
-const app_service_1 = __webpack_require__(112);
+const express_1 = __webpack_require__(113);
+const app_service_1 = __webpack_require__(114);
 const collectApp_dto_1 = __webpack_require__(121);
 const createApp_dto_1 = __webpack_require__(122);
 const createCats_dto_1 = __webpack_require__(123);
@@ -6688,7 +6782,6 @@ const queryApp_dto_1 = __webpack_require__(126);
 const queryCats_dto_1 = __webpack_require__(127);
 const updateApp_dto_1 = __webpack_require__(128);
 const updateCats_dto_1 = __webpack_require__(129);
-const userAppSettings_dto_1 = __webpack_require__(130);
 let AppController = class AppController {
     appService;
     constructor(appService) {
@@ -6750,35 +6843,20 @@ let AppController = class AppController {
     setEmotionVoices(body) {
         return this.appService.setAppEmotionVoices(body);
     }
-    userCreateApp(body, req) {
-        return this.appService.userCreateApp(body, req);
+    userCreateRole(body, req) {
+        return this.appService.userCreateRole(body, req);
     }
-    userMyApps(req, query) {
-        return this.appService.userMyApps(req, query);
+    userMyRoles(req, query) {
+        return this.appService.userMyRoles(req, query);
     }
-    userUpdateApp(body, req) {
-        return this.appService.userUpdateApp(body, req);
+    userUpdateRole(body, req) {
+        return this.appService.userUpdateRole(body, req);
     }
-    userDelApp(body, req) {
-        return this.appService.userDelApp(body, req);
+    userDelRole(body, req) {
+        return this.appService.userDelRole(body, req);
     }
     userTogglePublic(body, req) {
         return this.appService.userTogglePublic(body, req);
-    }
-    userGetEmotions() {
-        return this.appService.getGlobalRoleEmotions();
-    }
-    userSetEmotionVoices(body, req) {
-        return this.appService.userSetEmotionVoices(body, req);
-    }
-    userGetEmotionVoices(appId, req) {
-        return this.appService.userGetEmotionVoices(Number(appId), req);
-    }
-    getUserAppSettings(query, req) {
-        return this.appService.getUserAppSettings(query.appId, req);
-    }
-    updateUserAppSettings(body, req) {
-        return this.appService.updateUserAppSettings(body, req);
     }
 };
 exports.AppController = AppController;
@@ -6968,8 +7046,8 @@ __decorate([
     __metadata("design:returntype", void 0)
 ], AppController.prototype, "setEmotionVoices", null);
 __decorate([
-    (0, common_1.Post)('user/createApp'),
-    (0, swagger_1.ApiOperation)({ summary: '用户创建自己的应用' }),
+    (0, common_1.Post)('user/createRole'),
+    (0, swagger_1.ApiOperation)({ summary: '用户创建自己的角色' }),
     (0, common_1.UseGuards)(jwtAuth_guard_1.JwtAuthGuard),
     (0, swagger_1.ApiBearerAuth)(),
     __param(0, (0, common_1.Body)()),
@@ -6977,10 +7055,10 @@ __decorate([
     __metadata("design:type", Function),
     __metadata("design:paramtypes", [typeof (_v = typeof createApp_dto_1.CreateAppDto !== "undefined" && createApp_dto_1.CreateAppDto) === "function" ? _v : Object, typeof (_w = typeof express_1.Request !== "undefined" && express_1.Request) === "function" ? _w : Object]),
     __metadata("design:returntype", void 0)
-], AppController.prototype, "userCreateApp", null);
+], AppController.prototype, "userCreateRole", null);
 __decorate([
-    (0, common_1.Get)('user/myApps'),
-    (0, swagger_1.ApiOperation)({ summary: '获取用户自己创建的应用列表' }),
+    (0, common_1.Get)('user/myRoles'),
+    (0, swagger_1.ApiOperation)({ summary: '获取用户自己创建的角色列表' }),
     (0, common_1.UseGuards)(jwtAuth_guard_1.JwtAuthGuard),
     (0, swagger_1.ApiBearerAuth)(),
     __param(0, (0, common_1.Req)()),
@@ -6988,10 +7066,10 @@ __decorate([
     __metadata("design:type", Function),
     __metadata("design:paramtypes", [typeof (_x = typeof express_1.Request !== "undefined" && express_1.Request) === "function" ? _x : Object, typeof (_y = typeof queryApp_dto_1.QuerAppDto !== "undefined" && queryApp_dto_1.QuerAppDto) === "function" ? _y : Object]),
     __metadata("design:returntype", void 0)
-], AppController.prototype, "userMyApps", null);
+], AppController.prototype, "userMyRoles", null);
 __decorate([
-    (0, common_1.Post)('user/updateApp'),
-    (0, swagger_1.ApiOperation)({ summary: '用户修改自己的应用' }),
+    (0, common_1.Post)('user/updateRole'),
+    (0, swagger_1.ApiOperation)({ summary: '用户更新自己的角色' }),
     (0, common_1.UseGuards)(jwtAuth_guard_1.JwtAuthGuard),
     (0, swagger_1.ApiBearerAuth)(),
     __param(0, (0, common_1.Body)()),
@@ -6999,10 +7077,10 @@ __decorate([
     __metadata("design:type", Function),
     __metadata("design:paramtypes", [typeof (_z = typeof updateApp_dto_1.UpdateAppDto !== "undefined" && updateApp_dto_1.UpdateAppDto) === "function" ? _z : Object, typeof (_0 = typeof express_1.Request !== "undefined" && express_1.Request) === "function" ? _0 : Object]),
     __metadata("design:returntype", void 0)
-], AppController.prototype, "userUpdateApp", null);
+], AppController.prototype, "userUpdateRole", null);
 __decorate([
-    (0, common_1.Post)('user/delApp'),
-    (0, swagger_1.ApiOperation)({ summary: '用户删除自己的应用' }),
+    (0, common_1.Post)('user/delRole'),
+    (0, swagger_1.ApiOperation)({ summary: '用户删除自己的角色' }),
     (0, common_1.UseGuards)(jwtAuth_guard_1.JwtAuthGuard),
     (0, swagger_1.ApiBearerAuth)(),
     __param(0, (0, common_1.Body)()),
@@ -7010,10 +7088,10 @@ __decorate([
     __metadata("design:type", Function),
     __metadata("design:paramtypes", [typeof (_1 = typeof deleteApp_dto_1.OperateAppDto !== "undefined" && deleteApp_dto_1.OperateAppDto) === "function" ? _1 : Object, typeof (_2 = typeof express_1.Request !== "undefined" && express_1.Request) === "function" ? _2 : Object]),
     __metadata("design:returntype", void 0)
-], AppController.prototype, "userDelApp", null);
+], AppController.prototype, "userDelRole", null);
 __decorate([
     (0, common_1.Post)('user/togglePublic'),
-    (0, swagger_1.ApiOperation)({ summary: '用户切换应用公开状态' }),
+    (0, swagger_1.ApiOperation)({ summary: '用户切换角色公开状态' }),
     (0, common_1.UseGuards)(jwtAuth_guard_1.JwtAuthGuard),
     (0, swagger_1.ApiBearerAuth)(),
     __param(0, (0, common_1.Body)()),
@@ -7022,59 +7100,6 @@ __decorate([
     __metadata("design:paramtypes", [Object, typeof (_3 = typeof express_1.Request !== "undefined" && express_1.Request) === "function" ? _3 : Object]),
     __metadata("design:returntype", void 0)
 ], AppController.prototype, "userTogglePublic", null);
-__decorate([
-    (0, common_1.Get)('user/emotions'),
-    (0, swagger_1.ApiOperation)({ summary: '获取全局情绪列表（用户使用）' }),
-    (0, common_1.UseGuards)(jwtAuth_guard_1.JwtAuthGuard),
-    (0, swagger_1.ApiBearerAuth)(),
-    __metadata("design:type", Function),
-    __metadata("design:paramtypes", []),
-    __metadata("design:returntype", void 0)
-], AppController.prototype, "userGetEmotions", null);
-__decorate([
-    (0, common_1.Post)('user/setEmotionVoices'),
-    (0, swagger_1.ApiOperation)({ summary: '用户设置角色的情绪音色映射' }),
-    (0, common_1.UseGuards)(jwtAuth_guard_1.JwtAuthGuard),
-    (0, swagger_1.ApiBearerAuth)(),
-    __param(0, (0, common_1.Body)()),
-    __param(1, (0, common_1.Req)()),
-    __metadata("design:type", Function),
-    __metadata("design:paramtypes", [Object, typeof (_4 = typeof express_1.Request !== "undefined" && express_1.Request) === "function" ? _4 : Object]),
-    __metadata("design:returntype", void 0)
-], AppController.prototype, "userSetEmotionVoices", null);
-__decorate([
-    (0, common_1.Get)('user/emotionVoices'),
-    (0, swagger_1.ApiOperation)({ summary: '用户获取角色的情绪音色映射' }),
-    (0, common_1.UseGuards)(jwtAuth_guard_1.JwtAuthGuard),
-    (0, swagger_1.ApiBearerAuth)(),
-    __param(0, (0, common_1.Query)('appId')),
-    __param(1, (0, common_1.Req)()),
-    __metadata("design:type", Function),
-    __metadata("design:paramtypes", [Number, typeof (_5 = typeof express_1.Request !== "undefined" && express_1.Request) === "function" ? _5 : Object]),
-    __metadata("design:returntype", void 0)
-], AppController.prototype, "userGetEmotionVoices", null);
-__decorate([
-    (0, common_1.Get)('user/settings'),
-    (0, swagger_1.ApiOperation)({ summary: '获取用户对某个角色的个性化设置' }),
-    (0, common_1.UseGuards)(jwtAuth_guard_1.JwtAuthGuard),
-    (0, swagger_1.ApiBearerAuth)(),
-    __param(0, (0, common_1.Query)()),
-    __param(1, (0, common_1.Req)()),
-    __metadata("design:type", Function),
-    __metadata("design:paramtypes", [typeof (_6 = typeof userAppSettings_dto_1.GetUserAppSettingsDto !== "undefined" && userAppSettings_dto_1.GetUserAppSettingsDto) === "function" ? _6 : Object, typeof (_7 = typeof express_1.Request !== "undefined" && express_1.Request) === "function" ? _7 : Object]),
-    __metadata("design:returntype", void 0)
-], AppController.prototype, "getUserAppSettings", null);
-__decorate([
-    (0, common_1.Post)('user/settings'),
-    (0, swagger_1.ApiOperation)({ summary: '更新用户对某个角色的个性化设置' }),
-    (0, common_1.UseGuards)(jwtAuth_guard_1.JwtAuthGuard),
-    (0, swagger_1.ApiBearerAuth)(),
-    __param(0, (0, common_1.Body)()),
-    __param(1, (0, common_1.Req)()),
-    __metadata("design:type", Function),
-    __metadata("design:paramtypes", [typeof (_8 = typeof userAppSettings_dto_1.UpdateUserAppSettingsDto !== "undefined" && userAppSettings_dto_1.UpdateUserAppSettingsDto) === "function" ? _8 : Object, typeof (_9 = typeof express_1.Request !== "undefined" && express_1.Request) === "function" ? _9 : Object]),
-    __metadata("design:returntype", void 0)
-], AppController.prototype, "updateUserAppSettings", null);
 exports.AppController = AppController = __decorate([
     (0, swagger_1.ApiTags)('app'),
     (0, common_1.Controller)('app'),
@@ -7083,7 +7108,7 @@ exports.AppController = AppController = __decorate([
 
 
 /***/ }),
-/* 109 */
+/* 111 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
@@ -7120,7 +7145,7 @@ exports.AdminAuthGuard = AdminAuthGuard = __decorate([
 
 
 /***/ }),
-/* 110 */
+/* 112 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
@@ -7157,13 +7182,13 @@ exports.SuperAuthGuard = SuperAuthGuard = __decorate([
 
 
 /***/ }),
-/* 111 */
+/* 113 */
 /***/ ((module) => {
 
 module.exports = require("express");
 
 /***/ }),
-/* 112 */
+/* 114 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
@@ -7180,7 +7205,7 @@ var __param = (this && this.__param) || function (paramIndex, decorator) {
     return function (target, key) { decorator(target, key, paramIndex); }
 };
 var AppService_1;
-var _a, _b, _c, _d, _e, _f, _g, _h, _j, _k;
+var _a, _b, _c, _d, _e, _f, _g, _h, _j;
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.AppService = void 0;
 const common_1 = __webpack_require__(2);
@@ -7188,12 +7213,11 @@ const typeorm_1 = __webpack_require__(33);
 const typeorm_2 = __webpack_require__(3);
 const globalConfig_service_1 = __webpack_require__(36);
 const userBalance_service_1 = __webpack_require__(91);
-const app_entity_1 = __webpack_require__(113);
-const appCats_entity_1 = __webpack_require__(114);
-const appEmotionVoice_entity_1 = __webpack_require__(115);
-const appVoice_entity_1 = __webpack_require__(116);
-const roleEmotion_entity_1 = __webpack_require__(117);
-const userAppSettings_service_1 = __webpack_require__(118);
+const app_entity_1 = __webpack_require__(115);
+const appCats_entity_1 = __webpack_require__(116);
+const appEmotionVoice_entity_1 = __webpack_require__(117);
+const appVoice_entity_1 = __webpack_require__(118);
+const roleEmotion_entity_1 = __webpack_require__(119);
 const userApps_entity_1 = __webpack_require__(120);
 let AppService = AppService_1 = class AppService {
     appCatsEntity;
@@ -7205,8 +7229,7 @@ let AppService = AppService_1 = class AppService {
     userBalanceService;
     globalConfigService;
     dataSource;
-    userAppSettingsService;
-    constructor(appCatsEntity, appEntity, userAppsEntity, appVoiceRepo, appEmotionRepo, emotionRepo, userBalanceService, globalConfigService, dataSource, userAppSettingsService) {
+    constructor(appCatsEntity, appEntity, userAppsEntity, appVoiceRepo, appEmotionRepo, emotionRepo, userBalanceService, globalConfigService, dataSource) {
         this.appCatsEntity = appCatsEntity;
         this.appEntity = appEntity;
         this.userAppsEntity = userAppsEntity;
@@ -7216,7 +7239,6 @@ let AppService = AppService_1 = class AppService {
         this.userBalanceService = userBalanceService;
         this.globalConfigService = globalConfigService;
         this.dataSource = dataSource;
-        this.userAppSettingsService = userAppSettingsService;
     }
     async createAppCat(body) {
         const { name } = body;
@@ -7281,7 +7303,6 @@ let AppService = AppService_1 = class AppService {
             voiceId = v?.voiceId || null;
         }
         catch (_) { }
-        const emotionVoices = await this.getAppEmotionVoices(Number(id));
         return {
             demoData: appData.demoData ? appData.demoData.split('\n') : [],
             coverImg: appData.coverImg,
@@ -7296,13 +7317,6 @@ let AppService = AppService_1 = class AppService {
             backgroundImg: appData.backgroundImg,
             prompt: appData.prompt,
             voiceId,
-            emotionVoices: emotionVoices.items || [],
-            enableRealTime: appData.enableRealTime,
-            enableLongTermMemory: appData.enableLongTermMemory,
-            enableKnowledgeBase: appData.enableKnowledgeBase,
-            knowledgeBaseIds: appData.knowledgeBaseIds,
-            dialogueExamples: appData.dialogueExamples,
-            openingRemark: appData.openingRemark,
         };
     }
     async appCatsList(query, req) {
@@ -7437,7 +7451,6 @@ let AppService = AppService_1 = class AppService {
                 public: false,
             },
             { userId: (0, typeorm_2.MoreThan)(0), public: true },
-            { userId: req.user.id },
         ];
         const userCatIds = await this.userBalanceService.getUserApps(Number(req.user.id));
         const userCatIdsSet = new Set(userCatIds);
@@ -7511,7 +7524,6 @@ let AppService = AppService_1 = class AppService {
                 public: false,
             },
             { userId: (0, typeorm_2.MoreThan)(0), public: true },
-            { userId: Number(userId) },
         ];
         if (keyword) {
             baseWhere = baseWhere.map(condition => ({
@@ -7656,46 +7668,34 @@ let AppService = AppService_1 = class AppService {
                     ? body.emotionVoices
                     : [];
                 if (items.length) {
-                    common_1.Logger.log(`[AppService][CreateApp] 收到 emotionVoices: ${JSON.stringify(items)}`);
                     const all = await this.emotionRepo.find();
-                    common_1.Logger.log(`[AppService][CreateApp] role_emotions 表记录数: ${all.length}`);
                     const idToName = new Map(all.map(e => [e.id, e.emotion]));
                     const cleaned = items
                         .map((i) => {
                         const emotionId = Number(i?.emotionId || 0);
                         const emotionFromId = idToName.get(emotionId);
                         const emotionName = emotionFromId || String(i?.emotion || '').trim();
-                        const voiceId = String(i?.voiceId || '').trim();
-                        common_1.Logger.log(`[AppService][CreateApp] 映射: emotionId=${emotionId} -> emotionFromId=${emotionFromId} -> emotionName=${emotionName}, voiceId=${voiceId}`);
-                        return { emotion: emotionName, voiceId: voiceId };
+                        return { emotion: emotionName, voiceId: String(i?.voiceId || '') };
                     })
                         .filter((i) => i.emotion && i.voiceId);
-                    common_1.Logger.log(`[AppService][CreateApp] 准备保存 appId=${saved.id} incoming=${items.length} cleaned=${cleaned.length}`);
-                    common_1.Logger.log(`[AppService][CreateApp] cleaned数据: ${JSON.stringify(cleaned)}`);
+                    common_1.Logger.log(`[AppService] 准备覆盖 emotionVoices appId=${saved.id} incoming=${items.length} cleaned=${cleaned.length}`);
                     await this.appEmotionRepo.delete({ appId: saved.id });
-                    common_1.Logger.log(`[AppService][CreateApp] 已删除旧数据 appId=${saved.id}`);
                     if (cleaned.length) {
                         const now = new Date();
-                        const toSave = cleaned.map((i) => ({
+                        await this.appEmotionRepo.save(cleaned.map((i) => ({
                             appId: saved.id,
                             emotion: i.emotion,
                             voiceId: i.voiceId,
                             status: 1,
                             createdAt: now,
                             updatedAt: now,
-                        }));
-                        common_1.Logger.log(`[AppService][CreateApp] 准备写入数据: ${JSON.stringify(toSave)}`);
-                        const result = await this.appEmotionRepo.save(toSave);
-                        common_1.Logger.log(`[AppService][CreateApp] 写入结果: ${JSON.stringify(result)}`);
+                        })));
                     }
-                    common_1.Logger.log(`[AppService][CreateApp] 已保存 emotionVoices 条目=${cleaned.length} appId=${saved.id}`);
-                }
-                else {
-                    common_1.Logger.log(`[AppService][CreateApp] emotionVoices 为空，跳过保存`);
+                    common_1.Logger.log(`[AppService] 已保存 emotionVoices 条目=${cleaned.length} appId=${saved.id}`);
                 }
             }
             catch (e) {
-                common_1.Logger.error(`[AppService][CreateApp] 保存 emotionVoices 失败 appId=${saved.id} err=${e?.message || e}`, e?.stack || '');
+                common_1.Logger.warn(`[AppService] 保存 emotionVoices 失败 appId=${saved.id} err=${e?.message || e}`);
             }
             return saved;
         }
@@ -7768,46 +7768,34 @@ let AppService = AppService_1 = class AppService {
             try {
                 if (Array.isArray(body?.emotionVoices)) {
                     const items = body.emotionVoices;
-                    common_1.Logger.log(`[AppService][UpdateApp] 收到 emotionVoices: ${JSON.stringify(items)}`);
                     const all = await this.emotionRepo.find();
-                    common_1.Logger.log(`[AppService][UpdateApp] role_emotions 表记录数: ${all.length}`);
                     const idToName = new Map(all.map(e => [e.id, e.emotion]));
                     const cleaned = items
                         .map(i => {
                         const emotionId = Number(i?.emotionId || 0);
                         const emotionFromId = idToName.get(emotionId);
                         const emotionName = emotionFromId || String(i?.emotion || '').trim();
-                        const voiceId = String(i?.voiceId || '').trim();
-                        common_1.Logger.log(`[AppService][UpdateApp] 映射: emotionId=${emotionId} -> emotionFromId=${emotionFromId} -> emotionName=${emotionName}, voiceId=${voiceId}`);
-                        return { emotion: emotionName, voiceId: voiceId };
+                        return { emotion: emotionName, voiceId: String(i?.voiceId || '') };
                     })
                         .filter(i => i.emotion && i.voiceId);
-                    common_1.Logger.log(`[AppService][UpdateApp] 准备覆盖 appId=${id} incoming=${items.length} cleaned=${cleaned.length}`);
-                    common_1.Logger.log(`[AppService][UpdateApp] cleaned数据: ${JSON.stringify(cleaned)}`);
+                    common_1.Logger.log(`[AppService] 准备覆盖 emotionVoices appId=${id} incoming=${items.length} cleaned=${cleaned.length}`);
                     await this.appEmotionRepo.delete({ appId: id });
-                    common_1.Logger.log(`[AppService][UpdateApp] 已删除旧数据 appId=${id}`);
                     if (cleaned.length) {
                         const now = new Date();
-                        const toSave = cleaned.map(i => ({
+                        await this.appEmotionRepo.save(cleaned.map(i => ({
                             appId: id,
                             emotion: i.emotion,
                             voiceId: i.voiceId,
                             status: 1,
                             createdAt: now,
                             updatedAt: now,
-                        }));
-                        common_1.Logger.log(`[AppService][UpdateApp] 准备写入数据: ${JSON.stringify(toSave)}`);
-                        const result = await this.appEmotionRepo.save(toSave);
-                        common_1.Logger.log(`[AppService][UpdateApp] 写入结果: ${JSON.stringify(result)}`);
+                        })));
                     }
-                    common_1.Logger.log(`[AppService][UpdateApp] 更新 emotionVoices 条目=${cleaned.length} appId=${id}`);
-                }
-                else {
-                    common_1.Logger.log(`[AppService][UpdateApp] emotionVoices 不是数组或为空`);
+                    common_1.Logger.log(`[AppService] 更新 emotionVoices 条目=${cleaned.length} appId=${id}`);
                 }
             }
             catch (e) {
-                common_1.Logger.error(`[AppService][UpdateApp] 更新 emotionVoices 失败 appId=${id} err=${e?.message || e}`, e?.stack || '');
+                common_1.Logger.error(`[AppService] 更新 emotionVoices 失败 appId=${id} err=${e?.message || e}`, e?.stack || '');
             }
             return '修改角色信息成功';
         }
@@ -8051,151 +8039,14 @@ let AppService = AppService_1 = class AppService {
         }
         return { success: true };
     }
-    async userCreateApp(body, req) {
+    async userCreateRole(body, req) {
         const { name, catId } = body;
         const userId = req.user.id;
-        const existingApp = await this.appEntity.findOne({
+        const existingRole = await this.appEntity.findOne({
             where: { name, userId },
         });
-        if (existingApp) {
-            throw new common_1.HttpException('您已经创建了同名的应用！', common_1.HttpStatus.BAD_REQUEST);
-        }
-        if (!catId) {
-            throw new common_1.HttpException('缺少分类ID！', common_1.HttpStatus.BAD_REQUEST);
-        }
-        const catIds = catId.split(',');
-        for (const id of catIds) {
-            const numId = Number(id);
-            if (isNaN(numId)) {
-                throw new common_1.HttpException(`分类ID ${id} 不是有效的数字！`, common_1.HttpStatus.BAD_REQUEST);
-            }
-            const c = await this.appCatsEntity.findOne({ where: { id: numId } });
-            if (!c) {
-                throw new common_1.HttpException(`分类ID ${id} 不存在！`, common_1.HttpStatus.BAD_REQUEST);
-            }
-        }
-        try {
-            const saveData = { ...body };
-            if ('voiceId' in saveData)
-                delete saveData.voiceId;
-            if ('emotionVoices' in saveData)
-                delete saveData.emotionVoices;
-            if (!saveData.id || isNaN(Number(saveData.id))) {
-                delete saveData.id;
-            }
-            saveData.userId = userId;
-            saveData.public = false;
-            saveData.role = 'user';
-            saveData.des = saveData.des || '';
-            saveData.appModel = saveData.appModel || '';
-            saveData.order = isNaN(Number(saveData.order)) ? 100 : saveData.order;
-            saveData.status = isNaN(Number(saveData.status)) ? 1 : saveData.status;
-            saveData.isGPTs = isNaN(Number(saveData.isGPTs)) ? 0 : saveData.isGPTs;
-            saveData.isFlowith = isNaN(Number(saveData.isFlowith)) ? 0 : saveData.isFlowith;
-            saveData.flowithId = saveData.flowithId || '';
-            saveData.flowithName = saveData.flowithName || '';
-            saveData.flowithKey = saveData.flowithKey || '';
-            saveData.isFixedModel = isNaN(Number(saveData.isFixedModel)) ? 0 : saveData.isFixedModel;
-            saveData.backgroundImg = saveData.backgroundImg || '';
-            saveData.prompt = saveData.prompt || '';
-            const saved = await this.appEntity.save(saveData);
-            try {
-                const voiceId = body?.voiceId;
-                if (voiceId) {
-                    await this.appVoiceRepo.save({
-                        appId: saved.id,
-                        voiceId: String(voiceId),
-                        isDefault: 1,
-                    });
-                    common_1.Logger.log(`[AppService][UserCreate] 写入默认音色成功 appId=${saved.id} voiceId=${voiceId}`);
-                }
-            }
-            catch (e) {
-                common_1.Logger.warn(`[AppService][UserCreate] 写入 app_voice 失败 appId=${saved.id} err=${e?.message || e}`);
-            }
-            return saved;
-        }
-        catch (error) {
-            common_1.Logger.error(`[AppService][UserCreate] 保存应用失败: ${error?.message || error}`, error?.stack);
-            throw new common_1.HttpException(`保存应用失败: ${error?.message || '未知错误'}`, common_1.HttpStatus.BAD_REQUEST);
-        }
-    }
-    async userMyApps(req, query) {
-        const userId = req.user.id;
-        const { page = 1, size = 30, name, status } = query;
-        const pageNum = Math.max(1, Number(page) || 1);
-        const sizeNum = Math.max(1, Number(size) || 30);
-        const where = { userId };
-        if (typeof name === 'string' && name.length > 0)
-            where.name = (0, typeorm_2.Like)(`%${name}%`);
-        if ([0, 1, '0', '1', '4', 4].includes(status))
-            where.status = Number(status);
-        const [rows, count] = await this.appEntity.findAndCount({
-            where,
-            order: { id: 'DESC' },
-            skip: (pageNum - 1) * sizeNum,
-            take: sizeNum,
-        });
-        const allCats = await this.appCatsEntity.find();
-        const catsMap = {};
-        allCats.forEach(cat => {
-            catsMap[cat.id] = cat;
-        });
-        rows.forEach((item) => {
-            const catIds = item.catId.split(',');
-            const catNames = catIds
-                .map(id => {
-                const cat = catsMap[Number(id)];
-                return cat ? cat.name : '';
-            })
-                .filter(name => name);
-            item.catName = catNames.join(', ');
-            item.backgroundImg = item.backgroundImg;
-            item.prompt = item.prompt;
-        });
-        try {
-            const appIds = rows.map(r => r.id);
-            if (appIds.length > 0) {
-                const maps = await this.appVoiceRepo.find({ where: { appId: (0, typeorm_2.In)(appIds), isDefault: 1 } });
-                const mapByApp = new Map(maps.map(m => [m.appId, m.voiceId]));
-                rows.forEach((item) => {
-                    const v = mapByApp.get(item.id) ?? null;
-                    try {
-                        Object.defineProperty(item, 'voiceId', {
-                            value: v,
-                            enumerable: true,
-                            configurable: true,
-                            writable: true,
-                        });
-                    }
-                    catch (_) {
-                        item.voiceId = v;
-                    }
-                });
-            }
-        }
-        catch (e) {
-        }
-        return { rows, count };
-    }
-    async userUpdateApp(body, req) {
-        const { id, name, catId } = body;
-        const userId = req.user.id;
-        if (id === undefined || id === null || isNaN(Number(id))) {
-            throw new common_1.HttpException('无效的应用ID！', common_1.HttpStatus.BAD_REQUEST);
-        }
-        const existingApp = await this.appEntity.findOne({ where: { id } });
-        if (!existingApp) {
-            throw new common_1.HttpException('应用不存在！', common_1.HttpStatus.BAD_REQUEST);
-        }
-        if (existingApp.userId !== userId) {
-            throw new common_1.HttpException('您没有权限修改此应用！', common_1.HttpStatus.FORBIDDEN);
-        }
-        const duplicateApp = await this.appEntity.findOne({
-            where: { name, userId, id: (0, typeorm_2.Not)(id) },
-        });
-        if (duplicateApp) {
-            throw new common_1.HttpException('您已经创建了同名的应用！', common_1.HttpStatus.BAD_REQUEST);
+        if (existingRole) {
+            throw new common_1.HttpException('您已经创建了同名的角色！', common_1.HttpStatus.BAD_REQUEST);
         }
         if (typeof catId === 'string' && String(catId).trim().length > 0) {
             const catIds = String(catId).split(',');
@@ -8206,128 +8057,133 @@ let AppService = AppService_1 = class AppService {
                 }
             }
         }
-        const updateData = { ...body };
-        const newVoiceId = body?.voiceId;
-        if ('voiceId' in updateData)
-            delete updateData.voiceId;
-        if ('emotionVoices' in updateData)
-            delete updateData.emotionVoices;
-        delete updateData.userId;
-        updateData.appModel = updateData.appModel ?? (existingApp.appModel || '');
-        updateData.order = isNaN(Number(updateData.order)) ? 100 : updateData.order;
-        updateData.status = isNaN(Number(updateData.status)) ? 1 : updateData.status;
-        updateData.isGPTs = isNaN(Number(updateData.isGPTs)) ? 0 : updateData.isGPTs;
-        updateData.isFlowith = isNaN(Number(updateData.isFlowith)) ? 0 : updateData.isFlowith;
-        updateData.flowithId = updateData.flowithId ?? (existingApp.flowithId || '');
-        updateData.flowithName = updateData.flowithName ?? (existingApp.flowithName || '');
-        updateData.isFixedModel = isNaN(Number(updateData.isFixedModel)) ? 0 : updateData.isFixedModel;
-        updateData.backgroundImg = updateData.backgroundImg ?? (existingApp.backgroundImg || '');
-        updateData.prompt = updateData.prompt ?? (existingApp.prompt || '');
-        const res = await this.appEntity.update({ id }, updateData);
-        if ((res.affected ?? 0) >= 0) {
-            if (typeof newVoiceId !== 'undefined' &&
-                newVoiceId !== null &&
-                String(newVoiceId).trim() !== '') {
-                try {
-                    await this.appVoiceRepo.delete({ appId: id });
-                    await this.appVoiceRepo.save({
-                        appId: id,
-                        voiceId: String(newVoiceId),
-                        isDefault: 1,
-                    });
-                    common_1.Logger.log(`[AppService][UserUpdate] 更新写入默认音色成功 appId=${id} voiceId=${String(newVoiceId)}`);
-                }
-                catch (e) {
-                    common_1.Logger.warn(`[AppService][UserUpdate] 更新写入 app_voice 失败 appId=${id} err=${e?.message || e}`);
+        const saveData = { ...body };
+        saveData.userId = userId;
+        saveData.public = false;
+        saveData.role = 'user';
+        saveData.status = 1;
+        try {
+            const saved = await this.appEntity.save(saveData);
+            return { success: true, data: saved };
+        }
+        catch (error) {
+            throw new common_1.HttpException(`创建角色失败: ${error?.message || '未知错误'}`, common_1.HttpStatus.BAD_REQUEST);
+        }
+    }
+    async userMyRoles(req, query) {
+        const userId = req.user.id;
+        const { page = 1, size = 10, name, status } = query;
+        const where = { userId };
+        if (name) {
+            where.name = (0, typeorm_2.Like)(`%${name}%`);
+        }
+        if (status !== undefined && status !== null) {
+            where.status = status;
+        }
+        try {
+            const pageNum = Math.max(1, Number(page) || 1);
+            const sizeNum = Math.max(1, Math.min(100, Number(size) || 10));
+            const [rows, count] = await this.appEntity.findAndCount({
+                where,
+                order: { id: 'DESC' },
+                skip: (pageNum - 1) * sizeNum,
+                take: sizeNum,
+            });
+            return {
+                success: true,
+                data: {
+                    rows,
+                    count,
+                    page: pageNum,
+                    size: sizeNum,
+                },
+            };
+        }
+        catch (error) {
+            throw new common_1.HttpException('查询角色列表失败', common_1.HttpStatus.BAD_REQUEST);
+        }
+    }
+    async userUpdateRole(body, req) {
+        const { id, name, catId } = body;
+        const userId = req.user.id;
+        if (!id) {
+            throw new common_1.HttpException('角色ID不能为空！', common_1.HttpStatus.BAD_REQUEST);
+        }
+        const role = await this.appEntity.findOne({ where: { id } });
+        if (!role) {
+            throw new common_1.HttpException('角色不存在！', common_1.HttpStatus.NOT_FOUND);
+        }
+        if (role.userId !== userId) {
+            throw new common_1.HttpException('无权修改此角色！', common_1.HttpStatus.FORBIDDEN);
+        }
+        if (name) {
+            const existing = await this.appEntity.findOne({
+                where: { name, userId, id: (0, typeorm_2.Not)(id) },
+            });
+            if (existing) {
+                throw new common_1.HttpException('您已有同名的角色！', common_1.HttpStatus.BAD_REQUEST);
+            }
+        }
+        if (typeof catId === 'string' && String(catId).trim().length > 0) {
+            const catIds = String(catId).split(',');
+            for (const cid of catIds) {
+                const c = await this.appCatsEntity.findOne({ where: { id: Number(cid) } });
+                if (!c) {
+                    throw new common_1.HttpException(`分类ID ${cid} 不存在！`, common_1.HttpStatus.BAD_REQUEST);
                 }
             }
-            return '修改应用信息成功';
         }
-        throw new common_1.HttpException('修改应用信息失败！', common_1.HttpStatus.BAD_REQUEST);
+        try {
+            const updateData = { ...body };
+            delete updateData.userId;
+            await this.appEntity.update(id, updateData);
+            const updated = await this.appEntity.findOne({ where: { id } });
+            return { success: true, data: updated };
+        }
+        catch (error) {
+            throw new common_1.HttpException('更新角色失败', common_1.HttpStatus.BAD_REQUEST);
+        }
     }
-    async userDelApp(body, req) {
+    async userDelRole(body, req) {
         const { id } = body;
         const userId = req.user.id;
-        const existingApp = await this.appEntity.findOne({ where: { id } });
-        if (!existingApp) {
-            throw new common_1.HttpException('应用不存在！', common_1.HttpStatus.BAD_REQUEST);
+        const role = await this.appEntity.findOne({ where: { id } });
+        if (!role) {
+            throw new common_1.HttpException('角色不存在！', common_1.HttpStatus.NOT_FOUND);
         }
-        if (existingApp.userId !== userId) {
-            throw new common_1.HttpException('您没有权限删除此应用！', common_1.HttpStatus.FORBIDDEN);
+        if (role.userId !== userId) {
+            throw new common_1.HttpException('无权删除此角色！', common_1.HttpStatus.FORBIDDEN);
         }
-        const res = await this.appEntity.delete(id);
-        if (res.affected > 0)
-            return '删除应用成功';
-        throw new common_1.HttpException('删除应用失败！', common_1.HttpStatus.BAD_REQUEST);
+        try {
+            await this.appEntity.delete(id);
+            return { success: true, message: '删除成功' };
+        }
+        catch (error) {
+            throw new common_1.HttpException('删除角色失败', common_1.HttpStatus.BAD_REQUEST);
+        }
     }
     async userTogglePublic(body, req) {
         const { id } = body;
         const userId = req.user.id;
-        const existingApp = await this.appEntity.findOne({ where: { id } });
-        if (!existingApp) {
-            throw new common_1.HttpException('应用不存在！', common_1.HttpStatus.BAD_REQUEST);
+        const role = await this.appEntity.findOne({ where: { id } });
+        if (!role) {
+            throw new common_1.HttpException('角色不存在！', common_1.HttpStatus.NOT_FOUND);
         }
-        if (existingApp.userId !== userId) {
-            throw new common_1.HttpException('您没有权限修改此应用！', common_1.HttpStatus.FORBIDDEN);
+        if (role.userId !== userId) {
+            throw new common_1.HttpException('无权修改此角色！', common_1.HttpStatus.FORBIDDEN);
         }
-        const newPublicStatus = !existingApp.public;
-        const res = await this.appEntity.update({ id }, { public: newPublicStatus });
-        if (res.affected > 0) {
+        try {
+            const newPublic = !role.public;
+            await this.appEntity.update(id, { public: newPublic });
             return {
                 success: true,
-                public: newPublicStatus,
-                message: newPublicStatus ? '应用已公开到应用广场' : '应用已设为私有',
+                data: { public: newPublic },
+                message: newPublic ? '已设为公开' : '已设为私有',
             };
         }
-        throw new common_1.HttpException('修改应用公开状态失败！', common_1.HttpStatus.BAD_REQUEST);
-    }
-    async userSetEmotionVoices(body, req) {
-        const { appId, items } = body;
-        const userId = req.user.id;
-        const existingApp = await this.appEntity.findOne({ where: { id: appId } });
-        if (!existingApp) {
-            throw new common_1.HttpException('应用不存在！', common_1.HttpStatus.BAD_REQUEST);
+        catch (error) {
+            throw new common_1.HttpException('切换公开状态失败', common_1.HttpStatus.BAD_REQUEST);
         }
-        if (existingApp.userId !== userId) {
-            throw new common_1.HttpException('您没有权限修改此应用！', common_1.HttpStatus.FORBIDDEN);
-        }
-        return this.setAppEmotionVoices({ appId, items });
-    }
-    async userGetEmotionVoices(appId, req) {
-        const userId = req.user.id;
-        const existingApp = await this.appEntity.findOne({ where: { id: appId } });
-        if (!existingApp) {
-            throw new common_1.HttpException('应用不存在！', common_1.HttpStatus.BAD_REQUEST);
-        }
-        if (existingApp.userId !== userId) {
-            throw new common_1.HttpException('您没有权限查看此应用！', common_1.HttpStatus.FORBIDDEN);
-        }
-        return this.getAppEmotionVoices(appId);
-    }
-    async getUserAppSettings(appId, req) {
-        const userId = req.user.id;
-        const existingApp = await this.appEntity.findOne({ where: { id: appId } });
-        if (!existingApp) {
-            throw new common_1.HttpException('应用不存在！', common_1.HttpStatus.BAD_REQUEST);
-        }
-        const enablePsychologicalDesc = await this.userAppSettingsService.getEnablePsychologicalDesc(userId, appId);
-        return {
-            appId,
-            enablePsychologicalDesc,
-        };
-    }
-    async updateUserAppSettings(body, req) {
-        const { appId, enablePsychologicalDesc } = body;
-        const userId = req.user.id;
-        const existingApp = await this.appEntity.findOne({ where: { id: appId } });
-        if (!existingApp) {
-            throw new common_1.HttpException('应用不存在！', common_1.HttpStatus.BAD_REQUEST);
-        }
-        await this.userAppSettingsService.setEnablePsychologicalDesc(userId, appId, enablePsychologicalDesc);
-        return {
-            success: true,
-            message: '设置已更新',
-        };
     }
 };
 exports.AppService = AppService;
@@ -8339,12 +8195,12 @@ exports.AppService = AppService = AppService_1 = __decorate([
     __param(3, (0, typeorm_1.InjectRepository)(appVoice_entity_1.AppVoiceEntity)),
     __param(4, (0, typeorm_1.InjectRepository)(appEmotionVoice_entity_1.AppEmotionVoiceEntity)),
     __param(5, (0, typeorm_1.InjectRepository)(roleEmotion_entity_1.RoleEmotionEntity)),
-    __metadata("design:paramtypes", [typeof (_a = typeof typeorm_2.Repository !== "undefined" && typeorm_2.Repository) === "function" ? _a : Object, typeof (_b = typeof typeorm_2.Repository !== "undefined" && typeorm_2.Repository) === "function" ? _b : Object, typeof (_c = typeof typeorm_2.Repository !== "undefined" && typeorm_2.Repository) === "function" ? _c : Object, typeof (_d = typeof typeorm_2.Repository !== "undefined" && typeorm_2.Repository) === "function" ? _d : Object, typeof (_e = typeof typeorm_2.Repository !== "undefined" && typeorm_2.Repository) === "function" ? _e : Object, typeof (_f = typeof typeorm_2.Repository !== "undefined" && typeorm_2.Repository) === "function" ? _f : Object, typeof (_g = typeof userBalance_service_1.UserBalanceService !== "undefined" && userBalance_service_1.UserBalanceService) === "function" ? _g : Object, typeof (_h = typeof globalConfig_service_1.GlobalConfigService !== "undefined" && globalConfig_service_1.GlobalConfigService) === "function" ? _h : Object, typeof (_j = typeof typeorm_2.DataSource !== "undefined" && typeorm_2.DataSource) === "function" ? _j : Object, typeof (_k = typeof userAppSettings_service_1.UserAppSettingsService !== "undefined" && userAppSettings_service_1.UserAppSettingsService) === "function" ? _k : Object])
+    __metadata("design:paramtypes", [typeof (_a = typeof typeorm_2.Repository !== "undefined" && typeorm_2.Repository) === "function" ? _a : Object, typeof (_b = typeof typeorm_2.Repository !== "undefined" && typeorm_2.Repository) === "function" ? _b : Object, typeof (_c = typeof typeorm_2.Repository !== "undefined" && typeorm_2.Repository) === "function" ? _c : Object, typeof (_d = typeof typeorm_2.Repository !== "undefined" && typeorm_2.Repository) === "function" ? _d : Object, typeof (_e = typeof typeorm_2.Repository !== "undefined" && typeorm_2.Repository) === "function" ? _e : Object, typeof (_f = typeof typeorm_2.Repository !== "undefined" && typeorm_2.Repository) === "function" ? _f : Object, typeof (_g = typeof userBalance_service_1.UserBalanceService !== "undefined" && userBalance_service_1.UserBalanceService) === "function" ? _g : Object, typeof (_h = typeof globalConfig_service_1.GlobalConfigService !== "undefined" && globalConfig_service_1.GlobalConfigService) === "function" ? _h : Object, typeof (_j = typeof typeorm_2.DataSource !== "undefined" && typeorm_2.DataSource) === "function" ? _j : Object])
 ], AppService);
 
 
 /***/ }),
-/* 113 */
+/* 115 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
@@ -8527,7 +8383,7 @@ exports.AppEntity = AppEntity = __decorate([
 
 
 /***/ }),
-/* 114 */
+/* 116 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
@@ -8578,7 +8434,7 @@ exports.AppCatsEntity = AppCatsEntity = __decorate([
 
 
 /***/ }),
-/* 115 */
+/* 117 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
@@ -8625,7 +8481,7 @@ exports.AppEmotionVoiceEntity = AppEmotionVoiceEntity = __decorate([
 
 
 /***/ }),
-/* 116 */
+/* 118 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
@@ -8668,7 +8524,7 @@ exports.AppVoiceEntity = AppVoiceEntity = __decorate([
 
 
 /***/ }),
-/* 117 */
+/* 119 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
@@ -8707,129 +8563,6 @@ __decorate([
 exports.RoleEmotionEntity = RoleEmotionEntity = __decorate([
     (0, typeorm_1.Entity)({ name: 'role_emotions' })
 ], RoleEmotionEntity);
-
-
-/***/ }),
-/* 118 */
-/***/ (function(__unused_webpack_module, exports, __webpack_require__) {
-
-
-var __decorate = (this && this.__decorate) || function (decorators, target, key, desc) {
-    var c = arguments.length, r = c < 3 ? target : desc === null ? desc = Object.getOwnPropertyDescriptor(target, key) : desc, d;
-    if (typeof Reflect === "object" && typeof Reflect.decorate === "function") r = Reflect.decorate(decorators, target, key, desc);
-    else for (var i = decorators.length - 1; i >= 0; i--) if (d = decorators[i]) r = (c < 3 ? d(r) : c > 3 ? d(target, key, r) : d(target, key)) || r;
-    return c > 3 && r && Object.defineProperty(target, key, r), r;
-};
-var __metadata = (this && this.__metadata) || function (k, v) {
-    if (typeof Reflect === "object" && typeof Reflect.metadata === "function") return Reflect.metadata(k, v);
-};
-var __param = (this && this.__param) || function (paramIndex, decorator) {
-    return function (target, key) { decorator(target, key, paramIndex); }
-};
-var UserAppSettingsService_1;
-var _a;
-Object.defineProperty(exports, "__esModule", ({ value: true }));
-exports.UserAppSettingsService = void 0;
-const common_1 = __webpack_require__(2);
-const typeorm_1 = __webpack_require__(33);
-const typeorm_2 = __webpack_require__(3);
-const userAppSettings_entity_1 = __webpack_require__(119);
-let UserAppSettingsService = UserAppSettingsService_1 = class UserAppSettingsService {
-    userAppSettingsEntity;
-    logger = new common_1.Logger(UserAppSettingsService_1.name);
-    constructor(userAppSettingsEntity) {
-        this.userAppSettingsEntity = userAppSettingsEntity;
-    }
-    async getEnablePsychologicalDesc(userId, appId) {
-        if (!userId || !appId)
-            return false;
-        try {
-            const setting = await this.userAppSettingsEntity.findOne({
-                where: { userId, appId },
-            });
-            return setting?.enablePsychologicalDesc ?? false;
-        }
-        catch (error) {
-            return false;
-        }
-    }
-    async setEnablePsychologicalDesc(userId, appId, enable) {
-        try {
-            this.logger.debug(`设置心理描述: userId=${userId}, appId=${appId}, enable=${enable}`);
-            const existing = await this.userAppSettingsEntity.findOne({
-                where: { userId, appId },
-            });
-            if (existing) {
-                this.logger.debug(`更新已有记录: id=${existing.id}`);
-                await this.userAppSettingsEntity.update(existing.id, {
-                    enablePsychologicalDesc: enable,
-                });
-            }
-            else {
-                this.logger.debug('创建新记录');
-                const newSetting = this.userAppSettingsEntity.create({
-                    userId,
-                    appId,
-                    enablePsychologicalDesc: enable,
-                });
-                await this.userAppSettingsEntity.save(newSetting);
-            }
-            this.logger.debug('设置成功');
-        }
-        catch (error) {
-            this.logger.error(`设置心理描述失败: userId=${userId}, appId=${appId}, error=${error.message}`, error.stack);
-            throw error;
-        }
-    }
-};
-exports.UserAppSettingsService = UserAppSettingsService;
-exports.UserAppSettingsService = UserAppSettingsService = UserAppSettingsService_1 = __decorate([
-    (0, common_1.Injectable)(),
-    __param(0, (0, typeorm_1.InjectRepository)(userAppSettings_entity_1.UserAppSettingsEntity)),
-    __metadata("design:paramtypes", [typeof (_a = typeof typeorm_2.Repository !== "undefined" && typeorm_2.Repository) === "function" ? _a : Object])
-], UserAppSettingsService);
-
-
-/***/ }),
-/* 119 */
-/***/ (function(__unused_webpack_module, exports, __webpack_require__) {
-
-
-var __decorate = (this && this.__decorate) || function (decorators, target, key, desc) {
-    var c = arguments.length, r = c < 3 ? target : desc === null ? desc = Object.getOwnPropertyDescriptor(target, key) : desc, d;
-    if (typeof Reflect === "object" && typeof Reflect.decorate === "function") r = Reflect.decorate(decorators, target, key, desc);
-    else for (var i = decorators.length - 1; i >= 0; i--) if (d = decorators[i]) r = (c < 3 ? d(r) : c > 3 ? d(target, key, r) : d(target, key)) || r;
-    return c > 3 && r && Object.defineProperty(target, key, r), r;
-};
-var __metadata = (this && this.__metadata) || function (k, v) {
-    if (typeof Reflect === "object" && typeof Reflect.metadata === "function") return Reflect.metadata(k, v);
-};
-Object.defineProperty(exports, "__esModule", ({ value: true }));
-exports.UserAppSettingsEntity = void 0;
-const baseEntity_1 = __webpack_require__(73);
-const typeorm_1 = __webpack_require__(3);
-let UserAppSettingsEntity = class UserAppSettingsEntity extends baseEntity_1.BaseEntity {
-    userId;
-    appId;
-    enablePsychologicalDesc;
-};
-exports.UserAppSettingsEntity = UserAppSettingsEntity;
-__decorate([
-    (0, typeorm_1.Column)({ type: 'int', comment: '用户ID' }),
-    __metadata("design:type", Number)
-], UserAppSettingsEntity.prototype, "userId", void 0);
-__decorate([
-    (0, typeorm_1.Column)({ type: 'int', comment: '应用ID（角色ID）' }),
-    __metadata("design:type", Number)
-], UserAppSettingsEntity.prototype, "appId", void 0);
-__decorate([
-    (0, typeorm_1.Column)({ comment: '是否启用心理描述（AI回复时使用括号展示心理活动）', default: false }),
-    __metadata("design:type", Boolean)
-], UserAppSettingsEntity.prototype, "enablePsychologicalDesc", void 0);
-exports.UserAppSettingsEntity = UserAppSettingsEntity = __decorate([
-    (0, typeorm_1.Entity)({ name: 'user_app_settings' }),
-    (0, typeorm_1.Index)(['userId', 'appId'], { unique: true })
-], UserAppSettingsEntity);
 
 
 /***/ }),
@@ -9498,60 +9231,6 @@ var __decorate = (this && this.__decorate) || function (decorators, target, key,
 var __metadata = (this && this.__metadata) || function (k, v) {
     if (typeof Reflect === "object" && typeof Reflect.metadata === "function") return Reflect.metadata(k, v);
 };
-Object.defineProperty(exports, "__esModule", ({ value: true }));
-exports.UpdateUserAppSettingsDto = exports.GetUserAppSettingsDto = void 0;
-const swagger_1 = __webpack_require__(14);
-const class_transformer_1 = __webpack_require__(131);
-const class_validator_1 = __webpack_require__(106);
-class GetUserAppSettingsDto {
-    appId;
-}
-exports.GetUserAppSettingsDto = GetUserAppSettingsDto;
-__decorate([
-    (0, swagger_1.ApiProperty)({ example: 1, description: '应用ID（角色ID）', required: true }),
-    (0, class_transformer_1.Type)(() => Number),
-    (0, class_validator_1.IsNumber)({}, { message: 'appId必须是Number' }),
-    __metadata("design:type", Number)
-], GetUserAppSettingsDto.prototype, "appId", void 0);
-class UpdateUserAppSettingsDto {
-    appId;
-    enablePsychologicalDesc;
-}
-exports.UpdateUserAppSettingsDto = UpdateUserAppSettingsDto;
-__decorate([
-    (0, swagger_1.ApiProperty)({ example: 1, description: '应用ID（角色ID）', required: true }),
-    (0, class_transformer_1.Type)(() => Number),
-    (0, class_validator_1.IsNumber)({}, { message: 'appId必须是Number' }),
-    __metadata("design:type", Number)
-], UpdateUserAppSettingsDto.prototype, "appId", void 0);
-__decorate([
-    (0, swagger_1.ApiProperty)({ example: true, description: '是否启用心理描述', required: true }),
-    (0, class_transformer_1.Type)(() => Boolean),
-    (0, class_validator_1.IsBoolean)({ message: 'enablePsychologicalDesc必须是Boolean' }),
-    __metadata("design:type", Boolean)
-], UpdateUserAppSettingsDto.prototype, "enablePsychologicalDesc", void 0);
-
-
-/***/ }),
-/* 131 */
-/***/ ((module) => {
-
-module.exports = require("class-transformer");
-
-/***/ }),
-/* 132 */
-/***/ (function(__unused_webpack_module, exports, __webpack_require__) {
-
-
-var __decorate = (this && this.__decorate) || function (decorators, target, key, desc) {
-    var c = arguments.length, r = c < 3 ? target : desc === null ? desc = Object.getOwnPropertyDescriptor(target, key) : desc, d;
-    if (typeof Reflect === "object" && typeof Reflect.decorate === "function") r = Reflect.decorate(decorators, target, key, desc);
-    else for (var i = decorators.length - 1; i >= 0; i--) if (d = decorators[i]) r = (c < 3 ? d(r) : c > 3 ? d(target, key, r) : d(target, key)) || r;
-    return c > 3 && r && Object.defineProperty(target, key, r), r;
-};
-var __metadata = (this && this.__metadata) || function (k, v) {
-    if (typeof Reflect === "object" && typeof Reflect.metadata === "function") return Reflect.metadata(k, v);
-};
 var __param = (this && this.__param) || function (paramIndex, decorator) {
     return function (target, key) { decorator(target, key, paramIndex); }
 };
@@ -9560,8 +9239,8 @@ Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.OpenAppController = void 0;
 const common_1 = __webpack_require__(2);
 const swagger_1 = __webpack_require__(14);
-const app_service_1 = __webpack_require__(112);
-const userAppSettings_service_1 = __webpack_require__(118);
+const userAppSettings_service_1 = __webpack_require__(109);
+const app_service_1 = __webpack_require__(114);
 let OpenAppController = class OpenAppController {
     appService;
     userAppSettingsService;
@@ -9941,7 +9620,7 @@ exports.OpenAppController = OpenAppController = __decorate([
 
 
 /***/ }),
-/* 133 */
+/* 131 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
@@ -9953,7 +9632,7 @@ var __decorate = (this && this.__decorate) || function (decorators, target, key,
 };
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.AuthModule = void 0;
-const jwt_strategy_1 = __webpack_require__(134);
+const jwt_strategy_1 = __webpack_require__(132);
 const jwtAuth_guard_1 = __webpack_require__(35);
 const common_1 = __webpack_require__(2);
 const jwt_1 = __webpack_require__(82);
@@ -9967,7 +9646,7 @@ const mailer_service_1 = __webpack_require__(85);
 const redisCache_module_1 = __webpack_require__(26);
 const redisCache_service_1 = __webpack_require__(28);
 const user_entity_1 = __webpack_require__(97);
-const user_module_1 = __webpack_require__(136);
+const user_module_1 = __webpack_require__(134);
 const accountLog_entity_1 = __webpack_require__(93);
 const balance_entity_1 = __webpack_require__(94);
 const fingerprint_entity_1 = __webpack_require__(98);
@@ -9975,7 +9654,7 @@ const userBalance_entity_1 = __webpack_require__(95);
 const userBalance_service_1 = __webpack_require__(91);
 const verification_entity_1 = __webpack_require__(100);
 const verification_service_1 = __webpack_require__(99);
-const auth_controller_1 = __webpack_require__(143);
+const auth_controller_1 = __webpack_require__(141);
 const auth_service_1 = __webpack_require__(80);
 let AuthModule = class AuthModule {
 };
@@ -10023,7 +9702,7 @@ exports.AuthModule = AuthModule = __decorate([
 
 
 /***/ }),
-/* 134 */
+/* 132 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
@@ -10041,7 +9720,7 @@ Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.JwtStrategy = void 0;
 const common_1 = __webpack_require__(2);
 const passport_1 = __webpack_require__(78);
-const passport_jwt_1 = __webpack_require__(135);
+const passport_jwt_1 = __webpack_require__(133);
 const redisCache_service_1 = __webpack_require__(28);
 let JwtStrategy = class JwtStrategy extends (0, passport_1.PassportStrategy)(passport_jwt_1.Strategy) {
     redisService;
@@ -10064,13 +9743,13 @@ exports.JwtStrategy = JwtStrategy = __decorate([
 
 
 /***/ }),
-/* 135 */
+/* 133 */
 /***/ ((module) => {
 
 module.exports = require("passport-jwt");
 
 /***/ }),
-/* 136 */
+/* 134 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
@@ -10084,8 +9763,8 @@ Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.UserModule = void 0;
 const common_1 = __webpack_require__(2);
 const typeorm_1 = __webpack_require__(33);
-const app_entity_1 = __webpack_require__(113);
-const appCats_entity_1 = __webpack_require__(114);
+const app_entity_1 = __webpack_require__(115);
+const appCats_entity_1 = __webpack_require__(116);
 const chatGroup_entity_1 = __webpack_require__(96);
 const chatLog_entity_1 = __webpack_require__(72);
 const cramiPackage_entity_1 = __webpack_require__(92);
@@ -10099,7 +9778,7 @@ const userBalance_entity_1 = __webpack_require__(95);
 const userBalance_service_1 = __webpack_require__(91);
 const verification_entity_1 = __webpack_require__(100);
 const verification_service_1 = __webpack_require__(99);
-const user_controller_1 = __webpack_require__(137);
+const user_controller_1 = __webpack_require__(135);
 const user_entity_1 = __webpack_require__(97);
 const user_service_1 = __webpack_require__(87);
 let UserModule = class UserModule {
@@ -10138,7 +9817,7 @@ exports.UserModule = UserModule = __decorate([
 
 
 /***/ }),
-/* 137 */
+/* 135 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
@@ -10157,17 +9836,17 @@ var __param = (this && this.__param) || function (paramIndex, decorator) {
 var _a, _b, _c, _d, _e, _f, _g, _h;
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.UserController = void 0;
-const adminAuth_guard_1 = __webpack_require__(109);
+const adminAuth_guard_1 = __webpack_require__(111);
 const jwtAuth_guard_1 = __webpack_require__(35);
-const superAuth_guard_1 = __webpack_require__(110);
+const superAuth_guard_1 = __webpack_require__(112);
 const common_1 = __webpack_require__(2);
 const swagger_1 = __webpack_require__(14);
-const express_1 = __webpack_require__(111);
-const queryAllUser_dto_1 = __webpack_require__(138);
-const resetUserPass_dto_1 = __webpack_require__(139);
-const updateUser_dto_1 = __webpack_require__(140);
-const updateUserStatus_dto_1 = __webpack_require__(141);
-const userRecharge_dto_1 = __webpack_require__(142);
+const express_1 = __webpack_require__(113);
+const queryAllUser_dto_1 = __webpack_require__(136);
+const resetUserPass_dto_1 = __webpack_require__(137);
+const updateUser_dto_1 = __webpack_require__(138);
+const updateUserStatus_dto_1 = __webpack_require__(139);
+const userRecharge_dto_1 = __webpack_require__(140);
 const user_service_1 = __webpack_require__(87);
 let UserController = class UserController {
     userService;
@@ -10251,7 +9930,7 @@ exports.UserController = UserController = __decorate([
 
 
 /***/ }),
-/* 138 */
+/* 136 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
@@ -10330,7 +10009,7 @@ __decorate([
 
 
 /***/ }),
-/* 139 */
+/* 137 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
@@ -10364,7 +10043,7 @@ __decorate([
 
 
 /***/ }),
-/* 140 */
+/* 138 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
@@ -10408,7 +10087,7 @@ __decorate([
 
 
 /***/ }),
-/* 141 */
+/* 139 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
@@ -10445,7 +10124,7 @@ __decorate([
 
 
 /***/ }),
-/* 142 */
+/* 140 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
@@ -10500,7 +10179,7 @@ __decorate([
 
 
 /***/ }),
-/* 143 */
+/* 141 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
@@ -10520,14 +10199,14 @@ var _a, _b, _c, _d, _e, _f, _g, _h, _j, _k;
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.AuthController = void 0;
 const jwtAuth_guard_1 = __webpack_require__(35);
-const superAuth_guard_1 = __webpack_require__(110);
+const superAuth_guard_1 = __webpack_require__(112);
 const common_1 = __webpack_require__(2);
 const swagger_1 = __webpack_require__(14);
-const express_1 = __webpack_require__(111);
+const express_1 = __webpack_require__(113);
 const auth_service_1 = __webpack_require__(80);
-const authLogin_dto_1 = __webpack_require__(144);
-const updatePassByOther_dto_1 = __webpack_require__(145);
-const updatePassword_dto_1 = __webpack_require__(146);
+const authLogin_dto_1 = __webpack_require__(142);
+const updatePassByOther_dto_1 = __webpack_require__(143);
+const updatePassword_dto_1 = __webpack_require__(144);
 let AuthController = class AuthController {
     authService;
     constructor(authService) {
@@ -10650,7 +10329,7 @@ exports.AuthController = AuthController = __decorate([
 
 
 /***/ }),
-/* 144 */
+/* 142 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
@@ -10702,7 +10381,7 @@ __decorate([
 
 
 /***/ }),
-/* 145 */
+/* 143 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
@@ -10733,7 +10412,7 @@ __decorate([
 
 
 /***/ }),
-/* 146 */
+/* 144 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
@@ -10764,7 +10443,7 @@ __decorate([
 
 
 /***/ }),
-/* 147 */
+/* 145 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
@@ -10778,9 +10457,9 @@ Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.AutoReplyModule = void 0;
 const common_1 = __webpack_require__(2);
 const typeorm_1 = __webpack_require__(33);
-const autoReply_controller_1 = __webpack_require__(148);
-const autoReply_entity_1 = __webpack_require__(150);
-const autoReply_service_1 = __webpack_require__(149);
+const autoReply_controller_1 = __webpack_require__(146);
+const autoReply_entity_1 = __webpack_require__(148);
+const autoReply_service_1 = __webpack_require__(147);
 let AutoReplyModule = class AutoReplyModule {
 };
 exports.AutoReplyModule = AutoReplyModule;
@@ -10796,7 +10475,7 @@ exports.AutoReplyModule = AutoReplyModule = __decorate([
 
 
 /***/ }),
-/* 148 */
+/* 146 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
@@ -10815,15 +10494,15 @@ var __param = (this && this.__param) || function (paramIndex, decorator) {
 var _a, _b, _c, _d, _e;
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.AutoReplyController = void 0;
-const adminAuth_guard_1 = __webpack_require__(109);
-const superAuth_guard_1 = __webpack_require__(110);
+const adminAuth_guard_1 = __webpack_require__(111);
+const superAuth_guard_1 = __webpack_require__(112);
 const common_1 = __webpack_require__(2);
 const swagger_1 = __webpack_require__(14);
-const autoReply_service_1 = __webpack_require__(149);
-const addAutoReply_dto_1 = __webpack_require__(151);
-const delBadWords_dto_1 = __webpack_require__(152);
-const queryAutoReply_dto_1 = __webpack_require__(153);
-const updateAutoReply_dto_1 = __webpack_require__(154);
+const autoReply_service_1 = __webpack_require__(147);
+const addAutoReply_dto_1 = __webpack_require__(149);
+const delBadWords_dto_1 = __webpack_require__(150);
+const queryAutoReply_dto_1 = __webpack_require__(151);
+const updateAutoReply_dto_1 = __webpack_require__(152);
 let AutoReplyController = class AutoReplyController {
     autoReplyService;
     constructor(autoReplyService) {
@@ -10891,7 +10570,7 @@ exports.AutoReplyController = AutoReplyController = __decorate([
 
 
 /***/ }),
-/* 149 */
+/* 147 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
@@ -10913,7 +10592,7 @@ exports.AutoReplyService = void 0;
 const common_1 = __webpack_require__(2);
 const typeorm_1 = __webpack_require__(33);
 const typeorm_2 = __webpack_require__(3);
-const autoReply_entity_1 = __webpack_require__(150);
+const autoReply_entity_1 = __webpack_require__(148);
 let AutoReplyService = class AutoReplyService {
     autoReplyEntity;
     autoReplyKes = [];
@@ -11025,7 +10704,7 @@ exports.AutoReplyService = AutoReplyService = __decorate([
 
 
 /***/ }),
-/* 150 */
+/* 148 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
@@ -11071,7 +10750,7 @@ exports.AutoReplyEntity = AutoReplyEntity = __decorate([
 
 
 /***/ }),
-/* 151 */
+/* 149 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
@@ -11107,7 +10786,7 @@ __decorate([
 
 
 /***/ }),
-/* 152 */
+/* 150 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
@@ -11134,7 +10813,7 @@ __decorate([
 
 
 /***/ }),
-/* 153 */
+/* 151 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
@@ -11181,7 +10860,7 @@ __decorate([
 
 
 /***/ }),
-/* 154 */
+/* 152 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
@@ -11232,7 +10911,7 @@ __decorate([
 
 
 /***/ }),
-/* 155 */
+/* 153 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
@@ -11247,10 +10926,10 @@ exports.BadWordsModule = void 0;
 const common_1 = __webpack_require__(2);
 const typeorm_1 = __webpack_require__(33);
 const user_entity_1 = __webpack_require__(97);
-const badWords_controller_1 = __webpack_require__(156);
-const badWords_entity_1 = __webpack_require__(158);
-const badWords_service_1 = __webpack_require__(157);
-const violationLog_entity_1 = __webpack_require__(159);
+const badWords_controller_1 = __webpack_require__(154);
+const badWords_entity_1 = __webpack_require__(156);
+const badWords_service_1 = __webpack_require__(155);
+const violationLog_entity_1 = __webpack_require__(157);
 let BadWordsModule = class BadWordsModule {
 };
 exports.BadWordsModule = BadWordsModule;
@@ -11266,7 +10945,7 @@ exports.BadWordsModule = BadWordsModule = __decorate([
 
 
 /***/ }),
-/* 156 */
+/* 154 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
@@ -11285,17 +10964,17 @@ var __param = (this && this.__param) || function (paramIndex, decorator) {
 var _a, _b, _c, _d, _e, _f, _g;
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.BadWordsController = void 0;
-const adminAuth_guard_1 = __webpack_require__(109);
-const superAuth_guard_1 = __webpack_require__(110);
+const adminAuth_guard_1 = __webpack_require__(111);
+const superAuth_guard_1 = __webpack_require__(112);
 const common_1 = __webpack_require__(2);
 const swagger_1 = __webpack_require__(14);
-const express_1 = __webpack_require__(111);
-const badWords_service_1 = __webpack_require__(157);
-const addBadWords_dto_1 = __webpack_require__(160);
-const delBadWords_dto_1 = __webpack_require__(161);
-const queryBadWords_dto_1 = __webpack_require__(162);
-const queryViolation_dto_1 = __webpack_require__(163);
-const updateBadWords_dto_1 = __webpack_require__(164);
+const express_1 = __webpack_require__(113);
+const badWords_service_1 = __webpack_require__(155);
+const addBadWords_dto_1 = __webpack_require__(158);
+const delBadWords_dto_1 = __webpack_require__(159);
+const queryBadWords_dto_1 = __webpack_require__(160);
+const queryViolation_dto_1 = __webpack_require__(161);
+const updateBadWords_dto_1 = __webpack_require__(162);
 let BadWordsController = class BadWordsController {
     badWordsService;
     constructor(badWordsService) {
@@ -11375,7 +11054,7 @@ exports.BadWordsController = BadWordsController = __decorate([
 
 
 /***/ }),
-/* 157 */
+/* 155 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
@@ -11401,8 +11080,8 @@ const axios_1 = __webpack_require__(40);
 const typeorm_2 = __webpack_require__(3);
 const globalConfig_service_1 = __webpack_require__(36);
 const user_entity_1 = __webpack_require__(97);
-const badWords_entity_1 = __webpack_require__(158);
-const violationLog_entity_1 = __webpack_require__(159);
+const badWords_entity_1 = __webpack_require__(156);
+const violationLog_entity_1 = __webpack_require__(157);
 let BadWordsService = class BadWordsService {
     badWordsEntity;
     violationLogEntity;
@@ -11600,7 +11279,7 @@ exports.BadWordsService = BadWordsService = __decorate([
 
 
 /***/ }),
-/* 158 */
+/* 156 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
@@ -11641,7 +11320,7 @@ exports.BadWordsEntity = BadWordsEntity = __decorate([
 
 
 /***/ }),
-/* 159 */
+/* 157 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
@@ -11692,7 +11371,7 @@ exports.ViolationLogEntity = ViolationLogEntity = __decorate([
 
 
 /***/ }),
-/* 160 */
+/* 158 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
@@ -11719,7 +11398,7 @@ __decorate([
 
 
 /***/ }),
-/* 161 */
+/* 159 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
@@ -11746,7 +11425,7 @@ __decorate([
 
 
 /***/ }),
-/* 162 */
+/* 160 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
@@ -11793,7 +11472,7 @@ __decorate([
 
 
 /***/ }),
-/* 163 */
+/* 161 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
@@ -11844,7 +11523,7 @@ __decorate([
 
 
 /***/ }),
-/* 164 */
+/* 162 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
@@ -11885,7 +11564,7 @@ __decorate([
 
 
 /***/ }),
-/* 165 */
+/* 163 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
@@ -11900,35 +11579,35 @@ exports.ChatModule = void 0;
 const common_1 = __webpack_require__(2);
 const typeorm_1 = __webpack_require__(33);
 const affection_module_1 = __webpack_require__(32);
-const chat_service_1 = __webpack_require__(166);
-const netSearch_service_1 = __webpack_require__(170);
+const chat_service_1 = __webpack_require__(164);
+const netSearch_service_1 = __webpack_require__(168);
+const app_entity_1 = __webpack_require__(115);
 const app_module_1 = __webpack_require__(107);
-const app_entity_1 = __webpack_require__(113);
-const app_service_1 = __webpack_require__(112);
-const appCats_entity_1 = __webpack_require__(114);
-const appEmotionVoice_entity_1 = __webpack_require__(115);
-const appVoice_entity_1 = __webpack_require__(116);
-const roleEmotion_entity_1 = __webpack_require__(117);
+const app_service_1 = __webpack_require__(114);
+const appCats_entity_1 = __webpack_require__(116);
+const appEmotionVoice_entity_1 = __webpack_require__(117);
+const appVoice_entity_1 = __webpack_require__(118);
+const roleEmotion_entity_1 = __webpack_require__(119);
 const userApps_entity_1 = __webpack_require__(120);
-const userAppSettings_entity_1 = __webpack_require__(119);
-const autoReply_entity_1 = __webpack_require__(150);
-const autoReply_service_1 = __webpack_require__(149);
-const badWords_entity_1 = __webpack_require__(158);
-const badWords_service_1 = __webpack_require__(157);
-const violationLog_entity_1 = __webpack_require__(159);
+const userAppSettings_entity_1 = __webpack_require__(108);
+const autoReply_entity_1 = __webpack_require__(148);
+const autoReply_service_1 = __webpack_require__(147);
+const badWords_entity_1 = __webpack_require__(156);
+const badWords_service_1 = __webpack_require__(155);
+const violationLog_entity_1 = __webpack_require__(157);
 const chatGroup_entity_1 = __webpack_require__(96);
-const chatGroup_service_1 = __webpack_require__(168);
+const chatGroup_service_1 = __webpack_require__(166);
 const chatLog_entity_1 = __webpack_require__(72);
-const chatLog_service_1 = __webpack_require__(172);
+const chatLog_service_1 = __webpack_require__(170);
 const cramiPackage_entity_1 = __webpack_require__(92);
 const config_entity_1 = __webpack_require__(77);
 const globalConfig_service_1 = __webpack_require__(36);
 const mailer_service_1 = __webpack_require__(85);
 const models_entity_1 = __webpack_require__(76);
 const models_service_1 = __webpack_require__(74);
-const plugin_entity_1 = __webpack_require__(174);
+const plugin_entity_1 = __webpack_require__(172);
 const redisCache_service_1 = __webpack_require__(28);
-const upload_service_1 = __webpack_require__(175);
+const upload_service_1 = __webpack_require__(173);
 const user_entity_1 = __webpack_require__(97);
 const user_service_1 = __webpack_require__(87);
 const accountLog_entity_1 = __webpack_require__(93);
@@ -11938,9 +11617,10 @@ const userBalance_entity_1 = __webpack_require__(95);
 const userBalance_service_1 = __webpack_require__(91);
 const verification_entity_1 = __webpack_require__(100);
 const verification_service_1 = __webpack_require__(99);
-const voice_module_1 = __webpack_require__(182);
-const chat_controller_1 = __webpack_require__(196);
-const chat_service_2 = __webpack_require__(197);
+const voice_module_1 = __webpack_require__(180);
+const conversationSummary_module_1 = __webpack_require__(195);
+const chat_controller_1 = __webpack_require__(198);
+const chat_service_2 = __webpack_require__(199);
 const open_chat_controller_1 = __webpack_require__(201);
 let ChatModule = class ChatModule {
 };
@@ -11977,6 +11657,7 @@ exports.ChatModule = ChatModule = __decorate([
             voice_module_1.VoiceModule,
             affection_module_1.AffectionModule,
             app_module_1.AppModule,
+            conversationSummary_module_1.ConversationSummaryModule,
         ],
         controllers: [chat_controller_1.ChatController, open_chat_controller_1.OpenChatController],
         providers: [
@@ -12003,7 +11684,7 @@ exports.ChatModule = ChatModule = __decorate([
 
 
 /***/ }),
-/* 166 */
+/* 164 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
@@ -12022,10 +11703,10 @@ exports.OpenAIChatService = void 0;
 const utils_1 = __webpack_require__(37);
 const correctApiBaseUrl_1 = __webpack_require__(71);
 const common_1 = __webpack_require__(2);
-const openai_1 = __webpack_require__(167);
-const chatGroup_service_1 = __webpack_require__(168);
+const openai_1 = __webpack_require__(165);
+const chatGroup_service_1 = __webpack_require__(166);
 const globalConfig_service_1 = __webpack_require__(36);
-const netSearch_service_1 = __webpack_require__(170);
+const netSearch_service_1 = __webpack_require__(168);
 let OpenAIChatService = class OpenAIChatService {
     globalConfigService;
     netSearchService;
@@ -12486,9 +12167,18 @@ let OpenAIChatService = class OpenAIChatService {
             }
             catch (_) { }
         }
+        if (!botContent || botContent.trim() === '') {
+            botContent = '你是一个友好、乐于助人的AI助手。请用简洁、自然的方式回答用户的问题。';
+            common_1.Logger.debug('使用默认角色预设（botProfile.content不能为空）', 'OpenAIChatService');
+        }
         const cfgKey = await this.globalConfigService.getConfigs(['xingchenApiKey']);
         const xingchenApiKey = typeof cfgKey === 'string' ? cfgKey : cfgKey?.xingchenApiKey;
         const useKey = xingchenApiKey || process.env.XINGCHEN_API_KEY || '';
+        if (!useKey) {
+            common_1.Logger.error('星尘API Key未配置！请在系统配置中设置 xingchenApiKey，或在环境变量中设置 XINGCHEN_API_KEY', 'OpenAIChatService');
+            throw new Error('星尘API Key未配置');
+        }
+        common_1.Logger.debug(`星尘API Key已配置: ${useKey ? '已设置' : '未设置'}`, 'OpenAIChatService');
         const url = 'https://nlp.aliyuncs.com/v2/api/chat/send';
         const isStreaming = !!options?.onProgress;
         const headers = {
@@ -12568,8 +12258,8 @@ let OpenAIChatService = class OpenAIChatService {
             ...(isStreaming ? { stream: true } : {}),
         };
         try {
-            const xingchenLog = this.sanitizeForLog({ url, headers, payload }, Number.MAX_SAFE_INTEGER);
-            common_1.Logger.debug(`星尘请求完整body: ${JSON.stringify(xingchenLog, null, 2)}`, 'OpenAIChatService');
+            const xingchenLog = this.sanitizeForLog({ url, headers, payload });
+            common_1.Logger.debug(`星尘请求 - body: ${JSON.stringify(xingchenLog)}`, 'OpenAIChatService');
             const controller = new AbortController();
             const signal = options?.abortSignal || controller.signal;
             const response = await fetch(url, {
@@ -12578,14 +12268,22 @@ let OpenAIChatService = class OpenAIChatService {
                 body: JSON.stringify(payload),
                 signal,
             });
+            common_1.Logger.debug(`星尘API响应状态: ${response.status} ${response.statusText}`, 'OpenAIChatService');
+            if (!response.ok) {
+                const errorText = await response.text();
+                common_1.Logger.error(`星尘API请求失败: ${response.status} ${errorText}`, 'OpenAIChatService');
+                throw new Error(`星尘API请求失败: ${response.status} ${errorText}`);
+            }
             const contentType = response.headers.get('content-type') || '';
             const isSse = contentType.includes('text/event-stream');
             const supportsStream = !!response.body && typeof response.body.getReader === 'function';
+            common_1.Logger.debug(`星尘API响应类型: contentType=${contentType}, isSse=${isSse}, supportsStream=${supportsStream}`, 'OpenAIChatService');
             if (options?.onProgress && (isSse || supportsStream)) {
                 const reader = response.body.getReader();
                 const decoder = new TextDecoder('utf-8');
                 let buffer = '';
                 let full = '';
+                let usage = null;
                 while (true) {
                     const { done, value } = await reader.read();
                     if (done)
@@ -12627,6 +12325,10 @@ let OpenAIChatService = class OpenAIChatService {
                                     }
                                     catch { }
                                 }
+                                if (obj?.usage) {
+                                    usage = obj.usage;
+                                    common_1.Logger.debug(`星尘API返回usage: ${JSON.stringify(usage)}`, 'OpenAIChatService');
+                                }
                             }
                             catch { }
                         }
@@ -12655,6 +12357,10 @@ let OpenAIChatService = class OpenAIChatService {
                                     delta = obj.delta;
                                 if (!delta && typeof obj?.text === 'string')
                                     delta = obj.text;
+                                if (obj?.usage) {
+                                    usage = obj.usage;
+                                    common_1.Logger.debug(`星尘API返回usage: ${JSON.stringify(usage)}`, 'OpenAIChatService');
+                                }
                             }
                             catch {
                                 delta = line;
@@ -12694,6 +12400,10 @@ let OpenAIChatService = class OpenAIChatService {
                             }
                             catch { }
                         }
+                        if (obj?.usage) {
+                            usage = obj.usage;
+                            common_1.Logger.debug(`星尘API返回usage: ${JSON.stringify(usage)}`, 'OpenAIChatService');
+                        }
                     }
                     catch {
                         full += buffer;
@@ -12703,9 +12413,19 @@ let OpenAIChatService = class OpenAIChatService {
                         catch { }
                     }
                 }
-                return full;
+                return {
+                    text: full,
+                    usage: usage
+                        ? {
+                            userTokens: usage.userTokens,
+                            inputTokens: usage.inputTokens,
+                            outputTokens: usage.outputTokens,
+                        }
+                        : undefined,
+                };
             }
             let text = '';
+            let usage = null;
             try {
                 const data = await response.json();
                 const choices = data?.data?.choices || data?.choices;
@@ -12718,6 +12438,10 @@ let OpenAIChatService = class OpenAIChatService {
                     text = data.output;
                 if (!text && typeof data?.content === 'string')
                     text = data.content;
+                if (data?.usage) {
+                    usage = data.usage;
+                    common_1.Logger.debug(`星尘API返回usage: ${JSON.stringify(usage)}`, 'OpenAIChatService');
+                }
             }
             catch {
                 try {
@@ -12727,12 +12451,22 @@ let OpenAIChatService = class OpenAIChatService {
                 }
                 catch { }
             }
-            return text;
+            return {
+                text,
+                usage: usage
+                    ? {
+                        userTokens: usage.userTokens,
+                        inputTokens: usage.inputTokens,
+                        outputTokens: usage.outputTokens,
+                    }
+                    : undefined,
+            };
         }
         catch (error) {
             const errorMessage = (0, utils_1.handleError)(error);
             common_1.Logger.error(`星尘全局模型调用失败: ${errorMessage}`, 'OpenAIChatService');
-            return;
+            common_1.Logger.error(`错误详情: ${JSON.stringify(error)}`, 'OpenAIChatService');
+            throw error;
         }
     }
     prepareSystemMessage(messagesHistory, inputs, result) {
@@ -12922,13 +12656,13 @@ exports.OpenAIChatService = OpenAIChatService = __decorate([
 
 
 /***/ }),
-/* 167 */
+/* 165 */
 /***/ ((module) => {
 
 module.exports = require("openai");
 
 /***/ }),
-/* 168 */
+/* 166 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
@@ -12950,11 +12684,11 @@ exports.ChatGroupService = void 0;
 const common_1 = __webpack_require__(2);
 const typeorm_1 = __webpack_require__(33);
 const axios_1 = __webpack_require__(40);
-const pdf = __webpack_require__(169);
+const pdf = __webpack_require__(167);
 const typeorm_2 = __webpack_require__(3);
-const affection_service_1 = __webpack_require__(102);
-const app_entity_1 = __webpack_require__(113);
+const app_entity_1 = __webpack_require__(115);
 const models_service_1 = __webpack_require__(74);
+const affection_service_1 = __webpack_require__(102);
 const chatGroup_entity_1 = __webpack_require__(96);
 let ChatGroupService = class ChatGroupService {
     chatGroupEntity;
@@ -13219,7 +12953,24 @@ let ChatGroupService = class ChatGroupService {
     async listMembers(body, req) {
         const { groupId } = body;
         const g = await this.ensureGroupOwned(groupId, req);
-        return this.parseMembers(g.members);
+        const members = this.parseMembers(g.members);
+        const appIds = members.filter(m => m.appId).map(m => m.appId);
+        if (appIds.length > 0) {
+            const appInfos = await this.appEntity.find({
+                where: { id: (0, typeorm_2.In)(appIds) },
+            });
+            return members.map(member => {
+                if (member.appId) {
+                    const appInfo = appInfos.find(app => app.id === member.appId);
+                    return {
+                        ...member,
+                        appAvatar: appInfo?.coverImg || null,
+                    };
+                }
+                return member;
+            });
+        }
+        return members;
     }
     async assignTask(body, req) {
         const { groupId, userId, title, detail, status } = body;
@@ -13293,13 +13044,13 @@ exports.ChatGroupService = ChatGroupService = __decorate([
 
 
 /***/ }),
-/* 169 */
+/* 167 */
 /***/ ((module) => {
 
 module.exports = require("pdf-parse");
 
 /***/ }),
-/* 170 */
+/* 168 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
@@ -13317,7 +13068,7 @@ Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.NetSearchService = void 0;
 const utils_1 = __webpack_require__(37);
 const common_1 = __webpack_require__(2);
-const cross_fetch_1 = __webpack_require__(171);
+const cross_fetch_1 = __webpack_require__(169);
 const globalConfig_service_1 = __webpack_require__(36);
 let NetSearchService = class NetSearchService {
     globalConfigService;
@@ -13490,13 +13241,13 @@ exports.NetSearchService = NetSearchService = __decorate([
 
 
 /***/ }),
-/* 171 */
+/* 169 */
 /***/ ((module) => {
 
 module.exports = require("cross-fetch");
 
 /***/ }),
-/* 172 */
+/* 170 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
@@ -13519,7 +13270,7 @@ const balance_constant_1 = __webpack_require__(88);
 const utils_1 = __webpack_require__(37);
 const common_1 = __webpack_require__(2);
 const typeorm_1 = __webpack_require__(33);
-const exceljs_1 = __webpack_require__(173);
+const exceljs_1 = __webpack_require__(171);
 const typeorm_2 = __webpack_require__(3);
 const chatGroup_entity_1 = __webpack_require__(96);
 const user_entity_1 = __webpack_require__(97);
@@ -13698,20 +13449,16 @@ let ChatLogService = class ChatLogService {
         const { groupId } = params;
         const where = { userId: id, isDelete: false };
         groupId && Object.assign(where, { groupId });
-        common_1.Logger.debug(`[chatList] 查询参数 - userId: ${id}, groupId: ${groupId || 'null'}, where: ${JSON.stringify(where)}`, 'ChatLogService');
         if (groupId) {
-            const groupExists = await this.chatGroupEntity.findOne({
-                where: { id: groupId, isDelete: false },
+            const count = await this.chatGroupEntity.count({
+                where: { isDelete: false },
             });
-            if (!groupExists) {
-                common_1.Logger.debug(`[chatList] 群组 ${groupId} 不存在或已删除，返回空数组`, 'ChatLogService');
+            if (count === 0)
                 return [];
-            }
         }
-        const list = await this.chatLogEntity.find({ where, order: { createdAt: 'ASC' } });
-        common_1.Logger.debug(`[chatList] 查询结果数量: ${list.length}`, 'ChatLogService');
-        const mappedList = list.map(item => {
-            const { prompt, role, answer, createdAt, model, modelName, type, status, action, drawId, id, imageUrl, fileInfo, fileUrl, ttsUrl, videoUrl, audioUrl, customId, pluginParam, progress, modelAvatar, taskData, promptReference, networkSearchResult, fileVectorResult, taskId, reasoning_content, tool_calls, content, } = item;
+        const list = await this.chatLogEntity.find({ where });
+        return list.map(item => {
+            const { prompt, role, answer, createdAt, model, modelName, type, status, action, drawId, id, imageUrl, fileInfo, fileUrl, ttsUrl, videoUrl, audioUrl, customId, pluginParam, progress, modelAvatar, taskData, promptReference, networkSearchResult, fileVectorResult, taskId, reasoning_content, tool_calls, content, promptTokens, completionTokens, totalTokens, } = item;
             return {
                 chatId: id,
                 dateTime: (0, utils_1.formatDate)(createdAt),
@@ -13740,26 +13487,11 @@ let ChatLogService = class ChatLogService {
                 networkSearchResult: networkSearchResult,
                 fileVectorResult: fileVectorResult,
                 taskId: taskId,
+                promptTokens: promptTokens,
+                completionTokens: completionTokens,
+                totalTokens: totalTokens,
             };
         });
-        if (groupId) {
-            const deduplicatedList = [];
-            const seenUserMessages = new Set();
-            for (const item of mappedList) {
-                if (item.role === 'user') {
-                    const userContent = item.content?.trim();
-                    if (userContent && seenUserMessages.has(userContent)) {
-                        common_1.Logger.debug(`[群聊去重] 跳过重复的用户消息: ${userContent.substring(0, 30)}...`, 'ChatLogService');
-                        continue;
-                    }
-                    seenUserMessages.add(userContent);
-                }
-                deduplicatedList.push(item);
-            }
-            common_1.Logger.debug(`[群聊去重] 原始消息数=${mappedList.length}, 去重后=${deduplicatedList.length}`, 'ChatLogService');
-            return deduplicatedList;
-        }
-        return mappedList;
     }
     async chatHistory(groupId, rounds) {
         if (rounds === 0) {
@@ -13948,13 +13680,13 @@ exports.ChatLogService = ChatLogService = __decorate([
 
 
 /***/ }),
-/* 173 */
+/* 171 */
 /***/ ((module) => {
 
 module.exports = require("exceljs");
 
 /***/ }),
-/* 174 */
+/* 172 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
@@ -14010,7 +13742,7 @@ exports.PluginEntity = PluginEntity = __decorate([
 
 
 /***/ }),
-/* 175 */
+/* 173 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
@@ -14027,16 +13759,16 @@ var _a, _b;
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.UploadService = void 0;
 const utils_1 = __webpack_require__(37);
-const client_s3_1 = __webpack_require__(176);
+const client_s3_1 = __webpack_require__(174);
 const common_1 = __webpack_require__(2);
-const ALIOSS = __webpack_require__(177);
+const ALIOSS = __webpack_require__(175);
 const axios_1 = __webpack_require__(40);
-const TENCENTCOS = __webpack_require__(178);
-const FormData = __webpack_require__(179);
+const TENCENTCOS = __webpack_require__(176);
+const FormData = __webpack_require__(177);
 const fs_1 = __webpack_require__(18);
-const mime = __webpack_require__(180);
+const mime = __webpack_require__(178);
 const path = __webpack_require__(20);
-const streamToBuffer = __webpack_require__(181);
+const streamToBuffer = __webpack_require__(179);
 const globalConfig_service_1 = __webpack_require__(36);
 const redisCache_service_1 = __webpack_require__(28);
 const blacklist = ['exe', 'sh', 'bat', 'js', 'php', 'py'];
@@ -14067,7 +13799,10 @@ let UploadService = class UploadService {
         if (process.env.ISDEV === 'true') {
             dir = `dev/${dir}`;
         }
-        const fileExtension = mime.extension(mimetype) || '';
+        let fileExtension = mime.extension(mimetype) || '';
+        if (mimetype === 'audio/mpeg' && fileExtension === 'mpga') {
+            fileExtension = 'mp3';
+        }
         if (!fileExtension) {
             common_1.Logger.error('无法识别文件类型，请检查文件', 'UploadService');
         }
@@ -14417,43 +14152,43 @@ exports.UploadService = UploadService = __decorate([
 
 
 /***/ }),
-/* 176 */
+/* 174 */
 /***/ ((module) => {
 
 module.exports = require("@aws-sdk/client-s3");
 
 /***/ }),
-/* 177 */
+/* 175 */
 /***/ ((module) => {
 
 module.exports = require("ali-oss");
 
 /***/ }),
-/* 178 */
+/* 176 */
 /***/ ((module) => {
 
 module.exports = require("cos-nodejs-sdk-v5");
 
 /***/ }),
-/* 179 */
+/* 177 */
 /***/ ((module) => {
 
 module.exports = require("form-data");
 
 /***/ }),
-/* 180 */
+/* 178 */
 /***/ ((module) => {
 
 module.exports = require("mime-types");
 
 /***/ }),
-/* 181 */
+/* 179 */
 /***/ ((module) => {
 
 module.exports = require("stream-to-buffer");
 
 /***/ }),
-/* 182 */
+/* 180 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
@@ -14467,15 +14202,15 @@ Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.VoiceModule = void 0;
 const common_1 = __webpack_require__(2);
 const typeorm_1 = __webpack_require__(33);
-const app_entity_1 = __webpack_require__(113);
-const appEmotionVoice_entity_1 = __webpack_require__(115);
-const appVoice_entity_1 = __webpack_require__(116);
-const globalConfig_module_1 = __webpack_require__(183);
-const upload_module_1 = __webpack_require__(187);
-const open_voice_controller_1 = __webpack_require__(190);
-const voice_controller_1 = __webpack_require__(195);
-const voice_entity_1 = __webpack_require__(192);
-const voice_service_1 = __webpack_require__(191);
+const app_entity_1 = __webpack_require__(115);
+const appEmotionVoice_entity_1 = __webpack_require__(117);
+const appVoice_entity_1 = __webpack_require__(118);
+const globalConfig_module_1 = __webpack_require__(181);
+const upload_module_1 = __webpack_require__(186);
+const open_voice_controller_1 = __webpack_require__(189);
+const voice_controller_1 = __webpack_require__(194);
+const voice_entity_1 = __webpack_require__(191);
+const voice_service_1 = __webpack_require__(190);
 let VoiceModule = class VoiceModule {
 };
 exports.VoiceModule = VoiceModule;
@@ -14494,7 +14229,7 @@ exports.VoiceModule = VoiceModule = __decorate([
 
 
 /***/ }),
-/* 183 */
+/* 181 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
@@ -14510,7 +14245,7 @@ const common_1 = __webpack_require__(2);
 const typeorm_1 = __webpack_require__(33);
 const chatLog_entity_1 = __webpack_require__(72);
 const config_entity_1 = __webpack_require__(77);
-const globalConfig_controller_1 = __webpack_require__(184);
+const globalConfig_controller_1 = __webpack_require__(182);
 const globalConfig_service_1 = __webpack_require__(36);
 let GlobalConfigModule = class GlobalConfigModule {
 };
@@ -14527,7 +14262,7 @@ exports.GlobalConfigModule = GlobalConfigModule = __decorate([
 
 
 /***/ }),
-/* 184 */
+/* 182 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
@@ -14546,13 +14281,13 @@ var __param = (this && this.__param) || function (paramIndex, decorator) {
 var _a, _b, _c, _d, _e, _f;
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.GlobalConfigController = void 0;
-const adminAuth_guard_1 = __webpack_require__(109);
-const superAuth_guard_1 = __webpack_require__(110);
+const adminAuth_guard_1 = __webpack_require__(111);
+const superAuth_guard_1 = __webpack_require__(112);
 const common_1 = __webpack_require__(2);
 const swagger_1 = __webpack_require__(14);
-const express_1 = __webpack_require__(111);
-const queryConfig_dto_1 = __webpack_require__(185);
-const setConfig_dto_1 = __webpack_require__(186);
+const express_1 = __webpack_require__(113);
+const queryConfig_dto_1 = __webpack_require__(183);
+const setConfig_dto_1 = __webpack_require__(185);
 const globalConfig_service_1 = __webpack_require__(36);
 let GlobalConfigController = class GlobalConfigController {
     globalConfigService;
@@ -14631,7 +14366,7 @@ exports.GlobalConfigController = GlobalConfigController = __decorate([
 
 
 /***/ }),
-/* 185 */
+/* 183 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
@@ -14647,7 +14382,7 @@ var __metadata = (this && this.__metadata) || function (k, v) {
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.QueryConfigDto = void 0;
 const class_validator_1 = __webpack_require__(106);
-const class_transformer_1 = __webpack_require__(131);
+const class_transformer_1 = __webpack_require__(184);
 const swagger_1 = __webpack_require__(14);
 class QueryConfigDto {
     keys;
@@ -14666,7 +14401,13 @@ __decorate([
 
 
 /***/ }),
-/* 186 */
+/* 184 */
+/***/ ((module) => {
+
+module.exports = require("class-transformer");
+
+/***/ }),
+/* 185 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
@@ -14682,7 +14423,7 @@ var __metadata = (this && this.__metadata) || function (k, v) {
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.SetConfigDto = void 0;
 const swagger_1 = __webpack_require__(14);
-const class_transformer_1 = __webpack_require__(131);
+const class_transformer_1 = __webpack_require__(184);
 const class_validator_1 = __webpack_require__(106);
 class SetConfigDto {
     settings;
@@ -14702,7 +14443,7 @@ __decorate([
 
 
 /***/ }),
-/* 187 */
+/* 186 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
@@ -14716,8 +14457,8 @@ Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.UploadModule = void 0;
 const common_1 = __webpack_require__(2);
 const redisCache_module_1 = __webpack_require__(26);
-const upload_controller_1 = __webpack_require__(188);
-const upload_service_1 = __webpack_require__(175);
+const upload_controller_1 = __webpack_require__(187);
+const upload_service_1 = __webpack_require__(173);
 let UploadModule = class UploadModule {
 };
 exports.UploadModule = UploadModule;
@@ -14733,7 +14474,7 @@ exports.UploadModule = UploadModule = __decorate([
 
 
 /***/ }),
-/* 188 */
+/* 187 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
@@ -14754,10 +14495,10 @@ Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.UploadController = void 0;
 const jwtAuth_guard_1 = __webpack_require__(35);
 const common_1 = __webpack_require__(2);
-const platform_express_1 = __webpack_require__(189);
+const platform_express_1 = __webpack_require__(188);
 const swagger_1 = __webpack_require__(14);
-const express_1 = __webpack_require__(111);
-const upload_service_1 = __webpack_require__(175);
+const express_1 = __webpack_require__(113);
+const upload_service_1 = __webpack_require__(173);
 let UploadController = class UploadController {
     uploadService;
     constructor(uploadService) {
@@ -14793,13 +14534,13 @@ exports.UploadController = UploadController = __decorate([
 
 
 /***/ }),
-/* 189 */
+/* 188 */
 /***/ ((module) => {
 
 module.exports = require("@nestjs/platform-express");
 
 /***/ }),
-/* 190 */
+/* 189 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
@@ -14820,7 +14561,7 @@ Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.OpenVoiceController = void 0;
 const common_1 = __webpack_require__(2);
 const swagger_1 = __webpack_require__(14);
-const voice_service_1 = __webpack_require__(191);
+const voice_service_1 = __webpack_require__(190);
 let OpenVoiceController = class OpenVoiceController {
     voiceService;
     constructor(voiceService) {
@@ -15149,7 +14890,7 @@ exports.OpenVoiceController = OpenVoiceController = __decorate([
 
 
 /***/ }),
-/* 191 */
+/* 190 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
@@ -15175,12 +14916,12 @@ const fs = __webpack_require__(18);
 const os = __webpack_require__(84);
 const path = __webpack_require__(20);
 const typeorm_2 = __webpack_require__(3);
-const app_entity_1 = __webpack_require__(113);
-const appEmotionVoice_entity_1 = __webpack_require__(115);
-const appVoice_entity_1 = __webpack_require__(116);
+const app_entity_1 = __webpack_require__(115);
+const appEmotionVoice_entity_1 = __webpack_require__(117);
+const appVoice_entity_1 = __webpack_require__(118);
 const globalConfig_service_1 = __webpack_require__(36);
-const upload_service_1 = __webpack_require__(175);
-const voice_entity_1 = __webpack_require__(192);
+const upload_service_1 = __webpack_require__(173);
+const voice_entity_1 = __webpack_require__(191);
 const COSY_CUSTOMIZATION_URL = 'https://dashscope.aliyuncs.com/api/v1/services/audio/tts/customization';
 const COSY_WS_URL = 'wss://dashscope.aliyuncs.com/api-ws/v1/inference/';
 let VoiceService = class VoiceService {
@@ -15380,7 +15121,7 @@ let VoiceService = class VoiceService {
                 common_1.Logger.log(`[preprocessAudioToLocal] 音频下载完成，开始转换`, 'VoiceService');
                 let ffmpeg;
                 try {
-                    const mod = await Promise.resolve().then(() => __webpack_require__(193));
+                    const mod = await Promise.resolve().then(() => __webpack_require__(192));
                     ffmpeg = mod?.default || mod;
                 }
                 catch (e) {
@@ -15454,7 +15195,7 @@ let VoiceService = class VoiceService {
                 common_1.Logger.log(`[preprocessAudio] 音频下载完成，开始转换`, 'VoiceService');
                 let ffmpeg;
                 try {
-                    const mod = await Promise.resolve().then(() => __webpack_require__(193));
+                    const mod = await Promise.resolve().then(() => __webpack_require__(192));
                     ffmpeg = mod?.default || mod;
                 }
                 catch (e) {
@@ -15790,7 +15531,7 @@ let VoiceService = class VoiceService {
         const apiKey = await this.getApiKey();
         let WS;
         try {
-            const WSMod = await Promise.resolve().then(() => __webpack_require__(194));
+            const WSMod = await Promise.resolve().then(() => __webpack_require__(193));
             WS = WSMod?.default || WSMod;
             if (!WS)
                 throw new Error('ws module not resolved');
@@ -16075,7 +15816,7 @@ let VoiceService = class VoiceService {
         const apiKey = await this.getApiKey();
         let WS;
         try {
-            const WSMod = await Promise.resolve().then(() => __webpack_require__(194));
+            const WSMod = await Promise.resolve().then(() => __webpack_require__(193));
             WS = WSMod?.default || WSMod;
             if (!WS)
                 throw new Error('ws module not resolved');
@@ -16195,7 +15936,7 @@ let VoiceService = class VoiceService {
         const apiKey = await this.getApiKey();
         let WS;
         try {
-            const WSMod = await Promise.resolve().then(() => __webpack_require__(194));
+            const WSMod = await Promise.resolve().then(() => __webpack_require__(193));
             WS = WSMod?.default || WSMod;
             if (!WS)
                 throw new Error('ws module not resolved');
@@ -16307,7 +16048,7 @@ let VoiceService = class VoiceService {
         const apiKey = await this.getApiKey();
         let WS;
         try {
-            const WSMod = await Promise.resolve().then(() => __webpack_require__(194));
+            const WSMod = await Promise.resolve().then(() => __webpack_require__(193));
             WS = WSMod?.default || WSMod;
             if (!WS)
                 throw new Error('ws module not resolved');
@@ -16521,7 +16262,7 @@ function cryptoRandomId() {
 
 
 /***/ }),
-/* 192 */
+/* 191 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
@@ -16600,19 +16341,19 @@ exports.VoiceEntity = VoiceEntity = __decorate([
 
 
 /***/ }),
-/* 193 */
+/* 192 */
 /***/ ((module) => {
 
 module.exports = require("fluent-ffmpeg");
 
 /***/ }),
-/* 194 */
+/* 193 */
 /***/ ((module) => {
 
 module.exports = require("ws");
 
 /***/ }),
-/* 195 */
+/* 194 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
@@ -16634,7 +16375,7 @@ exports.VoiceController = void 0;
 const jwtAuth_guard_1 = __webpack_require__(35);
 const common_1 = __webpack_require__(2);
 const swagger_1 = __webpack_require__(14);
-const voice_service_1 = __webpack_require__(191);
+const voice_service_1 = __webpack_require__(190);
 let VoiceController = class VoiceController {
     voiceService;
     constructor(voiceService) {
@@ -16823,7 +16564,291 @@ exports.VoiceController = VoiceController = __decorate([
 
 
 /***/ }),
+/* 195 */
+/***/ (function(__unused_webpack_module, exports, __webpack_require__) {
+
+
+var __decorate = (this && this.__decorate) || function (decorators, target, key, desc) {
+    var c = arguments.length, r = c < 3 ? target : desc === null ? desc = Object.getOwnPropertyDescriptor(target, key) : desc, d;
+    if (typeof Reflect === "object" && typeof Reflect.decorate === "function") r = Reflect.decorate(decorators, target, key, desc);
+    else for (var i = decorators.length - 1; i >= 0; i--) if (d = decorators[i]) r = (c < 3 ? d(r) : c > 3 ? d(target, key, r) : d(target, key)) || r;
+    return c > 3 && r && Object.defineProperty(target, key, r), r;
+};
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.ConversationSummaryModule = void 0;
+const common_1 = __webpack_require__(2);
+const typeorm_1 = __webpack_require__(33);
+const globalConfig_module_1 = __webpack_require__(181);
+const conversationSummary_entity_1 = __webpack_require__(196);
+const conversationSummary_service_1 = __webpack_require__(197);
+let ConversationSummaryModule = class ConversationSummaryModule {
+};
+exports.ConversationSummaryModule = ConversationSummaryModule;
+exports.ConversationSummaryModule = ConversationSummaryModule = __decorate([
+    (0, common_1.Module)({
+        imports: [typeorm_1.TypeOrmModule.forFeature([conversationSummary_entity_1.ConversationSummaryEntity]), globalConfig_module_1.GlobalConfigModule],
+        providers: [conversationSummary_service_1.ConversationSummaryService],
+        exports: [conversationSummary_service_1.ConversationSummaryService],
+    })
+], ConversationSummaryModule);
+
+
+/***/ }),
 /* 196 */
+/***/ (function(__unused_webpack_module, exports, __webpack_require__) {
+
+
+var __decorate = (this && this.__decorate) || function (decorators, target, key, desc) {
+    var c = arguments.length, r = c < 3 ? target : desc === null ? desc = Object.getOwnPropertyDescriptor(target, key) : desc, d;
+    if (typeof Reflect === "object" && typeof Reflect.decorate === "function") r = Reflect.decorate(decorators, target, key, desc);
+    else for (var i = decorators.length - 1; i >= 0; i--) if (d = decorators[i]) r = (c < 3 ? d(r) : c > 3 ? d(target, key, r) : d(target, key)) || r;
+    return c > 3 && r && Object.defineProperty(target, key, r), r;
+};
+var __metadata = (this && this.__metadata) || function (k, v) {
+    if (typeof Reflect === "object" && typeof Reflect.metadata === "function") return Reflect.metadata(k, v);
+};
+var _a;
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.ConversationSummaryEntity = void 0;
+const baseEntity_1 = __webpack_require__(73);
+const typeorm_1 = __webpack_require__(3);
+let ConversationSummaryEntity = class ConversationSummaryEntity extends baseEntity_1.BaseEntity {
+    groupId;
+    userId;
+    appId;
+    summary;
+    messageCount;
+    lastSummarizedAt;
+};
+exports.ConversationSummaryEntity = ConversationSummaryEntity;
+__decorate([
+    (0, typeorm_1.Column)({ type: 'varchar', length: 100, comment: '对话群组ID' }),
+    __metadata("design:type", String)
+], ConversationSummaryEntity.prototype, "groupId", void 0);
+__decorate([
+    (0, typeorm_1.Column)({ type: 'int', comment: '用户ID' }),
+    __metadata("design:type", Number)
+], ConversationSummaryEntity.prototype, "userId", void 0);
+__decorate([
+    (0, typeorm_1.Column)({ type: 'int', nullable: true, comment: '应用ID（角色ID）', default: null }),
+    __metadata("design:type", Number)
+], ConversationSummaryEntity.prototype, "appId", void 0);
+__decorate([
+    (0, typeorm_1.Column)({ type: 'text', comment: '对话总结内容', default: '' }),
+    __metadata("design:type", String)
+], ConversationSummaryEntity.prototype, "summary", void 0);
+__decorate([
+    (0, typeorm_1.Column)({ type: 'int', default: 0, comment: '已总结的消息数量' }),
+    __metadata("design:type", Number)
+], ConversationSummaryEntity.prototype, "messageCount", void 0);
+__decorate([
+    (0, typeorm_1.Column)({ type: 'timestamp', nullable: true, comment: '最后总结时间' }),
+    __metadata("design:type", typeof (_a = typeof Date !== "undefined" && Date) === "function" ? _a : Object)
+], ConversationSummaryEntity.prototype, "lastSummarizedAt", void 0);
+exports.ConversationSummaryEntity = ConversationSummaryEntity = __decorate([
+    (0, typeorm_1.Entity)({ name: 'conversation_summary' }),
+    (0, typeorm_1.Index)(['groupId'], { unique: true })
+], ConversationSummaryEntity);
+
+
+/***/ }),
+/* 197 */
+/***/ (function(__unused_webpack_module, exports, __webpack_require__) {
+
+
+var __decorate = (this && this.__decorate) || function (decorators, target, key, desc) {
+    var c = arguments.length, r = c < 3 ? target : desc === null ? desc = Object.getOwnPropertyDescriptor(target, key) : desc, d;
+    if (typeof Reflect === "object" && typeof Reflect.decorate === "function") r = Reflect.decorate(decorators, target, key, desc);
+    else for (var i = decorators.length - 1; i >= 0; i--) if (d = decorators[i]) r = (c < 3 ? d(r) : c > 3 ? d(target, key, r) : d(target, key)) || r;
+    return c > 3 && r && Object.defineProperty(target, key, r), r;
+};
+var __metadata = (this && this.__metadata) || function (k, v) {
+    if (typeof Reflect === "object" && typeof Reflect.metadata === "function") return Reflect.metadata(k, v);
+};
+var __param = (this && this.__param) || function (paramIndex, decorator) {
+    return function (target, key) { decorator(target, key, paramIndex); }
+};
+var _a, _b;
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.ConversationSummaryService = void 0;
+const common_1 = __webpack_require__(2);
+const typeorm_1 = __webpack_require__(33);
+const typeorm_2 = __webpack_require__(3);
+const globalConfig_service_1 = __webpack_require__(36);
+const conversationSummary_entity_1 = __webpack_require__(196);
+let ConversationSummaryService = class ConversationSummaryService {
+    conversationSummaryRepo;
+    globalConfigService;
+    constructor(conversationSummaryRepo, globalConfigService) {
+        this.conversationSummaryRepo = conversationSummaryRepo;
+        this.globalConfigService = globalConfigService;
+    }
+    async getSummary(groupId) {
+        try {
+            const summary = await this.conversationSummaryRepo.findOne({
+                where: { groupId },
+            });
+            if (summary) {
+                common_1.Logger.debug(`[对话总结] 获取到groupId=${groupId}的历史总结，消息数=${summary.messageCount}`, 'ConversationSummaryService');
+                return summary.summary;
+            }
+            common_1.Logger.debug(`[对话总结] groupId=${groupId}暂无历史总结`, 'ConversationSummaryService');
+            return null;
+        }
+        catch (error) {
+            common_1.Logger.error(`[对话总结] 获取总结失败: ${error?.message || error}`, error?.stack || '', 'ConversationSummaryService');
+            return null;
+        }
+    }
+    async summarizeConversationAsync(groupId, userId, appId, previousSummary, newMessages) {
+        setImmediate(async () => {
+            try {
+                common_1.Logger.debug(`[对话总结] 开始异步总结 - groupId=${groupId}, 新消息数=${newMessages.length}`, 'ConversationSummaryService');
+                const validMessages = newMessages.filter(msg => msg.content && msg.content.trim().length > 0);
+                if (validMessages.length === 0) {
+                    common_1.Logger.debug(`[对话总结] 没有有效的新消息，跳过总结`, 'ConversationSummaryService');
+                    return;
+                }
+                const newSummary = await this.generateSummary(previousSummary, validMessages);
+                if (!newSummary) {
+                    common_1.Logger.warn(`[对话总结] 总结生成失败，跳过保存`, 'ConversationSummaryService');
+                    return;
+                }
+                await this.saveSummary(groupId, userId, appId, newSummary, validMessages.length);
+                common_1.Logger.debug(`[对话总结] ✓ 总结完成并保存 - groupId=${groupId}`, 'ConversationSummaryService');
+            }
+            catch (error) {
+                common_1.Logger.error(`[对话总结] 异步总结失败: ${error?.message || error}`, error?.stack || '', 'ConversationSummaryService');
+            }
+        });
+    }
+    async generateSummary(previousSummary, messages) {
+        try {
+            const dashscopeApiKey = (await this.globalConfigService.getConfigs(['dashscopeApiKey'])) ||
+                process.env.DASHSCOPE_API_KEY;
+            if (!dashscopeApiKey) {
+                common_1.Logger.warn('[对话总结] 未配置DashScope API Key，跳过总结', 'ConversationSummaryService');
+                return null;
+            }
+            const conversationText = messages.map(m => `${m.role}: ${m.content}`).join('\n');
+            const systemPrompt = previousSummary
+                ? `你是一个专业的对话总结助手。请基于之前的总结和新的对话内容，生成一个更新的总结。
+
+之前的总结：
+${previousSummary}
+
+新的对话内容：
+${conversationText}
+
+要求：
+1. 保留之前总结中的重要信息
+2. 整合新对话的关键内容
+3. 总结应简洁、连贯，突出重点
+4. 字数控制在300字以内
+5. 只返回总结内容，不要任何前缀或解释
+
+请生成更新后的总结：`
+                : `你是一个专业的对话总结助手。请对以下对话内容进行总结。
+
+对话内容：
+${conversationText}
+
+要求：
+1. 总结对话的主要内容和关键信息
+2. 保持简洁、准确，突出重点
+3. 字数控制在300字以内
+4. 只返回总结内容，不要任何前缀或解释
+
+请生成总结：`;
+            const axios = __webpack_require__(40);
+            const response = await axios.post('https://dashscope.aliyuncs.com/api/v1/services/aigc/text-generation/generation', {
+                model: 'qwen-turbo',
+                input: {
+                    messages: [
+                        {
+                            role: 'system',
+                            content: '你是一个专业的对话总结助手',
+                        },
+                        {
+                            role: 'user',
+                            content: systemPrompt,
+                        },
+                    ],
+                },
+                parameters: {
+                    max_tokens: 500,
+                    temperature: 0.3,
+                },
+            }, {
+                headers: {
+                    Authorization: `Bearer ${dashscopeApiKey}`,
+                    'Content-Type': 'application/json',
+                },
+                timeout: 15000,
+            });
+            const summary = response.data?.output?.text?.trim() || '';
+            if (!summary) {
+                common_1.Logger.warn(`[对话总结] API返回空内容`, 'ConversationSummaryService');
+                return null;
+            }
+            common_1.Logger.debug(`[对话总结] ✓ 生成成功，长度=${summary.length}字`, 'ConversationSummaryService');
+            return summary;
+        }
+        catch (error) {
+            common_1.Logger.error(`[对话总结] 生成总结失败: ${error?.message || error}`, error?.stack || '', 'ConversationSummaryService');
+            return null;
+        }
+    }
+    async saveSummary(groupId, userId, appId, summary, messageCount) {
+        try {
+            let record = await this.conversationSummaryRepo.findOne({
+                where: { groupId },
+            });
+            if (record) {
+                record.summary = summary;
+                record.messageCount = (record.messageCount || 0) + messageCount;
+                record.lastSummarizedAt = new Date();
+                await this.conversationSummaryRepo.save(record);
+            }
+            else {
+                record = this.conversationSummaryRepo.create({
+                    groupId,
+                    userId,
+                    appId,
+                    summary,
+                    messageCount,
+                    lastSummarizedAt: new Date(),
+                });
+                await this.conversationSummaryRepo.save(record);
+            }
+            common_1.Logger.debug(`[对话总结] ✓ 保存成功 - groupId=${groupId}, 累计消息=${record.messageCount}`, 'ConversationSummaryService');
+        }
+        catch (error) {
+            common_1.Logger.error(`[对话总结] 保存失败: ${error?.message || error}`, error?.stack || '', 'ConversationSummaryService');
+            throw error;
+        }
+    }
+    async deleteSummary(groupId) {
+        try {
+            await this.conversationSummaryRepo.delete({ groupId });
+            common_1.Logger.debug(`[对话总结] ✓ 删除成功 - groupId=${groupId}`, 'ConversationSummaryService');
+        }
+        catch (error) {
+            common_1.Logger.error(`[对话总结] 删除失败: ${error?.message || error}`, error?.stack || '', 'ConversationSummaryService');
+            throw error;
+        }
+    }
+};
+exports.ConversationSummaryService = ConversationSummaryService;
+exports.ConversationSummaryService = ConversationSummaryService = __decorate([
+    (0, common_1.Injectable)(),
+    __param(0, (0, typeorm_1.InjectRepository)(conversationSummary_entity_1.ConversationSummaryEntity)),
+    __metadata("design:paramtypes", [typeof (_a = typeof typeorm_2.Repository !== "undefined" && typeorm_2.Repository) === "function" ? _a : Object, typeof (_b = typeof globalConfig_service_1.GlobalConfigService !== "undefined" && globalConfig_service_1.GlobalConfigService) === "function" ? _b : Object])
+], ConversationSummaryService);
+
+
+/***/ }),
+/* 198 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
@@ -16845,10 +16870,10 @@ exports.ChatController = void 0;
 const swagger_1 = __webpack_require__(14);
 const axios_1 = __webpack_require__(40);
 const jwtAuth_guard_1 = __webpack_require__(35);
-const voice_service_1 = __webpack_require__(191);
-const chat_service_1 = __webpack_require__(197);
+const voice_service_1 = __webpack_require__(190);
+const chat_service_1 = __webpack_require__(199);
 const common_1 = __webpack_require__(2);
-const express_1 = __webpack_require__(111);
+const express_1 = __webpack_require__(113);
 const chatProcess_dto_1 = __webpack_require__(200);
 let ChatController = class ChatController {
     chatService;
@@ -16859,7 +16884,6 @@ let ChatController = class ChatController {
     }
     async chatProcess(body, req, res) {
         try {
-            common_1.Logger.debug(`[ChatController] 接收到的body.options: ${JSON.stringify(body.options)}`, 'ChatController');
             if (body?.audioUrl) {
                 const url = body.audioUrl;
                 const resp = await axios_1.default.get(url, { responseType: 'arraybuffer' });
@@ -16987,7 +17011,7 @@ exports.ChatController = ChatController = __decorate([
 
 
 /***/ }),
-/* 197 */
+/* 199 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
@@ -17009,30 +17033,29 @@ exports.ChatService = void 0;
 const utils_1 = __webpack_require__(37);
 const common_1 = __webpack_require__(2);
 const typeorm_1 = __webpack_require__(33);
-const axios_1 = __webpack_require__(40);
-const openai_1 = __webpack_require__(167);
+const openai_1 = __webpack_require__(165);
 const typeorm_2 = __webpack_require__(3);
 const affection_service_1 = __webpack_require__(102);
-const chat_service_1 = __webpack_require__(166);
-const app_entity_1 = __webpack_require__(113);
-const conversationSummary_service_1 = __webpack_require__(198);
-const app_service_1 = __webpack_require__(112);
-const appEmotionVoice_entity_1 = __webpack_require__(115);
-const appVoice_entity_1 = __webpack_require__(116);
-const roleEmotion_entity_1 = __webpack_require__(117);
-const userAppSettings_service_1 = __webpack_require__(118);
-const autoReply_service_1 = __webpack_require__(149);
-const badWords_service_1 = __webpack_require__(157);
-const chatGroup_service_1 = __webpack_require__(168);
-const chatLog_service_1 = __webpack_require__(172);
+const chat_service_1 = __webpack_require__(164);
+const app_entity_1 = __webpack_require__(115);
+const app_service_1 = __webpack_require__(114);
+const appEmotionVoice_entity_1 = __webpack_require__(117);
+const appVoice_entity_1 = __webpack_require__(118);
+const roleEmotion_entity_1 = __webpack_require__(119);
+const autoReply_service_1 = __webpack_require__(147);
+const userAppSettings_service_1 = __webpack_require__(109);
+const badWords_service_1 = __webpack_require__(155);
+const chatGroup_service_1 = __webpack_require__(166);
+const chatLog_service_1 = __webpack_require__(170);
 const globalConfig_service_1 = __webpack_require__(36);
 const models_service_1 = __webpack_require__(74);
-const plugin_entity_1 = __webpack_require__(174);
-const upload_service_1 = __webpack_require__(175);
+const plugin_entity_1 = __webpack_require__(172);
+const upload_service_1 = __webpack_require__(173);
 const user_entity_1 = __webpack_require__(97);
 const user_service_1 = __webpack_require__(87);
 const userBalance_service_1 = __webpack_require__(91);
-const voice_service_1 = __webpack_require__(191);
+const voice_service_1 = __webpack_require__(190);
+const conversationSummary_service_1 = __webpack_require__(197);
 let ChatService = class ChatService {
     appEntity;
     appVoiceRepo;
@@ -17077,6 +17100,91 @@ let ChatService = class ChatService {
         this.conversationSummaryService = conversationSummaryService;
         this.appEmotionVoiceRepo = appEmotionVoiceRepo;
         this.roleEmotionRepo = roleEmotionRepo;
+    }
+    normalizeEmotionLabel(raw) {
+        if (!raw)
+            return null;
+        const s = String(raw).toLowerCase().trim();
+        if (!s)
+            return null;
+        const table = {
+            happy: [
+                'happy',
+                'joy',
+                'cheer',
+                'delight',
+                'excited',
+                '积极',
+                '开心',
+                '高兴',
+                '喜悦',
+                '愉快',
+                '欢快',
+                '喜欢',
+                '太棒',
+                '棒极了',
+                '兴奋',
+                '激动',
+            ],
+            sad: ['sad', 'depress', 'blue', 'down', '伤心', '难过', '悲伤', '低落', '沮丧', '忧郁', '哭'],
+            angry: ['angry', 'mad', 'furious', 'rage', '生气', '愤怒', '恼火', '气愤', '火大', '气死'],
+            calm: ['calm', 'neutral', 'plain', '平静', '冷静', '沉着', '镇定', '中性', '自然', '平稳'],
+            gentle: ['gentle', 'soft', '温柔', '柔和', '亲切', '体贴', '暖', '治愈'],
+            serious: ['serious', 'formal', 'authority', '严肃', '正式', '权威', '庄重', '成熟', '稳重'],
+            cute: ['cute', 'lovely', '萌', '可爱', '萝莉', '甜美', 'sweet'],
+            energetic: ['energetic', 'lively', 'vivid', '元气', '活力', '朝气', '热情', '激情'],
+            narrative: [
+                'narrative',
+                'announcer',
+                'commentator',
+                '旁白',
+                '解说',
+                '播音',
+                '主持',
+                '讲述',
+                '讲解',
+            ],
+            friendly: ['friendly', 'kind', '友好', '亲和'],
+            cold: ['cold', 'cool', '冷淡', '冷酷', '疏离'],
+        };
+        if (table[s])
+            return s;
+        for (const [label, arr] of Object.entries(table)) {
+            if (arr.some(k => s.includes(k)))
+                return label;
+        }
+        return null;
+    }
+    detectEmotionFromText(text) {
+        if (!text)
+            return null;
+        const s = String(text).toLowerCase();
+        const hit = (arr) => arr.some(k => s.includes(k));
+        const exclamations = (s.match(/[!！]{1,}/g) || []).length;
+        const questionMarks = (s.match(/[?？]{1,}/g) || []).length;
+        const hasShout = /大喊|大叫|怒吼|吼道|喊道/.test(s);
+        if (hit(['太棒', '喜欢', 'great', 'awesome', '真好', '开心', '高兴', 'excited', '兴奋']) ||
+            (exclamations >= 2 && !hit(['伤心', '难过', '愤怒', '生气', '沮丧'])))
+            return 'happy';
+        if (hit(['伤心', '难过', '悲伤', '哭', '失望', '遗憾', '沮丧']))
+            return 'sad';
+        if (hit(['生气', '愤怒', '太过分', '气死', '恼火', '怒']) || hasShout)
+            return 'angry';
+        if (hit(['严肃', '郑重', '正式', '注意', '请注意']))
+            return 'serious';
+        if (hit(['温柔', '轻声', '放松', '别担心', '安慰', '暖']))
+            return 'gentle';
+        if (hit(['旁白', '解说', '播音', '主持', '讲述', '讲解']))
+            return 'narrative';
+        if (hit(['元气', '活力', '激情', '热情']))
+            return 'energetic';
+        if (hit(['可爱', '萌', '甜美']))
+            return 'cute';
+        if (hit(['冷静', '平静', '理性', '中性']))
+            return 'calm';
+        if (questionMarks >= 2 && !exclamations)
+            return 'calm';
+        return null;
     }
     extractPsychologicalDescription(text) {
         if (!text)
@@ -17124,7 +17232,7 @@ let ChatService = class ChatService {
         return result;
     }
     async resolveEmotionVoiceId(appId, emotion) {
-        const label = String(emotion || '').trim();
+        const label = this.normalizeEmotionLabel(emotion || '');
         if (!label)
             return null;
         try {
@@ -17140,9 +17248,7 @@ let ChatService = class ChatService {
         return null;
     }
     mapEmotionToTtsParams(emotion) {
-        if (!emotion)
-            return {};
-        const label = String(emotion).trim();
+        const label = this.normalizeEmotionLabel(emotion || '');
         if (!label)
             return {};
         const table = {
@@ -17157,13 +17263,6 @@ let ChatService = class ChatService {
             calm: { rate: 0.97, pitch: 1.0, volume: 49 },
             friendly: { rate: 1.02, pitch: 1.03, volume: 52 },
             cold: { rate: 0.98, pitch: 0.97, volume: 49 },
-            暧昧: { rate: 0.95, pitch: 1.02, volume: 50 },
-            害羞: { rate: 0.93, pitch: 1.03, volume: 48 },
-            撒娇: { rate: 1.05, pitch: 1.08, volume: 53 },
-            深情: { rate: 0.92, pitch: 0.98, volume: 50 },
-            温柔: { rate: 0.95, pitch: 1.02, volume: 50 },
-            着急: { rate: 1.15, pitch: 1.05, volume: 58 },
-            害怕: { rate: 1.08, pitch: 1.05, volume: 52 },
         };
         return table[label] || {};
     }
@@ -17187,7 +17286,9 @@ let ChatService = class ChatService {
                 const rows = await this.appEmotionVoiceRepo.find({
                     where: { appId: Number(appId), status: 1 },
                 });
-                const list = rows.map(r => String(r.emotion || '').trim()).filter((e) => !!e);
+                const list = rows
+                    .map(r => this.normalizeEmotionLabel(r.emotion))
+                    .filter((e) => !!e);
                 if (list.length)
                     return uniq(list);
             }
@@ -17195,7 +17296,9 @@ let ChatService = class ChatService {
         catch { }
         try {
             const rows = await this.roleEmotionRepo.find({ where: { status: 1 } });
-            const list = rows.map(r => String(r.emotion || '').trim()).filter((e) => !!e);
+            const list = rows
+                .map(r => this.normalizeEmotionLabel(r.emotion))
+                .filter((e) => !!e);
             if (list.length)
                 return uniq(list);
         }
@@ -17207,8 +17310,8 @@ let ChatService = class ChatService {
             try {
                 const raw = await this.globalConfigService.getConfigs([key]);
                 const val = typeof raw === 'string' ? raw : raw?.[key] || raw?.defaultEmotion;
-                const emotion = String(val || '').trim();
-                return emotion && allowed.includes(emotion) ? emotion : null;
+                const normalized = this.normalizeEmotionLabel(val || '');
+                return normalized && allowed.includes(normalized) ? normalized : null;
             }
             catch {
                 return null;
@@ -17235,7 +17338,7 @@ let ChatService = class ChatService {
             });
             const list = rows
                 .filter(r => !!r.voiceId)
-                .map(r => String(r.emotion || '').trim())
+                .map(r => this.normalizeEmotionLabel(r.emotion))
                 .filter((e) => !!e);
             return Array.from(new Set(list));
         }
@@ -17254,7 +17357,7 @@ let ChatService = class ChatService {
             for (const r of rows) {
                 if (!r.voiceId)
                     continue;
-                const emo = String(r.emotion || '').trim();
+                const emo = this.normalizeEmotionLabel(r.emotion);
                 if (!emo)
                     continue;
                 if (pairs.find(p => p.emotion === emo))
@@ -17276,7 +17379,7 @@ let ChatService = class ChatService {
                     const rec = await this.appEmotionVoiceRepo.findOne({
                         where: { appId: Number(appId), voiceId: defVoice, status: 1 },
                     });
-                    const emo = String(rec?.emotion || '').trim();
+                    const emo = this.normalizeEmotionLabel(rec?.emotion || '');
                     if (emo && options.includes(emo))
                         return emo;
                 }
@@ -17287,7 +17390,7 @@ let ChatService = class ChatService {
             const key = `defaultEmotion:app:${appId}`;
             const raw = await this.globalConfigService.getConfigs([key]);
             const val = typeof raw === 'string' ? raw : raw?.[key] || raw?.defaultEmotion;
-            const emo = String(val || '').trim();
+            const emo = this.normalizeEmotionLabel(val || '');
             if (emo && options.includes(emo))
                 return emo;
         }
@@ -17295,6 +17398,36 @@ let ChatService = class ChatService {
         if (options.includes('calm'))
             return 'calm';
         return options[0] || 'calm';
+    }
+    getEmotionKeywords() {
+        return {
+            happy: [
+                '哈哈',
+                '开心',
+                '高兴',
+                '喜悦',
+                '愉快',
+                '兴奋',
+                '太棒',
+                '真好',
+                '开怀',
+                '欢快',
+                '爽朗',
+                '欢笑',
+                '!',
+                '！',
+            ],
+            energetic: ['元气', '活力', '热情', '激情', '振奋', '昂扬', '斗志', '精神抖擞', '!', '！'],
+            cute: ['可爱', '萌', '甜美', '软糯'],
+            angry: ['生气', '愤怒', '恼火', '气愤', '怒', '怒吼', '大喊', '大叫', '气死', '太过分'],
+            sad: ['伤心', '难过', '悲伤', '沮丧', '遗憾', '哭', '心酸', '落寞'],
+            gentle: ['温柔', '轻声', '安慰', '别担心', '放松', '柔和', '暖'],
+            serious: ['严肃', '郑重', '认真', '庄重', '正式', '注意'],
+            narrative: ['旁白', '解说', '播音', '主持', '讲述', '讲解'],
+            calm: ['冷静', '平静', '理性', '镇定', '中性', '自然'],
+            friendly: ['友好', '亲和', '亲切', '和蔼'],
+            cold: ['冷淡', '冷酷', '疏离', '冷漠'],
+        };
     }
     async detectEmotionByAI(text, options, psychologicalDesc) {
         if (!text || !options || options.length === 0)
@@ -17340,7 +17473,8 @@ ${numberedOptions}
 - 对话内容"该死的混蛋！"，候选只有"开心、温柔"，返回：0
 
 请返回：`;
-            const response = await axios_1.default.post('https://dashscope.aliyuncs.com/api/v1/services/aigc/text-generation/generation', {
+            const axios = __webpack_require__(40);
+            const response = await axios.post('https://dashscope.aliyuncs.com/api/v1/services/aigc/text-generation/generation', {
                 model: 'qwen-turbo',
                 input: {
                     messages: [
@@ -17380,34 +17514,11 @@ ${numberedOptions}
                     common_1.Logger.debug(`[AI情绪识别] ✓ 通过编号匹配成功: ${matchedEmotion}`, 'ChatService');
                     return matchedEmotion;
                 }
-                else if (index === -1) {
-                    common_1.Logger.debug(`[AI情绪识别] ⚠ AI判断候选中无合适情绪(编号0)，将使用默认音色`, 'ChatService');
-                    return null;
-                }
             }
-            if (options.includes(result)) {
-                common_1.Logger.debug(`[AI情绪识别] ✓ 完全匹配成功: ${result}`, 'ChatService');
-                return result;
-            }
-            const normalizedResult = result.toLowerCase().trim();
-            for (const option of options) {
-                if (normalizedResult.includes(option.toLowerCase())) {
-                    common_1.Logger.debug(`[AI情绪识别] ✓ 模糊匹配成功: ${option}`, 'ChatService');
-                    return option;
-                }
-            }
-            if (normalizedResult.length > 0) {
-                for (const option of options) {
-                    const normalizedOption = option.toLowerCase();
-                    if (normalizedOption.startsWith(normalizedResult)) {
-                        common_1.Logger.debug(`[AI情绪识别] ✓ 反向模糊匹配成功: ${option} (AI返回: ${result})`, 'ChatService');
-                        return option;
-                    }
-                    const emotionParts = normalizedOption.split(/[、，,]/);
-                    if (emotionParts.some(part => part.trim() === normalizedResult)) {
-                        common_1.Logger.debug(`[AI情绪识别] ✓ 部分匹配成功: ${option} (AI返回: ${result})`, 'ChatService');
-                        return option;
-                    }
+            for (const opt of options) {
+                if (result.includes(opt)) {
+                    common_1.Logger.debug(`[AI情绪识别] ✓ 通过名称匹配成功: ${opt}`, 'ChatService');
+                    return opt;
                 }
             }
             common_1.Logger.warn(`[AI情绪识别] ✗ 未能匹配 - AI返回: "${result}", 候选: [${options.join(' | ')}]`, 'ChatService');
@@ -17458,13 +17569,15 @@ ${numberedOptions}
             return null;
         }
     }
+    escapeRegex(s) {
+        return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    }
     async chatProcess(body, req, res) {
-        if (req?.user?.role !== 'visitor') {
-            await this.userBalanceService.checkUserCertification(req.user.id);
-        }
+        await this.userBalanceService.checkUserCertification(req.user.id);
         const { options = {}, usingPluginId, prompt, fileUrl, imageUrl, extraParam, model, action, modelName, modelAvatar, } = body;
         common_1.Logger.debug(`body: ${JSON.stringify(body)}`, 'ChatService');
         let appId = body?.appId ?? null;
+        common_1.Logger.debug(`[好感度调试] 初始 appId=${appId}, body.appId=${body?.appId}, groupId=${options?.groupId}`, 'ChatService');
         if (!appId && options?.groupId) {
             try {
                 const groupInfo = await this.chatGroupService.getGroupInfoFromId(options.groupId);
@@ -17478,6 +17591,7 @@ ${numberedOptions}
                 common_1.Logger.warn(`无法从群组推断 appId: ${e?.message || e}`, 'ChatService');
             }
         }
+        common_1.Logger.debug(`[好感度调试] 最终 appId=${appId}`, 'ChatService');
         let appInfo;
         if (appId) {
             common_1.Logger.debug(`正在使用应用ID: ${appId}`);
@@ -17487,36 +17601,27 @@ ${numberedOptions}
             if (!appInfo) {
                 throw new common_1.HttpException('你当前使用的应用已被下架、请删除当前对话开启新的对话吧！', common_1.HttpStatus.BAD_REQUEST);
             }
-            if (req?.user?.role !== 'visitor') {
-                const isAppMemberOnly = await this.appService.checkAppIsMemberOnly(Number(appId));
-                if (isAppMemberOnly) {
-                    common_1.Logger.debug(`检测到会员专属应用: ${isAppMemberOnly}`);
-                    const userCatIds = await this.userBalanceService.getUserApps(req.user.id);
-                    common_1.Logger.debug(`用户权限分类: ${userCatIds.join(',')}`);
-                    if (!appInfo.catId) {
-                        throw new common_1.HttpException('应用分类配置错误，请联系管理员', common_1.HttpStatus.INTERNAL_SERVER_ERROR);
-                    }
-                    const appCatIds = appInfo.catId.split(',').map(id => id.trim());
-                    common_1.Logger.debug(`应用所属分类: ${appCatIds.join(',')}`);
-                    const hasMatchingCategory = appCatIds.some(catId => userCatIds.includes(catId));
-                    if (!hasMatchingCategory) {
-                        throw new common_1.HttpException('你当前使用的应用为会员专属应用，请先开通会员！', common_1.HttpStatus.PAYMENT_REQUIRED);
-                    }
+            const isAppMemberOnly = await this.appService.checkAppIsMemberOnly(Number(appId));
+            if (isAppMemberOnly) {
+                common_1.Logger.debug(`检测到会员专属应用: ${isAppMemberOnly}`);
+                const userCatIds = await this.userBalanceService.getUserApps(req.user.id);
+                common_1.Logger.debug(`用户权限分类: ${userCatIds.join(',')}`);
+                const appCatIds = appInfo.catId.split(',').map(id => id.trim());
+                common_1.Logger.debug(`应用所属分类: ${appCatIds.join(',')}`);
+                const hasMatchingCategory = appCatIds.some(catId => userCatIds.includes(catId));
+                if (!hasMatchingCategory) {
+                    throw new common_1.HttpException('你当前使用的应用为会员专属应用，请先开通会员！', common_1.HttpStatus.PAYMENT_REQUIRED);
                 }
-            }
-            else {
-                common_1.Logger.debug(`visitor 用户跳过会员专属应用检查`, 'ChatService');
             }
         }
         const { groupId, usingNetwork, usingDeepThinking, usingMcpTool } = options;
-        common_1.Logger.debug(`[ChatService] 从options解构 - groupId=${groupId}, usingNetwork=${usingNetwork}, usingDeepThinking=${usingDeepThinking}`, 'ChatService');
         let isGroupChat = false;
         if (groupId) {
             try {
                 const groupInfo = await this.chatGroupService.getGroupInfoFromId(groupId);
                 isGroupChat =
                     groupInfo?.isGroupChat === true || groupInfo?.isGroupChat === 1 || false;
-                common_1.Logger.debug(`群聊检测 - groupId: ${groupId}, isGroupChat字段: ${groupInfo?.isGroupChat}, 判定结果: ${isGroupChat}`, 'ChatService');
+                common_1.Logger.debug(`[好感度调试] groupId=${groupId}, groupInfo.isGroupChat=${groupInfo?.isGroupChat}, 最终isGroupChat=${isGroupChat}`, 'ChatService');
             }
             catch (error) {
                 common_1.Logger.warn(`获取群组信息失败: ${error.message}，默认为单聊模式`, 'ChatService');
@@ -17551,7 +17656,6 @@ ${numberedOptions}
         const curIp = (0, utils_1.getClientIp)(req);
         let useModelAvatar = '';
         let usingPlugin;
-        common_1.Logger.debug(`[步骤1] 设置对话变量完成`, 'ChatService');
         if (usingPluginId) {
             common_1.Logger.debug(`使用插件ID: ${usingPluginId}`, 'ChatService');
             if (usingPluginId === 999) {
@@ -17560,63 +17664,24 @@ ${numberedOptions}
                 };
             }
         }
-        common_1.Logger.debug(`[步骤2] 准备获取模型配置 - appInfo存在: ${!!appInfo}, model: ${model || 'undefined'}`, 'ChatService');
         if (appInfo) {
             const { isGPTs, gizmoID, name, isFixedModel, appModel, coverImg } = appInfo;
             useModelAvatar = coverImg;
             appName = name;
-            common_1.Logger.debug(`[步骤2.1] 应用信息 - isGPTs: ${isGPTs}, isFixedModel: ${isFixedModel}, appModel: ${appModel}`, 'ChatService');
             if (isGPTs) {
-                common_1.Logger.debug(`[步骤2.2] 获取GPTs模型配置`, 'ChatService');
                 currentRequestModelKey = await this.modelsService.getCurrentModelKeyInfo('gpts');
-                if (!currentRequestModelKey) {
-                    throw new common_1.HttpException('GPTs模型配置未找到，请在后台配置模型', common_1.HttpStatus.BAD_REQUEST);
-                }
                 currentRequestModelKey.model = `gpt-4-gizmo-${gizmoID}`;
             }
             else if (!isGPTs && isFixedModel && appModel) {
-                common_1.Logger.debug(`[步骤2.3] 获取固定模型配置: ${appModel}`, 'ChatService');
                 appInfo.preset && (setSystemMessage = appInfo.preset);
                 currentRequestModelKey = await this.modelsService.getCurrentModelKeyInfo(appModel);
-                if (!currentRequestModelKey) {
-                    throw new common_1.HttpException(`应用指定的模型 ${appModel} 未找到，请在后台配置该模型`, common_1.HttpStatus.BAD_REQUEST);
-                }
                 currentRequestModelKey.model = appModel;
                 common_1.Logger.debug(`使用固定模型和应用预设`, 'ChatService');
             }
             else {
-                common_1.Logger.debug(`[步骤2.4] 获取默认模型配置: ${model || 'undefined'}`, 'ChatService');
                 appInfo.preset && (setSystemMessage = appInfo.preset);
                 currentRequestModelKey = await this.modelsService.getCurrentModelKeyInfo(model);
-                if (!currentRequestModelKey) {
-                    throw new common_1.HttpException(`请求的模型 ${model || '默认模型'} 未找到，请在后台配置该模型`, common_1.HttpStatus.BAD_REQUEST);
-                }
                 common_1.Logger.debug(`使用应用预设模式`, 'ChatService');
-            }
-            common_1.Logger.debug(`[步骤2.5] 模型配置获取完成`, 'ChatService');
-            const groupId = options?.groupId;
-            if (appId && !groupId && setSystemMessage) {
-                try {
-                    const affectionData = await this.affectionService.getUserAffection(req.user.id, appId);
-                    if (affectionData?.stage?.behaviors) {
-                        const affectionPrompt = `\n\n【当前好感度阶段行为指导】\n当前好感度阶段：${affectionData.stage.name}（${affectionData.score}分）\n行为特征：${affectionData.stage.behaviors}`;
-                        setSystemMessage = setSystemMessage + affectionPrompt;
-                        common_1.Logger.debug(`已添加好感度行为到预设 - 阶段:${affectionData.stage.name}, 分数:${affectionData.score}`, 'ChatService');
-                    }
-                }
-                catch (error) {
-                    common_1.Logger.warn(`获取好感度信息失败: ${error?.message || error}`, 'ChatService');
-                }
-            }
-            const enablePsychologicalDesc = await this.userAppSettingsService.getEnablePsychologicalDesc(req.user.id, appId);
-            if (enablePsychologicalDesc && setSystemMessage) {
-                const psychologicalDescPrompt = '\n\n【重要】请在回复时使用（）表示角色的心理描述或内心活动，例如：（他心里想着...）、（她感到有些紧张）等。心理描述应自然融入对话中，体现角色的情感和思考。';
-                setSystemMessage = setSystemMessage + psychologicalDescPrompt;
-                common_1.Logger.debug(`用户已启用角色${appId}的心理描述功能`, 'ChatService');
-            }
-            else {
-                const psychologicalDescPrompt = '【重要】回复的内容中，不添加任何心理描述、内心活动或动作描述';
-                setSystemMessage = setSystemMessage + psychologicalDescPrompt;
             }
         }
         else {
@@ -17765,30 +17830,7 @@ ${numberedOptions}
                 fileUrl: fileUrl,
             }, req);
         }
-        let { deduct, isTokenBased, tokenFeeRatio, deductType, key, id: keyId, maxRounds, proxyUrl, maxModelTokens, max_tokens, timeout, model: useModel, isFileUpload, isImageUpload, keyType: modelType, deductDeepThink = 1, isMcpTool, deepThinkingType, drawingType, } = currentRequestModelKey;
-        if (isGroupChat && groupId) {
-            try {
-                const groupInfo = await this.chatGroupService.getGroupInfoFromId(groupId);
-                if (groupInfo?.members) {
-                    const members = JSON.parse(groupInfo.members);
-                    const memberCount = Array.isArray(members) ? members.length : 1;
-                    maxRounds = 5 * memberCount;
-                    common_1.Logger.debug(`[上下文限制] 群聊模式 - 群员数=${memberCount}, maxRounds=${maxRounds}`, 'ChatService');
-                }
-                else {
-                    maxRounds = 5;
-                    common_1.Logger.debug(`[上下文限制] 群聊模式 - 无群员信息，使用默认 maxRounds=5`, 'ChatService');
-                }
-            }
-            catch (error) {
-                maxRounds = 5;
-                common_1.Logger.warn(`[上下文限制] 获取群员数量失败，使用默认 maxRounds=5: ${error?.message || error}`, 'ChatService');
-            }
-        }
-        else {
-            maxRounds = 5;
-            common_1.Logger.debug(`[上下文限制] 单聊模式 - maxRounds=5`, 'ChatService');
-        }
+        const { deduct, isTokenBased, tokenFeeRatio, deductType, key, id: keyId, maxRounds, proxyUrl, maxModelTokens, max_tokens, timeout, model: useModel, isFileUpload, isImageUpload, keyType: modelType, deductDeepThink = 1, isMcpTool, deepThinkingType, drawingType, } = currentRequestModelKey;
         if (!isGroupChat) {
             if (await this.chatLogService.checkModelLimits(req.user, useModel)) {
                 res.write(`\n${JSON.stringify({
@@ -17831,11 +17873,11 @@ ${numberedOptions}
         let userSaveLog;
         let userLogId;
         if (isGroupChat && groupId) {
-            const existingUserLog = await this.chatLogService.findRecentUserLogInGroup(groupId, prompt, 60);
+            const existingUserLog = await this.chatLogService.findRecentUserLogInGroup(groupId, prompt, 10);
             if (existingUserLog) {
                 userLogId = existingUserLog.id;
                 userSaveLog = existingUserLog;
-                common_1.Logger.debug(`[群聊] 复用已存在的用户消息，id=${userLogId}, appId=${appId}, 原创建时间=${existingUserLog.createdAt}`, 'ChatService');
+                common_1.Logger.debug(`[群聊] 使用已存在的用户消息，id=${userLogId}, appId=${appId}`, 'ChatService');
             }
             else {
                 userSaveLog = await this.chatLogService.saveChatLog({
@@ -17855,7 +17897,7 @@ ${numberedOptions}
                     groupId: groupId ? groupId : null,
                 });
                 userLogId = userSaveLog.id;
-                common_1.Logger.debug(`[群聊] 保存新的用户消息，id=${userLogId}, appId=${appId}, 这是第一个角色的请求`, 'ChatService');
+                common_1.Logger.debug(`[群聊] 保存新的用户消息，id=${userLogId}, appId=${appId}`, 'ChatService');
             }
         }
         else {
@@ -17916,7 +17958,6 @@ ${numberedOptions}
                     : null,
         });
         const assistantLogId = assistantSaveLog.id;
-        common_1.Logger.debug(`[ChatService] 保存助手消息成功 - assistantLogId=${assistantLogId}, groupId=${groupId || 'null'}, appId=${appId || 'null'}`, 'ChatService');
         if (autoReplyRes.answer && res) {
             if (autoReplyRes.isAIReplyEnabled === 0) {
                 const chars = autoReplyRes.answer.split('');
@@ -17940,6 +17981,35 @@ ${numberedOptions}
                 setSystemMessage = setSystemMessage + autoReplyRes.answer;
             }
         }
+        if (appId && setSystemMessage && this.userAppSettingsService) {
+            try {
+                const enablePsychologicalDesc = await this.userAppSettingsService.getEnablePsychologicalDesc(req.user.id, appId);
+                if (enablePsychologicalDesc) {
+                    const psychologicalDescPrompt = '\n\n【重要】请在回复时使用（）表示角色的心理描述或内心活动，例如：（他心里想着...）、（她感到有些紧张）等。心理描述应自然融入对话中，体现角色的情感和思考。';
+                    setSystemMessage = setSystemMessage + psychologicalDescPrompt;
+                    common_1.Logger.debug(`用户已启用角色${appId}的心理描述功能`, 'ChatService');
+                }
+                else {
+                    const psychologicalDescPrompt = '【重要】回复的内容中，不添加任何心理描述、内心活动或动作描述';
+                    setSystemMessage = setSystemMessage + psychologicalDescPrompt;
+                }
+            }
+            catch (error) {
+                common_1.Logger.warn(`获取心理描述开关失败: ${error?.message || error}`, 'ChatService');
+            }
+        }
+        if (groupId) {
+            try {
+                const historySummary = await this.conversationSummaryService.getSummary(groupId);
+                if (historySummary) {
+                    setSystemMessage = `【对话历史总结】\n${historySummary}\n\n${setSystemMessage}`;
+                    common_1.Logger.debug(`[对话总结] 已添加历史总结到system message，长度=${historySummary.length}字`, 'ChatService');
+                }
+            }
+            catch (error) {
+                common_1.Logger.warn(`[对话总结] 获取历史总结失败: ${error?.message || error}`, 'ChatService');
+            }
+        }
         const { messagesHistory } = await this.buildMessageFromParentMessageId({
             groupId,
             appId: appId,
@@ -17955,51 +18025,46 @@ ${numberedOptions}
             prompt: prompt,
             userId: req?.user?.id,
         }, this.chatLogService);
-        if (groupId) {
-            try {
-                const historySummary = await this.conversationSummaryService.getSummary(groupId);
-                if (historySummary) {
-                    setSystemMessage = `【对话历史总结】\n${historySummary}\n\n${setSystemMessage}`;
-                    common_1.Logger.debug(`[对话总结] 已添加历史总结到system message，长度=${historySummary.length}字`, 'ChatService');
-                }
-            }
-            catch (error) {
-                common_1.Logger.warn(`[对话总结] 获取历史总结失败: ${error?.message || error}`, 'ChatService');
-            }
-        }
         try {
             if (isGroupChat && groupId) {
                 const groupInfo = await this.chatGroupService.getGroupInfoFromId(groupId);
                 const members = JSON.parse(groupInfo?.members || '[]') || [];
                 if (Array.isArray(members) && members.length) {
-                    const currentMember = members.find((m) => Number(m.appId) === Number(appId) || Number(m.userId) === Number(appId));
-                    if (currentMember) {
-                        const tasks = Array.isArray(currentMember.tasks) ? currentMember.tasks : [];
-                        if (tasks.length > 0) {
-                            const taskLines = tasks
-                                .map((t) => {
-                                const detail = t.detail ? `（${t.detail}）` : '';
-                                return `${t.title}${detail}`;
-                            })
-                                .join('；');
-                            const taskPrompt = `你本次的任务：${taskLines}`;
-                            setSystemMessage = setSystemMessage
-                                ? `${setSystemMessage}\n\n${taskPrompt}`
-                                : taskPrompt;
-                            common_1.Logger.debug(`[群聊] 已将当前角色任务添加到预设，任务数=${tasks.length}，预设总长度: ${setSystemMessage.length}`, 'ChatService');
-                        }
-                        else {
-                            common_1.Logger.debug(`[群聊] 当前角色 appId=${appId} 没有任务`, 'ChatService');
-                        }
+                    members.sort((a, b) => Number(a.order || 999999) - Number(b.order || 999999) ||
+                        Number(a.userId) - Number(b.userId));
+                    const roleLines = members.map((m, idx) => {
+                        const role = m.role || 'member';
+                        const name = m.name || m.appName || `用户${m.userId}`;
+                        const app = m.appName ? `（应用：${m.appName}）` : '';
+                        const tasks = Array.isArray(m.tasks) ? m.tasks : [];
+                        const taskBrief = tasks
+                            .slice(0, 2)
+                            .map((t) => `${t.title}${t.status ? `(${t.status})` : ''}`)
+                            .join('；');
+                        const suffix = taskBrief ? ` ｜ 任务：${taskBrief}` : '';
+                        return `${idx + 1}. ${name}${app} —— 角色: ${role}${suffix}`;
+                    });
+                    const assistantCount = (messagesHistory || []).filter((m) => m.role === 'assistant').length;
+                    const speakerIdx = assistantCount % members.length;
+                    const nextSpeaker = members[speakerIdx];
+                    const nextName = nextSpeaker?.name || nextSpeaker?.appName || `用户${nextSpeaker?.userId}`;
+                    const pending = Array.isArray(nextSpeaker?.tasks)
+                        ? nextSpeaker.tasks.find(t => (t?.status || 'todo') !== 'done')
+                        : null;
+                    const taskGuide = pending
+                        ? `请围绕“${pending.title}”完成回应（当前任务状态：${pending.status || 'todo'}）。`
+                        : '若无任务，请围绕用户提问作答。';
+                    const systemRolePrompt = `\n【群聊角色与发言顺序】\n${roleLines.join('\n')}\n\n【回合规则】\n- 按顺序从当前应发言的角色开始依次发言。\n- 单次响应中，允许从当前应发言者起按顺序输出所有角色各1次发言；每位内容不限长度，前缀以[角色名]开头以便区分。\n- 绝不输出多余流程说明，不要描述轮换，仅给出发言内容。\n\n【本轮起始发言者】${speakerIdx + 1}. ${nextName}。${taskGuide}`;
+                    if (messagesHistory.length && messagesHistory[0].role === 'system') {
+                        messagesHistory[0].content = `${messagesHistory[0].content || ''}${systemRolePrompt}`;
                     }
                     else {
-                        common_1.Logger.debug(`[群聊] 未找到匹配的角色 appId=${appId}`, 'ChatService');
+                        messagesHistory.unshift({ role: 'system', content: systemRolePrompt });
                     }
                 }
             }
         }
         catch (e) {
-            common_1.Logger.warn(`[群聊] 构建任务信息失败: ${e?.message || e}`, 'ChatService');
         }
         let charge;
         if (action !== 'UPSCALE' && useModel === 'midjourney') {
@@ -18042,18 +18107,11 @@ ${numberedOptions}
                             openingRemark: appInfo.openingRemark,
                         }
                         : undefined;
-                    const xingchenText = await this.openAIChatService.chatFree(prompt || '', setSystemMessage, messagesHistory, imageUrl, {
+                    const xingchenResult = await this.openAIChatService.chatFree(prompt || '', setSystemMessage, messagesHistory, imageUrl, {
                         onProgress: (delta) => {
-                            if (delta) {
+                            if (!isGroupChat && delta) {
                                 accumulatedText += delta;
-                                let textToSend = accumulatedText;
-                                if (isGroupChat) {
-                                    const speakerPrefixMatch = textToSend.match(/^[^：]+：/);
-                                    if (speakerPrefixMatch) {
-                                        textToSend = textToSend.substring(speakerPrefixMatch[0].length);
-                                    }
-                                }
-                                const payload = { content: [{ type: 'text', text: textToSend }] };
+                                const payload = { content: [{ type: 'text', text: accumulatedText }] };
                                 try {
                                     res.write(`\n${JSON.stringify(payload)}`);
                                 }
@@ -18062,13 +18120,23 @@ ${numberedOptions}
                         },
                         abortSignal: abortController.signal,
                     }, appConfigForXingchen);
-                    let finalText = xingchenText || '';
-                    if (isGroupChat && finalText) {
-                        const speakerPrefixMatch = finalText.match(/^[^：]+：/);
-                        if (speakerPrefixMatch) {
-                            finalText = finalText.substring(speakerPrefixMatch[0].length);
-                            common_1.Logger.debug(`[群聊] 移除说话人前缀: ${speakerPrefixMatch[0]}，原长度=${xingchenText.length}，新长度=${finalText.length}`, 'ChatService');
-                        }
+                    const xingchenText = xingchenResult.text || '';
+                    const xingchenUsage = xingchenResult.usage;
+                    let promptTokens = 0;
+                    let completionTokens = 0;
+                    if (xingchenUsage) {
+                        promptTokens = xingchenUsage.inputTokens || xingchenUsage.userTokens || 0;
+                        completionTokens = xingchenUsage.outputTokens || 0;
+                        common_1.Logger.debug(`使用星尘API返回的token数据 - promptTokens: ${promptTokens}, completionTokens: ${completionTokens}`, 'ChatService');
+                    }
+                    else {
+                        let totalText = '';
+                        messagesHistory.forEach(msg => {
+                            totalText += msg.content + ' ';
+                        });
+                        promptTokens = await (0, utils_1.getTokenCount)(totalText);
+                        completionTokens = await (0, utils_1.getTokenCount)(xingchenText);
+                        common_1.Logger.debug(`星尘API未返回token数据，使用计算值 - promptTokens: ${promptTokens}, completionTokens: ${completionTokens}`, 'ChatService');
                     }
                     response = {
                         chatId: assistantLogId,
@@ -18076,11 +18144,14 @@ ${numberedOptions}
                         modelAvatar: '',
                         model: useModel,
                         status: 2,
-                        full_content: finalText,
+                        full_content: xingchenText || '',
                         full_reasoning_content: '',
                         networkSearchResult: '',
                         fileVectorResult: '',
                         finishReason: 'stop',
+                        promptTokens: promptTokens,
+                        completionTokens: completionTokens,
+                        totalTokens: promptTokens + completionTokens,
                         content: [
                             {
                                 type: 'text',
@@ -18099,12 +18170,6 @@ ${numberedOptions}
                         common_1.Logger.error(`用户ID: ${req.user.id} 模型名称: ${useModeName} 模型: ${model} 回复出错，本次不扣除积分`, 'ChatService');
                         return res.write(`\n${JSON.stringify(response)}`);
                     }
-                    let totalText = '';
-                    messagesHistory.forEach(messagesHistory => {
-                        totalText += messagesHistory.content + ' ';
-                    });
-                    const promptTokens = await (0, utils_1.getTokenCount)(totalText);
-                    const completionTokens = await (0, utils_1.getTokenCount)(response.full_reasoning_content + response.full_content);
                     await this.chatLogService.updateChatLog(userLogId, {
                         promptTokens: promptTokens,
                         completionTokens: completionTokens,
@@ -18128,6 +18193,19 @@ ${numberedOptions}
                         totalTokens: promptTokens + completionTokens,
                         status: 3,
                     });
+                    try {
+                        if (isGeneratePromptReference === '1') {
+                            const promptRefResult = await this.openAIChatService.chatFree(`根据用户提问{${prompt}}以及AI的回答{${response.full_content}}，生成三个更进入一步的问题来向AI提问，用{}包裹每个问题，不需要分行，不需要其他任何内容，单个提问不超过30个字`, setSystemMessage, messagesHistory);
+                            promptReference = promptRefResult.text || '';
+                            await this.chatLogService.updateChatLog(assistantLogId, {
+                                promptReference: promptReference,
+                            });
+                            common_1.Logger.debug(`生成了相关问题推荐`, 'ChatService');
+                        }
+                    }
+                    catch (error) {
+                        common_1.Logger.debug(`生成相关问题推荐失败: ${error}`);
+                    }
                     if (groupId) {
                         try {
                             const previousSummary = await this.conversationSummaryService.getSummary(groupId);
@@ -18146,18 +18224,6 @@ ${numberedOptions}
                             common_1.Logger.warn(`[对话总结] 触发异步总结失败: ${error?.message || error}`, 'ChatService');
                         }
                     }
-                    try {
-                        if (isGeneratePromptReference === '1') {
-                            promptReference = await this.openAIChatService.chatFree(`根据用户提问{${prompt}}以及AI的回答{${response.full_content}}，生成三个更进入一步的问题来向AI提问，用{}包裹每个问题，不需要分行，不需要其他任何内容，单个提问不超过30个字`, setSystemMessage, messagesHistory);
-                            await this.chatLogService.updateChatLog(assistantLogId, {
-                                promptReference: promptReference,
-                            });
-                            common_1.Logger.debug(`生成了相关问题推荐`, 'ChatService');
-                        }
-                    }
-                    catch (error) {
-                        common_1.Logger.debug(`生成相关问题推荐失败: ${error}`);
-                    }
                     if (isTokenBased === true) {
                         charge =
                             deduct *
@@ -18172,20 +18238,21 @@ ${numberedOptions}
                     response.chatId = assistantLogId;
                     response.promptReference = promptReference;
                     try {
-                        common_1.Logger.log(`[好感度检查] userId=${req.user.id}, appId=${appId}, isGroupChat=${isGroupChat}`, 'ChatService');
+                        common_1.Logger.debug(`[好感度] 检查条件: appId=${appId}, isGroupChat=${isGroupChat}, userId=${req.user.id}`, 'ChatService');
                         if (appId && !isGroupChat) {
-                            await this.affectionService.increment(req.user.id, Number(appId));
-                            common_1.Logger.log(`[好感度增加成功] userId=${req.user.id}, appId=${appId}`, 'ChatService');
+                            common_1.Logger.log(`[好感度] 开始增加好感度: userId=${req.user.id}, appId=${appId}`, 'ChatService');
+                            const result = await this.affectionService.increment(req.user.id, Number(appId));
+                            common_1.Logger.log(`[好感度] 增加成功: score=${result.score}, stage=${result.stage?.name}`, 'ChatService');
                         }
                         else if (!appId) {
-                            common_1.Logger.warn(`[好感度跳过] 缺少appId - userId=${req.user.id}`, 'ChatService');
+                            common_1.Logger.debug('[好感度] 跳过增加（缺少appId）', 'ChatService');
                         }
                         else if (isGroupChat) {
-                            common_1.Logger.debug(`[好感度跳过] 群聊模式 - userId=${req.user.id}, appId=${appId}`, 'ChatService');
+                            common_1.Logger.debug('[好感度] 跳过增加（群聊模式）', 'ChatService');
                         }
                     }
                     catch (e) {
-                        common_1.Logger.error(`[好感度增加失败] userId=${req.user.id}, appId=${appId}, error=${e?.message || e}`, 'ChatService');
+                        common_1.Logger.warn(`[好感度] 增加失败: ${e?.message || e}`, 'ChatService');
                     }
                     return res.write(`\n${JSON.stringify(response)}`);
                 }
@@ -18216,7 +18283,8 @@ ${numberedOptions}
             let chatTitle;
             if (modelType === 1) {
                 try {
-                    chatTitle = await this.openAIChatService.chatFree(`根据用户提问{${prompt}}，给这个对话取一个名字，不超过10个字，只需要返回标题，不需要其他任何内容。`, undefined, undefined);
+                    const titleResult = await this.openAIChatService.chatFree(`根据用户提问{${prompt}}，给这个对话取一个名字，不超过10个字，只需要返回标题，不需要其他任何内容。`, undefined, undefined);
+                    chatTitle = titleResult.text || '';
                     if (chatTitle.length > 15) {
                         chatTitle = chatTitle.slice(0, 15);
                     }
@@ -18358,6 +18426,9 @@ ${numberedOptions}
                         common_1.Logger.debug(`处理历史记录ID=${record.id}失败: ${error.message}`, 'ChatService');
                     }
                 }
+                if (systemMessage) {
+                    messages.push({ role: 'system', content: systemMessage });
+                }
                 let groupMembers = [];
                 if (groupId) {
                     const groupInfo = await this.chatGroupService.getGroupInfoFromId(groupId);
@@ -18374,22 +18445,9 @@ ${numberedOptions}
                     common_1.Logger.debug(`[群聊历史构建] 用户消息数=${userMessages.length}, AI消息数=${assistantMessages.length}`, 'ChatService');
                     const allMessages = [...userMessages, ...assistantMessages].sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
                     common_1.Logger.debug(`[群聊历史构建] 总消息数=${allMessages.length}, 按时间排序完成`, 'ChatService');
-                    const addedUserMessages = new Set();
                     for (const msg of allMessages) {
                         if (msg.role === 'user') {
                             let userContent = msg.content;
-                            const contentWithoutPrefix = typeof userContent === 'string' && /^[^：]+：/.test(userContent)
-                                ? userContent.replace(/^[^：]+：/, '').trim()
-                                : userContent;
-                            const timestamp = Math.floor(new Date(msg.createdAt).getTime() / 1000);
-                            const dedupeKey1 = `${userContent}_${timestamp}`;
-                            const dedupeKey2 = `${contentWithoutPrefix}_${timestamp}`;
-                            if (addedUserMessages.has(dedupeKey1) || addedUserMessages.has(dedupeKey2)) {
-                                common_1.Logger.debug(`[群聊历史] 跳过重复的用户消息: ${typeof userContent === 'string' ? userContent.substring(0, 30) : '[复杂内容]'}`, 'ChatService');
-                                continue;
-                            }
-                            addedUserMessages.add(dedupeKey1);
-                            addedUserMessages.add(dedupeKey2);
                             const hasSpeakerPrefix = typeof userContent === 'string' && /^[^：]+：/.test(userContent);
                             if (!hasSpeakerPrefix && typeof userContent === 'string') {
                                 let userName = '用户';
@@ -18490,7 +18548,7 @@ ${numberedOptions}
                 totalTokens = newTotalTokens;
             }
         }
-        if (messages.length > 1 && !isGroupChat) {
+        if (messages.length > 1) {
             const fixedMessages = [];
             if (messages[0].role === 'system') {
                 fixedMessages.push(messages[0]);
@@ -18514,28 +18572,9 @@ ${numberedOptions}
             messages.push(...fixedMessages);
         }
         if (prompt) {
-            let shouldAddPrompt = true;
-            if (isGroupChat) {
-                for (let i = messages.length - 1; i >= 0; i--) {
-                    const msg = messages[i];
-                    if (msg.role === 'user' && typeof msg.content === 'string') {
-                        const contentWithoutPrefix = msg.content.replace(/^[^：]+：/, '').trim();
-                        if (contentWithoutPrefix === prompt.trim()) {
-                            shouldAddPrompt = false;
-                            common_1.Logger.debug(`[群聊历史] 当前用户提问已存在于历史消息中，跳过添加: ${msg.content}`, 'ChatService');
-                            break;
-                        }
-                    }
-                }
-            }
-            else {
-                const lastMessage = messages[messages.length - 1];
-                const isLastMessageCurrentPrompt = lastMessage && lastMessage.role === 'user' && lastMessage.content === prompt;
-                if (isLastMessageCurrentPrompt) {
-                    shouldAddPrompt = false;
-                }
-            }
-            if (shouldAddPrompt) {
+            const lastMessage = messages[messages.length - 1];
+            const isLastMessageCurrentPrompt = lastMessage && lastMessage.role === 'user' && lastMessage.content === prompt;
+            if (!isLastMessageCurrentPrompt) {
                 let userPrompt = prompt;
                 if (isGroupChat) {
                     const hasSpeakerPrefix = typeof userPrompt === 'string' && /^[^：]+：/.test(userPrompt);
@@ -18588,7 +18627,7 @@ ${numberedOptions}
         };
     }
     async ttsProcess(body, req, res) {
-        const { chatId, prompt, emotion, appId: inputAppId } = body;
+        const { chatId, prompt, emotion } = body;
         common_1.Logger.debug(`开始TTS处理: ${String(prompt || '').substring(0, 50)}${(prompt || '').length > 50 ? '...' : ''}`, 'TTSService');
         const psychologicalDesc = this.extractPsychologicalDescription(prompt);
         common_1.Logger.debug(`提取心理描述: ${psychologicalDesc || '无'}`, 'TTSService');
@@ -18618,97 +18657,74 @@ ${numberedOptions}
             catch (e) {
                 common_1.Logger.warn(`[TTSService] 扣费配置缺失或校验失败，已跳过扣费: ${e?.message || e}`, 'TTSService');
             }
-            if (chatId) {
-                await this.chatLogService.updateChatLog(chatId, { ttsUrl: url });
-            }
+            await this.chatLogService.updateChatLog(chatId, { ttsUrl: url });
             return res.status(200).send({ ttsUrl: url });
         };
         try {
-            let appId = inputAppId ?? null;
-            if (!appId && chatId) {
-                const chatLog = await this.chatLogService.findOneChatLog(chatId);
-                appId = chatLog?.appId ?? null;
-                common_1.Logger.debug(`从 chatId=${chatId} 获取 appId=${appId}`, 'TTSService');
-            }
-            else if (appId) {
-                common_1.Logger.debug(`使用传入的 appId=${appId}`, 'TTSService');
-            }
+            const chatLog = await this.chatLogService.findOneChatLog(chatId);
+            const appId = chatLog?.appId ?? null;
             let detectedEmotion = null;
             if (emotion) {
                 detectedEmotion = emotion;
-                common_1.Logger.debug(`使用API指定情绪: ${detectedEmotion}`, 'TTSService');
+                common_1.Logger.debug(`使用入参情绪: ${detectedEmotion}`, 'TTSService');
+            }
+            if (!detectedEmotion && psychologicalDesc) {
+                detectedEmotion = this.detectEmotionFromText(psychologicalDesc);
+            }
+            if (!detectedEmotion) {
+                detectedEmotion = this.detectEmotionFromText(prompt);
+                if (detectedEmotion) {
+                    common_1.Logger.debug(`从完整文本推断情绪: ${detectedEmotion} (文本: ${prompt.substring(0, 50)}...)`, 'TTSService');
+                }
             }
             const options = await this.getAppEmotionOptions(appId);
             const pairs = await this.getAppEmotionPairs(appId);
-            common_1.Logger.debug(`[TTS情绪识别] ========== 开始识别情绪 ==========`, 'TTSService');
-            common_1.Logger.debug(`[TTS情绪识别] 应用ID: ${appId ?? 'null'}`, 'TTSService');
-            common_1.Logger.debug(`[TTS情绪识别] 候选情绪数量: ${options.length}`, 'TTSService');
-            common_1.Logger.debug(`[TTS情绪识别] 候选情绪列表: ${options
-                .map((opt, idx) => `${idx + 1}. ${opt}`)
-                .join(' | ')}`, 'TTSService');
-            common_1.Logger.debug(`[TTS情绪识别] 情绪-音色映射: ${pairs.length} 个 [${pairs.map(p => `${p.emotion}→${p.voiceId}`).join(', ') || '无'}]`, 'TTSService');
-            common_1.Logger.debug(`[TTS情绪识别] 心理描述: ${psychologicalDesc || '无'}`, 'TTSService');
-            common_1.Logger.debug(`[TTS情绪识别] 原始文本: ${prompt.substring(0, 100)}${prompt.length > 100 ? '...' : ''}`, 'TTSService');
-            let chosen = await this.chooseEmotionFromOptions(psychologicalDesc, prompt, options, detectedEmotion);
-            if (!chosen) {
-                common_1.Logger.debug(`[TTS情绪识别] ⚠ 候选中无合适情绪，将使用角色默认音色`, 'TTSService');
-                common_1.Logger.debug(`[TTS情绪识别] ================================`, 'TTSService');
-                if (appId) {
-                    try {
-                        const map = await this.appVoiceRepo.findOne({ where: { appId, isDefault: 1 } });
-                        const voiceId = map?.voiceId;
-                        if (voiceId) {
-                            common_1.Logger.debug(`[TTSService] 使用角色默认音色: ${voiceId} (原因: 候选中无合适情绪)`, 'TTSService');
-                            const ttsParams = this.mapEmotionToTtsParams(null);
-                            return await doTtsWithVoice(voiceId, ttsParams);
-                        }
-                    }
-                    catch (e) {
-                        common_1.Logger.warn(`[TTSService] 读取应用默认音色失败: ${e?.message || e}`, 'TTSService');
-                    }
-                }
+            try {
+                common_1.Logger.debug(`应用情绪选项(${appId ?? 'null'}): ${options.join(', ') || '[]'}`, 'TTSService');
+                common_1.Logger.debug(`应用情绪-音色对(${appId ?? 'null'}): ${pairs.map(p => p.emotion + '=>' + p.voiceId).join(', ') || '[]'}`, 'TTSService');
             }
-            else {
-                const finalEmotion = chosen.emotion;
-                const methodText = {
-                    initial: '指定',
-                    ai: 'AI识别',
-                    default: '默认',
-                }[chosen.method] || '未知';
-                common_1.Logger.debug(`[TTS情绪识别] ========== 最终结果 ==========`, 'TTSService');
-                common_1.Logger.debug(`[TTS情绪识别] ✓ 选中情绪: ${finalEmotion}`, 'TTSService');
-                common_1.Logger.debug(`[TTS情绪识别] ✓ 识别方式: ${methodText} (${chosen.method})`, 'TTSService');
-                common_1.Logger.debug(`[TTS情绪识别] ================================`, 'TTSService');
-                if (finalEmotion) {
-                    const mappedVoice = pairs.find(p => p.emotion === finalEmotion)?.voiceId || null;
-                    if (mappedVoice) {
-                        common_1.Logger.debug(`命中情绪映射: emotion=${finalEmotion}, voice=${mappedVoice} (appId=${appId ?? 'global'})`, 'TTSService');
-                        const ttsParams = this.mapEmotionToTtsParams(finalEmotion);
+            catch { }
+            let normalizedEmotion = this.normalizeEmotionLabel(detectedEmotion || '');
+            let chosen = await this.chooseEmotionFromOptions(psychologicalDesc, prompt, options, normalizedEmotion);
+            if (!chosen) {
+                const fallback = await this.getAppDefaultEmotion(appId, options);
+                chosen = { emotion: fallback, method: 'default' };
+                common_1.Logger.debug(`未从内容中命中候选情绪，使用应用默认情绪: ${fallback}`, 'TTSService');
+            }
+            normalizedEmotion = chosen.emotion;
+            try {
+                common_1.Logger.debug(`最终情绪: ${normalizedEmotion}，识别方法: ${chosen.method || 'unknown'}`, 'TTSService');
+            }
+            catch { }
+            if (normalizedEmotion) {
+                const mappedVoice = pairs.find(p => p.emotion === normalizedEmotion)?.voiceId || null;
+                if (mappedVoice) {
+                    common_1.Logger.debug(`命中情绪映射: emotion=${normalizedEmotion}, voice=${mappedVoice} (appId=${appId ?? 'global'})`, 'TTSService');
+                    const ttsParams = this.mapEmotionToTtsParams(normalizedEmotion);
+                    try {
+                        common_1.Logger.debug(`情绪合成参数: ${JSON.stringify(ttsParams)}`, 'TTSService');
+                    }
+                    catch { }
+                    return await doTtsWithVoice(mappedVoice, ttsParams);
+                }
+                common_1.Logger.debug(`未找到情绪映射: emotion=${normalizedEmotion}, appId=${appId ?? 'null'}，尝试应用默认音色`, 'TTSService');
+            }
+            if (appId) {
+                try {
+                    const map = await this.appVoiceRepo.findOne({ where: { appId, isDefault: 1 } });
+                    const voiceId = map?.voiceId;
+                    if (voiceId) {
+                        common_1.Logger.debug(`检测到应用(${appId})绑定默认音色: ${voiceId}，使用角色音色进行TTS`, 'TTSService');
+                        const ttsParams = this.mapEmotionToTtsParams(normalizedEmotion);
                         try {
-                            common_1.Logger.debug(`情绪合成参数: ${JSON.stringify(ttsParams)}`, 'TTSService');
+                            common_1.Logger.debug(`默认音色合成参数: ${JSON.stringify(ttsParams)}`, 'TTSService');
                         }
                         catch { }
-                        return await doTtsWithVoice(mappedVoice, ttsParams);
+                        return await doTtsWithVoice(voiceId, ttsParams);
                     }
-                    common_1.Logger.debug(`未找到情绪映射: emotion=${finalEmotion}, appId=${appId ?? 'null'}，回退使用应用默认音色`, 'TTSService');
                 }
-                if (appId) {
-                    try {
-                        const map = await this.appVoiceRepo.findOne({ where: { appId, isDefault: 1 } });
-                        const voiceId = map?.voiceId;
-                        if (voiceId) {
-                            common_1.Logger.debug(`使用应用(${appId})默认音色: ${voiceId}${finalEmotion ? ` (原情绪: ${finalEmotion}, 未匹配到音色)` : ''}`, 'TTSService');
-                            const ttsParams = this.mapEmotionToTtsParams(null);
-                            try {
-                                common_1.Logger.debug(`默认音色合成参数: ${JSON.stringify(ttsParams)}`, 'TTSService');
-                            }
-                            catch { }
-                            return await doTtsWithVoice(voiceId, ttsParams);
-                        }
-                    }
-                    catch (e) {
-                        common_1.Logger.warn(`[TTSService] 读取应用默认音色失败: ${e?.message || e}`, 'TTSService');
-                    }
+                catch (e) {
+                    common_1.Logger.warn(`[TTSService] 读取应用默认音色失败: ${e?.message || e}`, 'TTSService');
                 }
             }
         }
@@ -18772,260 +18788,6 @@ exports.ChatService = ChatService = __decorate([
 
 
 /***/ }),
-/* 198 */
-/***/ (function(__unused_webpack_module, exports, __webpack_require__) {
-
-
-var __decorate = (this && this.__decorate) || function (decorators, target, key, desc) {
-    var c = arguments.length, r = c < 3 ? target : desc === null ? desc = Object.getOwnPropertyDescriptor(target, key) : desc, d;
-    if (typeof Reflect === "object" && typeof Reflect.decorate === "function") r = Reflect.decorate(decorators, target, key, desc);
-    else for (var i = decorators.length - 1; i >= 0; i--) if (d = decorators[i]) r = (c < 3 ? d(r) : c > 3 ? d(target, key, r) : d(target, key)) || r;
-    return c > 3 && r && Object.defineProperty(target, key, r), r;
-};
-var __metadata = (this && this.__metadata) || function (k, v) {
-    if (typeof Reflect === "object" && typeof Reflect.metadata === "function") return Reflect.metadata(k, v);
-};
-var __param = (this && this.__param) || function (paramIndex, decorator) {
-    return function (target, key) { decorator(target, key, paramIndex); }
-};
-var _a, _b;
-Object.defineProperty(exports, "__esModule", ({ value: true }));
-exports.ConversationSummaryService = void 0;
-const common_1 = __webpack_require__(2);
-const typeorm_1 = __webpack_require__(33);
-const typeorm_2 = __webpack_require__(3);
-const axios_1 = __webpack_require__(40);
-const conversationSummary_entity_1 = __webpack_require__(199);
-const globalConfig_service_1 = __webpack_require__(36);
-let ConversationSummaryService = class ConversationSummaryService {
-    conversationSummaryRepo;
-    globalConfigService;
-    constructor(conversationSummaryRepo, globalConfigService) {
-        this.conversationSummaryRepo = conversationSummaryRepo;
-        this.globalConfigService = globalConfigService;
-    }
-    async getSummary(groupId) {
-        try {
-            const summary = await this.conversationSummaryRepo.findOne({
-                where: { groupId },
-            });
-            if (summary && summary.summary) {
-                common_1.Logger.debug(`[对话总结] 获取到groupId=${groupId}的历史总结，消息数=${summary.messageCount}`, 'ConversationSummaryService');
-                return summary.summary;
-            }
-            common_1.Logger.debug(`[对话总结] groupId=${groupId}暂无历史总结`, 'ConversationSummaryService');
-            return null;
-        }
-        catch (error) {
-            common_1.Logger.error(`[对话总结] 获取总结失败: ${error?.message || error}`, error?.stack || '', 'ConversationSummaryService');
-            return null;
-        }
-    }
-    async summarizeConversationAsync(groupId, userId, appId, previousSummary, newMessages) {
-        setImmediate(async () => {
-            try {
-                common_1.Logger.debug(`[对话总结] 开始异步总结 - groupId=${groupId}, 新消息数=${newMessages.length}`, 'ConversationSummaryService');
-                const validMessages = newMessages.filter(msg => msg.content && msg.content.trim().length > 0);
-                if (validMessages.length === 0) {
-                    common_1.Logger.debug(`[对话总结] 没有有效的新消息，跳过总结`, 'ConversationSummaryService');
-                    return;
-                }
-                const newSummary = await this.generateSummary(previousSummary, validMessages);
-                if (!newSummary) {
-                    common_1.Logger.warn(`[对话总结] 总结生成失败，跳过保存`, 'ConversationSummaryService');
-                    return;
-                }
-                await this.saveSummary(groupId, userId, appId, newSummary, validMessages.length);
-                common_1.Logger.debug(`[对话总结] ✓ 总结完成并保存 - groupId=${groupId}`, 'ConversationSummaryService');
-            }
-            catch (error) {
-                common_1.Logger.error(`[对话总结] 异步总结失败: ${error?.message || error}`, error?.stack || '', 'ConversationSummaryService');
-            }
-        });
-    }
-    async generateSummary(previousSummary, newMessages) {
-        try {
-            const dashscopeApiKey = (await this.globalConfigService.getConfigs(['dashscopeApiKey'])) ||
-                process.env.DASHSCOPE_API_KEY;
-            if (!dashscopeApiKey) {
-                common_1.Logger.warn('[对话总结] 未配置DashScope API Key，跳过总结', 'ConversationSummaryService');
-                return null;
-            }
-            const messagesText = newMessages
-                .map(msg => {
-                const roleLabel = msg.role === 'user' ? '用户' : msg.role === 'assistant' ? 'AI' : '系统';
-                return `${roleLabel}: ${msg.content}`;
-            })
-                .join('\n');
-            const prompt = previousSummary
-                ? `你是一个专业的对话内容总结专家。请根据以下对话内容，更新并补充之前的总结。
-
-【之前的总结】
-${previousSummary}
-
-【新增对话内容】
-${messagesText}
-
-【要求】
-1. 提取关键信息和重要细节
-2. 保持简洁，但不丢失重要上下文
-3. 使用第三人称视角描述
-4. 突出用户的需求和AI的回应要点
-5. 如果新对话改变了之前的内容，请更新总结
-
-请直接返回更新后的总结内容（不要包含"总结："等前缀）：`
-                : `你是一个专业的对话内容总结专家。请总结以下对话内容的关键信息。
-
-【对话内容】
-${messagesText}
-
-【要求】
-1. 提取关键信息和重要细节
-2. 保持简洁，但不丢失重要上下文
-3. 使用第三人称视角描述
-4. 突出用户的需求和AI的回应要点
-5. 控制在200字以内
-
-请直接返回总结内容（不要包含"总结:"等前缀）：`;
-            const response = await axios_1.default.post('https://dashscope.aliyuncs.com/api/v1/services/aigc/text-generation/generation', {
-                model: 'qwen-turbo',
-                input: {
-                    messages: [
-                        {
-                            role: 'user',
-                            content: prompt,
-                        },
-                    ],
-                },
-                parameters: {
-                    max_tokens: 500,
-                    temperature: 0.3,
-                },
-            }, {
-                headers: {
-                    Authorization: `Bearer ${dashscopeApiKey}`,
-                    'Content-Type': 'application/json',
-                },
-                timeout: 15000,
-            });
-            const summary = response.data?.output?.text?.trim() || '';
-            if (!summary) {
-                common_1.Logger.warn(`[对话总结] API返回空内容`, 'ConversationSummaryService');
-                return null;
-            }
-            common_1.Logger.debug(`[对话总结] ✓ 生成成功，长度=${summary.length}字`, 'ConversationSummaryService');
-            return summary;
-        }
-        catch (error) {
-            common_1.Logger.error(`[对话总结] 生成总结失败: ${error?.message || error}`, error?.stack || '', 'ConversationSummaryService');
-            return null;
-        }
-    }
-    async saveSummary(groupId, userId, appId, summary, newMessageCount) {
-        try {
-            let record = await this.conversationSummaryRepo.findOne({
-                where: { groupId },
-            });
-            if (record) {
-                record.summary = summary;
-                record.messageCount += newMessageCount;
-                record.lastSummarizedAt = new Date();
-                await this.conversationSummaryRepo.save(record);
-            }
-            else {
-                record = this.conversationSummaryRepo.create({
-                    groupId,
-                    userId,
-                    appId,
-                    summary,
-                    messageCount: newMessageCount,
-                    lastSummarizedAt: new Date(),
-                });
-                await this.conversationSummaryRepo.save(record);
-            }
-            common_1.Logger.debug(`[对话总结] ✓ 保存成功 - groupId=${groupId}, 累计消息=${record.messageCount}`, 'ConversationSummaryService');
-        }
-        catch (error) {
-            common_1.Logger.error(`[对话总结] 保存失败: ${error?.message || error}`, error?.stack || '', 'ConversationSummaryService');
-            throw error;
-        }
-    }
-    async deleteSummary(groupId) {
-        try {
-            await this.conversationSummaryRepo.delete({ groupId });
-            common_1.Logger.debug(`[对话总结] ✓ 删除成功 - groupId=${groupId}`, 'ConversationSummaryService');
-        }
-        catch (error) {
-            common_1.Logger.error(`[对话总结] 删除失败: ${error?.message || error}`, error?.stack || '', 'ConversationSummaryService');
-        }
-    }
-};
-exports.ConversationSummaryService = ConversationSummaryService;
-exports.ConversationSummaryService = ConversationSummaryService = __decorate([
-    (0, common_1.Injectable)(),
-    __param(0, (0, typeorm_1.InjectRepository)(conversationSummary_entity_1.ConversationSummaryEntity)),
-    __metadata("design:paramtypes", [typeof (_a = typeof typeorm_2.Repository !== "undefined" && typeorm_2.Repository) === "function" ? _a : Object, typeof (_b = typeof globalConfig_service_1.GlobalConfigService !== "undefined" && globalConfig_service_1.GlobalConfigService) === "function" ? _b : Object])
-], ConversationSummaryService);
-
-
-/***/ }),
-/* 199 */
-/***/ (function(__unused_webpack_module, exports, __webpack_require__) {
-
-
-var __decorate = (this && this.__decorate) || function (decorators, target, key, desc) {
-    var c = arguments.length, r = c < 3 ? target : desc === null ? desc = Object.getOwnPropertyDescriptor(target, key) : desc, d;
-    if (typeof Reflect === "object" && typeof Reflect.decorate === "function") r = Reflect.decorate(decorators, target, key, desc);
-    else for (var i = decorators.length - 1; i >= 0; i--) if (d = decorators[i]) r = (c < 3 ? d(r) : c > 3 ? d(target, key, r) : d(target, key)) || r;
-    return c > 3 && r && Object.defineProperty(target, key, r), r;
-};
-var __metadata = (this && this.__metadata) || function (k, v) {
-    if (typeof Reflect === "object" && typeof Reflect.metadata === "function") return Reflect.metadata(k, v);
-};
-var _a;
-Object.defineProperty(exports, "__esModule", ({ value: true }));
-exports.ConversationSummaryEntity = void 0;
-const baseEntity_1 = __webpack_require__(73);
-const typeorm_1 = __webpack_require__(3);
-let ConversationSummaryEntity = class ConversationSummaryEntity extends baseEntity_1.BaseEntity {
-    groupId;
-    userId;
-    appId;
-    summary;
-    messageCount;
-    lastSummarizedAt;
-};
-exports.ConversationSummaryEntity = ConversationSummaryEntity;
-__decorate([
-    (0, typeorm_1.Column)({ comment: '对话组ID', unique: true }),
-    __metadata("design:type", Number)
-], ConversationSummaryEntity.prototype, "groupId", void 0);
-__decorate([
-    (0, typeorm_1.Column)({ comment: '用户ID' }),
-    __metadata("design:type", Number)
-], ConversationSummaryEntity.prototype, "userId", void 0);
-__decorate([
-    (0, typeorm_1.Column)({ comment: '应用ID', nullable: true }),
-    __metadata("design:type", Number)
-], ConversationSummaryEntity.prototype, "appId", void 0);
-__decorate([
-    (0, typeorm_1.Column)({ comment: '对话总结内容', type: 'text' }),
-    __metadata("design:type", String)
-], ConversationSummaryEntity.prototype, "summary", void 0);
-__decorate([
-    (0, typeorm_1.Column)({ comment: '总结的消息数量', default: 0 }),
-    __metadata("design:type", Number)
-], ConversationSummaryEntity.prototype, "messageCount", void 0);
-__decorate([
-    (0, typeorm_1.Column)({ comment: '最后总结时间', type: 'datetime', nullable: true }),
-    __metadata("design:type", typeof (_a = typeof Date !== "undefined" && Date) === "function" ? _a : Object)
-], ConversationSummaryEntity.prototype, "lastSummarizedAt", void 0);
-exports.ConversationSummaryEntity = ConversationSummaryEntity = __decorate([
-    (0, typeorm_1.Entity)({ name: 'conversation_summary' })
-], ConversationSummaryEntity);
-
-
-/***/ }),
 /* 200 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
@@ -19042,7 +18804,7 @@ var __metadata = (this && this.__metadata) || function (k, v) {
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.ChatProcessDto = exports.Options = void 0;
 const swagger_1 = __webpack_require__(14);
-const class_transformer_1 = __webpack_require__(131);
+const class_transformer_1 = __webpack_require__(184);
 const class_validator_1 = __webpack_require__(106);
 class Options {
     parentMessageId;
@@ -19050,53 +18812,12 @@ class Options {
     temperature;
     top_p;
     groupId;
-    fileParsing;
-    usingNetwork;
-    usingDeepThinking;
-    usingMcpTool;
 }
 exports.Options = Options;
 __decorate([
-    (0, class_validator_1.IsOptional)(),
     (0, class_validator_1.IsString)(),
     __metadata("design:type", String)
 ], Options.prototype, "parentMessageId", void 0);
-__decorate([
-    (0, class_validator_1.IsOptional)(),
-    (0, class_validator_1.IsString)(),
-    __metadata("design:type", String)
-], Options.prototype, "model", void 0);
-__decorate([
-    (0, class_validator_1.IsOptional)(),
-    (0, class_validator_1.IsNumber)(),
-    __metadata("design:type", Number)
-], Options.prototype, "temperature", void 0);
-__decorate([
-    (0, class_validator_1.IsOptional)(),
-    (0, class_validator_1.IsNumber)(),
-    __metadata("design:type", Number)
-], Options.prototype, "top_p", void 0);
-__decorate([
-    (0, class_validator_1.IsOptional)(),
-    (0, class_validator_1.IsNumber)(),
-    __metadata("design:type", Number)
-], Options.prototype, "groupId", void 0);
-__decorate([
-    (0, class_validator_1.IsOptional)(),
-    __metadata("design:type", Object)
-], Options.prototype, "fileParsing", void 0);
-__decorate([
-    (0, class_validator_1.IsOptional)(),
-    __metadata("design:type", Boolean)
-], Options.prototype, "usingNetwork", void 0);
-__decorate([
-    (0, class_validator_1.IsOptional)(),
-    __metadata("design:type", Boolean)
-], Options.prototype, "usingDeepThinking", void 0);
-__decorate([
-    (0, class_validator_1.IsOptional)(),
-    __metadata("design:type", Boolean)
-], Options.prototype, "usingMcpTool", void 0);
 class ChatProcessDto {
     prompt;
     audioUrl;
@@ -19105,9 +18826,6 @@ class ChatProcessDto {
     systemMessage;
     appId;
     model;
-    modelName;
-    modelAvatar;
-    modelType;
 }
 exports.ChatProcessDto = ChatProcessDto;
 __decorate([
@@ -19138,11 +18856,10 @@ __decorate([
 ], ChatProcessDto.prototype, "url", void 0);
 __decorate([
     (0, swagger_1.ApiProperty)({
-        example: '{ parentMessageId: 0, groupId: 123 }',
-        description: '对话选项（包含上下文、群聊ID等）',
+        example: '{ parentMessageId: 0 }',
+        description: '上次对话信息',
         required: false,
     }),
-    (0, class_validator_1.IsOptional)(),
     (0, class_transformer_1.Type)(() => Options),
     __metadata("design:type", Options)
 ], ChatProcessDto.prototype, "options", void 0);
@@ -19168,36 +18885,6 @@ __decorate([
     (0, class_validator_1.IsOptional)(),
     __metadata("design:type", String)
 ], ChatProcessDto.prototype, "model", void 0);
-__decorate([
-    (0, swagger_1.ApiProperty)({
-        example: 'AI助手',
-        description: '模型显示名称',
-        required: false,
-    }),
-    (0, class_validator_1.IsOptional)(),
-    (0, class_validator_1.IsString)(),
-    __metadata("design:type", String)
-], ChatProcessDto.prototype, "modelName", void 0);
-__decorate([
-    (0, swagger_1.ApiProperty)({
-        example: 'https://example.com/avatar.png',
-        description: '模型头像',
-        required: false,
-    }),
-    (0, class_validator_1.IsOptional)(),
-    (0, class_validator_1.IsString)(),
-    __metadata("design:type", String)
-], ChatProcessDto.prototype, "modelAvatar", void 0);
-__decorate([
-    (0, swagger_1.ApiProperty)({
-        example: 1,
-        description: '模型类型',
-        required: false,
-    }),
-    (0, class_validator_1.IsOptional)(),
-    (0, class_validator_1.IsNumber)(),
-    __metadata("design:type", Number)
-], ChatProcessDto.prototype, "modelType", void 0);
 
 
 /***/ }),
@@ -19217,17 +18904,16 @@ var __metadata = (this && this.__metadata) || function (k, v) {
 var __param = (this && this.__param) || function (paramIndex, decorator) {
     return function (target, key) { decorator(target, key, paramIndex); }
 };
-var _a, _b, _c, _d, _e, _f, _g, _h, _j, _k, _l, _m;
+var _a, _b, _c, _d, _e, _f, _g, _h, _j;
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.OpenChatController = void 0;
 const common_1 = __webpack_require__(2);
 const swagger_1 = __webpack_require__(14);
 const axios_1 = __webpack_require__(40);
-const express_1 = __webpack_require__(111);
+const express_1 = __webpack_require__(113);
 const affection_service_1 = __webpack_require__(102);
-const voice_service_1 = __webpack_require__(191);
-const chat_service_1 = __webpack_require__(197);
-const openChat_dto_1 = __webpack_require__(202);
+const voice_service_1 = __webpack_require__(190);
+const chat_service_1 = __webpack_require__(199);
 let OpenChatController = class OpenChatController {
     chatService;
     voiceService;
@@ -19237,10 +18923,12 @@ let OpenChatController = class OpenChatController {
         this.voiceService = voiceService;
         this.affectionService = affectionService;
     }
-    async chatProcess(body, req, res) {
+    async chatProcess(body, _req, res) {
         try {
-            console.log('[OpenChat] Received request:', JSON.stringify(body));
-            if (body.audioUrl) {
+            const { userId } = body || {};
+            if (!userId)
+                throw new common_1.HttpException('userId 必填', common_1.HttpStatus.BAD_REQUEST);
+            if (body?.audioUrl) {
                 const url = body.audioUrl;
                 const resp = await axios_1.default.get(url, { responseType: 'arraybuffer' });
                 const buf = Buffer.from(resp.data);
@@ -19260,26 +18948,30 @@ let OpenChatController = class OpenChatController {
                 if (text)
                     body.prompt = text;
             }
-            if (!body.prompt || body.prompt.trim() === '') {
+            if (!body?.prompt || body.prompt.trim() === '') {
                 throw new common_1.HttpException('提问信息不能为空！', common_1.HttpStatus.BAD_REQUEST);
             }
-            req.user = { id: body.userId, role: 'visitor' };
-            return this.chatService.chatProcess(body, req, res);
+            const fakeReq = { user: { id: userId } };
+            return this.chatService.chatProcess(body, fakeReq, res);
         }
         catch (e) {
-            console.error('[OpenChat] Error:', e);
             const status = e instanceof common_1.HttpException ? e.getStatus() : common_1.HttpStatus.INTERNAL_SERVER_ERROR;
             const message = e?.message || '对话处理失败';
             return res.status(status).json({ code: status, message });
         }
     }
-    ttsProcess(body, req, res) {
-        req.user = { id: body.userId, role: 'visitor' };
-        return this.chatService.ttsProcess(body, req, res);
+    ttsProcess(body, _req, res) {
+        const { userId } = body || {};
+        if (!userId)
+            throw new common_1.HttpException('userId 必填', common_1.HttpStatus.BAD_REQUEST);
+        const fakeReq = { user: { id: userId } };
+        return this.chatService.ttsProcess(body, fakeReq, res);
     }
-    async chatProcessVoice(body, req, res) {
+    async chatProcessVoice(body, _req, res) {
         try {
-            const { userId, audioUrl, audioBase64 } = body;
+            const { userId, audioUrl, audioBase64 } = body || {};
+            if (!userId)
+                throw new common_1.HttpException('userId 必填', common_1.HttpStatus.BAD_REQUEST);
             let base64 = audioBase64;
             if (!base64 && audioUrl) {
                 const url = audioUrl;
@@ -19297,17 +18989,16 @@ let OpenChatController = class OpenChatController {
                                 : 'audio/wav';
                 base64 = `data:${mime};base64,${buf.toString('base64')}`;
             }
-            if (!base64) {
+            if (!base64)
                 throw new common_1.HttpException('请提供 audioUrl 或 audioBase64', common_1.HttpStatus.BAD_REQUEST);
-            }
             const asr = await this.voiceService.asr({ audioBase64: base64 });
             const text = (asr?.text || '').trim();
             if (!text) {
                 throw new common_1.HttpException('未识别到有效语音内容', common_1.HttpStatus.BAD_REQUEST);
             }
             const payload = { ...body, prompt: text };
-            req.user = { id: userId, role: 'visitor' };
-            return this.chatService.chatProcess(payload, req, res);
+            const fakeReq = { user: { id: userId } };
+            return this.chatService.chatProcess(payload, fakeReq, res);
         }
         catch (e) {
             const status = e instanceof common_1.HttpException ? e.getStatus() : common_1.HttpStatus.INTERNAL_SERVER_ERROR;
@@ -19326,102 +19017,33 @@ let OpenChatController = class OpenChatController {
 exports.OpenChatController = OpenChatController;
 __decorate([
     (0, common_1.Post)('chat-process'),
-    (0, swagger_1.ApiOperation)({
-        summary: '【开放】聊天对话',
-        description: `
-核心功能：文本对话、语音输入（ASR）、图片/文件对话、角色对话、群聊
-
-参数说明：
-- userId（必填）：用户ID
-- prompt：提问内容（传audioUrl时可为空）
-- appId：角色ID
-- audioUrl/imageUrl/fileUrl：音频/图片/文件URL
-- options.groupId：群聊ID（通过options传递）
-- options.parentMessageId：维持对话上下文
-- options.temperature：控制回复随机性（0-2，默认0.7）
-
-返回：流式响应（SSE格式）
-    `,
-    }),
+    (0, swagger_1.ApiOperation)({ summary: '【开放】聊天对话（无鉴权，需显式传 userId；支持 audioUrl 自动ASR）' }),
     (0, swagger_1.ApiBody)({
-        type: openChat_dto_1.OpenChatProcessDto,
+        schema: {
+            type: 'object',
+            properties: {
+                userId: { type: 'number', description: '外部用户ID（必须为系统中存在的用户）' },
+                model: { type: 'string', description: '使用的模型标识（可选）' },
+                modelName: { type: 'string', description: '模型名称（可选）' },
+                modelType: { type: 'number', description: '模型类型（可选）' },
+                modelAvatar: { type: 'string', description: '模型头像URL（可选）' },
+                prompt: { type: 'string', description: '用户提问内容；若传 audioUrl 将自动识别为文本' },
+                audioUrl: { type: 'string', description: '音频URL，自动进行ASR识别为文本（可选）' },
+                imageUrl: { type: 'string', description: '图片URL（可选）' },
+                fileUrl: { type: 'string', description: '文件URL（可选）' },
+                appId: { type: 'number', description: '角色(App) ID（可选）' },
+                options: { type: 'object', description: '对话附加选项（可选）' },
+                extraParam: { type: 'object', description: '扩展参数（可选）' },
+                usingPluginId: { type: 'number', description: '插件ID（可选）' },
+            },
+            required: ['userId'],
+        },
         examples: {
-            minimal: {
-                summary: '最小参数（推荐）',
-                description: '只包含必填参数userId和prompt',
+            demo: {
                 value: {
                     userId: 1,
+                    model: 'deepseek-chat',
                     prompt: '你好',
-                },
-            },
-            withRole: {
-                summary: '角色对话',
-                description: '使用预设角色进行对话',
-                value: {
-                    userId: 1,
-                    appId: 101,
-                    prompt: '你好，我想了解一下你',
-                },
-            },
-            groupChat: {
-                summary: '群聊模式',
-                description: '多角色群聊，groupId 通过 options 传递',
-                value: {
-                    userId: 1,
-                    appId: 101,
-                    prompt: '大家好，今天聊什么？',
-                    options: {
-                        groupId: 1,
-                    },
-                },
-            },
-            withImage: {
-                summary: '图片对话',
-                description: '发送图片进行视觉问答',
-                value: {
-                    userId: 1,
-                    prompt: '这张图片里有什么？',
-                    imageUrl: 'https://example.com/image.jpg',
-                },
-            },
-            withFile: {
-                summary: '文件对话',
-                description: '上传文档（PDF、Word等）',
-                value: {
-                    userId: 1,
-                    prompt: '请总结这个文档',
-                    fileUrl: 'https://example.com/doc.pdf',
-                },
-            },
-            withVoice: {
-                summary: '语音输入',
-                description: '音频自动识别为文本',
-                value: {
-                    userId: 1,
-                    audioUrl: 'https://example.com/voice.mp3',
-                },
-            },
-            withContext: {
-                summary: '带上下文',
-                description: '使用 parentMessageId 维持对话',
-                value: {
-                    userId: 1,
-                    prompt: '继续刚才的话题',
-                    options: {
-                        parentMessageId: '123456',
-                    },
-                },
-            },
-            withTemperature: {
-                summary: '自定义温度',
-                description: '调整回复的创造性',
-                value: {
-                    userId: 1,
-                    appId: 101,
-                    prompt: '给我讲个故事',
-                    options: {
-                        temperature: 0.9,
-                    },
                 },
             },
         },
@@ -19430,168 +19052,63 @@ __decorate([
     __param(1, (0, common_1.Req)()),
     __param(2, (0, common_1.Res)()),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [typeof (_d = typeof openChat_dto_1.OpenChatProcessDto !== "undefined" && openChat_dto_1.OpenChatProcessDto) === "function" ? _d : Object, typeof (_e = typeof express_1.Request !== "undefined" && express_1.Request) === "function" ? _e : Object, typeof (_f = typeof express_1.Response !== "undefined" && express_1.Response) === "function" ? _f : Object]),
+    __metadata("design:paramtypes", [Object, typeof (_d = typeof express_1.Request !== "undefined" && express_1.Request) === "function" ? _d : Object, typeof (_e = typeof express_1.Response !== "undefined" && express_1.Response) === "function" ? _e : Object]),
     __metadata("design:returntype", Promise)
 ], OpenChatController.prototype, "chatProcess", null);
 __decorate([
     (0, common_1.Post)('tts-process'),
-    (0, swagger_1.ApiOperation)({
-        summary: '【开放】TTS 文字转语音',
-        description: `
-将文本转换为语音，支持角色情绪音色
-
-参数说明：
-- userId（必填）：用户ID
-- prompt（必填）：要转换的文本（支持括号内心理描述，如：你好啊~（开心地打招呼））
-- appId（可选）：角色ID，用于情绪音色选择
-- chatId（可选）：聊天记录ID，如果未传appId则从此获取
-- emotion（可选）：直接指定情绪类型，跳过AI识别
-- voice（可选）：音色类型（alloy/nova等）
-- speed（可选）：语速（0.25-4.0，默认1.0）
-    `,
-    }),
+    (0, swagger_1.ApiOperation)({ summary: '【开放】TTS 文字转语音（无鉴权，需显式传 userId）' }),
     (0, swagger_1.ApiBody)({
-        type: openChat_dto_1.OpenTtsDto,
-        examples: {
-            minimal: {
-                summary: '最小参数（推荐）',
-                description: '只包含必填参数',
-                value: {
-                    userId: 1,
-                    prompt: '你好，很高兴为你服务',
-                },
+        schema: {
+            type: 'object',
+            properties: {
+                userId: { type: 'number', description: '外部用户ID' },
+                chatId: { type: 'number', description: '可选：继续某个会话ID' },
+                prompt: { type: 'string', description: '要合成的文本' },
             },
-            withRole: {
-                summary: '角色情绪朗读',
-                description: '使用角色ID和情绪音色',
-                value: {
-                    userId: 1,
-                    appId: 101,
-                    prompt: '你好啊~（开心地打招呼）',
-                },
-            },
-            withEmotion: {
-                summary: '指定情绪',
-                description: '直接指定情绪类型',
-                value: {
-                    userId: 1,
-                    appId: 101,
-                    prompt: '今天天气真好',
-                    emotion: '开心',
-                },
-            },
-            withSpeed: {
-                summary: '调整语速',
-                description: '语速范围 0.25-4.0，默认1.0',
-                value: {
-                    userId: 1,
-                    prompt: '这是一段快速播报的内容',
-                    speed: 1.5,
-                },
-            },
-            withVoice: {
-                summary: '指定音色',
-                description: '使用不同的声音类型',
-                value: {
-                    userId: 1,
-                    prompt: '测试不同的音色效果',
-                    voice: 'alloy',
-                },
-            },
+            required: ['userId', 'prompt'],
         },
     }),
     __param(0, (0, common_1.Body)()),
     __param(1, (0, common_1.Req)()),
     __param(2, (0, common_1.Res)()),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [typeof (_g = typeof openChat_dto_1.OpenTtsDto !== "undefined" && openChat_dto_1.OpenTtsDto) === "function" ? _g : Object, typeof (_h = typeof express_1.Request !== "undefined" && express_1.Request) === "function" ? _h : Object, typeof (_j = typeof express_1.Response !== "undefined" && express_1.Response) === "function" ? _j : Object]),
+    __metadata("design:paramtypes", [Object, typeof (_f = typeof express_1.Request !== "undefined" && express_1.Request) === "function" ? _f : Object, typeof (_g = typeof express_1.Response !== "undefined" && express_1.Response) === "function" ? _g : Object]),
     __metadata("design:returntype", void 0)
 ], OpenChatController.prototype, "ttsProcess", null);
 __decorate([
     (0, common_1.Post)('chat-process-voice'),
-    (0, swagger_1.ApiOperation)({
-        summary: '【开放】语音对话',
-        description: `
-语音转文本后进行AI对话
-
-参数说明：
-- userId（必填）：用户ID
-- audioUrl 或 audioBase64（二选一）：音频输入
-- appId：角色ID
-- options.groupId：群聊ID（通过options传递）
-- options.parentMessageId：维持对话上下文
-- options.temperature：控制回复随机性
-
-支持格式：MP3, AAC, AMR, OGG, WAV
-返回：流式响应
-    `,
-    }),
+    (0, swagger_1.ApiOperation)({ summary: '【开放】语音对话（无鉴权，需显式传 userId；audioUrl 或 audioBase64）' }),
     (0, swagger_1.ApiBody)({
-        type: openChat_dto_1.OpenChatVoiceDto,
-        examples: {
-            minimalUrl: {
-                summary: '最小参数-URL（推荐）',
-                description: '使用音频URL',
-                value: {
-                    userId: 1,
-                    audioUrl: 'https://example.com/voice.mp3',
-                },
+        schema: {
+            type: 'object',
+            properties: {
+                userId: { type: 'number', description: '外部用户ID（必须为系统中存在的用户）' },
+                audioUrl: { type: 'string', description: '音频URL（与 audioBase64 二选一）' },
+                audioBase64: { type: 'string', description: '音频base64（与 audioUrl 二选一）' },
+                model: { type: 'string', description: '使用的模型标识（可选）' },
+                modelName: { type: 'string', description: '模型名称（可选）' },
+                modelType: { type: 'number', description: '模型类型（可选）' },
+                modelAvatar: { type: 'string', description: '模型头像URL（可选）' },
+                appId: { type: 'number', description: '角色(App) ID（可选）' },
+                options: { type: 'object', description: '对话附加选项（可选）' },
+                usingPluginId: { type: 'number', description: '插件ID（可选）' },
+                extraParam: { type: 'object', description: '扩展参数（可选）' },
             },
-            minimalBase64: {
-                summary: '最小参数-Base64',
-                description: '使用Base64编码音频',
-                value: {
-                    userId: 1,
-                    audioBase64: 'data:audio/mp3;base64,//uQxAAAAAAAAAAAAAAAAAAAAAAA...',
-                },
-            },
-            withRole: {
-                summary: '角色语音对话',
-                description: '使用预设角色',
-                value: {
-                    userId: 1,
-                    audioUrl: 'https://example.com/question.mp3',
-                    appId: 101,
-                },
-            },
-            groupVoice: {
-                summary: '群聊语音',
-                description: '群聊中发送语音，groupId 通过 options 传递',
-                value: {
-                    userId: 1,
-                    audioUrl: 'https://example.com/voice.aac',
-                    appId: 101,
-                    options: {
-                        groupId: 1,
-                    },
-                },
-            },
-            withContext: {
-                summary: '带上下文',
-                description: '维持对话上下文',
-                value: {
-                    userId: 1,
-                    audioUrl: 'https://example.com/followup.wav',
-                    options: {
-                        parentMessageId: '123456',
-                    },
-                },
-            },
+            required: ['userId'],
         },
     }),
     __param(0, (0, common_1.Body)()),
     __param(1, (0, common_1.Req)()),
     __param(2, (0, common_1.Res)()),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [typeof (_k = typeof openChat_dto_1.OpenChatVoiceDto !== "undefined" && openChat_dto_1.OpenChatVoiceDto) === "function" ? _k : Object, typeof (_l = typeof express_1.Request !== "undefined" && express_1.Request) === "function" ? _l : Object, typeof (_m = typeof express_1.Response !== "undefined" && express_1.Response) === "function" ? _m : Object]),
+    __metadata("design:paramtypes", [Object, typeof (_h = typeof express_1.Request !== "undefined" && express_1.Request) === "function" ? _h : Object, typeof (_j = typeof express_1.Response !== "undefined" && express_1.Response) === "function" ? _j : Object]),
     __metadata("design:returntype", Promise)
 ], OpenChatController.prototype, "chatProcessVoice", null);
 __decorate([
     (0, common_1.Get)('affection/status'),
     (0, swagger_1.ApiOperation)({
-        summary: '【开放】获取好感度状态（已废弃，请使用 /api/open/affection/status）',
-        deprecated: true,
-        description: '此接口已废弃，请使用 GET /api/open/affection/status',
+        summary: '【开放】获取某用户在某app的好感度与阶段（无鉴权，需显式传 userId, appId）',
     }),
     (0, swagger_1.ApiQuery)({ name: 'userId', type: Number, required: true }),
     (0, swagger_1.ApiQuery)({ name: 'appId', type: Number, required: true }),
@@ -19619,298 +19136,14 @@ var __decorate = (this && this.__decorate) || function (decorators, target, key,
     else for (var i = decorators.length - 1; i >= 0; i--) if (d = decorators[i]) r = (c < 3 ? d(r) : c > 3 ? d(target, key, r) : d(target, key)) || r;
     return c > 3 && r && Object.defineProperty(target, key, r), r;
 };
-var __metadata = (this && this.__metadata) || function (k, v) {
-    if (typeof Reflect === "object" && typeof Reflect.metadata === "function") return Reflect.metadata(k, v);
-};
-Object.defineProperty(exports, "__esModule", ({ value: true }));
-exports.OpenTtsDto = exports.OpenChatVoiceDto = exports.OpenChatProcessDto = exports.ExtraParamDto = exports.ChatOptionsDto = void 0;
-const swagger_1 = __webpack_require__(14);
-const class_transformer_1 = __webpack_require__(131);
-const class_validator_1 = __webpack_require__(106);
-class ChatOptionsDto {
-    parentMessageId;
-    temperature;
-    groupId;
-}
-exports.ChatOptionsDto = ChatOptionsDto;
-__decorate([
-    (0, swagger_1.ApiPropertyOptional)({
-        description: '父消息ID，用于维护对话上下文',
-        example: '123456',
-    }),
-    (0, class_validator_1.IsOptional)(),
-    (0, class_validator_1.IsString)(),
-    __metadata("design:type", String)
-], ChatOptionsDto.prototype, "parentMessageId", void 0);
-__decorate([
-    (0, swagger_1.ApiPropertyOptional)({
-        description: '温度参数（0-2），控制回复的随机性，默认0.7',
-        example: 0.7,
-        minimum: 0,
-        maximum: 2,
-    }),
-    (0, class_validator_1.IsOptional)(),
-    (0, class_validator_1.IsNumber)(),
-    __metadata("design:type", Number)
-], ChatOptionsDto.prototype, "temperature", void 0);
-__decorate([
-    (0, swagger_1.ApiPropertyOptional)({
-        description: '群聊ID（传递此参数启用群聊模式）',
-        example: 1,
-    }),
-    (0, class_validator_1.IsOptional)(),
-    (0, class_validator_1.IsNumber)(),
-    __metadata("design:type", Number)
-], ChatOptionsDto.prototype, "groupId", void 0);
-class ExtraParamDto {
-    size;
-}
-exports.ExtraParamDto = ExtraParamDto;
-__decorate([
-    (0, swagger_1.ApiPropertyOptional)({
-        description: '图片尺寸（用于图片生成）',
-        example: '1024x1024',
-    }),
-    (0, class_validator_1.IsOptional)(),
-    (0, class_validator_1.IsString)(),
-    __metadata("design:type", String)
-], ExtraParamDto.prototype, "size", void 0);
-class OpenChatProcessDto {
-    userId;
-    prompt;
-    appId;
-    audioUrl;
-    imageUrl;
-    fileUrl;
-    options;
-}
-exports.OpenChatProcessDto = OpenChatProcessDto;
-__decorate([
-    (0, swagger_1.ApiProperty)({
-        description: '用户ID（必须为系统中存在的用户）',
-        example: 1,
-    }),
-    (0, class_validator_1.IsNotEmpty)({ message: 'userId不能为空' }),
-    (0, class_validator_1.IsNumber)({}, { message: 'userId必须为数字' }),
-    __metadata("design:type", Number)
-], OpenChatProcessDto.prototype, "userId", void 0);
-__decorate([
-    (0, swagger_1.ApiPropertyOptional)({
-        description: '用户提问内容（若传audioUrl则可为空，将自动ASR识别为文本）',
-        example: '你好，请介绍一下自己',
-    }),
-    (0, class_validator_1.IsOptional)(),
-    (0, class_validator_1.IsString)(),
-    __metadata("design:type", String)
-], OpenChatProcessDto.prototype, "prompt", void 0);
-__decorate([
-    (0, swagger_1.ApiPropertyOptional)({
-        description: '角色应用ID（使用预设角色时传递）',
-        example: 101,
-    }),
-    (0, class_validator_1.IsOptional)(),
-    (0, class_validator_1.IsNumber)(),
-    __metadata("design:type", Number)
-], OpenChatProcessDto.prototype, "appId", void 0);
-__decorate([
-    (0, swagger_1.ApiPropertyOptional)({
-        description: '音频文件URL（自动进行ASR识别为文本）',
-        example: 'https://example.com/audio.mp3',
-    }),
-    (0, class_validator_1.IsOptional)(),
-    (0, class_validator_1.IsString)(),
-    __metadata("design:type", String)
-], OpenChatProcessDto.prototype, "audioUrl", void 0);
-__decorate([
-    (0, swagger_1.ApiPropertyOptional)({
-        description: '图片URL（用于多模态对话）',
-        example: 'https://example.com/image.jpg',
-    }),
-    (0, class_validator_1.IsOptional)(),
-    (0, class_validator_1.IsString)(),
-    __metadata("design:type", String)
-], OpenChatProcessDto.prototype, "imageUrl", void 0);
-__decorate([
-    (0, swagger_1.ApiPropertyOptional)({
-        description: '文件URL（如PDF、Word等）',
-        example: 'https://example.com/document.pdf',
-    }),
-    (0, class_validator_1.IsOptional)(),
-    (0, class_validator_1.IsString)(),
-    __metadata("design:type", String)
-], OpenChatProcessDto.prototype, "fileUrl", void 0);
-__decorate([
-    (0, swagger_1.ApiPropertyOptional)({
-        description: '对话附加选项（parentMessageId、temperature、groupId）',
-        type: ChatOptionsDto,
-    }),
-    (0, class_validator_1.IsOptional)(),
-    (0, class_validator_1.IsObject)(),
-    (0, class_validator_1.ValidateNested)(),
-    (0, class_transformer_1.Type)(() => ChatOptionsDto),
-    __metadata("design:type", ChatOptionsDto)
-], OpenChatProcessDto.prototype, "options", void 0);
-class OpenChatVoiceDto {
-    userId;
-    audioUrl;
-    audioBase64;
-    appId;
-    options;
-}
-exports.OpenChatVoiceDto = OpenChatVoiceDto;
-__decorate([
-    (0, swagger_1.ApiProperty)({
-        description: '用户ID（必须为系统中存在的用户）',
-        example: 1,
-    }),
-    (0, class_validator_1.IsNotEmpty)({ message: 'userId不能为空' }),
-    (0, class_validator_1.IsNumber)({}, { message: 'userId必须为数字' }),
-    __metadata("design:type", Number)
-], OpenChatVoiceDto.prototype, "userId", void 0);
-__decorate([
-    (0, swagger_1.ApiPropertyOptional)({
-        description: '音频URL（与audioBase64二选一）',
-        example: 'https://example.com/audio.mp3',
-    }),
-    (0, class_validator_1.IsOptional)(),
-    (0, class_validator_1.IsString)(),
-    __metadata("design:type", String)
-], OpenChatVoiceDto.prototype, "audioUrl", void 0);
-__decorate([
-    (0, swagger_1.ApiPropertyOptional)({
-        description: '音频Base64编码（与audioUrl二选一）',
-        example: 'data:audio/wav;base64,UklGRiQAAABXQVZF...',
-    }),
-    (0, class_validator_1.IsOptional)(),
-    (0, class_validator_1.IsString)(),
-    __metadata("design:type", String)
-], OpenChatVoiceDto.prototype, "audioBase64", void 0);
-__decorate([
-    (0, swagger_1.ApiPropertyOptional)({
-        description: '角色应用ID',
-        example: 101,
-    }),
-    (0, class_validator_1.IsOptional)(),
-    (0, class_validator_1.IsNumber)(),
-    __metadata("design:type", Number)
-], OpenChatVoiceDto.prototype, "appId", void 0);
-__decorate([
-    (0, swagger_1.ApiPropertyOptional)({
-        description: '对话附加选项（parentMessageId、temperature、groupId）',
-        type: ChatOptionsDto,
-    }),
-    (0, class_validator_1.IsOptional)(),
-    (0, class_validator_1.IsObject)(),
-    (0, class_validator_1.ValidateNested)(),
-    (0, class_transformer_1.Type)(() => ChatOptionsDto),
-    __metadata("design:type", ChatOptionsDto)
-], OpenChatVoiceDto.prototype, "options", void 0);
-class OpenTtsDto {
-    userId;
-    prompt;
-    chatId;
-    appId;
-    model;
-    voice;
-    speed;
-    emotion;
-}
-exports.OpenTtsDto = OpenTtsDto;
-__decorate([
-    (0, swagger_1.ApiProperty)({
-        description: '用户ID',
-        example: 1,
-    }),
-    (0, class_validator_1.IsNotEmpty)({ message: 'userId不能为空' }),
-    (0, class_validator_1.IsNumber)({}, { message: 'userId必须为数字' }),
-    __metadata("design:type", Number)
-], OpenTtsDto.prototype, "userId", void 0);
-__decorate([
-    (0, swagger_1.ApiProperty)({
-        description: '要转换为语音的文本',
-        example: '你好，很高兴为你服务',
-    }),
-    (0, class_validator_1.IsNotEmpty)({ message: 'prompt不能为空' }),
-    (0, class_validator_1.IsString)(),
-    __metadata("design:type", String)
-], OpenTtsDto.prototype, "prompt", void 0);
-__decorate([
-    (0, swagger_1.ApiPropertyOptional)({
-        description: '关联的聊天ID（可选，用于继续某个会话）',
-        example: 123,
-    }),
-    (0, class_validator_1.IsOptional)(),
-    (0, class_validator_1.IsNumber)(),
-    __metadata("design:type", Number)
-], OpenTtsDto.prototype, "chatId", void 0);
-__decorate([
-    (0, swagger_1.ApiPropertyOptional)({
-        description: '角色ID（可选，用于情绪音色选择）',
-        example: 101,
-    }),
-    (0, class_validator_1.IsOptional)(),
-    (0, class_validator_1.IsNumber)(),
-    __metadata("design:type", Number)
-], OpenTtsDto.prototype, "appId", void 0);
-__decorate([
-    (0, swagger_1.ApiPropertyOptional)({
-        description: '语音模型（可选）',
-        example: 'tts-1',
-    }),
-    (0, class_validator_1.IsOptional)(),
-    (0, class_validator_1.IsString)(),
-    __metadata("design:type", String)
-], OpenTtsDto.prototype, "model", void 0);
-__decorate([
-    (0, swagger_1.ApiPropertyOptional)({
-        description: '声音类型（可选）',
-        example: 'alloy',
-    }),
-    (0, class_validator_1.IsOptional)(),
-    (0, class_validator_1.IsString)(),
-    __metadata("design:type", String)
-], OpenTtsDto.prototype, "voice", void 0);
-__decorate([
-    (0, swagger_1.ApiPropertyOptional)({
-        description: '语速（0.25-4.0）',
-        example: 1.0,
-        minimum: 0.25,
-        maximum: 4.0,
-    }),
-    (0, class_validator_1.IsOptional)(),
-    (0, class_validator_1.IsNumber)(),
-    __metadata("design:type", Number)
-], OpenTtsDto.prototype, "speed", void 0);
-__decorate([
-    (0, swagger_1.ApiPropertyOptional)({
-        description: '指定情绪类型（可选，直接指定则跳过AI识别）',
-        example: '开心',
-    }),
-    (0, class_validator_1.IsOptional)(),
-    (0, class_validator_1.IsString)(),
-    __metadata("design:type", String)
-], OpenTtsDto.prototype, "emotion", void 0);
-
-
-/***/ }),
-/* 203 */
-/***/ (function(__unused_webpack_module, exports, __webpack_require__) {
-
-
-var __decorate = (this && this.__decorate) || function (decorators, target, key, desc) {
-    var c = arguments.length, r = c < 3 ? target : desc === null ? desc = Object.getOwnPropertyDescriptor(target, key) : desc, d;
-    if (typeof Reflect === "object" && typeof Reflect.decorate === "function") r = Reflect.decorate(decorators, target, key, desc);
-    else for (var i = decorators.length - 1; i >= 0; i--) if (d = decorators[i]) r = (c < 3 ? d(r) : c > 3 ? d(target, key, r) : d(target, key)) || r;
-    return c > 3 && r && Object.defineProperty(target, key, r), r;
-};
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.ChatGroupModule = void 0;
 const common_1 = __webpack_require__(2);
-const chatGroup_controller_1 = __webpack_require__(204);
-const chatGroup_service_1 = __webpack_require__(168);
+const chatGroup_controller_1 = __webpack_require__(203);
+const chatGroup_service_1 = __webpack_require__(166);
 const typeorm_1 = __webpack_require__(33);
 const chatGroup_entity_1 = __webpack_require__(96);
-const app_entity_1 = __webpack_require__(113);
+const app_entity_1 = __webpack_require__(115);
 const affection_module_1 = __webpack_require__(32);
 let ChatGroupModule = class ChatGroupModule {
 };
@@ -19927,7 +19160,7 @@ exports.ChatGroupModule = ChatGroupModule = __decorate([
 
 
 /***/ }),
-/* 204 */
+/* 203 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
@@ -19949,11 +19182,11 @@ exports.ChatGroupController = void 0;
 const jwtAuth_guard_1 = __webpack_require__(35);
 const common_1 = __webpack_require__(2);
 const swagger_1 = __webpack_require__(14);
-const express_1 = __webpack_require__(111);
-const chatGroup_service_1 = __webpack_require__(168);
-const createGroup_dto_1 = __webpack_require__(205);
-const delGroup_dto_1 = __webpack_require__(206);
-const updateGroup_dto_1 = __webpack_require__(207);
+const express_1 = __webpack_require__(113);
+const chatGroup_service_1 = __webpack_require__(166);
+const createGroup_dto_1 = __webpack_require__(204);
+const delGroup_dto_1 = __webpack_require__(205);
+const updateGroup_dto_1 = __webpack_require__(206);
 let ChatGroupController = class ChatGroupController {
     chatGroupService;
     constructor(chatGroupService) {
@@ -20121,7 +19354,7 @@ exports.ChatGroupController = ChatGroupController = __decorate([
 
 
 /***/ }),
-/* 205 */
+/* 204 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
@@ -20137,7 +19370,6 @@ var __metadata = (this && this.__metadata) || function (k, v) {
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.CreateGroupDto = void 0;
 const swagger_1 = __webpack_require__(14);
-const class_transformer_1 = __webpack_require__(131);
 const class_validator_1 = __webpack_require__(106);
 class CreateGroupDto {
     appId;
@@ -20148,17 +19380,14 @@ exports.CreateGroupDto = CreateGroupDto;
 __decorate([
     (0, swagger_1.ApiProperty)({ example: 10, description: '应用ID', required: false }),
     (0, class_validator_1.IsOptional)(),
-    (0, class_transformer_1.Type)(() => Number),
-    (0, class_validator_1.IsNumber)(),
     __metadata("design:type", Number)
 ], CreateGroupDto.prototype, "appId", void 0);
 __decorate([
     (0, swagger_1.ApiProperty)({
-        example: {},
-        description: '对话模型配置项',
+        example: '',
+        description: '对话模型配置项序列化的字符串',
         required: false,
     }),
-    (0, class_validator_1.IsOptional)(),
     __metadata("design:type", Object)
 ], CreateGroupDto.prototype, "modelConfig", void 0);
 __decorate([
@@ -20167,10 +19396,35 @@ __decorate([
         description: '对话组参数序列化的字符串',
         required: false,
     }),
-    (0, class_validator_1.IsOptional)(),
-    (0, class_validator_1.IsString)(),
     __metadata("design:type", String)
 ], CreateGroupDto.prototype, "params", void 0);
+
+
+/***/ }),
+/* 205 */
+/***/ (function(__unused_webpack_module, exports, __webpack_require__) {
+
+
+var __decorate = (this && this.__decorate) || function (decorators, target, key, desc) {
+    var c = arguments.length, r = c < 3 ? target : desc === null ? desc = Object.getOwnPropertyDescriptor(target, key) : desc, d;
+    if (typeof Reflect === "object" && typeof Reflect.decorate === "function") r = Reflect.decorate(decorators, target, key, desc);
+    else for (var i = decorators.length - 1; i >= 0; i--) if (d = decorators[i]) r = (c < 3 ? d(r) : c > 3 ? d(target, key, r) : d(target, key)) || r;
+    return c > 3 && r && Object.defineProperty(target, key, r), r;
+};
+var __metadata = (this && this.__metadata) || function (k, v) {
+    if (typeof Reflect === "object" && typeof Reflect.metadata === "function") return Reflect.metadata(k, v);
+};
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.DelGroupDto = void 0;
+const swagger_1 = __webpack_require__(14);
+class DelGroupDto {
+    groupId;
+}
+exports.DelGroupDto = DelGroupDto;
+__decorate([
+    (0, swagger_1.ApiProperty)({ example: 1, description: '对话分组ID', required: true }),
+    __metadata("design:type", Number)
+], DelGroupDto.prototype, "groupId", void 0);
 
 
 /***/ }),
@@ -20188,68 +19442,29 @@ var __metadata = (this && this.__metadata) || function (k, v) {
     if (typeof Reflect === "object" && typeof Reflect.metadata === "function") return Reflect.metadata(k, v);
 };
 Object.defineProperty(exports, "__esModule", ({ value: true }));
-exports.DelGroupDto = void 0;
-const swagger_1 = __webpack_require__(14);
-const class_transformer_1 = __webpack_require__(131);
-const class_validator_1 = __webpack_require__(106);
-class DelGroupDto {
-    groupId;
-}
-exports.DelGroupDto = DelGroupDto;
-__decorate([
-    (0, swagger_1.ApiProperty)({ example: 1, description: '对话分组ID', required: true }),
-    (0, class_validator_1.IsNotEmpty)({ message: 'groupId不能为空' }),
-    (0, class_transformer_1.Type)(() => Number),
-    (0, class_validator_1.IsNumber)({}, { message: 'groupId必须为数字' }),
-    __metadata("design:type", Number)
-], DelGroupDto.prototype, "groupId", void 0);
-
-
-/***/ }),
-/* 207 */
-/***/ (function(__unused_webpack_module, exports, __webpack_require__) {
-
-
-var __decorate = (this && this.__decorate) || function (decorators, target, key, desc) {
-    var c = arguments.length, r = c < 3 ? target : desc === null ? desc = Object.getOwnPropertyDescriptor(target, key) : desc, d;
-    if (typeof Reflect === "object" && typeof Reflect.decorate === "function") r = Reflect.decorate(decorators, target, key, desc);
-    else for (var i = decorators.length - 1; i >= 0; i--) if (d = decorators[i]) r = (c < 3 ? d(r) : c > 3 ? d(target, key, r) : d(target, key)) || r;
-    return c > 3 && r && Object.defineProperty(target, key, r), r;
-};
-var __metadata = (this && this.__metadata) || function (k, v) {
-    if (typeof Reflect === "object" && typeof Reflect.metadata === "function") return Reflect.metadata(k, v);
-};
-Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.UpdateGroupDto = void 0;
 const swagger_1 = __webpack_require__(14);
-const class_transformer_1 = __webpack_require__(131);
 const class_validator_1 = __webpack_require__(106);
 class UpdateGroupDto {
     groupId;
     title;
     isSticky;
     config;
-    fileUrl;
 }
 exports.UpdateGroupDto = UpdateGroupDto;
 __decorate([
     (0, swagger_1.ApiProperty)({ example: 1, description: '修改的对话ID', required: false }),
     (0, class_validator_1.IsOptional)(),
-    (0, class_transformer_1.Type)(() => Number),
-    (0, class_validator_1.IsNumber)(),
     __metadata("design:type", Number)
 ], UpdateGroupDto.prototype, "groupId", void 0);
 __decorate([
-    (0, swagger_1.ApiProperty)({ example: '新对话', description: '对话组title', required: false }),
+    (0, swagger_1.ApiProperty)({ example: 10, description: '对话组title', required: false }),
     (0, class_validator_1.IsOptional)(),
-    (0, class_validator_1.IsString)(),
     __metadata("design:type", String)
 ], UpdateGroupDto.prototype, "title", void 0);
 __decorate([
-    (0, swagger_1.ApiProperty)({ example: false, description: '对话组是否置顶', required: false }),
+    (0, swagger_1.ApiProperty)({ example: 10, description: '对话组是否置顶', required: false }),
     (0, class_validator_1.IsOptional)(),
-    (0, class_transformer_1.Type)(() => Boolean),
-    (0, class_validator_1.IsBoolean)(),
     __metadata("design:type", Boolean)
 ], UpdateGroupDto.prototype, "isSticky", void 0);
 __decorate([
@@ -20258,24 +19473,12 @@ __decorate([
         description: '对话模型配置项序列化的字符串',
         required: false,
     }),
-    (0, class_validator_1.IsOptional)(),
-    (0, class_validator_1.IsString)(),
     __metadata("design:type", String)
 ], UpdateGroupDto.prototype, "config", void 0);
-__decorate([
-    (0, swagger_1.ApiProperty)({
-        example: '',
-        description: '文件URL',
-        required: false,
-    }),
-    (0, class_validator_1.IsOptional)(),
-    (0, class_validator_1.IsString)(),
-    __metadata("design:type", String)
-], UpdateGroupDto.prototype, "fileUrl", void 0);
 
 
 /***/ }),
-/* 208 */
+/* 207 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
@@ -20291,10 +19494,10 @@ const common_1 = __webpack_require__(2);
 const typeorm_1 = __webpack_require__(33);
 const chatGroup_entity_1 = __webpack_require__(96);
 const user_entity_1 = __webpack_require__(97);
-const chatLog_controller_1 = __webpack_require__(209);
+const chatLog_controller_1 = __webpack_require__(208);
 const chatLog_entity_1 = __webpack_require__(72);
-const chatLog_service_1 = __webpack_require__(172);
-const open_chatLog_controller_1 = __webpack_require__(219);
+const chatLog_service_1 = __webpack_require__(170);
+const open_chatLog_controller_1 = __webpack_require__(218);
 let ChatLogModule = class ChatLogModule {
 };
 exports.ChatLogModule = ChatLogModule;
@@ -20310,7 +19513,7 @@ exports.ChatLogModule = ChatLogModule = __decorate([
 
 
 /***/ }),
-/* 209 */
+/* 208 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
@@ -20329,22 +19532,22 @@ var __param = (this && this.__param) || function (paramIndex, decorator) {
 var _a, _b, _c, _d, _e, _f, _g, _h, _j, _k, _l, _m, _o, _p, _q, _r, _s, _t, _u;
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.ChatLogController = void 0;
-const adminAuth_guard_1 = __webpack_require__(109);
+const adminAuth_guard_1 = __webpack_require__(111);
 const jwtAuth_guard_1 = __webpack_require__(35);
-const superAuth_guard_1 = __webpack_require__(110);
+const superAuth_guard_1 = __webpack_require__(112);
 const common_1 = __webpack_require__(2);
 const swagger_1 = __webpack_require__(14);
-const express_1 = __webpack_require__(111);
-const chatLog_service_1 = __webpack_require__(172);
-const chatList_dto_1 = __webpack_require__(210);
-const del_dto_1 = __webpack_require__(211);
-const delByGroup_dto_1 = __webpack_require__(212);
-const exportExcelChatlog_dto_1 = __webpack_require__(213);
-const queryAllChatLog_dto_1 = __webpack_require__(214);
-const queryByAppId_dto_1 = __webpack_require__(215);
-const queryMyChatLog_dto_1 = __webpack_require__(216);
-const querySingleChat_dto_1 = __webpack_require__(217);
-const recDrawImg_dto_1 = __webpack_require__(218);
+const express_1 = __webpack_require__(113);
+const chatLog_service_1 = __webpack_require__(170);
+const chatList_dto_1 = __webpack_require__(209);
+const del_dto_1 = __webpack_require__(210);
+const delByGroup_dto_1 = __webpack_require__(211);
+const exportExcelChatlog_dto_1 = __webpack_require__(212);
+const queryAllChatLog_dto_1 = __webpack_require__(213);
+const queryByAppId_dto_1 = __webpack_require__(214);
+const queryMyChatLog_dto_1 = __webpack_require__(215);
+const querySingleChat_dto_1 = __webpack_require__(216);
+const recDrawImg_dto_1 = __webpack_require__(217);
 let ChatLogController = class ChatLogController {
     chatLogService;
     constructor(chatLogService) {
@@ -20498,7 +19701,7 @@ exports.ChatLogController = ChatLogController = __decorate([
 
 
 /***/ }),
-/* 210 */
+/* 209 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
@@ -20527,7 +19730,7 @@ __decorate([
 
 
 /***/ }),
-/* 211 */
+/* 210 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
@@ -20554,7 +19757,7 @@ __decorate([
 
 
 /***/ }),
-/* 212 */
+/* 211 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
@@ -20581,7 +19784,7 @@ __decorate([
 
 
 /***/ }),
-/* 213 */
+/* 212 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
@@ -20636,7 +19839,7 @@ __decorate([
 
 
 /***/ }),
-/* 214 */
+/* 213 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
@@ -20704,7 +19907,7 @@ __decorate([
 
 
 /***/ }),
-/* 215 */
+/* 214 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
@@ -20745,7 +19948,7 @@ __decorate([
 
 
 /***/ }),
-/* 216 */
+/* 215 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
@@ -20774,7 +19977,7 @@ __decorate([
 
 
 /***/ }),
-/* 217 */
+/* 216 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
@@ -20803,7 +20006,7 @@ __decorate([
 
 
 /***/ }),
-/* 218 */
+/* 217 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
@@ -20830,7 +20033,7 @@ __decorate([
 
 
 /***/ }),
-/* 219 */
+/* 218 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
@@ -20851,7 +20054,7 @@ Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.OpenChatLogController = void 0;
 const common_1 = __webpack_require__(2);
 const swagger_1 = __webpack_require__(14);
-const chatLog_service_1 = __webpack_require__(172);
+const chatLog_service_1 = __webpack_require__(170);
 let OpenChatLogController = class OpenChatLogController {
     chatLogService;
     constructor(chatLogService) {
@@ -20945,38 +20148,7 @@ exports.OpenChatLogController = OpenChatLogController = __decorate([
 
 
 /***/ }),
-/* 220 */
-/***/ (function(__unused_webpack_module, exports, __webpack_require__) {
-
-
-var __decorate = (this && this.__decorate) || function (decorators, target, key, desc) {
-    var c = arguments.length, r = c < 3 ? target : desc === null ? desc = Object.getOwnPropertyDescriptor(target, key) : desc, d;
-    if (typeof Reflect === "object" && typeof Reflect.decorate === "function") r = Reflect.decorate(decorators, target, key, desc);
-    else for (var i = decorators.length - 1; i >= 0; i--) if (d = decorators[i]) r = (c < 3 ? d(r) : c > 3 ? d(target, key, r) : d(target, key)) || r;
-    return c > 3 && r && Object.defineProperty(target, key, r), r;
-};
-Object.defineProperty(exports, "__esModule", ({ value: true }));
-exports.ConversationSummaryModule = void 0;
-const common_1 = __webpack_require__(2);
-const typeorm_1 = __webpack_require__(33);
-const conversationSummary_entity_1 = __webpack_require__(199);
-const conversationSummary_service_1 = __webpack_require__(198);
-const globalConfig_module_1 = __webpack_require__(183);
-let ConversationSummaryModule = class ConversationSummaryModule {
-};
-exports.ConversationSummaryModule = ConversationSummaryModule;
-exports.ConversationSummaryModule = ConversationSummaryModule = __decorate([
-    (0, common_1.Global)(),
-    (0, common_1.Module)({
-        imports: [typeorm_1.TypeOrmModule.forFeature([conversationSummary_entity_1.ConversationSummaryEntity]), globalConfig_module_1.GlobalConfigModule],
-        providers: [conversationSummary_service_1.ConversationSummaryService],
-        exports: [conversationSummary_service_1.ConversationSummaryService],
-    })
-], ConversationSummaryModule);
-
-
-/***/ }),
-/* 221 */
+/* 219 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
@@ -20999,9 +20171,9 @@ const balance_entity_1 = __webpack_require__(94);
 const fingerprint_entity_1 = __webpack_require__(98);
 const userBalance_entity_1 = __webpack_require__(95);
 const userBalance_service_1 = __webpack_require__(91);
-const crami_controller_1 = __webpack_require__(222);
-const crami_entity_1 = __webpack_require__(224);
-const crami_service_1 = __webpack_require__(223);
+const crami_controller_1 = __webpack_require__(220);
+const crami_entity_1 = __webpack_require__(222);
+const crami_service_1 = __webpack_require__(221);
 const cramiPackage_entity_1 = __webpack_require__(92);
 let CramiModule = class CramiModule {
 };
@@ -21031,7 +20203,7 @@ exports.CramiModule = CramiModule = __decorate([
 
 
 /***/ }),
-/* 222 */
+/* 220 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
@@ -21050,21 +20222,21 @@ var __param = (this && this.__param) || function (paramIndex, decorator) {
 var _a, _b, _c, _d, _e, _f, _g, _h, _j, _k, _l;
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.CramiController = void 0;
-const adminAuth_guard_1 = __webpack_require__(109);
+const adminAuth_guard_1 = __webpack_require__(111);
 const jwtAuth_guard_1 = __webpack_require__(35);
-const superAuth_guard_1 = __webpack_require__(110);
+const superAuth_guard_1 = __webpack_require__(112);
 const common_1 = __webpack_require__(2);
 const swagger_1 = __webpack_require__(14);
-const express_1 = __webpack_require__(111);
-const crami_service_1 = __webpack_require__(223);
-const batchDelCrami_dto_1 = __webpack_require__(225);
-const createCrami_dto_1 = __webpack_require__(226);
-const createPackage_dto_1 = __webpack_require__(227);
-const deletePackage_dto_1 = __webpack_require__(228);
-const queryAllCrami_dto_1 = __webpack_require__(229);
-const queryAllPackage_dto_1 = __webpack_require__(230);
-const updatePackage_dto_1 = __webpack_require__(231);
-const useCrami_dto_1 = __webpack_require__(232);
+const express_1 = __webpack_require__(113);
+const crami_service_1 = __webpack_require__(221);
+const batchDelCrami_dto_1 = __webpack_require__(223);
+const createCrami_dto_1 = __webpack_require__(224);
+const createPackage_dto_1 = __webpack_require__(225);
+const deletePackage_dto_1 = __webpack_require__(226);
+const queryAllCrami_dto_1 = __webpack_require__(227);
+const queryAllPackage_dto_1 = __webpack_require__(228);
+const updatePackage_dto_1 = __webpack_require__(229);
+const useCrami_dto_1 = __webpack_require__(230);
 let CramiController = class CramiController {
     cramiService;
     constructor(cramiService) {
@@ -21208,7 +20380,7 @@ exports.CramiController = CramiController = __decorate([
 
 
 /***/ }),
-/* 223 */
+/* 221 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
@@ -21234,7 +20406,7 @@ const typeorm_1 = __webpack_require__(33);
 const typeorm_2 = __webpack_require__(3);
 const user_entity_1 = __webpack_require__(97);
 const userBalance_service_1 = __webpack_require__(91);
-const crami_entity_1 = __webpack_require__(224);
+const crami_entity_1 = __webpack_require__(222);
 const cramiPackage_entity_1 = __webpack_require__(92);
 let CramiService = class CramiService {
     cramiEntity;
@@ -21452,7 +20624,7 @@ exports.CramiService = CramiService = __decorate([
 
 
 /***/ }),
-/* 224 */
+/* 222 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
@@ -21537,7 +20709,7 @@ exports.CramiEntity = CramiEntity = __decorate([
 
 
 /***/ }),
-/* 225 */
+/* 223 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
@@ -21567,7 +20739,7 @@ __decorate([
 
 
 /***/ }),
-/* 226 */
+/* 224 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
@@ -21627,7 +20799,7 @@ __decorate([
 
 
 /***/ }),
-/* 227 */
+/* 225 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
@@ -21643,7 +20815,7 @@ var __metadata = (this && this.__metadata) || function (k, v) {
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.CreatePackageDto = void 0;
 const swagger_1 = __webpack_require__(14);
-const class_transformer_1 = __webpack_require__(131);
+const class_transformer_1 = __webpack_require__(184);
 const class_validator_1 = __webpack_require__(106);
 class CreatePackageDto {
     name;
@@ -21748,7 +20920,7 @@ __decorate([
 
 
 /***/ }),
-/* 228 */
+/* 226 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
@@ -21777,7 +20949,7 @@ __decorate([
 
 
 /***/ }),
-/* 229 */
+/* 227 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
@@ -21828,7 +21000,7 @@ __decorate([
 
 
 /***/ }),
-/* 230 */
+/* 228 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
@@ -21889,7 +21061,7 @@ __decorate([
 
 
 /***/ }),
-/* 231 */
+/* 229 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
@@ -21906,7 +21078,7 @@ Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.UpdatePackageDto = void 0;
 const class_validator_1 = __webpack_require__(106);
 const swagger_1 = __webpack_require__(14);
-const createPackage_dto_1 = __webpack_require__(227);
+const createPackage_dto_1 = __webpack_require__(225);
 class UpdatePackageDto extends createPackage_dto_1.CreatePackageDto {
     id;
 }
@@ -21919,7 +21091,7 @@ __decorate([
 
 
 /***/ }),
-/* 232 */
+/* 230 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
@@ -21952,7 +21124,7 @@ __decorate([
 
 
 /***/ }),
-/* 233 */
+/* 231 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
@@ -21972,35 +21144,35 @@ exports.DatabaseModule = void 0;
 const common_1 = __webpack_require__(2);
 const typeorm_1 = __webpack_require__(33);
 const typeorm_2 = __webpack_require__(3);
-const database_service_1 = __webpack_require__(234);
+const database_service_1 = __webpack_require__(232);
 const affection_entity_1 = __webpack_require__(103);
-const app_entity_1 = __webpack_require__(113);
-const appCats_entity_1 = __webpack_require__(114);
-const appEmotionVoice_entity_1 = __webpack_require__(115);
-const appVoice_entity_1 = __webpack_require__(116);
-const roleEmotion_entity_1 = __webpack_require__(117);
+const app_entity_1 = __webpack_require__(115);
+const appCats_entity_1 = __webpack_require__(116);
+const appEmotionVoice_entity_1 = __webpack_require__(117);
+const appVoice_entity_1 = __webpack_require__(118);
+const roleEmotion_entity_1 = __webpack_require__(119);
 const userApps_entity_1 = __webpack_require__(120);
-const userAppSettings_entity_1 = __webpack_require__(119);
-const autoReply_entity_1 = __webpack_require__(150);
-const badWords_entity_1 = __webpack_require__(158);
-const violationLog_entity_1 = __webpack_require__(159);
+const autoReply_entity_1 = __webpack_require__(148);
+const badWords_entity_1 = __webpack_require__(156);
+const violationLog_entity_1 = __webpack_require__(157);
 const chatGroup_entity_1 = __webpack_require__(96);
 const chatLog_entity_1 = __webpack_require__(72);
-const crami_entity_1 = __webpack_require__(224);
+const conversationSummary_entity_1 = __webpack_require__(196);
+const crami_entity_1 = __webpack_require__(222);
 const cramiPackage_entity_1 = __webpack_require__(92);
 const config_entity_1 = __webpack_require__(77);
 const models_entity_1 = __webpack_require__(76);
-const order_entity_1 = __webpack_require__(235);
-const plugin_entity_1 = __webpack_require__(174);
-const share_entity_1 = __webpack_require__(236);
-const signIn_entity_1 = __webpack_require__(237);
+const order_entity_1 = __webpack_require__(233);
+const plugin_entity_1 = __webpack_require__(172);
+const share_entity_1 = __webpack_require__(234);
+const signIn_entity_1 = __webpack_require__(235);
 const user_entity_1 = __webpack_require__(97);
 const accountLog_entity_1 = __webpack_require__(93);
 const balance_entity_1 = __webpack_require__(94);
 const fingerprint_entity_1 = __webpack_require__(98);
 const userBalance_entity_1 = __webpack_require__(95);
 const verification_entity_1 = __webpack_require__(100);
-const voice_entity_1 = __webpack_require__(192);
+const voice_entity_1 = __webpack_require__(191);
 let DatabaseModule = DatabaseModule_1 = class DatabaseModule {
     connection;
     constructor(connection) {
@@ -22071,7 +21243,7 @@ exports.DatabaseModule = DatabaseModule = DatabaseModule_1 = __decorate([
                         voice_entity_1.VoiceEntity,
                         affection_entity_1.AffectionRuleEntity,
                         affection_entity_1.UserAppAffectionEntity,
-                        userAppSettings_entity_1.UserAppSettingsEntity,
+                        conversationSummary_entity_1.ConversationSummaryEntity,
                     ],
                     synchronize: false,
                     logging: false,
@@ -22095,7 +21267,7 @@ exports.DatabaseModule = DatabaseModule = DatabaseModule_1 = __decorate([
 
 
 /***/ }),
-/* 234 */
+/* 232 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
@@ -22280,7 +21452,7 @@ exports.DatabaseService = DatabaseService = __decorate([
 
 
 /***/ }),
-/* 235 */
+/* 233 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
@@ -22374,7 +21546,7 @@ exports.OrderEntity = OrderEntity = __decorate([
 
 
 /***/ }),
-/* 236 */
+/* 234 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
@@ -22420,7 +21592,7 @@ exports.Share = Share = __decorate([
 
 
 /***/ }),
-/* 237 */
+/* 235 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
@@ -22467,7 +21639,7 @@ exports.SigninEntity = SigninEntity = __decorate([
 
 
 /***/ }),
-/* 238 */
+/* 236 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
@@ -22480,7 +21652,7 @@ var __decorate = (this && this.__decorate) || function (decorators, target, key,
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.ModelsModule = void 0;
 const common_1 = __webpack_require__(2);
-const models_controller_1 = __webpack_require__(239);
+const models_controller_1 = __webpack_require__(237);
 const models_service_1 = __webpack_require__(74);
 const typeorm_1 = __webpack_require__(33);
 const models_entity_1 = __webpack_require__(76);
@@ -22499,7 +21671,7 @@ exports.ModelsModule = ModelsModule = __decorate([
 
 
 /***/ }),
-/* 239 */
+/* 237 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
@@ -22518,14 +21690,14 @@ var __param = (this && this.__param) || function (paramIndex, decorator) {
 var _a, _b, _c, _d, _e, _f;
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.ModelsController = void 0;
-const adminAuth_guard_1 = __webpack_require__(109);
-const superAuth_guard_1 = __webpack_require__(110);
+const adminAuth_guard_1 = __webpack_require__(111);
+const superAuth_guard_1 = __webpack_require__(112);
 const common_1 = __webpack_require__(2);
 const swagger_1 = __webpack_require__(14);
-const queryModel_dto_1 = __webpack_require__(240);
-const queryModelType_dto_1 = __webpack_require__(241);
-const setModel_dto_1 = __webpack_require__(242);
-const setModelType_dto_1 = __webpack_require__(243);
+const queryModel_dto_1 = __webpack_require__(238);
+const queryModelType_dto_1 = __webpack_require__(239);
+const setModel_dto_1 = __webpack_require__(240);
+const setModelType_dto_1 = __webpack_require__(241);
 const models_service_1 = __webpack_require__(74);
 let ModelsController = class ModelsController {
     modelsService;
@@ -22639,7 +21811,7 @@ exports.ModelsController = ModelsController = __decorate([
 
 
 /***/ }),
-/* 240 */
+/* 238 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
@@ -22703,7 +21875,7 @@ __decorate([
 
 
 /***/ }),
-/* 241 */
+/* 239 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
@@ -22749,7 +21921,7 @@ __decorate([
 
 
 /***/ }),
-/* 242 */
+/* 240 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
@@ -22902,7 +22074,7 @@ __decorate([
 
 
 /***/ }),
-/* 243 */
+/* 241 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
@@ -23043,7 +22215,7 @@ __decorate([
 
 
 /***/ }),
-/* 244 */
+/* 242 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
@@ -23056,8 +22228,8 @@ var __decorate = (this && this.__decorate) || function (decorators, target, key,
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.OfficialModule = void 0;
 const common_1 = __webpack_require__(2);
-const official_controller_1 = __webpack_require__(245);
-const official_service_1 = __webpack_require__(248);
+const official_controller_1 = __webpack_require__(243);
+const official_service_1 = __webpack_require__(246);
 let OfficialModule = class OfficialModule {
 };
 exports.OfficialModule = OfficialModule;
@@ -23072,7 +22244,7 @@ exports.OfficialModule = OfficialModule = __decorate([
 
 
 /***/ }),
-/* 245 */
+/* 243 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
@@ -23092,14 +22264,14 @@ var _a, _b, _c, _d, _e, _f, _g, _h, _j, _k, _l, _m;
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.OfficialController = void 0;
 const jwtAuth_guard_1 = __webpack_require__(35);
-const superAuth_guard_1 = __webpack_require__(110);
+const superAuth_guard_1 = __webpack_require__(112);
 const utils_1 = __webpack_require__(37);
 const common_1 = __webpack_require__(2);
 const swagger_1 = __webpack_require__(14);
-const express_1 = __webpack_require__(111);
-const createMenu_dto_1 = __webpack_require__(246);
-const getQrCode_dto_1 = __webpack_require__(247);
-const official_service_1 = __webpack_require__(248);
+const express_1 = __webpack_require__(113);
+const createMenu_dto_1 = __webpack_require__(244);
+const getQrCode_dto_1 = __webpack_require__(245);
+const official_service_1 = __webpack_require__(246);
 let OfficialController = class OfficialController {
     officialService;
     constructor(officialService) {
@@ -23451,7 +22623,7 @@ exports.OfficialController = OfficialController = __decorate([
 
 
 /***/ }),
-/* 246 */
+/* 244 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
@@ -23467,7 +22639,7 @@ var __metadata = (this && this.__metadata) || function (k, v) {
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.CreateMenuDto = void 0;
 const swagger_1 = __webpack_require__(14);
-const class_transformer_1 = __webpack_require__(131);
+const class_transformer_1 = __webpack_require__(184);
 const class_validator_1 = __webpack_require__(106);
 class ButtonBase {
     name;
@@ -23587,7 +22759,7 @@ __decorate([
 
 
 /***/ }),
-/* 247 */
+/* 245 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
@@ -23620,7 +22792,7 @@ __decorate([
 
 
 /***/ }),
-/* 248 */
+/* 246 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
@@ -23640,8 +22812,8 @@ const utils_1 = __webpack_require__(37);
 const common_1 = __webpack_require__(2);
 const axios_1 = __webpack_require__(40);
 const crypto = __webpack_require__(16);
-const autoReply_service_1 = __webpack_require__(149);
-const chat_service_1 = __webpack_require__(197);
+const autoReply_service_1 = __webpack_require__(147);
+const chat_service_1 = __webpack_require__(199);
 const auth_service_1 = __webpack_require__(80);
 const globalConfig_service_1 = __webpack_require__(36);
 const user_service_1 = __webpack_require__(87);
@@ -24050,7 +23222,7 @@ exports.OfficialService = OfficialService = __decorate([
 
 
 /***/ }),
-/* 249 */
+/* 247 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
@@ -24064,9 +23236,9 @@ Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.OrderModule = void 0;
 const cramiPackage_entity_1 = __webpack_require__(92);
 const common_1 = __webpack_require__(2);
-const order_controller_1 = __webpack_require__(250);
-const order_service_1 = __webpack_require__(251);
-const order_entity_1 = __webpack_require__(235);
+const order_controller_1 = __webpack_require__(248);
+const order_service_1 = __webpack_require__(249);
+const order_entity_1 = __webpack_require__(233);
 const typeorm_1 = __webpack_require__(33);
 const user_entity_1 = __webpack_require__(97);
 let OrderModule = class OrderModule {
@@ -24082,7 +23254,7 @@ exports.OrderModule = OrderModule = __decorate([
 
 
 /***/ }),
-/* 250 */
+/* 248 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
@@ -24101,16 +23273,16 @@ var __param = (this && this.__param) || function (paramIndex, decorator) {
 var _a, _b, _c, _d, _e, _f, _g;
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.OrderController = void 0;
-const superAuth_guard_1 = __webpack_require__(110);
+const superAuth_guard_1 = __webpack_require__(112);
 const jwtAuth_guard_1 = __webpack_require__(35);
 const common_1 = __webpack_require__(2);
 const swagger_1 = __webpack_require__(14);
-const order_service_1 = __webpack_require__(251);
-const express_1 = __webpack_require__(111);
-const buy_dto_1 = __webpack_require__(253);
-const queryByOrder_dto_1 = __webpack_require__(254);
-const adminAuth_guard_1 = __webpack_require__(109);
-const queryAllOrder_dto_1 = __webpack_require__(255);
+const order_service_1 = __webpack_require__(249);
+const express_1 = __webpack_require__(113);
+const buy_dto_1 = __webpack_require__(251);
+const queryByOrder_dto_1 = __webpack_require__(252);
+const adminAuth_guard_1 = __webpack_require__(111);
+const queryAllOrder_dto_1 = __webpack_require__(253);
 let OrderController = class OrderController {
     orderService;
     constructor(orderService) {
@@ -24190,7 +23362,7 @@ exports.OrderController = OrderController = __decorate([
 
 
 /***/ }),
-/* 251 */
+/* 249 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
@@ -24215,9 +23387,9 @@ const typeorm_1 = __webpack_require__(33);
 const typeorm_2 = __webpack_require__(3);
 const cramiPackage_entity_1 = __webpack_require__(92);
 const globalConfig_service_1 = __webpack_require__(36);
-const pay_service_1 = __webpack_require__(252);
+const pay_service_1 = __webpack_require__(250);
 const user_entity_1 = __webpack_require__(97);
-const order_entity_1 = __webpack_require__(235);
+const order_entity_1 = __webpack_require__(233);
 let OrderService = class OrderService {
     orderEntity;
     cramiPackageEntity;
@@ -24352,7 +23524,7 @@ exports.OrderService = OrderService = __decorate([
 
 
 /***/ }),
-/* 252 */
+/* 250 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
@@ -24379,7 +23551,7 @@ const crypto = __webpack_require__(16);
 const typeorm_2 = __webpack_require__(3);
 const cramiPackage_entity_1 = __webpack_require__(92);
 const globalConfig_service_1 = __webpack_require__(36);
-const order_entity_1 = __webpack_require__(235);
+const order_entity_1 = __webpack_require__(233);
 const user_service_1 = __webpack_require__(87);
 const userBalance_service_1 = __webpack_require__(91);
 let PayService = class PayService {
@@ -25074,7 +24246,7 @@ exports.PayService = PayService = __decorate([
 
 
 /***/ }),
-/* 253 */
+/* 251 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
@@ -25111,7 +24283,7 @@ __decorate([
 
 
 /***/ }),
-/* 254 */
+/* 252 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
@@ -25142,7 +24314,7 @@ __decorate([
 
 
 /***/ }),
-/* 255 */
+/* 253 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
@@ -25195,7 +24367,7 @@ __decorate([
 
 
 /***/ }),
-/* 256 */
+/* 254 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
@@ -25208,9 +24380,9 @@ var __decorate = (this && this.__decorate) || function (decorators, target, key,
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.PayModule = void 0;
 const common_1 = __webpack_require__(2);
-const pay_controller_1 = __webpack_require__(257);
-const pay_service_1 = __webpack_require__(252);
-const order_entity_1 = __webpack_require__(235);
+const pay_controller_1 = __webpack_require__(255);
+const pay_service_1 = __webpack_require__(250);
+const order_entity_1 = __webpack_require__(233);
 const cramiPackage_entity_1 = __webpack_require__(92);
 const typeorm_1 = __webpack_require__(33);
 let PayModule = class PayModule {
@@ -25228,7 +24400,7 @@ exports.PayModule = PayModule = __decorate([
 
 
 /***/ }),
-/* 257 */
+/* 255 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
@@ -25249,7 +24421,7 @@ Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.PayController = void 0;
 const common_1 = __webpack_require__(2);
 const swagger_1 = __webpack_require__(14);
-const pay_service_1 = __webpack_require__(252);
+const pay_service_1 = __webpack_require__(250);
 let PayController = class PayController {
     payService;
     constructor(payService) {
@@ -25313,7 +24485,7 @@ exports.PayController = PayController = __decorate([
 
 
 /***/ }),
-/* 258 */
+/* 256 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
@@ -25327,9 +24499,9 @@ Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.PluginModule = void 0;
 const common_1 = __webpack_require__(2);
 const typeorm_1 = __webpack_require__(33);
-const plugin_controller_1 = __webpack_require__(259);
-const plugin_entity_1 = __webpack_require__(174);
-const plugin_service_1 = __webpack_require__(260);
+const plugin_controller_1 = __webpack_require__(257);
+const plugin_entity_1 = __webpack_require__(172);
+const plugin_service_1 = __webpack_require__(258);
 let PluginModule = class PluginModule {
 };
 exports.PluginModule = PluginModule;
@@ -25343,7 +24515,7 @@ exports.PluginModule = PluginModule = __decorate([
 
 
 /***/ }),
-/* 259 */
+/* 257 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
@@ -25362,11 +24534,11 @@ var __param = (this && this.__param) || function (paramIndex, decorator) {
 var _a, _b;
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.PluginController = void 0;
-const superAuth_guard_1 = __webpack_require__(110);
+const superAuth_guard_1 = __webpack_require__(112);
 const common_1 = __webpack_require__(2);
 const swagger_1 = __webpack_require__(14);
-const express_1 = __webpack_require__(111);
-const plugin_service_1 = __webpack_require__(260);
+const express_1 = __webpack_require__(113);
+const plugin_service_1 = __webpack_require__(258);
 let PluginController = class PluginController {
     pluginService;
     constructor(pluginService) {
@@ -25432,7 +24604,7 @@ exports.PluginController = PluginController = __decorate([
 
 
 /***/ }),
-/* 260 */
+/* 258 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
@@ -25455,7 +24627,7 @@ const common_1 = __webpack_require__(2);
 const typeorm_1 = __webpack_require__(33);
 const typeorm_2 = __webpack_require__(3);
 const models_service_1 = __webpack_require__(74);
-const plugin_entity_1 = __webpack_require__(174);
+const plugin_entity_1 = __webpack_require__(172);
 let PluginService = class PluginService {
     PluginEntity;
     modelsService;
@@ -25562,7 +24734,7 @@ exports.PluginService = PluginService = __decorate([
 
 
 /***/ }),
-/* 261 */
+/* 259 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
@@ -25576,9 +24748,9 @@ Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.ShareModule = void 0;
 const common_1 = __webpack_require__(2);
 const typeorm_1 = __webpack_require__(33);
-const share_controller_1 = __webpack_require__(262);
-const share_entity_1 = __webpack_require__(236);
-const share_service_1 = __webpack_require__(263);
+const share_controller_1 = __webpack_require__(260);
+const share_entity_1 = __webpack_require__(234);
+const share_service_1 = __webpack_require__(261);
 let ShareModule = class ShareModule {
 };
 exports.ShareModule = ShareModule;
@@ -25592,7 +24764,7 @@ exports.ShareModule = ShareModule = __decorate([
 
 
 /***/ }),
-/* 262 */
+/* 260 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
@@ -25614,7 +24786,7 @@ exports.ShareController = void 0;
 const jwtAuth_guard_1 = __webpack_require__(35);
 const common_1 = __webpack_require__(2);
 const swagger_1 = __webpack_require__(14);
-const share_service_1 = __webpack_require__(263);
+const share_service_1 = __webpack_require__(261);
 let ShareController = class ShareController {
     shareService;
     constructor(shareService) {
@@ -25662,7 +24834,7 @@ exports.ShareController = ShareController = __decorate([
 
 
 /***/ }),
-/* 263 */
+/* 261 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
@@ -25685,7 +24857,7 @@ const common_1 = __webpack_require__(2);
 const typeorm_1 = __webpack_require__(33);
 const typeorm_2 = __webpack_require__(3);
 const globalConfig_service_1 = __webpack_require__(36);
-const share_entity_1 = __webpack_require__(236);
+const share_entity_1 = __webpack_require__(234);
 let ShareService = class ShareService {
     shareRepository;
     globalConfigService;
@@ -25741,7 +24913,7 @@ exports.ShareService = ShareService = __decorate([
 
 
 /***/ }),
-/* 264 */
+/* 262 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
@@ -25754,10 +24926,10 @@ var __decorate = (this && this.__decorate) || function (decorators, target, key,
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.SigninModule = void 0;
 const common_1 = __webpack_require__(2);
-const signin_controller_1 = __webpack_require__(265);
-const signin_service_1 = __webpack_require__(266);
+const signin_controller_1 = __webpack_require__(263);
+const signin_service_1 = __webpack_require__(264);
 const typeorm_1 = __webpack_require__(33);
-const signIn_entity_1 = __webpack_require__(237);
+const signIn_entity_1 = __webpack_require__(235);
 const user_entity_1 = __webpack_require__(97);
 let SigninModule = class SigninModule {
 };
@@ -25774,7 +24946,7 @@ exports.SigninModule = SigninModule = __decorate([
 
 
 /***/ }),
-/* 265 */
+/* 263 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
@@ -25794,10 +24966,10 @@ var _a, _b, _c;
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.SigninController = void 0;
 const common_1 = __webpack_require__(2);
-const signin_service_1 = __webpack_require__(266);
+const signin_service_1 = __webpack_require__(264);
 const swagger_1 = __webpack_require__(14);
 const jwtAuth_guard_1 = __webpack_require__(35);
-const express_1 = __webpack_require__(111);
+const express_1 = __webpack_require__(113);
 let SigninController = class SigninController {
     signinService;
     constructor(signinService) {
@@ -25839,7 +25011,7 @@ exports.SigninController = SigninController = __decorate([
 
 
 /***/ }),
-/* 266 */
+/* 264 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
@@ -25861,7 +25033,7 @@ exports.SigninService = void 0;
 const globalConfig_service_1 = __webpack_require__(36);
 const userBalance_service_1 = __webpack_require__(91);
 const common_1 = __webpack_require__(2);
-const signIn_entity_1 = __webpack_require__(237);
+const signIn_entity_1 = __webpack_require__(235);
 const typeorm_1 = __webpack_require__(33);
 const typeorm_2 = __webpack_require__(3);
 const date_1 = __webpack_require__(48);
@@ -25974,7 +25146,7 @@ exports.SigninService = SigninService = __decorate([
 
 
 /***/ }),
-/* 267 */
+/* 265 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
@@ -25987,7 +25159,7 @@ var __decorate = (this && this.__decorate) || function (decorators, target, key,
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.SpaModule = void 0;
 const common_1 = __webpack_require__(2);
-const spa_controller_1 = __webpack_require__(268);
+const spa_controller_1 = __webpack_require__(266);
 let SpaModule = class SpaModule {
 };
 exports.SpaModule = SpaModule;
@@ -25999,7 +25171,7 @@ exports.SpaModule = SpaModule = __decorate([
 
 
 /***/ }),
-/* 268 */
+/* 266 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
@@ -26021,7 +25193,7 @@ Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.SpaController = void 0;
 const common_1 = __webpack_require__(2);
 const swagger_1 = __webpack_require__(14);
-const express_1 = __webpack_require__(111);
+const express_1 = __webpack_require__(113);
 const fs = __webpack_require__(18);
 const path_1 = __webpack_require__(20);
 let SpaController = SpaController_1 = class SpaController {
@@ -26077,7 +25249,7 @@ exports.SpaController = SpaController = SpaController_1 = __decorate([
 
 
 /***/ }),
-/* 269 */
+/* 267 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
@@ -26093,10 +25265,10 @@ const common_1 = __webpack_require__(2);
 const typeorm_1 = __webpack_require__(33);
 const chatLog_entity_1 = __webpack_require__(72);
 const config_entity_1 = __webpack_require__(77);
-const order_entity_1 = __webpack_require__(235);
+const order_entity_1 = __webpack_require__(233);
 const user_entity_1 = __webpack_require__(97);
-const statistic_controller_1 = __webpack_require__(270);
-const statistic_service_1 = __webpack_require__(272);
+const statistic_controller_1 = __webpack_require__(268);
+const statistic_service_1 = __webpack_require__(270);
 let StatisticModule = class StatisticModule {
 };
 exports.StatisticModule = StatisticModule;
@@ -26110,7 +25282,7 @@ exports.StatisticModule = StatisticModule = __decorate([
 
 
 /***/ }),
-/* 270 */
+/* 268 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
@@ -26129,11 +25301,11 @@ var __param = (this && this.__param) || function (paramIndex, decorator) {
 var _a, _b, _c;
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.StatisticController = void 0;
-const adminAuth_guard_1 = __webpack_require__(109);
+const adminAuth_guard_1 = __webpack_require__(111);
 const common_1 = __webpack_require__(2);
 const swagger_1 = __webpack_require__(14);
-const queryStatisticDto_dto_1 = __webpack_require__(271);
-const statistic_service_1 = __webpack_require__(272);
+const queryStatisticDto_dto_1 = __webpack_require__(269);
+const statistic_service_1 = __webpack_require__(270);
 let StatisticController = class StatisticController {
     statisticService;
     constructor(statisticService) {
@@ -26187,7 +25359,7 @@ exports.StatisticController = StatisticController = __decorate([
 
 
 /***/ }),
-/* 271 */
+/* 269 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
@@ -26214,7 +25386,7 @@ __decorate([
 
 
 /***/ }),
-/* 272 */
+/* 270 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
@@ -26242,7 +25414,7 @@ const typeorm_2 = __webpack_require__(3);
 const chatLog_entity_1 = __webpack_require__(72);
 const config_entity_1 = __webpack_require__(77);
 const globalConfig_service_1 = __webpack_require__(36);
-const order_entity_1 = __webpack_require__(235);
+const order_entity_1 = __webpack_require__(233);
 const user_entity_1 = __webpack_require__(97);
 let StatisticService = class StatisticService {
     userEntity;
@@ -26498,7 +25670,7 @@ exports.StatisticService = StatisticService = __decorate([
 
 
 /***/ }),
-/* 273 */
+/* 271 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
@@ -26511,12 +25683,12 @@ var __decorate = (this && this.__decorate) || function (decorators, target, key,
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.TaskModule = void 0;
 const common_1 = __webpack_require__(2);
-const schedule_1 = __webpack_require__(274);
+const schedule_1 = __webpack_require__(272);
 const typeorm_1 = __webpack_require__(33);
-const globalConfig_module_1 = __webpack_require__(183);
-const models_module_1 = __webpack_require__(238);
+const globalConfig_module_1 = __webpack_require__(181);
+const models_module_1 = __webpack_require__(236);
 const userBalance_entity_1 = __webpack_require__(95);
-const task_service_1 = __webpack_require__(275);
+const task_service_1 = __webpack_require__(273);
 let TaskModule = class TaskModule {
 };
 exports.TaskModule = TaskModule;
@@ -26534,13 +25706,13 @@ exports.TaskModule = TaskModule = __decorate([
 
 
 /***/ }),
-/* 274 */
+/* 272 */
 /***/ ((module) => {
 
 module.exports = require("@nestjs/schedule");
 
 /***/ }),
-/* 275 */
+/* 273 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
@@ -26560,7 +25732,7 @@ var _a, _b, _c;
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.TaskService = void 0;
 const common_1 = __webpack_require__(2);
-const schedule_1 = __webpack_require__(274);
+const schedule_1 = __webpack_require__(272);
 const typeorm_1 = __webpack_require__(33);
 const fs = __webpack_require__(18);
 const path = __webpack_require__(20);
@@ -26640,7 +25812,7 @@ exports.TaskService = TaskService = __decorate([
 
 
 /***/ }),
-/* 276 */
+/* 274 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
@@ -26653,8 +25825,8 @@ var __decorate = (this && this.__decorate) || function (decorators, target, key,
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.TestModule = void 0;
 const common_1 = __webpack_require__(2);
-const voice_module_1 = __webpack_require__(182);
-const test_controller_1 = __webpack_require__(277);
+const voice_module_1 = __webpack_require__(180);
+const test_controller_1 = __webpack_require__(275);
 let TestModule = class TestModule {
 };
 exports.TestModule = TestModule;
@@ -26667,7 +25839,7 @@ exports.TestModule = TestModule = __decorate([
 
 
 /***/ }),
-/* 277 */
+/* 275 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
@@ -26690,7 +25862,7 @@ exports.TestController = void 0;
 const common_1 = __webpack_require__(2);
 const fs = __webpack_require__(18);
 const path = __webpack_require__(20);
-const voice_service_1 = __webpack_require__(191);
+const voice_service_1 = __webpack_require__(190);
 let TestController = TestController_1 = class TestController {
     voiceService;
     logger = new common_1.Logger(TestController_1.name);
@@ -26816,7 +25988,7 @@ exports.TestController = TestController = TestController_1 = __decorate([
 
 
 /***/ }),
-/* 278 */
+/* 276 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
@@ -26830,20 +26002,18 @@ Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.UserBalanceModule = void 0;
 const common_1 = __webpack_require__(2);
 const typeorm_1 = __webpack_require__(33);
-const app_module_1 = __webpack_require__(107);
-const app_entity_1 = __webpack_require__(113);
-const app_service_1 = __webpack_require__(112);
-const appCats_entity_1 = __webpack_require__(114);
-const appEmotionVoice_entity_1 = __webpack_require__(115);
-const appVoice_entity_1 = __webpack_require__(116);
-const roleEmotion_entity_1 = __webpack_require__(117);
+const app_entity_1 = __webpack_require__(115);
+const app_service_1 = __webpack_require__(114);
+const appCats_entity_1 = __webpack_require__(116);
+const appEmotionVoice_entity_1 = __webpack_require__(117);
+const appVoice_entity_1 = __webpack_require__(118);
+const roleEmotion_entity_1 = __webpack_require__(119);
 const userApps_entity_1 = __webpack_require__(120);
-const userAppSettings_entity_1 = __webpack_require__(119);
 const chatGroup_entity_1 = __webpack_require__(96);
 const chatLog_entity_1 = __webpack_require__(72);
 const cramiPackage_entity_1 = __webpack_require__(92);
 const config_entity_1 = __webpack_require__(77);
-const globalConfig_module_1 = __webpack_require__(183);
+const globalConfig_module_1 = __webpack_require__(181);
 const redisCache_service_1 = __webpack_require__(28);
 const user_entity_1 = __webpack_require__(97);
 const verification_entity_1 = __webpack_require__(100);
@@ -26851,7 +26021,7 @@ const verification_service_1 = __webpack_require__(99);
 const accountLog_entity_1 = __webpack_require__(93);
 const balance_entity_1 = __webpack_require__(94);
 const fingerprint_entity_1 = __webpack_require__(98);
-const userBalance_controller_1 = __webpack_require__(279);
+const userBalance_controller_1 = __webpack_require__(277);
 const userBalance_entity_1 = __webpack_require__(95);
 const userBalance_service_1 = __webpack_require__(91);
 let UserBalanceModule = class UserBalanceModule {
@@ -26878,10 +26048,8 @@ exports.UserBalanceModule = UserBalanceModule = __decorate([
                 appVoice_entity_1.AppVoiceEntity,
                 appEmotionVoice_entity_1.AppEmotionVoiceEntity,
                 roleEmotion_entity_1.RoleEmotionEntity,
-                userAppSettings_entity_1.UserAppSettingsEntity,
             ]),
             globalConfig_module_1.GlobalConfigModule,
-            app_module_1.AppModule,
         ],
         controllers: [userBalance_controller_1.UserBalanceController],
         providers: [userBalance_service_1.UserBalanceService, verification_service_1.VerificationService, redisCache_service_1.RedisCacheService, app_service_1.AppService],
@@ -26891,7 +26059,7 @@ exports.UserBalanceModule = UserBalanceModule = __decorate([
 
 
 /***/ }),
-/* 279 */
+/* 277 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
@@ -26910,11 +26078,11 @@ var __param = (this && this.__param) || function (paramIndex, decorator) {
 var _a, _b, _c, _d, _e, _f;
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.UserBalanceController = void 0;
-const adminAuth_guard_1 = __webpack_require__(109);
+const adminAuth_guard_1 = __webpack_require__(111);
 const jwtAuth_guard_1 = __webpack_require__(35);
 const common_1 = __webpack_require__(2);
 const swagger_1 = __webpack_require__(14);
-const express_1 = __webpack_require__(111);
+const express_1 = __webpack_require__(113);
 const userBalance_service_1 = __webpack_require__(91);
 let UserBalanceController = class UserBalanceController {
     userBalanceService;
@@ -26998,7 +26166,7 @@ exports.UserBalanceController = UserBalanceController = __decorate([
 
 
 /***/ }),
-/* 280 */
+/* 278 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
@@ -27027,7 +26195,7 @@ exports.VerificationModule = VerificationModule = __decorate([
 
 
 /***/ }),
-/* 281 */
+/* 279 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
@@ -27037,12 +26205,10 @@ var __decorate = (this && this.__decorate) || function (decorators, target, key,
     else for (var i = decorators.length - 1; i >= 0; i--) if (d = decorators[i]) r = (c < 3 ? d(r) : c > 3 ? d(target, key, r) : d(target, key)) || r;
     return c > 3 && r && Object.defineProperty(target, key, r), r;
 };
-var AllExceptionsFilter_1;
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.AllExceptionsFilter = void 0;
 const common_1 = __webpack_require__(2);
-let AllExceptionsFilter = AllExceptionsFilter_1 = class AllExceptionsFilter {
-    logger = new common_1.Logger(AllExceptionsFilter_1.name);
+let AllExceptionsFilter = class AllExceptionsFilter {
     catch(exception, host) {
         const ctx = host.switchToHttp();
         const response = ctx.getResponse();
@@ -27065,27 +26231,21 @@ let AllExceptionsFilter = AllExceptionsFilter_1 = class AllExceptionsFilter {
             });
             return;
         }
-        this.logger.error(`[500错误] 未处理的异常 - 路径: ${_request.path}, 方法: ${_request.method}`);
-        this.logger.error(`异常详情: ${exception}`);
-        if (exception instanceof Error) {
-            this.logger.error(`错误消息: ${exception.message}`);
-            this.logger.error(`错误堆栈:\n${exception.stack}`);
-        }
         response.status(common_1.HttpStatus.INTERNAL_SERVER_ERROR).json({
             code: common_1.HttpStatus.INTERNAL_SERVER_ERROR,
-            message: 'Internal server error',
+            message: '服务器内部错误',
             data: null,
         });
     }
 };
 exports.AllExceptionsFilter = AllExceptionsFilter;
-exports.AllExceptionsFilter = AllExceptionsFilter = AllExceptionsFilter_1 = __decorate([
+exports.AllExceptionsFilter = AllExceptionsFilter = __decorate([
     (0, common_1.Catch)()
 ], AllExceptionsFilter);
 
 
 /***/ }),
-/* 282 */
+/* 280 */
 /***/ ((__unused_webpack_module, exports, __webpack_require__) => {
 
 
@@ -27093,35 +26253,36 @@ Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.initDatabase = initDatabase;
 const common_1 = __webpack_require__(2);
 const dotenv_1 = __webpack_require__(17);
-const mysql = __webpack_require__(283);
+const mysql = __webpack_require__(281);
 const typeorm_1 = __webpack_require__(3);
-const app_entity_1 = __webpack_require__(113);
-const appCats_entity_1 = __webpack_require__(114);
-const appEmotionVoice_entity_1 = __webpack_require__(115);
-const appVoice_entity_1 = __webpack_require__(116);
-const roleEmotion_entity_1 = __webpack_require__(117);
+const app_entity_1 = __webpack_require__(115);
+const appCats_entity_1 = __webpack_require__(116);
+const appEmotionVoice_entity_1 = __webpack_require__(117);
+const appVoice_entity_1 = __webpack_require__(118);
+const roleEmotion_entity_1 = __webpack_require__(119);
 const userApps_entity_1 = __webpack_require__(120);
-const affection_entity_1 = __webpack_require__(103);
-const autoReply_entity_1 = __webpack_require__(150);
-const badWords_entity_1 = __webpack_require__(158);
-const violationLog_entity_1 = __webpack_require__(159);
+const userAppSettings_entity_1 = __webpack_require__(108);
+const conversationSummary_entity_1 = __webpack_require__(196);
+const autoReply_entity_1 = __webpack_require__(148);
+const badWords_entity_1 = __webpack_require__(156);
+const violationLog_entity_1 = __webpack_require__(157);
 const chatGroup_entity_1 = __webpack_require__(96);
 const chatLog_entity_1 = __webpack_require__(72);
-const crami_entity_1 = __webpack_require__(224);
+const crami_entity_1 = __webpack_require__(222);
 const cramiPackage_entity_1 = __webpack_require__(92);
 const config_entity_1 = __webpack_require__(77);
 const models_entity_1 = __webpack_require__(76);
-const order_entity_1 = __webpack_require__(235);
-const plugin_entity_1 = __webpack_require__(174);
-const share_entity_1 = __webpack_require__(236);
-const signIn_entity_1 = __webpack_require__(237);
+const order_entity_1 = __webpack_require__(233);
+const plugin_entity_1 = __webpack_require__(172);
+const share_entity_1 = __webpack_require__(234);
+const signIn_entity_1 = __webpack_require__(235);
 const user_entity_1 = __webpack_require__(97);
 const accountLog_entity_1 = __webpack_require__(93);
 const balance_entity_1 = __webpack_require__(94);
 const fingerprint_entity_1 = __webpack_require__(98);
 const userBalance_entity_1 = __webpack_require__(95);
 const verification_entity_1 = __webpack_require__(100);
-const voice_entity_1 = __webpack_require__(192);
+const voice_entity_1 = __webpack_require__(191);
 (0, dotenv_1.config)();
 const dataSourceOptions = {
     type: 'mysql',
@@ -27132,8 +26293,6 @@ const dataSourceOptions = {
     database: process.env.DB_DATABASE,
     entities: [
         share_entity_1.Share,
-        affection_entity_1.AffectionRuleEntity,
-        affection_entity_1.UserAppAffectionEntity,
         autoReply_entity_1.AutoReplyEntity,
         crami_entity_1.CramiEntity,
         cramiPackage_entity_1.CramiPackageEntity,
@@ -27159,6 +26318,8 @@ const dataSourceOptions = {
         appEmotionVoice_entity_1.AppEmotionVoiceEntity,
         voice_entity_1.VoiceEntity,
         order_entity_1.OrderEntity,
+        userAppSettings_entity_1.UserAppSettingsEntity,
+        conversationSummary_entity_1.ConversationSummaryEntity,
     ],
     synchronize: false,
     charset: 'utf8mb4',
@@ -27268,34 +26429,6 @@ async function runAllMigrations() {
                 common_1.Logger.log(`迁移chatlog表${column}列时跳过: ${error.message}`, 'Database');
             }
         }
-        try {
-            const [ruleSentenceCol] = (await conn.execute(`SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS
-         WHERE TABLE_SCHEMA = ? AND TABLE_NAME = 'affection_rule' AND COLUMN_NAME = 'sentenceCount'`, [process.env.DB_DATABASE]));
-            if (ruleSentenceCol.length > 0) {
-                await conn.execute(`ALTER TABLE affection_rule DROP COLUMN sentenceCount`);
-                common_1.Logger.log('已从 affection_rule 表删除 sentenceCount 字段', 'Database');
-            }
-            const [ruleAppIdCol] = (await conn.execute(`SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS
-         WHERE TABLE_SCHEMA = ? AND TABLE_NAME = 'affection_rule' AND COLUMN_NAME = 'appId'`, [process.env.DB_DATABASE]));
-            if (ruleAppIdCol.length > 0) {
-                try {
-                    await conn.execute(`ALTER TABLE affection_rule DROP INDEX IDX_affection_rule_appId`);
-                }
-                catch (e) {
-                }
-                await conn.execute(`ALTER TABLE affection_rule DROP COLUMN appId`);
-                common_1.Logger.log('已从 affection_rule 表删除 appId 字段', 'Database');
-            }
-            const [uaSentenceCol] = (await conn.execute(`SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS
-         WHERE TABLE_SCHEMA = ? AND TABLE_NAME = 'user_app_affection' AND COLUMN_NAME = 'sentenceCount'`, [process.env.DB_DATABASE]));
-            if (uaSentenceCol.length > 0) {
-                await conn.execute(`ALTER TABLE user_app_affection DROP COLUMN sentenceCount`);
-                common_1.Logger.log('已从 user_app_affection 表删除 sentenceCount 字段', 'Database');
-            }
-        }
-        catch (error) {
-            common_1.Logger.log(`清理好感度表废弃字段时跳过: ${error.message}`, 'Database');
-        }
     }
     finally {
         await conn.end();
@@ -27318,15 +26451,8 @@ async function initDatabase() {
             synchronize: true,
         };
         const syncDataSource = new typeorm_1.DataSource(syncOptions);
-        try {
-            common_1.Logger.log('开始执行数据库结构同步', 'Database');
-            await syncDataSource.initialize();
-            common_1.Logger.log('数据库结构同步完成', 'Database');
-        }
-        catch (syncError) {
-            common_1.Logger.error(`数据库同步错误: ${syncError.message}`, 'Database');
-            throw syncError;
-        }
+        await syncDataSource.initialize();
+        common_1.Logger.log('数据库结构同步完成', 'Database');
         if (syncDataSource.isInitialized) {
             await syncDataSource.destroy();
         }
@@ -27334,12 +26460,19 @@ async function initDatabase() {
     }
     catch (error) {
         common_1.Logger.error(`数据库初始化错误: ${error.message}`, 'Database');
+        if (error instanceof SyntaxError) {
+            common_1.Logger.error(`语法错误详情: ${JSON.stringify({
+                name: error.name,
+                message: error.message,
+                stack: error.stack,
+            })}`, 'Database');
+        }
     }
 }
 
 
 /***/ }),
-/* 283 */
+/* 281 */
 /***/ ((module) => {
 
 module.exports = require("mysql2/promise");
@@ -27393,9 +26526,9 @@ const ioredis_1 = __webpack_require__(19);
 const path = __webpack_require__(20);
 __webpack_require__(21);
 const app_module_1 = __webpack_require__(22);
-const allExceptions_filter_1 = __webpack_require__(281);
-const chat_service_1 = __webpack_require__(166);
-const voice_service_1 = __webpack_require__(191);
+const allExceptions_filter_1 = __webpack_require__(279);
+const chat_service_1 = __webpack_require__(164);
+const voice_service_1 = __webpack_require__(190);
 Dotenv.config({ path: '.env' });
 function findFilePath(filename) {
     const possiblePaths = [
@@ -27429,7 +26562,7 @@ async function bootstrap() {
         common_1.Logger.log('Generating and setting new JWT_SECRET');
         await redis.set('JWT_SECRET', jwtSecret);
     }
-    const { initDatabase } = __webpack_require__(282);
+    const { initDatabase } = __webpack_require__(280);
     const app = await core_1.NestFactory.create(app_module_1.AppModule, {
         bufferLogs: true,
         logger: ['log', 'error', 'warn', 'debug', 'verbose'],
@@ -27465,26 +26598,53 @@ async function bootstrap() {
     app.useGlobalInterceptors(new transform_interceptor_1.TransformInterceptor());
     app.useGlobalFilters(new typeOrmQueryFailed_filter_1.TypeOrmQueryFailedFilter());
     app.useGlobalFilters(new allExceptions_filter_1.AllExceptionsFilter());
-    app.useGlobalPipes(new common_1.ValidationPipe({
-        transform: true,
-        whitelist: true,
-        forbidNonWhitelisted: false,
-        transformOptions: {
-            enableImplicitConversion: true,
-        },
-    }));
+    app.useGlobalPipes(new common_1.ValidationPipe());
     app.getHttpAdapter().getInstance().set('views', 'templates/pages');
     app.getHttpAdapter().getInstance().set('view engine', 'hbs');
     const swaggerConfig = new swagger_1.DocumentBuilder()
-        .setTitle('开放 API')
-        .setDescription('99AI服务API文档（含 /api/open/* 开放接口：对外可直接调用）')
-        .setVersion('1.0')
+        .setTitle('99AI 开放 API')
+        .setDescription(`
+# 99AI 服务 API 文档
+
+## 开放接口说明
+
+所有 \`/api/open/*\` 路径下的接口均为**开放接口**，可直接调用（当前无需鉴权）。
+
+## WebSocket 实时语音通话
+
+**地址**: \`ws://your-domain/api/realtime/voice-call\`
+
+### 功能特性
+- ✅ 实时语音识别（ASR）
+- ✅ AI 智能对话（LLM）
+- ✅ 语音合成播报（TTS）
+- ✅ 情绪识别与音色切换
+- ✅ 好感度系统集成
+- ✅ VAD 智能打断
+
+### 使用流程
+1. 建立 WebSocket 连接
+2. 发送 \`start_call\` 消息（包含 userId, appId 等配置）
+3. 发送音频数据（二进制 PCM/WAV）
+4. 接收 ASR、LLM、TTS 事件和音频流
+5. 发送 \`stop\` 触发识别，或 \`cancel\` 打断播放
+6. 发送 \`end_call\` 或关闭连接结束通话
+
+### 详细文档
+请查看项目根目录：
+- \`VOICE_CALL_API.md\` - 完整技术文档
+- \`VOICE_CALL_QUICK_START.md\` - 快速上手指南
+- \`API_OVERVIEW.md\` - 接口总览
+
+## HTTP 接口
+`)
+        .setVersion('1.0.0')
         .addBearerAuth()
-        .addTag('open-app', '开放的角色管理接口（读写）：角色列表/详情、分类CRUD、角色CRUD、全局情绪映射')
-        .addTag('open-voice', '开放的语音管理接口（读写）：音色列表/详情、复刻/更新/删除、参数/元信息、试听、ASR')
-        .addTag('open-affection', '开放的好感度接口（读写）：规则查询/维护、用户状态查询')
-        .addTag('open-chat', '开放的前端聊天接口（读写）：文字对话、语音对话、TTS 播报（需显式 userId）')
-        .addTag('open-chatLog', '开放的聊天记录接口（读）：查询我的对话列表、按应用查询、查询单条消息（需显式 userId）')
+        .addTag('open-app', '【角色管理】角色列表/详情、分类CRUD、角色CRUD、全局情绪映射')
+        .addTag('open-voice', '【语音管理】音色列表/详情、声音复刻、参数设置、试听、ASR 语音识别')
+        .addTag('open-affection', '【好感度系统】规则查询/维护、用户好感度状态查询')
+        .addTag('open-chat', '【对话接口】文字对话、语音对话（ASR+LLM）、TTS 文字转语音（需显式 userId）')
+        .addTag('open-chatLog', '【聊天记录】查询对话列表、按应用查询、查询单条消息（需显式 userId）')
         .build();
     const fullDoc = swagger_1.SwaggerModule.createDocument(app, swaggerConfig);
     const responseSchema = {
@@ -27530,7 +26690,13 @@ async function bootstrap() {
     try {
         const voiceService = app.get(voice_service_1.VoiceService);
         const openAIChatService = app.get(chat_service_1.OpenAIChatService);
-        const WSMod = await Promise.resolve().then(() => __webpack_require__(194));
+        const { ChatService } = await Promise.resolve().then(() => __webpack_require__(199));
+        const chatService = app.get(ChatService);
+        const { AppService } = await Promise.resolve().then(() => __webpack_require__(114));
+        const appService = app.get(AppService);
+        const { AffectionService } = await Promise.resolve().then(() => __webpack_require__(102));
+        const affectionService = app.get(AffectionService);
+        const WSMod = await Promise.resolve().then(() => __webpack_require__(193));
         const WSServer = WSMod?.Server || WSMod?.WebSocketServer;
         if (!WSServer) {
             common_1.Logger.warn('ws Server not available, skip realtime voice-call');
@@ -27540,13 +26706,80 @@ async function bootstrap() {
         common_1.Logger.log('Realtime WS ready at /api/realtime/voice-call', 'Main');
         wss.on('connection', (socket, req) => {
             common_1.Logger.debug('WS client connected', 'VoiceCall');
+            const getAppInfo = async (appId) => {
+                if (session.cache?.appInfo?.id === appId) {
+                    common_1.Logger.debug(`[VoiceCall] 使用缓存的应用信息: appId=${appId}`, 'VoiceCall');
+                    return session.cache.appInfo;
+                }
+                try {
+                    const appInfo = await appService.appEntity.findOne({
+                        where: { id: appId },
+                    });
+                    if (appInfo) {
+                        session.cache.appInfo = appInfo;
+                        common_1.Logger.debug(`[VoiceCall] 已缓存应用信息: appId=${appId}, name=${appInfo.name}`, 'VoiceCall');
+                    }
+                    return appInfo;
+                }
+                catch (error) {
+                    common_1.Logger.warn(`[VoiceCall] 查询应用信息失败: appId=${appId}, error=${error?.message}`, 'VoiceCall');
+                    return null;
+                }
+            };
+            const getAppEmotionVoices = async (appId) => {
+                if (session.cache?.emotionVoices && session.cache?.appInfo?.id === appId) {
+                    common_1.Logger.debug(`[VoiceCall] 使用缓存的情绪音色映射: appId=${appId}`, 'VoiceCall');
+                    return session.cache.emotionVoices;
+                }
+                try {
+                    const emotionVoices = await appService.appEmotionRepo.find({
+                        where: { appId: Number(appId), status: 1 },
+                    });
+                    session.cache.emotionVoices = emotionVoices || [];
+                    common_1.Logger.debug(`[VoiceCall] 已缓存情绪音色映射: appId=${appId}, count=${emotionVoices?.length || 0}`, 'VoiceCall');
+                    return emotionVoices || [];
+                }
+                catch (error) {
+                    common_1.Logger.warn(`[VoiceCall] 查询情绪音色映射失败: appId=${appId}, error=${error?.message}`, 'VoiceCall');
+                    return [];
+                }
+            };
+            const buildRolePrompt = async (appInfo, userId, basePrompt) => {
+                const cacheKey = `${appInfo?.id}_${userId}`;
+                if (session.cache?.rolePromptWithAffection &&
+                    session.cache?.appInfo?.id === appInfo?.id &&
+                    session.cache?.affectionData?.userId === userId) {
+                    common_1.Logger.debug(`[VoiceCall] 使用缓存的角色预设（含好感度）: appId=${appInfo?.id}, userId=${userId}`, 'VoiceCall');
+                    return session.cache.rolePromptWithAffection;
+                }
+                let finalPrompt = appInfo?.preset || basePrompt || '';
+                if (userId && appInfo?.id) {
+                    try {
+                        const affectionData = await affectionService.getUserAffection(userId, appInfo.id);
+                        session.cache.affectionData = { ...affectionData, userId };
+                        if (affectionData?.stage?.behaviors) {
+                            const behaviors = affectionData.stage.behaviors.trim();
+                            if (behaviors) {
+                                finalPrompt = `${finalPrompt}\n\n## 当前好感度等级: ${affectionData.stage.name}\n${behaviors}`;
+                                common_1.Logger.debug(`[VoiceCall] 添加好感度行为规范: 等级=${affectionData.stage.name}, score=${affectionData.score}`, 'VoiceCall');
+                            }
+                        }
+                    }
+                    catch (error) {
+                        common_1.Logger.warn(`[VoiceCall] 获取好感度失败: userId=${userId}, appId=${appInfo.id}, error=${error?.message}`, 'VoiceCall');
+                    }
+                }
+                session.cache.rolePromptWithAffection = finalPrompt;
+                common_1.Logger.debug(`[VoiceCall] 已缓存角色预设（含好感度）: appId=${appInfo?.id}, userId=${userId}, 长度=${finalPrompt.length}`, 'VoiceCall');
+                return finalPrompt;
+            };
             let audioChunks = [];
             let cfg = {
                 sampleRate: 8000,
                 format: 'wav',
                 voice_id: '',
             };
-            const session = { llmAbort: null, ttsCanceled: false, ttsActive: false };
+            const session = { llmAbort: null, ttsCanceled: false, ttsActive: false, cache: {} };
             let recvBytesTotal = 0;
             let recvChunkCount = 0;
             let lastRecvAt = 0;
@@ -27697,108 +26930,217 @@ async function bootstrap() {
                     common_1.Logger.debug('音频处理完成', 'VoiceCall');
                 }
             };
+            const extractPsychologicalDesc = (text) => {
+                const match = text.match(/（([^）]+)）/);
+                return match ? match[1] : null;
+            };
+            const removeBracketedContent = (text) => {
+                return text
+                    .replace(/（[^）]*）/g, '')
+                    .replace(/\([^)]*\)/g, '')
+                    .trim();
+            };
+            const detectEmotionFromText = (text) => {
+                const s = text.toLowerCase();
+                const patterns = {
+                    happy: ['开心', '高兴', '快乐', '哈哈', '嘻嘻', '太好了', '真棒', '！！', '!!'],
+                    sad: ['难过', '伤心', '哭', '呜呜', '悲伤', '失落', '…'],
+                    angry: ['生气', '愤怒', '可恶', '讨厌', '气死', '烦'],
+                    excited: ['激动', '兴奋', '哇', '天哪', '!!!', '！！！'],
+                    calm: ['平静', '冷静', '好的', '嗯', '知道了'],
+                    shy: ['害羞', '不好意思', '///'],
+                };
+                for (const [emotion, keywords] of Object.entries(patterns)) {
+                    if (keywords.some(k => s.includes(k)))
+                        return emotion;
+                }
+                return null;
+            };
+            const selectVoiceByEmotion = async (appId, detectedEmotion, defaultVoiceId = null) => {
+                if (!appId)
+                    return { voiceId: defaultVoiceId || cfg.voice_id || null, emotion: null };
+                try {
+                    const emotionVoices = await getAppEmotionVoices(appId);
+                    if (detectedEmotion) {
+                        const rec = emotionVoices.find((v) => v.emotion === detectedEmotion);
+                        if (rec?.voiceId) {
+                            common_1.Logger.debug(`[情绪识别] 检测到情绪: ${detectedEmotion}, 使用音色: ${rec.voiceId}`, 'VoiceCall');
+                            sendJson({ type: 'emotion.detected', emotion: detectedEmotion });
+                            return { voiceId: rec.voiceId, emotion: detectedEmotion };
+                        }
+                    }
+                    if (defaultVoiceId) {
+                        common_1.Logger.debug(`[情绪识别] 未匹配到情绪音色，使用角色默认音色: ${defaultVoiceId}`, 'VoiceCall');
+                        sendJson({ type: 'emotion.detected', emotion: '默认' });
+                        return { voiceId: defaultVoiceId, emotion: '默认' };
+                    }
+                    const defaultRec = emotionVoices[0];
+                    if (defaultRec?.voiceId) {
+                        common_1.Logger.debug(`[情绪识别] 使用应用第一个音色配置: ${defaultRec.voiceId}`, 'VoiceCall');
+                        return { voiceId: defaultRec.voiceId, emotion: defaultRec.emotion };
+                    }
+                }
+                catch (error) {
+                    common_1.Logger.warn(`[情绪识别] 查询情绪音色失败: ${error?.message}, 使用默认音色`, 'VoiceCall');
+                }
+                sendJson({ type: 'emotion.detected', emotion: '默认' });
+                return { voiceId: defaultVoiceId || cfg.voice_id || null, emotion: '默认' };
+            };
             const processLLMStream = async (text) => {
                 if (session.ttsCanceled)
                     return;
                 sendJson({ type: 'llm.start' });
                 const abortController = new AbortController();
                 session.llmAbort = abortController;
-                let ttsSession = null;
-                if (cfg.voice_id) {
-                    try {
-                        common_1.Logger.debug('创建流式TTS会话', 'VoiceCall');
-                        ttsSession = await voiceService.createTTSStreamSession({
-                            voice_id: cfg.voice_id,
-                            format: 'mp3',
-                            sample_rate: 22050,
-                            onStart: info => {
-                                sendJson({ type: 'tts.start', format: info.format, sample_rate: info.sample_rate });
-                                common_1.Logger.debug('TTS会话已启动', 'VoiceCall');
-                            },
-                            onData: chunk => {
-                                if (session.ttsCanceled)
-                                    return;
-                                try {
-                                    socket.send(chunk, { binary: true });
-                                }
-                                catch { }
-                            },
-                            onEnd: () => {
-                                sendJson({ type: 'tts.end' });
-                                common_1.Logger.debug('TTS会话已结束', 'VoiceCall');
-                            },
-                            onError: err => {
-                                common_1.Logger.error(`TTS会话错误: ${err?.message}`, 'VoiceCall');
-                                sendJson({ type: 'error', stage: 'tts', message: err?.message || 'TTS错误' });
-                            },
-                        });
-                    }
-                    catch (e) {
-                        common_1.Logger.error(`创建TTS会话失败: ${e?.message}`, 'VoiceCall');
-                        sendJson({ type: 'error', stage: 'tts', message: e?.message || 'TTS初始化失败' });
-                    }
-                }
+                llmBuffer = '';
                 try {
-                    const chatConfig = {
-                        chatId: 'realtime',
-                        apiKey: '',
-                        model: session.chatConfig?.model || 'gpt-4o-mini',
-                        modelName: session.chatConfig?.modelName || 'AI助手',
-                        temperature: session.chatConfig?.temperature || 1,
-                        prompt: session.chatConfig?.prompt
-                            ? `${session.chatConfig.prompt}\n\n用户说：${text}`
-                            : text,
-                        timeout: 300000,
-                        proxyUrl: '',
-                        abortController,
-                        usingDeepThinking: false,
-                        usingNetwork: false,
-                        extraParam: null,
-                        deepThinkingType: 0,
-                        isFileUpload: 0,
-                        isImageUpload: 0,
-                        onProgress: async (delta) => {
-                            const t = delta?.content?.[0]?.text || '';
-                            if (t) {
-                                llmBuffer += t;
-                                sendJson({ type: 'llm.partial', text: t });
-                                if (ttsSession && !session.ttsCanceled) {
-                                    try {
-                                        ttsSession.sendText(t);
-                                    }
-                                    catch (e) {
-                                        common_1.Logger.warn(`TTS发送文本失败: ${e?.message}`, 'VoiceCall');
-                                    }
-                                }
+                    common_1.Logger.debug(`[VoiceCall] 开始获取角色配置: session.chatConfig=${JSON.stringify({
+                        userId: session.chatConfig?.userId,
+                        appId: session.chatConfig?.appId,
+                        prompt: session.chatConfig?.prompt?.substring(0, 30),
+                    })}`, 'VoiceCall');
+                    let rolePrompt = '';
+                    let appInfo = null;
+                    if (session.chatConfig?.appId) {
+                        appInfo = await getAppInfo(session.chatConfig.appId);
+                    }
+                    rolePrompt = await buildRolePrompt(appInfo, session.chatConfig?.userId, session.chatConfig?.prompt || '');
+                    common_1.Logger.debug(`[VoiceCall] 角色预设已构建: appId=${session.chatConfig?.appId}, name=${appInfo?.name}, preset长度=${rolePrompt?.length}`, 'VoiceCall');
+                    if (!rolePrompt || rolePrompt.trim() === '') {
+                        rolePrompt = '你是一个友好、乐于助人的AI助手。请用简洁、自然的方式回答用户的问题。';
+                        common_1.Logger.debug(`[VoiceCall] 使用默认角色预设`, 'VoiceCall');
+                    }
+                    const appConfigForXingchen = session.chatConfig?.appId
+                        ? {
+                            botName: appInfo?.name || session.chatConfig?.modelName || 'AI助手',
+                            userId: session.chatConfig?.userId,
+                            appId: session.chatConfig?.appId,
+                            enableRealTime: appInfo?.enableRealTime ?? session.chatConfig?.enableRealTime,
+                            enableLongTermMemory: appInfo?.enableLongTermMemory ?? session.chatConfig?.enableLongTermMemory,
+                            enableKnowledgeBase: appInfo?.enableKnowledgeBase ?? session.chatConfig?.enableKnowledgeBase,
+                            knowledgeBaseIds: appInfo?.knowledgeBaseIds ?? session.chatConfig?.knowledgeBaseIds,
+                            dialogueExamples: appInfo?.dialogueExamples ?? session.chatConfig?.dialogueExamples,
+                            openingRemark: appInfo?.openingRemark ?? session.chatConfig?.openingRemark,
+                        }
+                        : undefined;
+                    common_1.Logger.debug(`[VoiceCall] 星尘API配置: userId=${session.chatConfig?.userId}, appId=${session.chatConfig?.appId}, botName=${appConfigForXingchen?.botName}, prompt=${rolePrompt?.substring(0, 50)}...`, 'VoiceCall');
+                    common_1.Logger.debug(`[VoiceCall] 开始调用星尘API: 用户输入="${text}"`, 'VoiceCall');
+                    const xingchenResult = await openAIChatService.chatFree(text, rolePrompt, [], undefined, {
+                        onProgress: (delta) => {
+                            if (delta) {
+                                common_1.Logger.debug(`[VoiceCall] LLM流式输出: "${delta}"`, 'VoiceCall');
+                                llmBuffer += delta;
+                                sendJson({ type: 'llm.partial', text: delta });
                             }
                         },
-                    };
-                    await openAIChatService.chat([{ role: 'user', content: text }], chatConfig);
+                        abortSignal: abortController.signal,
+                    }, appConfigForXingchen);
+                    const xingchenText = xingchenResult.text || '';
+                    common_1.Logger.debug(`[VoiceCall] 星尘API调用完成: xingchenText="${xingchenText?.substring(0, 100)}...", llmBuffer="${llmBuffer?.substring(0, 100)}..."`, 'VoiceCall');
+                    if (!llmBuffer && xingchenText) {
+                        llmBuffer = xingchenText;
+                        common_1.Logger.debug(`[VoiceCall] 使用非流式结果: "${llmBuffer?.substring(0, 100)}..."`, 'VoiceCall');
+                    }
+                    if (!llmBuffer) {
+                        common_1.Logger.warn('[VoiceCall] LLM返回为空！', 'VoiceCall');
+                        sendJson({ type: 'error', stage: 'llm', message: 'LLM返回为空' });
+                        return;
+                    }
                     sendJson({ type: 'llm.final', text: llmBuffer });
-                    if (ttsSession && !session.ttsCanceled) {
-                        try {
-                            common_1.Logger.debug('结束TTS会话', 'VoiceCall');
-                            await ttsSession.finish();
+                    if (!session.ttsCanceled && llmBuffer) {
+                        common_1.Logger.debug(`[情绪识别] 开始分析LLM回复: ${llmBuffer.substring(0, 50)}...`, 'VoiceCall');
+                        const psychologicalDesc = extractPsychologicalDesc(llmBuffer);
+                        if (psychologicalDesc) {
+                            common_1.Logger.debug(`[情绪识别] 提取到心理描述: ${psychologicalDesc}`, 'VoiceCall');
                         }
-                        catch (e) {
-                            common_1.Logger.warn(`结束TTS会话失败: ${e?.message}`, 'VoiceCall');
+                        let detectedEmotion = psychologicalDesc
+                            ? detectEmotionFromText(psychologicalDesc)
+                            : null;
+                        if (!detectedEmotion) {
+                            detectedEmotion = detectEmotionFromText(llmBuffer);
+                        }
+                        common_1.Logger.debug(`[情绪识别] 检测到的情绪: ${detectedEmotion || '无'}`, 'VoiceCall');
+                        const { voiceId: selectedVoiceId, emotion: selectedEmotion } = await selectVoiceByEmotion(session.chatConfig?.appId || null, detectedEmotion, appInfo?.voiceId || null);
+                        common_1.Logger.debug(`[情绪识别] 选择的音色: voiceId=${selectedVoiceId}, emotion=${selectedEmotion}`, 'VoiceCall');
+                        const textToSpeak = removeBracketedContent(llmBuffer);
+                        common_1.Logger.debug(`[TTS] 准备播报: textToSpeak="${textToSpeak?.substring(0, 100)}...", 长度=${textToSpeak?.length}`, 'VoiceCall');
+                        if (selectedVoiceId && textToSpeak) {
+                            common_1.Logger.debug(`[TTS] 开始播报: 音色=${selectedVoiceId}, 情绪=${selectedEmotion || '默认'}, 文本长度=${textToSpeak.length}`, 'VoiceCall');
+                            sendJson({ type: 'tts.start' });
+                            session.ttsActive = true;
+                            try {
+                                await voiceService.ttsStream({
+                                    voice_id: selectedVoiceId,
+                                    text: textToSpeak,
+                                    format: 'mp3',
+                                    sample_rate: 22050,
+                                }, {
+                                    onStart: info => sendJson({
+                                        type: 'tts.info',
+                                        format: info.format,
+                                        sample_rate: info.sample_rate,
+                                    }),
+                                    onData: chunk => {
+                                        if (session.ttsCanceled)
+                                            return;
+                                        try {
+                                            socket.send(chunk, { binary: true });
+                                        }
+                                        catch { }
+                                    },
+                                    onEnd: () => {
+                                        if (!session.ttsCanceled)
+                                            sendJson({ type: 'tts.end' });
+                                        session.ttsActive = false;
+                                        common_1.Logger.debug('[TTS] 播报完成', 'VoiceCall');
+                                    },
+                                });
+                            }
+                            catch (e) {
+                                common_1.Logger.error(`[TTS] 播报失败: ${e?.message}`, 'VoiceCall');
+                                sendJson({ type: 'error', stage: 'tts', message: e?.message || 'TTS failed' });
+                                session.ttsActive = false;
+                            }
+                        }
+                        else {
+                            common_1.Logger.warn(`[TTS] 跳过播报: selectedVoiceId=${selectedVoiceId || 'null'}, textToSpeak=${textToSpeak ? textToSpeak.substring(0, 50) : 'empty'}`, 'VoiceCall');
+                            sendJson({ type: 'done' });
                         }
                     }
                 }
                 catch (e) {
+                    common_1.Logger.error(`[VoiceCall] LLM处理失败: ${e?.message}`, 'VoiceCall');
+                    common_1.Logger.error(e?.stack, 'VoiceCall');
                     sendJson({ type: 'error', stage: 'llm', message: e?.message || 'LLM failed' });
-                    if (ttsSession) {
-                        try {
-                            ttsSession.cancel();
-                        }
-                        catch { }
-                    }
                 }
             };
             socket.on('message', async (data, isBinary) => {
                 try {
-                    const isBuf = Buffer.isBuffer(data) || typeof data !== 'string';
-                    if (isBuf) {
+                    let msg = null;
+                    let isControlMessage = false;
+                    if (isBinary) {
+                        common_1.Logger.debug(`[VoiceCall] 收到二进制消息（音频）: ${data?.length || 'N/A'} bytes`, 'VoiceCall');
+                        isControlMessage = false;
+                    }
+                    else {
+                        try {
+                            const text = typeof data === 'string' ? data : Buffer.from(data).toString('utf8');
+                            msg = JSON.parse(text);
+                            if (msg && typeof msg.type === 'string') {
+                                isControlMessage = true;
+                                common_1.Logger.debug(`[VoiceCall] 收到控制消息: type=${msg.type}`, 'VoiceCall');
+                            }
+                        }
+                        catch (error) {
+                            common_1.Logger.debug(`[VoiceCall] 非二进制消息但JSON解析失败，作为音频处理: ${data?.length || 'N/A'} bytes`, 'VoiceCall');
+                            isControlMessage = false;
+                        }
+                    }
+                    if (!isControlMessage) {
+                        if (session.ttsCanceled && audioChunks.length === 0) {
+                            common_1.Logger.debug('[VoiceCall] 检测到新录音，重置ttsCanceled标志', 'VoiceCall');
+                            session.ttsCanceled = false;
+                        }
                         if (session.ttsCanceled) {
                             return;
                         }
@@ -27839,15 +27181,13 @@ async function bootstrap() {
                         }
                         return;
                     }
-                    const text = typeof data === 'string' ? data : Buffer.from(data).toString('utf8');
-                    let msg;
-                    try {
-                        msg = JSON.parse(text);
-                    }
-                    catch {
-                        return;
-                    }
                     if (msg?.type === 'start_call') {
+                        common_1.Logger.debug(`[VoiceCall] 收到start_call消息: userId=${msg.userId}, appId=${msg.appId}, model=${msg.model}, modelName=${msg.modelName}, prompt=${msg.prompt?.substring(0, 30)}...`, 'VoiceCall');
+                        if (session.chatConfig?.appId !== msg.appId ||
+                            session.chatConfig?.userId !== msg.userId) {
+                            common_1.Logger.debug(`[VoiceCall] 检测到角色或用户变更，清除缓存: 旧appId=${session.chatConfig?.appId}, 新appId=${msg.appId}`, 'VoiceCall');
+                            session.cache = {};
+                        }
                         audioChunks = [];
                         cfg.sampleRate = Number(msg.sampleRate || 8000);
                         cfg.format = msg.format || 'wav';
@@ -27856,12 +27196,20 @@ async function bootstrap() {
                         session.ttsActive = false;
                         session.chatConfig = {
                             appId: msg.appId,
+                            userId: msg.userId,
                             model: msg.model || 'gpt-4o-mini',
                             modelName: msg.modelName || 'AI助手',
                             prompt: msg.prompt || '',
                             temperature: Number(msg.temperature || 1),
                             config: msg.config || {},
+                            enableRealTime: msg.config?.enableRealTime,
+                            enableLongTermMemory: msg.config?.enableLongTermMemory,
+                            enableKnowledgeBase: msg.config?.enableKnowledgeBase,
+                            knowledgeBaseIds: msg.config?.knowledgeBaseIds,
+                            dialogueExamples: msg.config?.dialogueExamples,
+                            openingRemark: msg.config?.openingRemark,
                         };
+                        common_1.Logger.debug(`[VoiceCall] start_call配置已保存: userId=${session.chatConfig.userId}, appId=${session.chatConfig.appId}, modelName=${session.chatConfig.modelName}, prompt=${session.chatConfig.prompt?.substring(0, 30)}...`, 'VoiceCall');
                         sendJson({ type: 'call_started', sampleRate: cfg.sampleRate, format: cfg.format });
                     }
                     else if (msg?.type === 'end_call') {
@@ -27897,13 +27245,16 @@ async function bootstrap() {
                         sendJson({ type: 'canceled' });
                     }
                     else if (msg?.type === 'stop') {
+                        common_1.Logger.debug(`[VoiceCall] 收到stop消息: audioChunks.length=${audioChunks.length}`, 'VoiceCall');
                         const buf = Buffer.concat(audioChunks);
                         audioChunks = [];
                         if (!buf.length) {
+                            common_1.Logger.debug(`[VoiceCall] 音频数据为空，返回空结果`, 'VoiceCall');
                             sendJson({ type: 'asr.final', text: '' });
                             sendJson({ type: 'done' });
                             return;
                         }
+                        common_1.Logger.debug(`[VoiceCall] 开始处理音频: ${buf.length} bytes`, 'VoiceCall');
                         const mime = cfg.format === 'wav'
                             ? 'audio/wav'
                             : cfg.format === 'mp3'
@@ -27932,45 +27283,90 @@ async function bootstrap() {
                         session.llmAbort = abortController;
                         let llmFull = '';
                         try {
-                            await openAIChatService.chat([{ role: 'user', content: asrText }], {
-                                chatId: 'realtime',
-                                apiKey: '',
-                                model: 'gpt-4o-mini',
-                                modelName: 'AI助手',
-                                temperature: 1,
-                                prompt: asrText,
-                                timeout: 300000,
-                                proxyUrl: '',
-                                abortController,
-                                usingDeepThinking: false,
-                                usingNetwork: false,
-                                extraParam: null,
-                                deepThinkingType: 0,
-                                isFileUpload: 0,
-                                isImageUpload: 0,
+                            let rolePrompt = '';
+                            let appInfo = null;
+                            if (session.chatConfig?.appId) {
+                                appInfo = await getAppInfo(session.chatConfig.appId);
+                            }
+                            rolePrompt = await buildRolePrompt(appInfo, session.chatConfig?.userId, session.chatConfig?.prompt || '');
+                            common_1.Logger.debug(`[VoiceCall] stop模式-角色预设已构建: appId=${session.chatConfig?.appId}, name=${appInfo?.name}, preset长度=${rolePrompt?.length}`, 'VoiceCall');
+                            if (!rolePrompt || rolePrompt.trim() === '') {
+                                rolePrompt = '你是一个友好、乐于助人的AI助手。请用简洁、自然的方式回答用户的问题。';
+                                common_1.Logger.debug(`[VoiceCall] stop模式-使用默认角色预设`, 'VoiceCall');
+                            }
+                            const appConfigForXingchen = session.chatConfig?.appId
+                                ? {
+                                    botName: appInfo?.name || session.chatConfig?.modelName || 'AI助手',
+                                    userId: session.chatConfig?.userId,
+                                    appId: session.chatConfig?.appId,
+                                    enableRealTime: appInfo?.enableRealTime ?? session.chatConfig?.enableRealTime,
+                                    enableLongTermMemory: appInfo?.enableLongTermMemory ?? session.chatConfig?.enableLongTermMemory,
+                                    enableKnowledgeBase: appInfo?.enableKnowledgeBase ?? session.chatConfig?.enableKnowledgeBase,
+                                    knowledgeBaseIds: appInfo?.knowledgeBaseIds ?? session.chatConfig?.knowledgeBaseIds,
+                                    dialogueExamples: appInfo?.dialogueExamples ?? session.chatConfig?.dialogueExamples,
+                                    openingRemark: appInfo?.openingRemark ?? session.chatConfig?.openingRemark,
+                                }
+                                : undefined;
+                            common_1.Logger.debug(`[VoiceCall] stop模式-星尘API配置: userId=${session.chatConfig?.userId}, appId=${session.chatConfig?.appId}, botName=${appConfigForXingchen?.botName}`, 'VoiceCall');
+                            const xingchenResult = await openAIChatService.chatFree(asrText, rolePrompt, [], undefined, {
                                 onProgress: (delta) => {
-                                    const t = delta?.content?.[0]?.text || '';
-                                    if (t) {
-                                        llmFull += t;
-                                        sendJson({ type: 'llm.partial', text: t });
+                                    if (delta) {
+                                        llmFull += delta;
+                                        sendJson({ type: 'llm.partial', text: delta });
                                     }
                                 },
-                            });
+                                abortSignal: abortController.signal,
+                            }, appConfigForXingchen);
+                            const xingchenText = xingchenResult.text || '';
+                            if (!llmFull && xingchenText) {
+                                llmFull = xingchenText;
+                            }
                             sendJson({ type: 'llm.final', text: llmFull });
                         }
                         catch (e) {
                             sendJson({ type: 'error', stage: 'llm', message: e?.message || 'LLM failed' });
                             return;
                         }
-                        if (cfg.voice_id && llmFull) {
+                        if (llmFull) {
                             if (session.ttsCanceled) {
                                 sendJson({ type: 'done' });
                                 return;
                             }
+                            common_1.Logger.debug(`[VoiceCall] stop模式-开始情绪识别: ${llmFull.substring(0, 50)}...`, 'VoiceCall');
+                            const psychologicalDesc = extractPsychologicalDesc(llmFull);
+                            if (psychologicalDesc) {
+                                common_1.Logger.debug(`[VoiceCall] stop模式-提取到心理描述: ${psychologicalDesc}`, 'VoiceCall');
+                            }
+                            let detectedEmotion = psychologicalDesc
+                                ? detectEmotionFromText(psychologicalDesc)
+                                : null;
+                            if (!detectedEmotion) {
+                                detectedEmotion = detectEmotionFromText(llmFull);
+                            }
+                            common_1.Logger.debug(`[VoiceCall] stop模式-检测到的情绪: ${detectedEmotion || '无'}`, 'VoiceCall');
+                            const { voiceId: selectedVoiceId, emotion: selectedEmotion } = await selectVoiceByEmotion(session.chatConfig?.appId || null, detectedEmotion, appInfo?.voiceId || cfg.voice_id || null);
+                            common_1.Logger.debug(`[VoiceCall] stop模式-选择的音色: voiceId=${selectedVoiceId}, emotion=${selectedEmotion}`, 'VoiceCall');
+                            const textToSpeak = removeBracketedContent(llmFull);
+                            if (!textToSpeak || textToSpeak.trim().length === 0) {
+                                common_1.Logger.warn('[VoiceCall] stop模式-移除括号后文本为空，跳过TTS', 'VoiceCall');
+                                sendJson({ type: 'done' });
+                                return;
+                            }
+                            if (!selectedVoiceId) {
+                                common_1.Logger.warn('[VoiceCall] stop模式-未找到可用音色，跳过TTS', 'VoiceCall');
+                                sendJson({ type: 'done' });
+                                return;
+                            }
+                            common_1.Logger.debug(`[VoiceCall] stop模式-开始播报: 音色=${selectedVoiceId}, 情绪=${selectedEmotion || '默认'}, 文本长度=${textToSpeak.length}`, 'VoiceCall');
                             sendJson({ type: 'tts.start' });
                             session.ttsActive = true;
                             try {
-                                await voiceService.ttsStream({ voice_id: cfg.voice_id, text: llmFull, format: 'mp3', sample_rate: 22050 }, {
+                                await voiceService.ttsStream({
+                                    voice_id: selectedVoiceId,
+                                    text: textToSpeak,
+                                    format: 'mp3',
+                                    sample_rate: 22050,
+                                }, {
                                     onStart: info => sendJson({
                                         type: 'tts.info',
                                         format: info.format,

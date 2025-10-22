@@ -1,6 +1,6 @@
 import { RechargeType } from '@/common/constants/balance.constant';
 import { createRandomUid, hideString } from '@/common/utils';
-import { HttpException, HttpStatus, Injectable } from '@nestjs/common';
+import { HttpException, HttpStatus, Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Request } from 'express';
 import { In, LessThan, Repository } from 'typeorm';
@@ -131,13 +131,18 @@ export class UserBalanceService {
   /* 检查余额 */
   async validateBalance(req, type, amount) {
     const { id: userId, role } = req.user;
+
+    // visitor 角色跳过所有额度检查（用于外部 API 调用）
+    if (role === 'visitor') {
+      Logger.debug(`[validateBalance] visitor 角色跳过额度检查`, 'UserBalanceService');
+      return true;
+    }
+
     let b = await this.userBalanceEntity.findOne({ where: { userId } });
     if (!b) {
       b = await this.createBaseUserBalance(userId);
     }
-    if (role === 'visitor') {
-      return this.validateVisitorBalance(req, type, amount);
-    }
+
     /* 会员扣费key */
     const memberKey =
       type === 1
@@ -255,7 +260,13 @@ export class UserBalanceService {
     return date >= todayStart;
   }
 
-  async deductFromBalance(userId, deductionType, amount, UseAmount = 0) {
+  async deductFromBalance(userId, deductionType, amount, UseAmount = 0, role = null) {
+    // visitor 角色跳过所有扣费（用于外部 API 调用）
+    if (role === 'visitor') {
+      Logger.debug(`[deductFromBalance] visitor 角色跳过扣费`, 'UserBalanceService');
+      return;
+    }
+
     // 从数据库中查找特定用户的账户余额记录
     const b = await this.userBalanceEntity.findOne({ where: { userId } });
 

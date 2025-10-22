@@ -11,7 +11,7 @@
     "prebuild": "pnpm run format",
     "build": "pnpm format && nest build",
     "build:test": "nest build",
-    "format": "prettier --write 'src/**/*.{vue,ts,tsx,js,jsx,css,scss,less}'",
+    "format": "prettier --write \"src/**/*.{vue,ts,tsx,js,jsx,css,scss,less}\"",
     "encrypt": "node ./encrypt.js",
     "start:daemon": "pm2 start pm2.conf.json --no-daemon",
     "dev": "nest start --watch --preserveWatchOutput",

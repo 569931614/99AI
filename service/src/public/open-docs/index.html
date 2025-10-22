@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>99AI 开放接口说明</title>
+  <title>AI服务 开放接口说明</title>
   <style>
     :root {
       --bg: #0b0f1a; /* 深色背景 */
@@ -47,6 +47,50 @@
     <header>
       <h1>开放接口说明</h1>
       <div class="sub">/api/open/* 对外开放接口的请求与返回字段说明</div>
+
+      <section style="margin: 24px 0;">
+        <h2 style="font-size: 18px; margin-bottom: 12px;">接口更新记录</h2>
+        <table style="font-size: 13px;">
+          <thead>
+            <tr>
+              <th style="width: 35%;">接口路径</th>
+              <th style="width: 8%;">方法</th>
+              <th style="width: 15%;">最后更新</th>
+              <th style="width: 42%;">变更说明</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr><td><code>/api/open/chat/tts-process</code></td><td>POST</td><td>2025-10-18</td><td>TTS 文字转语音，支持 appId 传参和情绪识别</td></tr>
+            <tr><td><code>/api/open/app/createApp</code></td><td>POST</td><td>2025-10-15</td><td>支持情绪音色映射、星尘API字段</td></tr>
+            <tr><td><code>/api/open/app/updateApp</code></td><td>POST</td><td>2025-10-15</td><td>支持情绪音色映射、星尘API字段</td></tr>
+            <tr><td><code>/api/open/app/list</code></td><td>GET</td><td>2025-10-15</td><td>角色列表查询</td></tr>
+            <tr><td><code>/api/open/app/detail/:id</code></td><td>GET</td><td>2025-10-15</td><td>返回详细配置含情绪音色</td></tr>
+            <tr><td><code>/api/open/app/delApp/:id</code></td><td>DELETE</td><td>2025-10-15</td><td>删除角色</td></tr>
+            <tr><td><code>/api/open/app/emotions</code></td><td>GET/POST</td><td>2025-10-15</td><td>全局情绪配置管理</td></tr>
+            <tr><td><code>/api/open/app/psychologicalDesc</code></td><td>GET/POST</td><td>2025-10-15</td><td>心理描述开关</td></tr>
+            <tr><td><code>/api/open/chat/chat-process</code></td><td>POST</td><td>2025-10-15</td><td>修复 groupId 参数传递（需通过 options）</td></tr>
+            <tr><td><code>/api/open/chat/chat-process-voice</code></td><td>POST</td><td>2025-10-15</td><td>语音对话支持群聊</td></tr>
+            <tr><td><code>/api/open/voice/list</code></td><td>GET</td><td>2025-10-15</td><td>音色列表查询（支持前缀过滤）</td></tr>
+            <tr><td><code>/api/open/voice/detail/:voiceId</code></td><td>GET</td><td>2025-10-15</td><td>音色详情</td></tr>
+            <tr><td><code>/api/open/voice/enroll</code></td><td>POST</td><td>2025-10-15</td><td>声音复刻</td></tr>
+            <tr><td><code>/api/open/voice/update</code></td><td>POST</td><td>2025-10-15</td><td>更新音色</td></tr>
+            <tr><td><code>/api/open/voice/delete</code></td><td>POST</td><td>2025-10-15</td><td>删除音色</td></tr>
+            <tr><td><code>/api/open/voice/asr</code></td><td>POST</td><td>2025-10-15</td><td>语音识别</td></tr>
+            <tr><td><code>/api/open/voice/preview</code></td><td>POST</td><td>2025-10-15</td><td>音色试听</td></tr>
+            <tr><td><code>/api/open/affection/rules</code></td><td>GET</td><td>2025-10-15</td><td>好感度规则列表</td></tr>
+            <tr><td><code>/api/open/affection/status</code></td><td>GET</td><td>2025-10-15</td><td>用户好感度状态</td></tr>
+            <tr><td><code>/api/open/affection/increment</code></td><td>POST</td><td>2025-10-20</td><td>增加/减少好感度（支持正负值）</td></tr>
+            <tr><td><code>/api/open/affection/score</code></td><td>PUT</td><td>2025-10-20</td><td>直接设置好感度分数</td></tr>
+            <tr><td><code>/api/open/affection/rule</code></td><td>POST</td><td>2025-10-15</td><td>新增/更新好感度规则</td></tr>
+            <tr><td><code>/api/open/affection/rule/:id</code></td><td>DELETE</td><td>2025-10-15</td><td>删除好感度规则</td></tr>
+            <tr><td><code>/api/open/chatLog/chatList</code></td><td>GET</td><td>2025-10-15</td><td>我的问答记录</td></tr>
+            <tr><td><code>/api/open/chatLog/byAppId</code></td><td>GET</td><td>2025-10-15</td><td>按角色查询聊天记录</td></tr>
+            <tr><td><code>ws://your-domain/api/realtime/voice-call</code></td><td>WebSocket</td><td>2025-10-21</td><td>实时语音通话（ASR+LLM+TTS），支持VAD、打断、情绪检测</td></tr>
+          </tbody>
+        </table>
+        <div class="tip" style="margin-top: 12px;">💡 此表记录各接口的最后更新时间，方便追踪变更。有改动时请更新对应日期和说明。</div>
+      </section>
+
       <div class="cards">
         <div class="card">
           <h3>OpenAPI JSON</h3>
@@ -60,15 +104,198 @@
         </div>
       </div>
       <div class="nav">
+        <a class="pill" href="#websocket-voice">🎙️ WebSocket语音通话</a>
         <a class="pill" href="#create">角色创建</a>
         <a class="pill" href="#update">角色更新</a>
         <a class="pill" href="#list">角色列表</a>
+        <a class="pill" href="#detail">角色详情</a>
+        <a class="pill" href="#delete">角色删除</a>
+        <a class="pill" href="#emotions">情绪配置</a>
+        <a class="pill" href="#psychological">心理描述</a>
         <a class="pill" href="#open-chat">开放·聊天</a>
         <a class="pill" href="#open-voice">开放·音色</a>
         <a class="pill" href="#open-affection">开放·好感度</a>
         <a class="pill" href="#open-chatlog">开放·聊天记录</a>
       </div>
     </header>
+
+    <section id="websocket-voice">
+      <h2>🎙️ WebSocket 实时语音通话</h2>
+      <div class="tip" style="margin-bottom: 16px;">
+        实时双向语音对话，支持 ASR（语音识别）→ LLM（智能对话）→ TTS（语音合成）全链路，支持 VAD 自动检测说话结束、随时打断、情绪识别与音色切换。
+      </div>
+
+      <h3>连接信息</h3>
+      <table>
+        <thead><tr><th>属性</th><th>值</th></tr></thead>
+        <tbody>
+          <tr><td>端点地址</td><td><code>ws://your-domain/api/realtime/voice-call</code></td></tr>
+          <tr><td>协议</td><td>WebSocket（支持文本和二进制消息）</td></tr>
+          <tr><td>鉴权</td><td>暂无（开放接口）</td></tr>
+        </tbody>
+      </table>
+
+      <h3>客户端发送消息类型</h3>
+
+      <h4>1. start_call - 开始通话</h4>
+      <div class="tip">消息类型：JSON 文本消息</div>
+      <table>
+        <thead><tr><th>字段</th><th>说明</th><th>必填</th></tr></thead>
+        <tbody>
+          <tr><td><code>type</code></td><td>固定值：'start_call'</td><td>是</td></tr>
+          <tr><td><code>sampleRate</code></td><td>采样率，推荐：8000 或 16000</td><td>是</td></tr>
+          <tr><td><code>format</code></td><td>音频格式：'pcm' 或 'wav'</td><td>是</td></tr>
+          <tr><td><code>userId</code></td><td>用户 ID</td><td>是</td></tr>
+          <tr><td><code>appId</code></td><td>角色应用 ID</td><td>是</td></tr>
+          <tr><td><code>voiceId</code></td><td>指定音色 ID（不填则使用角色默认音色）</td><td>否</td></tr>
+          <tr><td><code>groupId</code></td><td>会话组 ID（用于上下文关联）</td><td>否</td></tr>
+          <tr><td><code>enableEmotion</code></td><td>是否启用情绪检测（默认 true）</td><td>否</td></tr>
+          <tr><td><code>enableAffection</code></td><td>是否启用好感度系统（默认 true）</td><td>否</td></tr>
+        </tbody>
+      </table>
+      <div class="tip">
+        <strong>响应：</strong><code>{ type: 'call_started', sampleRate: 8000, format: 'pcm' }</code>
+      </div>
+
+      <h4>2. 音频数据 - 发送录音</h4>
+      <div class="tip">消息类型：二进制消息（ArrayBuffer）</div>
+      <table>
+        <thead><tr><th>属性</th><th>说明</th></tr></thead>
+        <tbody>
+          <tr><td>格式</td><td>PCM 16-bit 或 WAV 格式</td></tr>
+          <tr><td>采样率</td><td>与 start_call 中指定的 sampleRate 一致</td></tr>
+          <tr><td>声道</td><td>单声道（推荐）</td></tr>
+          <tr><td>发送方式</td><td>实时流式发送，每次发送一小块音频数据</td></tr>
+        </tbody>
+      </table>
+      <div class="tip">
+        <strong>响应：</strong>实时返回 <code>{ type: 'asr.partial', text: '识别的部分文字' }</code>
+      </div>
+
+      <h4>3. stop - 停止录音并触发处理</h4>
+      <div class="tip">消息类型：JSON 文本消息</div>
+      <table>
+        <thead><tr><th>字段</th><th>说明</th><th>必填</th></tr></thead>
+        <tbody>
+          <tr><td><code>type</code></td><td>固定值：'stop'</td><td>是</td></tr>
+        </tbody>
+      </table>
+      <div class="tip">
+        <strong>作用：</strong>停止当前录音，触发 ASR 最终识别 → LLM 生成回复 → TTS 语音播报<br>
+        <strong>响应序列：</strong>asr.final → llm.start → llm.partial (多次) → llm.final → emotion.detected (可选) → tts.start → 音频数据 → tts.end → done
+      </div>
+
+      <h4>4. cancel - 取消当前播放</h4>
+      <div class="tip">消息类型：JSON 文本消息</div>
+      <table>
+        <thead><tr><th>字段</th><th>说明</th><th>必填</th></tr></thead>
+        <tbody>
+          <tr><td><code>type</code></td><td>固定值：'cancel'</td><td>是</td></tr>
+        </tbody>
+      </table>
+      <div class="tip">
+        <strong>作用：</strong>立即停止当前 TTS 播放（用于打断）<br>
+        <strong>响应：</strong><code>{ type: 'canceled' }</code>
+      </div>
+
+      <h4>5. end_call - 结束通话</h4>
+      <div class="tip">消息类型：JSON 文本消息</div>
+      <table>
+        <thead><tr><th>字段</th><th>说明</th><th>必填</th></tr></thead>
+        <tbody>
+          <tr><td><code>type</code></td><td>固定值：'end_call'</td><td>是</td></tr>
+        </tbody>
+      </table>
+      <div class="tip">
+        <strong>作用：</strong>正常结束通话，释放资源。建议在发送此消息后关闭 WebSocket 连接。
+      </div>
+
+      <h4>6. probe - 请求诊断信息</h4>
+      <div class="tip">消息类型：JSON 文本消息</div>
+      <table>
+        <thead><tr><th>字段</th><th>说明</th><th>必填</th></tr></thead>
+        <tbody>
+          <tr><td><code>type</code></td><td>固定值：'probe'</td><td>是</td></tr>
+        </tbody>
+      </table>
+      <div class="tip">
+        <strong>作用：</strong>获取服务端状态信息（用于调试）<br>
+        <strong>响应：</strong><code>{ type: 'probe.resp', recvBytesTotal, recvChunkCount, bufferedChunks, isProcessing, ttsActive, lastRms, currentStage }</code>
+      </div>
+
+      <h3>服务端发送消息类型</h3>
+      <table>
+        <thead><tr><th>消息类型</th><th>说明</th><th>关键字段</th></tr></thead>
+        <tbody>
+          <tr><td><code>call_started</code></td><td>通话已启动</td><td>sampleRate, format</td></tr>
+          <tr><td><code>asr.partial</code></td><td>实时语音识别（部分）</td><td>text, begin, end</td></tr>
+          <tr><td><code>asr.final</code></td><td>语音识别完成</td><td>text（完整识别文本）</td></tr>
+          <tr><td><code>llm.start</code></td><td>AI 开始回复</td><td>无</td></tr>
+          <tr><td><code>llm.partial</code></td><td>AI 流式回复（部分）</td><td>text（文本片段）</td></tr>
+          <tr><td><code>llm.final</code></td><td>AI 回复完成</td><td>text（完整回复文本）, usage（token统计）</td></tr>
+          <tr><td><code>emotion.detected</code></td><td>检测到情绪</td><td>emotion（情绪类型，如 'happy', 'sad'）</td></tr>
+          <tr><td><code>tts.start</code></td><td>开始语音播报</td><td>无</td></tr>
+          <tr><td><code>tts.info</code></td><td>TTS 格式信息</td><td>format（'mp3'）, sample_rate（22050）</td></tr>
+          <tr><td><strong>音频数据</strong></td><td>TTS 播报音频（二进制）</td><td>ArrayBuffer（MP3 音频流）</td></tr>
+          <tr><td><code>tts.end</code></td><td>语音播报结束</td><td>无</td></tr>
+          <tr><td><code>done</code></td><td>本轮对话完成</td><td>无</td></tr>
+          <tr><td><code>canceled</code></td><td>操作已取消</td><td>无</td></tr>
+          <tr><td><code>error</code></td><td>错误信息</td><td>stage（错误阶段）, message（错误描述）</td></tr>
+          <tr><td><code>probe.resp</code></td><td>诊断信息响应</td><td>recvBytesTotal, recvChunkCount, bufferedChunks, isProcessing, ttsActive, lastRms, currentStage</td></tr>
+        </tbody>
+      </table>
+
+      <h3>完整对话流程示例</h3>
+      <div class="tip" style="margin-bottom: 12px;">典型的一轮对话流程：</div>
+      <table style="font-size: 13px;">
+        <thead><tr><th style="width: 8%;">步骤</th><th style="width: 18%;">方向</th><th style="width: 32%;">消息</th><th>说明</th></tr></thead>
+        <tbody>
+          <tr><td>1</td><td>客户端 → 服务端</td><td><code>{ type: 'start_call', ... }</code></td><td>建立连接并启动通话</td></tr>
+          <tr><td>2</td><td>服务端 → 客户端</td><td><code>{ type: 'call_started' }</code></td><td>通话已就绪</td></tr>
+          <tr><td>3</td><td>客户端 → 服务端</td><td>音频数据（ArrayBuffer）</td><td>流式发送录音数据</td></tr>
+          <tr><td>4</td><td>服务端 → 客户端</td><td><code>{ type: 'asr.partial', text: '你' }</code></td><td>实时识别（部分）</td></tr>
+          <tr><td>5</td><td>服务端 → 客户端</td><td><code>{ type: 'asr.partial', text: '你好' }</code></td><td>实时识别（部分）</td></tr>
+          <tr><td>6</td><td>客户端 → 服务端</td><td><code>{ type: 'stop' }</code></td><td>停止录音，触发处理</td></tr>
+          <tr><td>7</td><td>服务端 → 客户端</td><td><code>{ type: 'asr.final', text: '你好' }</code></td><td>识别完成</td></tr>
+          <tr><td>8</td><td>服务端 → 客户端</td><td><code>{ type: 'llm.start' }</code></td><td>AI 开始生成回复</td></tr>
+          <tr><td>9</td><td>服务端 → 客户端</td><td><code>{ type: 'llm.partial', text: '你' }</code></td><td>流式回复（部分）</td></tr>
+          <tr><td>10</td><td>服务端 → 客户端</td><td><code>{ type: 'llm.partial', text: '好呀' }</code></td><td>流式回复（部分）</td></tr>
+          <tr><td>11</td><td>服务端 → 客户端</td><td><code>{ type: 'llm.final', text: '你好呀，很高兴见到你！' }</code></td><td>回复完成</td></tr>
+          <tr><td>12</td><td>服务端 → 客户端</td><td><code>{ type: 'emotion.detected', emotion: 'happy' }</code></td><td>检测到情绪</td></tr>
+          <tr><td>13</td><td>服务端 → 客户端</td><td><code>{ type: 'tts.start' }</code></td><td>开始语音合成</td></tr>
+          <tr><td>14</td><td>服务端 → 客户端</td><td><code>{ type: 'tts.info', format: 'mp3', sample_rate: 22050 }</code></td><td>TTS 格式信息</td></tr>
+          <tr><td>15</td><td>服务端 → 客户端</td><td>音频数据（ArrayBuffer）</td><td>MP3 音频流（可能多次）</td></tr>
+          <tr><td>16</td><td>服务端 → 客户端</td><td><code>{ type: 'tts.end' }</code></td><td>语音播报结束</td></tr>
+          <tr><td>17</td><td>服务端 → 客户端</td><td><code>{ type: 'done' }</code></td><td>本轮对话完成</td></tr>
+        </tbody>
+      </table>
+
+      <h3>音频格式要求</h3>
+      <table>
+        <thead><tr><th>方向</th><th>格式</th><th>采样率</th><th>比特率</th><th>声道</th></tr></thead>
+        <tbody>
+          <tr><td>客户端 → 服务端（录音）</td><td>PCM 16-bit / WAV</td><td>8000Hz（推荐）或 16000Hz</td><td>-</td><td>单声道（推荐）</td></tr>
+          <tr><td>服务端 → 客户端（TTS）</td><td>MP3</td><td>22050Hz</td><td>128kbps</td><td>单声道</td></tr>
+        </tbody>
+      </table>
+
+      <h3>错误处理</h3>
+      <table>
+        <thead><tr><th>错误阶段</th><th>说明</th><th>常见原因</th></tr></thead>
+        <tbody>
+          <tr><td><code>asr</code></td><td>语音识别失败</td><td>音频格式不支持、音频质量差、无有效语音内容</td></tr>
+          <tr><td><code>llm</code></td><td>AI 对话生成失败</td><td>API 配额不足、网络超时、内容违规</td></tr>
+          <tr><td><code>tts</code></td><td>语音合成失败</td><td>音色 ID 无效、TTS 服务异常、文本过长</td></tr>
+        </tbody>
+      </table>
+
+      <h3>相关文档</h3>
+      <div class="tip">
+        📖 <strong>完整技术文档：</strong><a href="https://github.com/your-repo/VOICE_CALL_API.md" target="_blank">VOICE_CALL_API.md</a><br>
+        🚀 <strong>快速上手指南：</strong><a href="https://github.com/your-repo/VOICE_CALL_QUICK_START.md" target="_blank">VOICE_CALL_QUICK_START.md</a><br>
+        🔧 <strong>调试与诊断：</strong>发送 <code>{ type: 'probe' }</code> 获取实时状态信息
+      </div>
+    </section>
 
     <section id="create">
       <h2>角色创建（POST <code>/api/open/app/createApp</code>）</h2>
@@ -80,10 +307,21 @@
         <tbody>
           <tr><td><code>name</code></td><td>App 应用名称</td><td>是</td></tr>
           <tr><td><code>catId</code></td><td>分类 ID 列表（逗号分隔）</td><td>是</td></tr>
+          <tr><td><code>des</code></td><td>App 应用描述信息</td><td>否</td></tr>
           <tr><td><code>preset</code></td><td>角色设定/预设场景信息</td><td>推荐</td></tr>
           <tr><td><code>coverImg</code></td><td>封面图片 URL</td><td>否</td></tr>
+          <tr><td><code>order</code></td><td>排序值，数字越大越靠前（默认 100）</td><td>否</td></tr>
+          <tr><td><code>status</code></td><td>状态：0 禁用，1 启用（默认 1）</td><td>否</td></tr>
+          <tr><td><code>demoData</code></td><td>App 示例数据</td><td>否</td></tr>
+          <tr><td><code>role</code></td><td>应用角色标识，如 system/user（默认 system）</td><td>否</td></tr>
           <tr><td><code>voiceId</code></td><td>角色默认音色 ID（DashScope/CosyVoice voice_id）</td><td>否</td></tr>
           <tr><td><code>emotionVoices</code></td><td>情绪-音色映射数组；元素仅传 <code>{ emotionId, voiceId }</code> 且 <code>voiceId</code> 非空</td><td>否</td></tr>
+          <tr><td><code>enableRealTime</code></td><td>是否开启真实时间（星尘 API）</td><td>否</td></tr>
+          <tr><td><code>enableLongTermMemory</code></td><td>是否开启长期记忆（星尘 API）</td><td>否</td></tr>
+          <tr><td><code>enableKnowledgeBase</code></td><td>是否开启知识库搜索（星尘 API）</td><td>否</td></tr>
+          <tr><td><code>knowledgeBaseIds</code></td><td>知识库 ID 列表，JSON 数组格式（星尘 API），如：["kb_id_1","kb_id_2"]</td><td>否</td></tr>
+          <tr><td><code>dialogueExamples</code></td><td>对话示例，JSON 数组格式（星尘 API），如：[{"role":"user","content":"你好"}]</td><td>否</td></tr>
+          <tr><td><code>openingRemark</code></td><td>开场白（角色初始问候语）</td><td>否</td></tr>
         </tbody>
       </table>
       <h3>返回体</h3>
@@ -125,14 +363,56 @@
         <tr><td><code>options / extraParam / usingPluginId</code></td><td>附加选项/插件/扩展参数</td><td>否</td></tr>
       </tbody></table>
       <h3>语音对话（POST <code>/api/open/chat/chat-process-voice</code>）</h3>
-      <div class="tip">需传 <code>userId</code>，并提供 <code>audioUrl</code> 或 <code>audioBase64</code> 其一</div>
-
-      <h3>TTS 文字转语音（POST <code>/api/open/chat/tts-process</code>）</h3>
+      <div class="tip" style="margin-bottom: 12px;">一次性语音对话（ASR → LLM → TTS 完整流程），非实时流式，适合一问一答场景</div>
       <table><thead><tr><th>字段</th><th>说明</th><th>必填</th></tr></thead><tbody>
         <tr><td><code>userId</code></td><td>外部用户ID</td><td>是</td></tr>
-        <tr><td><code>prompt</code></td><td>要合成的文本</td><td>是</td></tr>
-        <tr><td><code>chatId</code></td><td>继续会话ID（可选）</td><td>否</td></tr>
+        <tr><td><code>appId</code></td><td>角色应用 ID</td><td>是</td></tr>
+        <tr><td><code>audioUrl</code></td><td>音频文件URL（与 <code>audioBase64</code> 二选一）</td><td>否</td></tr>
+        <tr><td><code>audioBase64</code></td><td>音频Base64（dataURL 或纯base64），与 <code>audioUrl</code> 二选一</td><td>否</td></tr>
+        <tr><td><code>voiceId</code></td><td>指定TTS音色 ID（不填则使用角色默认音色）</td><td>否</td></tr>
+        <tr><td><code>groupId</code></td><td>会话组 ID（用于上下文关联）</td><td>否</td></tr>
+        <tr><td><code>enableEmotion</code></td><td>是否启用情绪检测（默认 true）</td><td>否</td></tr>
+        <tr><td><code>enableAffection</code></td><td>是否启用好感度系统（默认 true）</td><td>否</td></tr>
       </tbody></table>
+      <h3>返回体</h3>
+      <table><thead><tr><th>字段</th><th>说明</th></tr></thead><tbody>
+        <tr><td><code>code</code></td><td>状态码，200 表示成功</td></tr>
+        <tr><td><code>success</code></td><td>是否成功（布尔值）</td></tr>
+        <tr><td><code>message</code></td><td>消息文本</td></tr>
+        <tr><td><code>data</code></td><td>返回数据对象</td></tr>
+      </tbody></table>
+      <h3>data 对象字段</h3>
+      <table><thead><tr><th>字段</th><th>说明</th></tr></thead><tbody>
+        <tr><td><code>asrText</code></td><td>ASR 识别的文字</td></tr>
+        <tr><td><code>llmText</code></td><td>AI 回复的文本</td></tr>
+        <tr><td><code>emotion</code></td><td>检测到的情绪（如 'happy', 'sad'）</td></tr>
+        <tr><td><code>ttsAudioUrl</code></td><td>TTS 生成的音频文件 URL（MP3 格式）</td></tr>
+        <tr><td><code>usage</code></td><td>Token 使用统计（可选）</td></tr>
+      </tbody></table>
+      <div class="tip" style="margin-top: 12px;">
+        💡 <strong>与 WebSocket 语音通话的区别：</strong><br>
+        • <strong>HTTP 语音对话</strong>：一次性请求，等待完整结果返回（ASR+LLM+TTS 全部完成后才返回）<br>
+        • <strong>WebSocket 语音通话</strong>：实时流式通信，支持边说边识别、打断、VAD 自动检测（推荐用于实时对话场景）
+      </div>
+
+      <h3>TTS 文字转语音（POST <code>/api/open/chat/tts-process</code>）</h3>
+      <div class="tip" style="margin-bottom: 12px;">支持角色情绪音色、心理描述识别、自动文本处理</div>
+      <table><thead><tr><th>字段</th><th>说明</th><th>必填</th></tr></thead><tbody>
+        <tr><td><code>userId</code></td><td>外部用户ID</td><td>是</td></tr>
+        <tr><td><code>prompt</code></td><td>要合成的文本（支持括号内心理描述，如：你好啊~（开心地打招呼））</td><td>是</td></tr>
+        <tr><td><code>appId</code></td><td>角色ID（用于情绪音色选择）</td><td>否</td></tr>
+        <tr><td><code>chatId</code></td><td>聊天记录ID（若未传appId则从此获取）</td><td>否</td></tr>
+        <tr><td><code>emotion</code></td><td>直接指定情绪类型（跳过AI识别），如：开心、难过</td><td>否</td></tr>
+        <tr><td><code>voice</code></td><td>音色类型，如：alloy、nova</td><td>否</td></tr>
+        <tr><td><code>speed</code></td><td>语速（0.25-4.0，默认1.0）</td><td>否</td></tr>
+        <tr><td><code>model</code></td><td>语音模型（默认tts-1）</td><td>否</td></tr>
+      </tbody></table>
+      <div class="tip" style="margin-top: 12px;">
+        <strong>功能特性：</strong><br>
+        1️⃣ 自动提取括号内心理描述用于情绪识别<br>
+        2️⃣ 朗读时移除括号内容，只朗读实际文本<br>
+        3️⃣ 音色选择优先级：指定emotion → AI识别情绪 → 角色情绪映射 → 角色默认音色 → 系统默认TTS
+      </div>
     </section>
 
     <section id="open-voice">
@@ -172,6 +452,8 @@
         <tr><td><code>voiceId</code></td><td>音色ID</td><td>是</td></tr>
         <tr><td><code>status</code></td><td>状态（PENDING/SUCCEEDED/FAILED 等）</td><td>是</td></tr>
       </tbody></table>
+      <h3>同步PENDING状态（POST <code>/api/open/voice/sync-pending-status</code>）</h3>
+      <div class="tip">自动同步所有PENDING状态的音色，查询最新状态并更新到数据库</div>
       <h3>删除（POST <code>/api/open/voice/delete</code>）</h3>
       <table><thead><tr><th>字段</th><th>说明</th><th>是否必填</th></tr></thead><tbody>
         <tr><td><code>voice_id</code></td><td>音色ID</td><td>是</td></tr>
@@ -225,6 +507,46 @@
       <table><thead><tr><th>参数</th><th>说明</th><th>是否必填</th></tr></thead><tbody>
         <tr><td><code>id</code></td><td>规则ID</td><td>是</td></tr>
       </tbody></table>
+
+      <h3>增加好感度（POST <code>/api/open/affection/increment</code>）</h3>
+      <div class="tip" style="margin-bottom: 12px;">增加或减少用户在指定角色的好感度，支持正负值调整</div>
+      <table><thead><tr><th>字段</th><th>说明</th><th>是否必填</th></tr></thead><tbody>
+        <tr><td><code>userId</code></td><td>用户ID</td><td>是</td></tr>
+        <tr><td><code>appId</code></td><td>角色ID</td><td>是</td></tr>
+        <tr><td><code>amount</code></td><td>增加的分数（正数增加，负数减少，默认+1）</td><td>否</td></tr>
+      </tbody></table>
+      <h3>返回体</h3>
+      <table><thead><tr><th>字段</th><th>说明</th></tr></thead><tbody>
+        <tr><td><code>score</code></td><td>当前好感度分数</td></tr>
+        <tr><td><code>sentenceCount</code></td><td>已聊天句数</td></tr>
+        <tr><td><code>stage</code></td><td>当前阶段信息（包含 id, name, behaviors, min, max）</td></tr>
+      </tbody></table>
+      <h3>示例</h3>
+      <table><thead><tr><th>场景</th><th>请求</th></tr></thead><tbody>
+        <tr><td>增加5分</td><td><code>{ "userId": 1, "appId": 101, "amount": 5 }</code></td></tr>
+        <tr><td>减少3分</td><td><code>{ "userId": 1, "appId": 101, "amount": -3 }</code></td></tr>
+        <tr><td>默认+1</td><td><code>{ "userId": 1, "appId": 101 }</code></td></tr>
+      </tbody></table>
+
+      <h3>设置好感度（PUT <code>/api/open/affection/score</code>）</h3>
+      <div class="tip" style="margin-bottom: 12px;">直接设置用户在指定角色的好感度分数（绝对值设置）</div>
+      <table><thead><tr><th>字段</th><th>说明</th><th>是否必填</th></tr></thead><tbody>
+        <tr><td><code>userId</code></td><td>用户ID</td><td>是</td></tr>
+        <tr><td><code>appId</code></td><td>角色ID</td><td>是</td></tr>
+        <tr><td><code>score</code></td><td>要设置的分数（最小为0）</td><td>是</td></tr>
+      </tbody></table>
+      <h3>返回体</h3>
+      <table><thead><tr><th>字段</th><th>说明</th></tr></thead><tbody>
+        <tr><td><code>score</code></td><td>当前好感度分数</td></tr>
+        <tr><td><code>sentenceCount</code></td><td>已聊天句数</td></tr>
+        <tr><td><code>stage</code></td><td>当前阶段信息（包含 id, name, behaviors, min, max）</td></tr>
+      </tbody></table>
+      <h3>示例</h3>
+      <table><thead><tr><th>场景</th><th>请求</th></tr></thead><tbody>
+        <tr><td>设置为50分</td><td><code>{ "userId": 1, "appId": 101, "score": 50 }</code></td></tr>
+        <tr><td>重置为0分</td><td><code>{ "userId": 1, "appId": 101, "score": 0 }</code></td></tr>
+      </tbody></table>
+      <div class="tip">💡 <strong>区别：</strong><code>increment</code> 是相对调整（±值），<code>score</code> 是绝对设置。</div>
     </section>
 
     <section id="open-chatlog">
@@ -248,6 +570,81 @@
       </tbody></table>
     </section>
 
+    <section id="delete">
+      <h2>角色删除（DELETE <code>/api/open/app/delApp/:id</code>）</h2>
+      <h3>路径参数</h3>
+      <table>
+        <thead><tr><th>参数</th><th>说明</th><th>是否必填</th></tr></thead>
+        <tbody>
+          <tr><td><code>id</code></td><td>角色 ID</td><td>是</td></tr>
+        </tbody>
+      </table>
+      <h3>返回体</h3>
+      <table>
+        <thead><tr><th>字段</th><th>说明</th></tr></thead>
+        <tbody>
+          <tr><td><code>code</code></td><td>状态码</td></tr>
+          <tr><td><code>message</code></td><td>消息文本（如"删除应用成功"）</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section id="emotions">
+      <h2>全局情绪配置</h2>
+      <h3>获取情绪配置（GET <code>/api/open/app/emotions</code>）</h3>
+      <div class="tip">获取全局情绪→音色映射配置</div>
+      <h3>返回体示例</h3>
+      <table>
+        <thead><tr><th>字段</th><th>说明</th></tr></thead>
+        <tbody>
+          <tr><td><code>emotions</code></td><td>情绪配置数组，每项包含 <code>{ id, emotion, voiceId }</code></td></tr>
+        </tbody>
+      </table>
+      <h3>设置情绪配置（POST <code>/api/open/app/emotions</code>）</h3>
+      <table>
+        <thead><tr><th>字段</th><th>说明</th><th>是否必填</th></tr></thead>
+        <tbody>
+          <tr><td><code>emotions</code></td><td>情绪配置数组，每项包含 <code>{ emotion, voiceId }</code></td><td>是</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section id="psychological">
+      <h2>心理描述开关</h2>
+      <h3>获取心理描述开关（GET <code>/api/open/app/psychologicalDesc</code>）</h3>
+      <table>
+        <thead><tr><th>参数</th><th>说明</th><th>是否必填</th></tr></thead>
+        <tbody>
+          <tr><td><code>userId</code></td><td>用户ID</td><td>是</td></tr>
+          <tr><td><code>appId</code></td><td>角色(App) ID</td><td>是</td></tr>
+        </tbody>
+      </table>
+      <h3>返回体</h3>
+      <table>
+        <thead><tr><th>字段</th><th>说明</th></tr></thead>
+        <tbody>
+          <tr><td><code>enable</code></td><td>是否启用心理描述（布尔值）</td></tr>
+        </tbody>
+      </table>
+      <h3>设置心理描述开关（POST <code>/api/open/app/psychologicalDesc</code>）</h3>
+      <table>
+        <thead><tr><th>字段</th><th>说明</th><th>是否必填</th></tr></thead>
+        <tbody>
+          <tr><td><code>userId</code></td><td>用户ID</td><td>是</td></tr>
+          <tr><td><code>appId</code></td><td>角色(App) ID</td><td>是</td></tr>
+          <tr><td><code>enable</code></td><td>是否启用心理描述</td><td>是</td></tr>
+        </tbody>
+      </table>
+      <h3>返回体</h3>
+      <table>
+        <thead><tr><th>字段</th><th>说明</th></tr></thead>
+        <tbody>
+          <tr><td><code>success</code></td><td>操作是否成功（布尔值）</td></tr>
+        </tbody>
+      </table>
+      <div class="tip">说明：心理描述用于控制AI回复时是否在括号内展示角色的心理活动。</div>
+    </section>
+
     <section id="update">
       <h2>角色更新（POST <code>/api/open/app/updateApp</code>）</h2>
       <h3>请求体字段</h3>
@@ -257,10 +654,21 @@
           <tr><td><code>id</code></td><td>角色 ID</td><td>是</td></tr>
           <tr><td><code>name</code></td><td>App 应用名称</td><td>否</td></tr>
           <tr><td><code>catId</code></td><td>分类 ID 列表（逗号分隔）</td><td>否</td></tr>
+          <tr><td><code>des</code></td><td>App 应用描述信息</td><td>否</td></tr>
           <tr><td><code>preset</code></td><td>角色设定/预设场景信息</td><td>否</td></tr>
           <tr><td><code>coverImg</code></td><td>封面图片 URL</td><td>否</td></tr>
-          <tr><td><code>voiceId</code></td><td>角色默认音色 ID</td><td>否</td></tr>
+          <tr><td><code>order</code></td><td>排序值，数字越大越靠前</td><td>否</td></tr>
+          <tr><td><code>status</code></td><td>状态：0 禁用，1 启用</td><td>否</td></tr>
+          <tr><td><code>demoData</code></td><td>App 示例数据</td><td>否</td></tr>
+          <tr><td><code>role</code></td><td>应用角色标识，如 system/user</td><td>否</td></tr>
+          <tr><td><code>voiceId</code></td><td>角色默认音色 ID（DashScope/CosyVoice voice_id）</td><td>否</td></tr>
           <tr><td><code>emotionVoices</code></td><td>情绪-音色映射数组；元素仅传 <code>{ emotionId, voiceId }</code> 且 <code>voiceId</code> 非空</td><td>否</td></tr>
+          <tr><td><code>enableRealTime</code></td><td>是否开启真实时间（星尘 API）</td><td>否</td></tr>
+          <tr><td><code>enableLongTermMemory</code></td><td>是否开启长期记忆（星尘 API）</td><td>否</td></tr>
+          <tr><td><code>enableKnowledgeBase</code></td><td>是否开启知识库搜索（星尘 API）</td><td>否</td></tr>
+          <tr><td><code>knowledgeBaseIds</code></td><td>知识库 ID 列表，JSON 数组格式（星尘 API），如：["kb_id_1","kb_id_2"]</td><td>否</td></tr>
+          <tr><td><code>dialogueExamples</code></td><td>对话示例，JSON 数组格式（星尘 API），如：[{"role":"user","content":"你好"}]</td><td>否</td></tr>
+          <tr><td><code>openingRemark</code></td><td>开场白（角色初始问候语）</td><td>否</td></tr>
         </tbody>
       </table>
       <h3>返回体</h3>
@@ -314,7 +722,41 @@
       </table>
     </section>
 
-    <div class="footer">© 99AI Open APIs — 如需更多模块的字段详细说明，请前往 <a href="/open-api-docs" target="_blank">/open-api-docs</a></div>
+    <section id="detail">
+      <h2>角色详情（GET <code>/api/open/app/detail/:id</code>）</h2>
+      <h3>路径参数</h3>
+      <table>
+        <thead><tr><th>参数</th><th>说明</th><th>是否必填</th></tr></thead>
+        <tbody>
+          <tr><td><code>id</code></td><td>角色 ID</td><td>是</td></tr>
+        </tbody>
+      </table>
+      <h3>返回体</h3>
+      <table>
+        <thead><tr><th>字段</th><th>说明</th></tr></thead>
+        <tbody>
+          <tr><td><code>name</code></td><td>App 应用名称</td></tr>
+          <tr><td><code>des</code></td><td>App 应用描述信息</td></tr>
+          <tr><td><code>coverImg</code></td><td>封面图片 URL</td></tr>
+          <tr><td><code>demoData</code></td><td>App 示例数据（数组格式）</td></tr>
+          <tr><td><code>voiceId</code></td><td>角色默认音色 ID（若已绑定）</td></tr>
+          <tr><td><code>emotionVoices</code></td><td>情绪-音色映射数组，格式：[{ emotion, emotionId, voiceId }]</td></tr>
+          <tr><td><code>isFixedModel</code></td><td>是否固定使用模型（0/1）</td></tr>
+          <tr><td><code>appModel</code></td><td>应用使用的模型配置</td></tr>
+          <tr><td><code>backgroundImg</code></td><td>背景图片 URL</td></tr>
+          <tr><td><code>prompt</code></td><td>提问模版</td></tr>
+          <tr><td><code>enableRealTime</code></td><td>是否开启真实时间（星尘 API）</td></tr>
+          <tr><td><code>enableLongTermMemory</code></td><td>是否开启长期记忆（星尘 API）</td></tr>
+          <tr><td><code>enableKnowledgeBase</code></td><td>是否开启知识库搜索（星尘 API）</td></tr>
+          <tr><td><code>knowledgeBaseIds</code></td><td>知识库 ID 列表，JSON 数组格式（星尘 API）</td></tr>
+          <tr><td><code>dialogueExamples</code></td><td>对话示例，JSON 数组格式（星尘 API）</td></tr>
+          <tr><td><code>openingRemark</code></td><td>开场白（角色初始问候语）</td></tr>
+        </tbody>
+      </table>
+      <div class="tip">说明：此接口返回角色的详细配置信息，用于展示和编辑。</div>
+    </section>
+
+    <div class="footer">© AI Open APIs — 如需更多模块的字段详细说明，请前往 <a href="/open-api-docs" target="_blank">/open-api-docs</a></div>
   </div>
 </body>
 </html>

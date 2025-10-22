@@ -19,10 +19,7 @@
 
       <div v-else-if="roles.length === 0" class="text-center py-12">
         <p class="text-gray-500 dark:text-gray-400 mb-4">还没有创建任何角色</p>
-        <button
-          @click="showCreateDialog = true"
-          class="btn btn-primary btn-sm"
-        >
+        <button @click="showCreateDialog = true" class="btn btn-primary btn-sm">
           创建第一个角色
         </button>
       </div>
@@ -64,11 +61,7 @@
                       :class="role.public ? 'text-green-600' : 'text-gray-400'"
                     />
                   </button>
-                  <button
-                    @click="editRole(role)"
-                    class="btn-icon btn-xs"
-                    title="编辑"
-                  >
+                  <button @click="editRole(role)" class="btn-icon btn-xs" title="编辑">
                     <Edit size="14" />
                   </button>
                   <button
@@ -106,7 +99,9 @@
         <div
           class="bg-white dark:bg-gray-800 rounded-lg shadow-xl w-full max-w-2xl mx-4 max-h-[90vh] overflow-y-auto"
         >
-          <div class="sticky top-0 bg-white dark:bg-gray-800 px-6 py-4 border-b border-gray-200 dark:border-gray-700">
+          <div
+            class="sticky top-0 bg-white dark:bg-gray-800 px-6 py-4 border-b border-gray-200 dark:border-gray-700"
+          >
             <div class="flex items-center justify-between">
               <h3 class="text-lg font-semibold text-gray-900 dark:text-gray-100">
                 {{ showEditDialog ? '编辑角色' : '创建角色' }}
@@ -179,17 +174,19 @@
             </div>
           </div>
 
-          <div class="sticky bottom-0 bg-gray-50 dark:bg-gray-750 px-6 py-4 border-t border-gray-200 dark:border-gray-700 flex justify-end gap-3">
-            <button @click="closeDialog" class="btn btn-default btn-md">
-              取消
-            </button>
+          <div
+            class="sticky bottom-0 bg-gray-50 dark:bg-gray-750 px-6 py-4 border-t border-gray-200 dark:border-gray-700 flex justify-end gap-3"
+          >
+            <button @click="closeDialog" class="btn btn-default btn-md">取消</button>
             <button
               @click="submitForm"
               :disabled="!formData.name || !formData.catId || submitting"
               class="btn btn-primary btn-md disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <span v-if="submitting" class="inline-block mr-2">
-                <div class="animate-spin rounded-full h-4 w-4 border-b-2 border-white inline-block"></div>
+                <div
+                  class="animate-spin rounded-full h-4 w-4 border-b-2 border-white inline-block"
+                ></div>
               </span>
               {{ showEditDialog ? '保存' : '创建' }}
             </button>

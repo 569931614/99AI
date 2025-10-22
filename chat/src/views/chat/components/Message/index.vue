@@ -50,6 +50,9 @@ interface Props {
   stepName?: string
   workflowProgress?: number
   isGroupChat?: boolean
+  promptTokens?: number
+  completionTokens?: number
+  totalTokens?: number
 }
 
 // 添加计算属性判断是否是用户消息
@@ -123,6 +126,13 @@ function handleRegenerate() {
     </div>
 
     <div class="overflow-visible text-sm items-start w-full">
+      <!-- 群聊模式下显示角色名称 -->
+      <div
+        v-if="!isUserMessage && isGroupChat && modelName"
+        class="text-xs font-medium text-gray-600 dark:text-gray-400 mb-1 ml-1"
+      >
+        {{ modelName }}
+      </div>
       <div class="flex items-end gap-1 flex-row">
         <div v-if="isUserMessage && username" class="text-xs opacity-60 mr-1">{{ username }}</div>
         <MermaidComponent
@@ -169,6 +179,9 @@ function handleRegenerate() {
           :usingMcpTool="usingMcpTool"
           :reasoningText="reasoningText"
           :isWorkflowMessage="isWorkflowMessage"
+          :promptTokens="promptTokens"
+          :completionTokens="completionTokens"
+          :totalTokens="totalTokens"
           @regenerate="handleRegenerate"
           @copy="handleCopy"
           @delete="handleDetele"

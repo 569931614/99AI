@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-99AI is a commercial-grade AI web platform built as a monorepo with three main modules:
+This is a commercial-grade AI web platform built as a monorepo with three main modules:
 
 - **admin**: Admin dashboard (Vue 3 + Vite)
 - **chat**: User-facing chat interface (Vue 3 + Vite)
@@ -16,7 +16,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ### Module Structure
 
 ```
-99AI/
+project/
 ├── admin/           # Admin dashboard frontend (Fantastic Admin Basic)
 │   └── src/
 │       ├── api/     # API client functions

@@ -134,7 +134,7 @@ meta:
       <template #content>
         <div class="text-sm/6">
           <div>
-            <a href="https://www.dulupay.com/?invite=99AI" target="_blank">嘟噜支付</a>
+            <a href="https://www.dulupay.com/" target="_blank">嘟噜支付</a>
             支付渠道，请按文档配置即可。
           </div>
           <div>支付通知地址为： https://您的域名/api/pay/notify。</div>

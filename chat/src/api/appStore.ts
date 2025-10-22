@@ -40,7 +40,10 @@ export function fetchQueryOneCatAPI<T>(data): Promise<T> {
 }
 
 /* 获取心理描述开关状态（无鉴权） */
-export function fetchGetPsychologicalDescAPI<T>(params: { userId: number; appId: number }): Promise<T> {
+export function fetchGetPsychologicalDescAPI<T>(params: {
+  userId: number
+  appId: number
+}): Promise<T> {
   return get<T>({
     url: '/open/app/psychologicalDesc',
     data: params,
@@ -48,7 +51,11 @@ export function fetchGetPsychologicalDescAPI<T>(params: { userId: number; appId:
 }
 
 /* 设置心理描述开关（无鉴权） */
-export function fetchSetPsychologicalDescAPI<T>(data: { userId: number; appId: number; enable: boolean }): Promise<T> {
+export function fetchSetPsychologicalDescAPI<T>(data: {
+  userId: number
+  appId: number
+  enable: boolean
+}): Promise<T> {
   return post<T>({
     url: '/open/app/psychologicalDesc',
     data,
@@ -66,7 +73,12 @@ export function fetchUserCreateRoleAPI<T>(data: any): Promise<T> {
 }
 
 /* 获取用户自己创建的角色列表 */
-export function fetchUserMyRolesAPI<T>(params?: { page?: number; size?: number; name?: string; status?: number }): Promise<T> {
+export function fetchUserMyRolesAPI<T>(params?: {
+  page?: number
+  size?: number
+  name?: string
+  status?: number
+}): Promise<T> {
   return get<T>({
     url: '/app/user/myRoles',
     data: params,

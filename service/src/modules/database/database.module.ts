@@ -16,6 +16,7 @@ import { BadWordsEntity } from '../badWords/badWords.entity';
 import { ViolationLogEntity } from '../badWords/violationLog.entity';
 import { ChatGroupEntity } from '../chatGroup/chatGroup.entity';
 import { ChatLogEntity } from '../chatLog/chatLog.entity';
+import { ConversationSummaryEntity } from '../conversationSummary/conversationSummary.entity';
 import { CramiEntity } from '../crami/crami.entity';
 import { CramiPackageEntity } from '../crami/cramiPackage.entity';
 import { ConfigEntity } from '../globalConfig/config.entity';
@@ -74,6 +75,7 @@ import { VoiceEntity } from '../voice/voice.entity';
             VoiceEntity,
             AffectionRuleEntity,
             UserAppAffectionEntity,
+            ConversationSummaryEntity,
           ],
           synchronize: false,
           logging: false,

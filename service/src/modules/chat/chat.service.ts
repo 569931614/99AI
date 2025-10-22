@@ -645,6 +645,12 @@ ${numberedOptions}
 
     // 解析 appId：优先使用 body.appId；若缺失且存在 groupId，则尝试从群组信息推断
     let appId = body?.appId ?? null;
+    Logger.debug(
+      `[好感度调试] 初始 appId=${appId}, body.appId=${body?.appId}, groupId=${
+        (options as any)?.groupId
+      }`,
+      'ChatService',
+    );
     if (!appId && (options as any)?.groupId) {
       try {
         const groupInfo = await this.chatGroupService.getGroupInfoFromId((options as any).groupId);
@@ -657,6 +663,7 @@ ${numberedOptions}
         Logger.warn(`无法从群组推断 appId: ${e?.message || e}`, 'ChatService');
       }
     }
+    Logger.debug(`[好感度调试] 最终 appId=${appId}`, 'ChatService');
 
     // 获取应用信息
     let appInfo;
@@ -705,7 +712,7 @@ ${numberedOptions}
         isGroupChat =
           groupInfo?.isGroupChat === true || (groupInfo?.isGroupChat as any) === 1 || false;
         Logger.debug(
-          `群聊检测 - groupId: ${groupId}, isGroupChat字段: ${groupInfo?.isGroupChat}, 判定结果: ${isGroupChat}`,
+          `[好感度调试] groupId=${groupId}, groupInfo.isGroupChat=${groupInfo?.isGroupChat}, 最终isGroupChat=${isGroupChat}`,
           'ChatService',
         );
       } catch (error) {
@@ -1317,7 +1324,7 @@ ${numberedOptions}
               }
             : undefined;
 
-          const xingchenText = await this.openAIChatService.chatFree(
+          const xingchenResult = await this.openAIChatService.chatFree(
             prompt || '',
             setSystemMessage,
             messagesHistory,
@@ -1336,6 +1343,34 @@ ${numberedOptions}
             },
             appConfigForXingchen,
           );
+
+          const xingchenText = xingchenResult.text || '';
+          const xingchenUsage = xingchenResult.usage;
+
+          // 使用API返回的token数据，如果没有则使用计算值
+          let promptTokens = 0;
+          let completionTokens = 0;
+          if (xingchenUsage) {
+            promptTokens = xingchenUsage.inputTokens || xingchenUsage.userTokens || 0;
+            completionTokens = xingchenUsage.outputTokens || 0;
+            Logger.debug(
+              `使用星尘API返回的token数据 - promptTokens: ${promptTokens}, completionTokens: ${completionTokens}`,
+              'ChatService',
+            );
+          } else {
+            // 回退到计算值
+            let totalText = '';
+            messagesHistory.forEach(msg => {
+              totalText += msg.content + ' ';
+            });
+            promptTokens = await getTokenCount(totalText);
+            completionTokens = await getTokenCount(xingchenText);
+            Logger.debug(
+              `星尘API未返回token数据，使用计算值 - promptTokens: ${promptTokens}, completionTokens: ${completionTokens}`,
+              'ChatService',
+            );
+          }
+
           response = {
             chatId: assistantLogId,
             modelName: useModeName,
@@ -1347,6 +1382,9 @@ ${numberedOptions}
             networkSearchResult: '',
             fileVectorResult: '',
             finishReason: 'stop',
+            promptTokens: promptTokens,
+            completionTokens: completionTokens,
+            totalTokens: promptTokens + completionTokens,
             content: [
               {
                 type: 'text',
@@ -1370,15 +1408,6 @@ ${numberedOptions}
             );
             return res.write(`\n${JSON.stringify(response)}`);
           }
-
-          let totalText = '';
-          messagesHistory.forEach(messagesHistory => {
-            totalText += messagesHistory.content + ' ';
-          });
-          const promptTokens = await getTokenCount(totalText);
-          const completionTokens = await getTokenCount(
-            response.full_reasoning_content + response.full_content,
-          );
 
           await this.chatLogService.updateChatLog(userLogId, {
             promptTokens: promptTokens,
@@ -1420,11 +1449,12 @@ ${numberedOptions}
 
           try {
             if (isGeneratePromptReference === '1') {
-              promptReference = await this.openAIChatService.chatFree(
+              const promptRefResult = await this.openAIChatService.chatFree(
                 `根据用户提问{${prompt}}以及AI的回答{${response.full_content}}，生成三个更进入一步的问题来向AI提问，用{}包裹每个问题，不需要分行，不需要其他任何内容，单个提问不超过30个字`,
                 setSystemMessage,
                 messagesHistory,
               );
+              promptReference = promptRefResult.text || '';
               await this.chatLogService.updateChatLog(assistantLogId, {
                 promptReference: promptReference,
               });
@@ -1476,6 +1506,7 @@ ${numberedOptions}
             deductType,
             charge,
             promptTokens + completionTokens,
+            req.user.role,
           );
           /* 记录key的使用次数 和使用token */
           await this.modelsService.saveUseLog(keyId, promptTokens + completionTokens);
@@ -1493,15 +1524,27 @@ ${numberedOptions}
 
           // Increase affection upon successful chat (skip in group chat)
           try {
+            Logger.debug(
+              `[好感度] 检查条件: appId=${appId}, isGroupChat=${isGroupChat}, userId=${req.user.id}`,
+              'ChatService',
+            );
             if (appId && !isGroupChat) {
-              await this.affectionService.increment(req.user.id, Number(appId));
+              Logger.log(
+                `[好感度] 开始增加好感度: userId=${req.user.id}, appId=${appId}`,
+                'ChatService',
+              );
+              const result = await this.affectionService.increment(req.user.id, Number(appId));
+              Logger.log(
+                `[好感度] 增加成功: score=${result.score}, stage=${result.stage?.name}`,
+                'ChatService',
+              );
             } else if (!appId) {
-              Logger.debug('Skipping affection increment due to missing appId', 'ChatService');
+              Logger.debug('[好感度] 跳过增加（缺少appId）', 'ChatService');
             } else if (isGroupChat) {
-              Logger.debug('Skipping affection increment in group chat mode', 'ChatService');
+              Logger.debug('[好感度] 跳过增加（群聊模式）', 'ChatService');
             }
           } catch (e) {
-            Logger.warn(`Affection increment failed: ${e?.message || e}`, 'ChatService');
+            Logger.warn(`[好感度] 增加失败: ${e?.message || e}`, 'ChatService');
           }
 
           return res.write(`\n${JSON.stringify(response)}`);
@@ -1533,11 +1576,12 @@ ${numberedOptions}
       let chatTitle: string;
       if (modelType === 1) {
         try {
-          chatTitle = await this.openAIChatService.chatFree(
+          const titleResult = await this.openAIChatService.chatFree(
             `根据用户提问{${prompt}}，给这个对话取一个名字，不超过10个字，只需要返回标题，不需要其他任何内容。`,
             undefined,
             undefined,
           );
+          chatTitle = titleResult.text || '';
           if (chatTitle.length > 15) {
             chatTitle = chatTitle.slice(0, 15);
           }
@@ -2146,7 +2190,13 @@ ${numberedOptions}
         const detailKeyInfo = await this.modelsService.getCurrentModelKeyInfo('tts-1');
         const { deduct, deductType } = detailKeyInfo;
         await this.userBalanceService.validateBalance(req, deductType, deduct);
-        await this.userBalanceService.deductFromBalance(req.user.id, deductType, deduct);
+        await this.userBalanceService.deductFromBalance(
+          req.user.id,
+          deductType,
+          deduct,
+          0,
+          req.user.role,
+        );
       } catch (e: any) {
         Logger.warn(
           `[TTSService] 扣费配置缺失或校验失败，已跳过扣费: ${e?.message || e}`,
@@ -2318,7 +2368,13 @@ ${numberedOptions}
 
       await Promise.all([
         this.chatLogService.updateChatLog(chatId, { ttsUrl }),
-        this.userBalanceService.deductFromBalance(req.user.id, deductType, deduct),
+        this.userBalanceService.deductFromBalance(
+          req.user.id,
+          deductType,
+          deduct,
+          0,
+          req.user.role,
+        ),
       ]);
 
       return res.status(200).send({ ttsUrl });

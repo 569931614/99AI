@@ -25,19 +25,15 @@ const CONSOLE_STYLES: ConsoleStyles = {
 }
 
 /**
- * 打印99AI相关的控制台信息
+ * 打印AI应用相关的控制台信息
  */
 export function print99aiInfo(): void {
   if (process.env.NODE_ENV === 'production') return
 
-  console.log('%c99AI', CONSOLE_STYLES.title)
-  console.log(`林深时见鹿, 海深时见鲸, 情深时见你🌹
+  console.log('%cAI智能助手', CONSOLE_STYLES.title)
+  console.log(`欢迎使用AI智能助手平台🌹
 
-千里万里路, 不如自己部署😊
-
-欢迎访问我们的开源项目👇
-
-https://github.com/vastxie/99AI`)
+感谢您的使用😊`)
 }
 
 /**

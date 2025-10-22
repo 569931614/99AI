@@ -13,10 +13,7 @@ export interface AffectionStatus {
   stage: AffectionStage | null
 }
 
-export function fetchAffectionStatus<T = AffectionStatus>(data: {
-  userId: number | string
-  appId: number
-}) {
+export function fetchAffectionStatus<T = AffectionStatus>(data: { appId: number }) {
   return get<T>({
     url: '/affection/status',
     data,

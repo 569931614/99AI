@@ -1,15 +1,16 @@
 import { Global, Module } from '@nestjs/common';
-import { ChatGroupController } from './chatGroup.controller';
-import { ChatGroupService } from './chatGroup.service';
 import { TypeOrmModule } from '@nestjs/typeorm';
-import { ChatGroupEntity } from './chatGroup.entity';
-import { AppEntity } from '../app/app.entity';
 import { AffectionModule } from '../affection/affection.module';
+import { AppEntity } from '../app/app.entity';
+import { ChatGroupController } from './chatGroup.controller';
+import { ChatGroupEntity } from './chatGroup.entity';
+import { ChatGroupService } from './chatGroup.service';
+import { OpenChatGroupController } from './open-chatGroup.controller';
 
 @Global()
 @Module({
   imports: [TypeOrmModule.forFeature([ChatGroupEntity, AppEntity]), AffectionModule],
-  controllers: [ChatGroupController],
+  controllers: [ChatGroupController, OpenChatGroupController],
   providers: [ChatGroupService],
   exports: [ChatGroupService],
 })

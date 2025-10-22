@@ -551,7 +551,7 @@
     loading: boolean;
   }>({
     visible: false,
-    text: '你好，这是99AI的试听合成。',
+    text: '你好，这是AI语音合成试听。',
     model: 'cosyvoice-v2',
     format: 'mp3',
     voice_id: undefined,

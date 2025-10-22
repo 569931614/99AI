@@ -578,6 +578,7 @@ const onConversation = async ({
           content: '',
           loading: true,
           modelName: memberName,
+          modelAvatar: member.appAvatar || '', // 添加成员头像
           appId: member.appId || member.userId,
           memberIndex: i, // 添加成员索引标识
           model: useModel,
@@ -803,6 +804,10 @@ const onConversation = async ({
     let finishReason = '' // 完成原因标识
     let full_json = ''
     let fileVectorResult = ''
+    // Token统计数据
+    let promptTokens = 0
+    let completionTokens = 0
+    let totalTokens = 0
     // 工作流相关变量
     let nodeType = ''
     let stepName = ''
@@ -1045,6 +1050,9 @@ const onConversation = async ({
         nodeType: nodeType,
         stepName: stepName,
         workflowProgress: workflowProgress,
+        promptTokens: promptTokens,
+        completionTokens: completionTokens,
+        totalTokens: totalTokens,
       })
 
       // 同步更新工作流预览的内容
@@ -1245,6 +1253,12 @@ const onConversation = async ({
                 if (jsonObj.networkSearchResult) networkSearchResult = jsonObj.networkSearchResult
                 if (jsonObj.fileVectorResult) fileVectorResult = jsonObj.fileVectorResult
                 if (jsonObj.tool_calls) tool_calls = jsonObj.tool_calls
+
+                // 提取token统计数据
+                if (jsonObj.promptTokens !== undefined) promptTokens = jsonObj.promptTokens
+                if (jsonObj.completionTokens !== undefined)
+                  completionTokens = jsonObj.completionTokens
+                if (jsonObj.totalTokens !== undefined) totalTokens = jsonObj.totalTokens
                 if (jsonObj.promptReference) promptReference = jsonObj.promptReference
                 if (jsonObj.chatId) {
                   assistantLogId = jsonObj.chatId
@@ -1331,6 +1345,9 @@ const onConversation = async ({
         nodeType: nodeType,
         stepName: stepName,
         workflowProgress: workflowProgress,
+        promptTokens: promptTokens,
+        completionTokens: completionTokens,
+        totalTokens: totalTokens,
       })
 
       // 延迟一段时间后再结束loading状态
@@ -1728,6 +1745,10 @@ provide('tryParseJson', tryParseJson)
                     :usingDeepThinking="false"
                     :useFileSearch="item.useFileSearch"
                     :tool_calls="item.tool_calls"
+                    :isGroupChat="isGroupChat"
+                    :promptTokens="item.promptTokens"
+                    :completionTokens="item.completionTokens"
+                    :totalTokens="item.totalTokens"
                     @delete="handleDelete(item)"
                   />
                   <div class="sticky bottom-2 flex justify-center p-1 z-20">

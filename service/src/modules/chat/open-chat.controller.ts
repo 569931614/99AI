@@ -31,28 +31,53 @@ export class OpenChatController {
     schema: {
       type: 'object',
       properties: {
-        userId: { type: 'number', description: '外部用户ID（必须为系统中存在的用户）' },
-        model: { type: 'string', description: '使用的模型标识（可选）' },
-        modelName: { type: 'string', description: '模型名称（可选）' },
-        modelType: { type: 'number', description: '模型类型（可选）' },
-        modelAvatar: { type: 'string', description: '模型头像URL（可选）' },
+        userId: { type: 'number', description: '外部用户ID（任意数字即可，用于区分不同用户会话）' },
         prompt: { type: 'string', description: '用户提问内容；若传 audioUrl 将自动识别为文本' },
+        options: {
+          type: 'object',
+          description: '对话附加选项（可选）',
+          properties: {
+            parentMessageId: { type: 'string', description: '上一条消息ID，用于连续对话' },
+            groupId: { type: 'number', description: '会话组ID' },
+          },
+        },
         audioUrl: { type: 'string', description: '音频URL，自动进行ASR识别为文本（可选）' },
         imageUrl: { type: 'string', description: '图片URL（可选）' },
         fileUrl: { type: 'string', description: '文件URL（可选）' },
         appId: { type: 'number', description: '角色(App) ID（可选）' },
-        options: { type: 'object', description: '对话附加选项（可选）' },
+        model: { type: 'string', description: '使用的模型标识（可选）' },
+        modelName: { type: 'string', description: '模型名称（可选）' },
+        modelType: { type: 'number', description: '模型类型（可选）' },
+        modelAvatar: { type: 'string', description: '模型头像URL（可选）' },
         extraParam: { type: 'object', description: '扩展参数（可选）' },
         usingPluginId: { type: 'number', description: '插件ID（可选）' },
       },
-      required: ['userId'],
+      required: ['userId', 'prompt'],
     },
     examples: {
-      demo: {
+      basic: {
+        summary: '基础对话',
         value: {
-          userId: 1,
-          model: 'deepseek-chat',
+          userId: 1001,
+          prompt: '你好，请介绍一下你自己',
+        },
+      },
+      withOptions: {
+        summary: '连续对话（带上下文）',
+        value: {
+          userId: 1001,
+          prompt: '继续说',
+          options: {
+            parentMessageId: 'chatcmpl-xxxxx',
+          },
+        },
+      },
+      withApp: {
+        summary: '使用特定角色',
+        value: {
+          userId: 1001,
           prompt: '你好',
+          appId: 123,
         },
       },
     },
@@ -86,8 +111,15 @@ export class OpenChatController {
         throw new HttpException('提问信息不能为空！', HttpStatus.BAD_REQUEST);
       }
 
-      // 构造伪造的 req.user 以复用服务逻辑
-      const fakeReq: any = { user: { id: userId } };
+      // 构造伪造的 req 对象，使用 visitor 角色跳过用户验证
+      const fakeReq: any = {
+        user: { id: userId, role: 'visitor' },
+        header: (name: string) => _req.header(name),
+        headers: _req.headers,
+        connection: _req.connection,
+        socket: _req.socket,
+        ip: _req.ip,
+      };
       return this.chatService.chatProcess(body as any, fakeReq, res);
     } catch (e: any) {
       const status = e instanceof HttpException ? e.getStatus() : HttpStatus.INTERNAL_SERVER_ERROR;
@@ -102,7 +134,7 @@ export class OpenChatController {
     schema: {
       type: 'object',
       properties: {
-        userId: { type: 'number', description: '外部用户ID' },
+        userId: { type: 'number', description: '外部用户ID（任意数字即可）' },
         chatId: { type: 'number', description: '可选：继续某个会话ID' },
         prompt: { type: 'string', description: '要合成的文本' },
       },
@@ -112,7 +144,14 @@ export class OpenChatController {
   ttsProcess(@Body() body: any, @Req() _req: Request, @Res() res: Response) {
     const { userId } = body || {};
     if (!userId) throw new HttpException('userId 必填', HttpStatus.BAD_REQUEST);
-    const fakeReq: any = { user: { id: userId } };
+    const fakeReq: any = {
+      user: { id: userId, role: 'visitor' },
+      header: (name: string) => _req.header(name),
+      headers: _req.headers,
+      connection: _req.connection,
+      socket: _req.socket,
+      ip: _req.ip,
+    };
     return this.chatService.ttsProcess(body, fakeReq, res);
   }
 
@@ -122,7 +161,7 @@ export class OpenChatController {
     schema: {
       type: 'object',
       properties: {
-        userId: { type: 'number', description: '外部用户ID（必须为系统中存在的用户）' },
+        userId: { type: 'number', description: '外部用户ID（任意数字即可，用于区分不同用户会话）' },
         audioUrl: { type: 'string', description: '音频URL（与 audioBase64 二选一）' },
         audioBase64: { type: 'string', description: '音频base64（与 audioUrl 二选一）' },
         model: { type: 'string', description: '使用的模型标识（可选）' },
@@ -158,6 +197,7 @@ export class OpenChatController {
     try {
       const { userId, audioUrl, audioBase64 } = body || ({} as any);
       if (!userId) throw new HttpException('userId 必填', HttpStatus.BAD_REQUEST);
+
       let base64 = audioBase64;
       if (!base64 && audioUrl) {
         const url = audioUrl;
@@ -185,7 +225,14 @@ export class OpenChatController {
       }
 
       const payload: any = { ...body, prompt: text };
-      const fakeReq: any = { user: { id: userId } };
+      const fakeReq: any = {
+        user: { id: userId, role: 'visitor' },
+        header: (name: string) => _req.header(name),
+        headers: _req.headers,
+        connection: _req.connection,
+        socket: _req.socket,
+        ip: _req.ip,
+      };
       return this.chatService.chatProcess(payload, fakeReq, res);
     } catch (e: any) {
       const status = e instanceof HttpException ? e.getStatus() : HttpStatus.INTERNAL_SERVER_ERROR;

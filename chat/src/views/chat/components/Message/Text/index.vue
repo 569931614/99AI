@@ -99,6 +99,9 @@ interface Props {
   reasoningText?: string
   fileAnalysisProgress?: number
   useFileSearch?: boolean
+  promptTokens?: number
+  completionTokens?: number
+  totalTokens?: number
 }
 
 interface Emit {
@@ -1189,11 +1192,23 @@ function openSingleImagePreview(src: string) {
     <!-- 操作按钮区域 -->
     <div
       :class="[
-        'flex transition-opacity duration-300 text-gray-700',
+        'flex items-center transition-opacity duration-300 text-gray-700',
         buttonGroupClass,
-        { 'justify-end': isUserMessage },
+        { 'justify-end': isUserMessage, 'justify-between': !isUserMessage },
       ]"
     >
+      <!-- Token统计信息 (仅显示AI回复) -->
+      <div
+        v-if="!isUserMessage && (promptTokens || completionTokens || totalTokens)"
+        class="mt-2 text-xs text-gray-500 dark:text-gray-400 mr-2"
+      >
+        <span v-if="promptTokens" class="mr-2">输入: {{ promptTokens.toLocaleString() }}</span>
+        <span v-if="completionTokens" class="mr-2"
+          >输出: {{ completionTokens.toLocaleString() }}</span
+        >
+        <span v-if="totalTokens">总计: {{ totalTokens.toLocaleString() }}</span>
+      </div>
+
       <div class="mt-2 flex group">
         <!-- 复制按钮 -->
         <div v-if="!isEditable" class="relative group-btn">

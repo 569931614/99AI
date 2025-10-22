@@ -340,7 +340,31 @@ export class ChatGroupService {
   async listMembers(body: { groupId: number }, req: Request) {
     const { groupId } = body;
     const g = await this.ensureGroupOwned(groupId, req);
-    return this.parseMembers(g.members);
+    const members = this.parseMembers(g.members);
+
+    // 获取所有成员的appId
+    const appIds = members.filter(m => m.appId).map(m => m.appId);
+
+    // 如果有appId，批量查询应用信息获取头像
+    if (appIds.length > 0) {
+      const appInfos = await this.appEntity.find({
+        where: { id: In(appIds) },
+      });
+
+      // 为每个成员添加头像信息
+      return members.map(member => {
+        if (member.appId) {
+          const appInfo = appInfos.find(app => app.id === member.appId);
+          return {
+            ...member,
+            appAvatar: appInfo?.coverImg || null,
+          };
+        }
+        return member;
+      });
+    }
+
+    return members;
   }
 
   async assignTask(

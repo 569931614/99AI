@@ -1260,479 +1260,494 @@ meta:
               </span>
             </template>
             <el-row :gutter="20" class="form-section">
-          <el-col :span="10">
-            <el-form-item label="角色名称" prop="name">
-              <el-input v-model="formPackage.name" placeholder="请填写App名称" />
-            </el-form-item>
-            <el-form-item v-if="false" label="App状态" prop="status">
-              <el-switch v-model="formPackage.status" :active-value="1" :inactive-value="0" />
-            </el-form-item>
-            <el-form-item v-if="false" label="排序ID" prop="order">
-              <el-input v-model.number="formPackage.order" placeholder="排序ID" />
-            </el-form-item>
-          </el-col>
-          <el-col :span="14">
-            <el-form-item v-if="false" label="App分类" prop="catId">
-              <div class="category-selector" style="height: 100%">
-                <div class="selected-categories mb-2">
-                  <el-tag
-                    v-for="catId in formPackage.catId"
-                    :key="catId"
-                    closable
-                    class="mr-1 mb-1"
-                    @close="removeCategory(catId)"
-                  >
-                    {{ getCategoryName(catId) }}
-                  </el-tag>
-                  <div v-if="formPackage.catId.length === 0" class="text-gray-400 text-sm">
-                    请选择分类
+              <el-col :span="10">
+                <el-form-item label="角色名称" prop="name">
+                  <el-input v-model="formPackage.name" placeholder="请填写App名称" />
+                </el-form-item>
+                <el-form-item v-if="false" label="App状态" prop="status">
+                  <el-switch v-model="formPackage.status" :active-value="1" :inactive-value="0" />
+                </el-form-item>
+                <el-form-item v-if="false" label="排序ID" prop="order">
+                  <el-input v-model.number="formPackage.order" placeholder="排序ID" />
+                </el-form-item>
+              </el-col>
+              <el-col :span="14">
+                <el-form-item v-if="false" label="App分类" prop="catId">
+                  <div class="category-selector" style="height: 100%">
+                    <div class="selected-categories mb-2">
+                      <el-tag
+                        v-for="catId in formPackage.catId"
+                        :key="catId"
+                        closable
+                        class="mr-1 mb-1"
+                        @close="removeCategory(catId)"
+                      >
+                        {{ getCategoryName(catId) }}
+                      </el-tag>
+                      <div v-if="formPackage.catId.length === 0" class="text-gray-400 text-sm">
+                        请选择分类
+                      </div>
+                    </div>
+                    <div class="category-options p-2 border rounded-md max-h-48 overflow-y-auto">
+                      <div class="text-sm text-gray-500 mb-2">可选分类：</div>
+                      <el-tag
+                        v-for="item in catList"
+                        :key="item.id"
+                        :class="[
+                          'mr-1 mb-1 cursor-pointer',
+                          isCategorySelected(item.id.toString()) ? 'is-disabled' : '',
+                        ]"
+                        :effect="isCategorySelected(item.id.toString()) ? 'plain' : 'dark'"
+                        @click="selectCategory(item.id.toString())"
+                      >
+                        {{ item.name }}
+                      </el-tag>
+                    </div>
                   </div>
-                </div>
-                <div class="category-options p-2 border rounded-md max-h-48 overflow-y-auto">
-                  <div class="text-sm text-gray-500 mb-2">可选分类：</div>
-                  <el-tag
-                    v-for="item in catList"
-                    :key="item.id"
-                    :class="[
-                      'mr-1 mb-1 cursor-pointer',
-                      isCategorySelected(item.id.toString()) ? 'is-disabled' : '',
-                    ]"
-                    :effect="isCategorySelected(item.id.toString()) ? 'plain' : 'dark'"
-                    @click="selectCategory(item.id.toString())"
-                  >
-                    {{ item.name }}
-                  </el-tag>
-                </div>
-              </div>
-            </el-form-item>
-            <!-- 角色头像放到第一行 -->
-            <el-form-item label="角色头像" prop="coverImg">
-              <div class="avatar-upload-box">
-                <el-input
-                  v-model="formPackage.coverImg"
-                  placeholder="填写图片URL或点击上传"
-                  clearable
-                >
-                  <template #prefix>
-                    <el-icon><Picture /></el-icon>
-                  </template>
-                </el-input>
-                <el-upload
-                  class="avatar-uploader"
-                  :http-request="customUpload"
-                  :show-file-list="false"
-                  :on-success="handleAvatarSuccess"
-                  :before-upload="beforeAvatarUpload"
-                >
-                  <el-button type="primary">
-                    <el-icon><Upload /></el-icon>
-                    上传
-                  </el-button>
-                </el-upload>
-                <el-avatar
-                  v-if="formPackage.coverImg"
-                  :src="formPackage.coverImg"
-                  :size="40"
-                />
-              </div>
-              <div class="form-item-tip">
-                <el-icon><InfoFilled /></el-icon>
-                支持PNG、JPEG、GIF、WebP格式，大小不超过3MB
-              </div>
-            </el-form-item>
-          </el-col>
-          <el-col :span="12">
-            <el-form-item v-if="false" label="角色描述" prop="des">
-              <el-input
-                v-model="formPackage.des"
-                type="textarea"
-                placeholder="请填写App介绍信息..."
-                :rows="3"
-              />
-            </el-form-item>
-          </el-col>
-          <el-col :span="12">
-            <el-form-item v-if="false" label="示例内容" prop="demoData">
-              <el-input
-                v-model="formPackage.demoData"
-                type="textarea"
-                placeholder="请填写App的demo示例数据..."
-                :rows="3"
-              />
-            </el-form-item>
-          </el-col>
-          <el-col :span="24">
-            <el-form-item v-if="specialModelType !== 'gpts'" label="角色设定" prop="preset">
-              <el-input
-                v-model="formPackage.preset"
-                type="textarea"
-                placeholder="请详细描述角色的性格、背景、说话风格、特点等..."
-                :rows="6"
-                maxlength="2000"
-                show-word-limit
-              />
-              <div class="form-item-tip">
-                <el-icon><InfoFilled /></el-icon>
-                角色设定会直接影响AI的回答风格和语气，建议详细描述角色特征
-              </div>
-            </el-form-item>
-          </el-col>
-          <el-col :span="12">
-            <el-form-item v-if="false" label="特殊模型" prop="specialModel">
-              <el-radio-group v-model="specialModelType">
-                <el-radio label="none">不使用</el-radio>
-                <el-radio label="gpts">GPTs</el-radio>
-                <el-radio label="flowith" :disabled="true" @click="showDevOnlyMessage"
-                  >Flowith</el-radio
-                >
-              </el-radio-group>
-            </el-form-item>
-          </el-col>
-          <el-col :span="12">
-            <el-row :gutter="10">
+                </el-form-item>
+                <!-- 角色头像放到第一行 -->
+                <el-form-item label="角色头像" prop="coverImg">
+                  <div class="avatar-upload-box">
+                    <el-input
+                      v-model="formPackage.coverImg"
+                      placeholder="填写图片URL或点击上传"
+                      clearable
+                    >
+                      <template #prefix>
+                        <el-icon><Picture /></el-icon>
+                      </template>
+                    </el-input>
+                    <el-upload
+                      class="avatar-uploader"
+                      :http-request="customUpload"
+                      :show-file-list="false"
+                      :on-success="handleAvatarSuccess"
+                      :before-upload="beforeAvatarUpload"
+                    >
+                      <el-button type="primary">
+                        <el-icon><Upload /></el-icon>
+                        上传
+                      </el-button>
+                    </el-upload>
+                    <el-avatar v-if="formPackage.coverImg" :src="formPackage.coverImg" :size="40" />
+                  </div>
+                  <div class="form-item-tip">
+                    <el-icon><InfoFilled /></el-icon>
+                    支持PNG、JPEG、GIF、WebP格式，大小不超过3MB
+                  </div>
+                </el-form-item>
+              </el-col>
               <el-col :span="12">
-                <el-form-item
-                  label="固定模型"
-                  prop="isFixedModel"
-                  v-if="specialModelType === 'none'"
-                >
-                  <el-switch
-                    v-model="formPackage.isFixedModel"
-                    :active-value="1"
-                    :inactive-value="0"
+                <el-form-item v-if="false" label="角色描述" prop="des">
+                  <el-input
+                    v-model="formPackage.des"
+                    type="textarea"
+                    placeholder="请填写App介绍信息..."
+                    :rows="3"
                   />
                 </el-form-item>
               </el-col>
               <el-col :span="12">
-                <el-form-item
-                  label="使用模型"
-                  prop="appModel"
-                  v-if="specialModelType === 'none' && Number(formPackage.isFixedModel) === 1"
-                >
+                <el-form-item v-if="false" label="示例内容" prop="demoData">
+                  <el-input
+                    v-model="formPackage.demoData"
+                    type="textarea"
+                    placeholder="请填写App的demo示例数据..."
+                    :rows="3"
+                  />
+                </el-form-item>
+              </el-col>
+              <el-col :span="24">
+                <el-form-item v-if="specialModelType !== 'gpts'" label="角色设定" prop="preset">
+                  <el-input
+                    v-model="formPackage.preset"
+                    type="textarea"
+                    placeholder="请详细描述角色的性格、背景、说话风格、特点等..."
+                    :rows="6"
+                    maxlength="2000"
+                    show-word-limit
+                  />
+                  <div class="form-item-tip">
+                    <el-icon><InfoFilled /></el-icon>
+                    角色设定会直接影响AI的回答风格和语气，建议详细描述角色特征
+                  </div>
+                </el-form-item>
+              </el-col>
+              <el-col :span="12">
+                <el-form-item v-if="false" label="特殊模型" prop="specialModel">
+                  <el-radio-group v-model="specialModelType">
+                    <el-radio label="none">不使用</el-radio>
+                    <el-radio label="gpts">GPTs</el-radio>
+                    <el-radio label="flowith" :disabled="true" @click="showDevOnlyMessage"
+                      >Flowith</el-radio
+                    >
+                  </el-radio-group>
+                </el-form-item>
+              </el-col>
+              <el-col :span="12">
+                <el-row :gutter="10">
+                  <el-col :span="12">
+                    <el-form-item
+                      label="固定模型"
+                      prop="isFixedModel"
+                      v-if="specialModelType === 'none'"
+                    >
+                      <el-switch
+                        v-model="formPackage.isFixedModel"
+                        :active-value="1"
+                        :inactive-value="0"
+                      />
+                    </el-form-item>
+                  </el-col>
+                  <el-col :span="12">
+                    <el-form-item
+                      label="使用模型"
+                      prop="appModel"
+                      v-if="specialModelType === 'none' && Number(formPackage.isFixedModel) === 1"
+                    >
+                      <el-select
+                        v-model="formPackage.appModel"
+                        filterable
+                        allow-create
+                        placeholder="选择模型"
+                        clearable
+                      >
+                        <el-option
+                          v-for="item in modelOptions"
+                          :key="item"
+                          :label="item"
+                          :value="item"
+                        />
+                      </el-select>
+                    </el-form-item>
+                  </el-col>
+                </el-row>
+              </el-col>
+              <el-col :span="12">
+                <el-form-item label="角色音色" prop="voiceId">
                   <el-select
-                    v-model="formPackage.appModel"
+                    v-model="formPackage.voiceId"
                     filterable
-                    allow-create
-                    placeholder="选择模型"
                     clearable
+                    :loading="voiceLoading"
+                    placeholder="选择音色"
                   >
                     <el-option
-                      v-for="item in modelOptions"
-                      :key="item"
-                      :label="item"
-                      :value="item"
+                      v-for="opt in voiceOptions"
+                      :key="opt.value"
+                      :label="opt.label"
+                      :value="opt.value"
                     />
                   </el-select>
                 </el-form-item>
               </el-col>
-            </el-row>
-          </el-col>
-          <el-col :span="12">
-            <el-form-item label="角色音色" prop="voiceId">
-              <el-select
-                v-model="formPackage.voiceId"
-                filterable
-                clearable
-                :loading="voiceLoading"
-                placeholder="选择音色"
-              >
-                <el-option
-                  v-for="opt in voiceOptions"
-                  :key="opt.value"
-                  :label="opt.label"
-                  :value="opt.value"
-                />
-              </el-select>
-            </el-form-item>
-          </el-col>
 
-          <!-- 角色情绪-音色映射（按角色） -->
-          <el-col :span="24">
-            <el-form-item label="角色情绪音色">
-              <el-table :data="roleEmotion.list" border size="small" style="width: 100%">
-                <el-table-column label="情绪" prop="emotion" width="200" />
-                <el-table-column label="音色">
-                  <template #default="scope">
-                    <el-select
-                      v-model="scope.row.voiceId"
-                      filterable
-                      clearable
-                      :loading="voiceLoading"
-                      placeholder="选择音色"
-                      style="width: 100%"
+              <!-- 角色情绪-音色映射（按角色） -->
+              <el-col :span="24">
+                <el-form-item label="角色情绪音色">
+                  <el-table :data="roleEmotion.list" border size="small" style="width: 100%">
+                    <el-table-column label="情绪" prop="emotion" width="200" />
+                    <el-table-column label="音色">
+                      <template #default="scope">
+                        <el-select
+                          v-model="scope.row.voiceId"
+                          filterable
+                          clearable
+                          :loading="voiceLoading"
+                          placeholder="选择音色"
+                          style="width: 100%"
+                        >
+                          <el-option
+                            v-for="opt in voiceOptions"
+                            :key="opt.value"
+                            :label="opt.label"
+                            :value="opt.value"
+                          />
+                        </el-select>
+                      </template>
+                    </el-table-column>
+                  </el-table>
+                </el-form-item>
+              </el-col>
+
+              <!-- 星尘API扩展配置 -->
+              <el-col :span="24" style="margin-top: 24px">
+                <el-alert
+                  type="info"
+                  :closable="false"
+                  show-icon
+                  title="星尘API扩展配置"
+                  description="以下配置基于阿里云星尘大模型API，可提升角色的智能化和个性化程度"
+                />
+              </el-col>
+
+              <el-col :span="24">
+                <el-form-item label="开场白" prop="openingRemark">
+                  <el-input
+                    v-model="formPackage.openingRemark"
+                    type="textarea"
+                    placeholder="例如：你好！我是你的AI助手，有什么可以帮助你的吗？"
+                    :rows="2"
+                    maxlength="500"
+                    show-word-limit
+                  />
+                  <div class="form-item-tip">
+                    <el-icon><InfoFilled /></el-icon>
+                    角色在新对话开始时的问候语，会在首次交互时展示给用户
+                  </div>
+                </el-form-item>
+              </el-col>
+
+              <el-col :span="24">
+                <el-divider content-position="left">
+                  <el-icon><Setting /></el-icon>
+                  智能增强功能
+                </el-divider>
+              </el-col>
+
+              <el-col :span="24">
+                <div class="enhance-features-container">
+                  <div class="feature-card">
+                    <div class="feature-icon">
+                      <el-icon :size="24" color="#3b82f6"><Clock /></el-icon>
+                    </div>
+                    <div class="feature-content">
+                      <div class="feature-title">真实时间</div>
+                      <div class="feature-desc">AI可以感知当前时间和日期</div>
+                    </div>
+                    <div class="feature-switch">
+                      <el-switch
+                        v-model="formPackage.enableRealTime"
+                        size="large"
+                        active-text="开启"
+                        inactive-text="关闭"
+                      />
+                    </div>
+                  </div>
+
+                  <div class="feature-card">
+                    <div class="feature-icon">
+                      <el-icon :size="24" color="#8b5cf6"><Memo /></el-icon>
+                    </div>
+                    <div class="feature-content">
+                      <div class="feature-title">长期记忆</div>
+                      <div class="feature-desc">记住用户的偏好和历史对话内容</div>
+                    </div>
+                    <div class="feature-switch">
+                      <el-switch
+                        v-model="formPackage.enableLongTermMemory"
+                        size="large"
+                        active-text="开启"
+                        inactive-text="关闭"
+                      />
+                    </div>
+                  </div>
+
+                  <div class="feature-card">
+                    <div class="feature-icon">
+                      <el-icon :size="24" color="#10b981"><Search /></el-icon>
+                    </div>
+                    <div class="feature-content">
+                      <div class="feature-title">知识库搜索</div>
+                      <div class="feature-desc">从指定知识库中检索相关信息</div>
+                    </div>
+                    <div class="feature-switch">
+                      <el-switch
+                        v-model="formPackage.enableKnowledgeBase"
+                        size="large"
+                        active-text="开启"
+                        inactive-text="关闭"
+                      />
+                    </div>
+                  </div>
+                </div>
+              </el-col>
+
+              <el-col :span="24" v-if="formPackage.enableKnowledgeBase">
+                <el-form-item label="知识库ID列表" prop="knowledgeBaseIds">
+                  <el-input
+                    v-model="formPackage.knowledgeBaseIds"
+                    type="textarea"
+                    placeholder="每行输入一个知识库ID，例如：&#10;kb_id_1&#10;kb_id_2&#10;kb_id_3"
+                    :rows="4"
+                  />
+                  <div class="form-item-tip">
+                    <el-icon><FolderOpened /></el-icon>
+                    每行一个知识库ID，AI会从这些知识库中检索相关信息来辅助回答
+                  </div>
+                </el-form-item>
+              </el-col>
+
+              <el-col :span="24">
+                <el-divider content-position="left">
+                  <el-icon><ChatLineRound /></el-icon>
+                  对话示例配置
+                </el-divider>
+              </el-col>
+
+              <el-col :span="24">
+                <el-form-item label="对话示例" prop="dialogueExamples">
+                  <div style="width: 100%; margin-bottom: 12px">
+                    <el-button type="primary" plain size="default" @click="addDialogueExample">
+                      <el-icon><Plus /></el-icon>
+                      新增对话示例
+                    </el-button>
+                    <span
+                      class="form-item-tip"
+                      style="display: inline-flex; margin-left: 12px; padding: 6px 10px"
                     >
-                      <el-option
-                        v-for="opt in voiceOptions"
-                        :key="opt.value"
-                        :label="opt.label"
-                        :value="opt.value"
-                      />
-                    </el-select>
-                  </template>
-                </el-table-column>
-              </el-table>
-            </el-form-item>
-          </el-col>
-
-          <!-- 星尘API扩展配置 -->
-          <el-col :span="24" style="margin-top: 24px;">
-            <el-alert
-              type="info"
-              :closable="false"
-              show-icon
-              title="星尘API扩展配置"
-              description="以下配置基于阿里云星尘大模型API，可提升角色的智能化和个性化程度"
-            />
-          </el-col>
-
-          <el-col :span="24">
-            <el-form-item label="开场白" prop="openingRemark">
-              <el-input
-                v-model="formPackage.openingRemark"
-                type="textarea"
-                placeholder="例如：你好！我是你的AI助手，有什么可以帮助你的吗？"
-                :rows="2"
-                maxlength="500"
-                show-word-limit
-              />
-              <div class="form-item-tip">
-                <el-icon><InfoFilled /></el-icon>
-                角色在新对话开始时的问候语，会在首次交互时展示给用户
-              </div>
-            </el-form-item>
-          </el-col>
-
-          <el-col :span="24">
-            <el-divider content-position="left">
-              <el-icon><Setting /></el-icon>
-              智能增强功能
-            </el-divider>
-          </el-col>
-
-          <el-col :span="24">
-            <div class="enhance-features-container">
-              <div class="feature-card">
-                <div class="feature-icon">
-                  <el-icon :size="24" color="#3b82f6"><Clock /></el-icon>
-                </div>
-                <div class="feature-content">
-                  <div class="feature-title">真实时间</div>
-                  <div class="feature-desc">AI可以感知当前时间和日期</div>
-                </div>
-                <div class="feature-switch">
-                  <el-switch
-                    v-model="formPackage.enableRealTime"
-                    size="large"
-                    active-text="开启"
-                    inactive-text="关闭"
-                  />
-                </div>
-              </div>
-
-              <div class="feature-card">
-                <div class="feature-icon">
-                  <el-icon :size="24" color="#8b5cf6"><Memo /></el-icon>
-                </div>
-                <div class="feature-content">
-                  <div class="feature-title">长期记忆</div>
-                  <div class="feature-desc">记住用户的偏好和历史对话内容</div>
-                </div>
-                <div class="feature-switch">
-                  <el-switch
-                    v-model="formPackage.enableLongTermMemory"
-                    size="large"
-                    active-text="开启"
-                    inactive-text="关闭"
-                  />
-                </div>
-              </div>
-
-              <div class="feature-card">
-                <div class="feature-icon">
-                  <el-icon :size="24" color="#10b981"><Search /></el-icon>
-                </div>
-                <div class="feature-content">
-                  <div class="feature-title">知识库搜索</div>
-                  <div class="feature-desc">从指定知识库中检索相关信息</div>
-                </div>
-                <div class="feature-switch">
-                  <el-switch
-                    v-model="formPackage.enableKnowledgeBase"
-                    size="large"
-                    active-text="开启"
-                    inactive-text="关闭"
-                  />
-                </div>
-              </div>
-            </div>
-          </el-col>
-
-          <el-col :span="24" v-if="formPackage.enableKnowledgeBase">
-            <el-form-item label="知识库ID列表" prop="knowledgeBaseIds">
-              <el-input
-                v-model="formPackage.knowledgeBaseIds"
-                type="textarea"
-                placeholder="每行输入一个知识库ID，例如：&#10;kb_id_1&#10;kb_id_2&#10;kb_id_3"
-                :rows="4"
-              />
-              <div class="form-item-tip">
-                <el-icon><FolderOpened /></el-icon>
-                每行一个知识库ID，AI会从这些知识库中检索相关信息来辅助回答
-              </div>
-            </el-form-item>
-          </el-col>
-
-          <el-col :span="24">
-            <el-divider content-position="left">
-              <el-icon><ChatLineRound /></el-icon>
-              对话示例配置
-            </el-divider>
-          </el-col>
-
-          <el-col :span="24">
-            <el-form-item label="对话示例" prop="dialogueExamples">
-              <div style="width: 100%; margin-bottom: 12px;">
-                <el-button type="primary" plain size="default" @click="addDialogueExample">
-                  <el-icon><Plus /></el-icon>
-                  新增对话示例
-                </el-button>
-                <span class="form-item-tip" style="display: inline-flex; margin-left: 12px; padding: 6px 10px;">
-                  <el-icon><InfoFilled /></el-icon>
-                  提供2-4组对话示例，帮助AI理解你期望的回答风格和语气
-                </span>
-              </div>
-              <div style="width: 100%">
-                <el-table
-                  :data="dialogueExamplesList"
-                  border
-                  size="default"
-                  style="width: 100%"
-                  :header-cell-style="{ background: '#f5f7fa', color: '#606266' }"
-                  v-if="dialogueExamplesList.length > 0"
-                >
-                  <el-table-column label="角色" width="150" align="center">
-                    <template #default="scope">
-                      <el-select v-model="scope.row.role" placeholder="选择角色" style="width: 100%">
-                        <el-option label="👤 用户" value="user" />
-                        <el-option label="🤖 AI助手" value="assistant" />
-                      </el-select>
-                    </template>
-                  </el-table-column>
-                  <el-table-column label="对话内容">
-                    <template #default="scope">
-                      <el-input
-                        v-model="scope.row.content"
-                        type="textarea"
-                        :rows="2"
-                        placeholder="请输入对话内容..."
-                      />
-                    </template>
-                  </el-table-column>
-                  <el-table-column label="操作" width="100" align="center">
-                    <template #default="scope">
-                      <el-button link type="danger" @click="removeDialogueExample(scope.$index)">
-                        <el-icon><Delete /></el-icon>
-                        删除
-                      </el-button>
-                    </template>
-                  </el-table-column>
-                </el-table>
-                <el-empty
-                  v-else
-                  description="暂无对话示例，点击上方按钮添加"
-                  :image-size="100"
-                />
-              </div>
-            </el-form-item>
-          </el-col>
-
-          <el-col :span="12" v-if="specialModelType === 'gpts'">
-            <el-form-item v-if="false" label="gizmoID" prop="gizmoID">
-              <el-input v-model="formPackage.gizmoID" placeholder="请填写 GPTs 使用的 gizmoID" />
-            </el-form-item>
-          </el-col>
-          <el-col :span="12" v-if="specialModelType === 'gpts'">
-            <!-- Placeholder Column -->
-          </el-col>
-
-          <el-col :span="12">
-            <el-form-item v-if="false" label="App背景图" prop="backgroundImg">
-              <el-input
-                v-model="formPackage.backgroundImg"
-                placeholder="填写或上传背景图"
-                clearable
-              >
-                <template #append>
-                  <!-- Upload Component -->
-                  <el-upload
-                    class="avatar-uploader"
-                    :http-request="customUpload"
-                    :show-file-list="false"
-                    :on-success="handleBackgroundSuccess"
-                    :before-upload="beforeAvatarUpload"
-                    style="
-                      display: inline-flex;
-                      align-items: center;
-                      justify-content: center;
-                      vertical-align: middle;
-                    "
-                  >
-                    <img
-                      v-if="formPackage.backgroundImg"
-                      :src="formPackage.backgroundImg"
-                      style="
-                        max-width: 1.5rem;
-                        max-height: 1.5rem;
-                        margin: 5px 0;
-                        object-fit: contain;
-                      "
+                      <el-icon><InfoFilled /></el-icon>
+                      提供2-4组对话示例，帮助AI理解你期望的回答风格和语气
+                    </span>
+                  </div>
+                  <div style="width: 100%">
+                    <el-table
+                      :data="dialogueExamplesList"
+                      border
+                      size="default"
+                      style="width: 100%"
+                      :header-cell-style="{ background: '#f5f7fa', color: '#606266' }"
+                      v-if="dialogueExamplesList.length > 0"
+                    >
+                      <el-table-column label="角色" width="150" align="center">
+                        <template #default="scope">
+                          <el-select
+                            v-model="scope.row.role"
+                            placeholder="选择角色"
+                            style="width: 100%"
+                          >
+                            <el-option label="👤 用户" value="user" />
+                            <el-option label="🤖 AI助手" value="assistant" />
+                          </el-select>
+                        </template>
+                      </el-table-column>
+                      <el-table-column label="对话内容">
+                        <template #default="scope">
+                          <el-input
+                            v-model="scope.row.content"
+                            type="textarea"
+                            :rows="2"
+                            placeholder="请输入对话内容..."
+                          />
+                        </template>
+                      </el-table-column>
+                      <el-table-column label="操作" width="100" align="center">
+                        <template #default="scope">
+                          <el-button
+                            link
+                            type="danger"
+                            @click="removeDialogueExample(scope.$index)"
+                          >
+                            <el-icon><Delete /></el-icon>
+                            删除
+                          </el-button>
+                        </template>
+                      </el-table-column>
+                    </el-table>
+                    <el-empty
+                      v-else
+                      description="暂无对话示例，点击上方按钮添加"
+                      :image-size="100"
                     />
-                    <el-icon v-else style="width: 1rem">
-                      <Plus />
-                    </el-icon>
-                  </el-upload>
-                  <!-- Re-upload Icon (Separate) -->
-                  <el-icon
-                    v-if="formPackage.backgroundImg"
-                    @click="reuploadBackgroundImg"
-                    style="margin-left: 10px; width: 1rem; cursor: pointer; vertical-align: middle"
-                    class="hover:text-primary"
-                  >
-                    <Refresh />
-                  </el-icon>
-                </template>
-              </el-input>
-            </el-form-item>
-          </el-col>
-          <el-col :span="24">
-            <el-form-item v-if="false" label="提问模版" prop="prompt">
-              <el-radio-group v-model="usePromptTemplate" size="small" class="mb-2">
-                <el-radio-button label="plain">普通模式</el-radio-button>
-                <el-radio-button label="template">模板模式</el-radio-button>
-              </el-radio-group>
+                  </div>
+                </el-form-item>
+              </el-col>
 
-              <!-- Container for both modes, use v-show -->
-              <div class="w-full mt-2">
-                <!-- Plain Mode Textarea -->
-                <el-input
-                  v-show="usePromptTemplate === 'plain'"
-                  v-model="formPackage.prompt"
-                  type="textarea"
-                  :placeholder="plainModePlaceholder"
-                  :rows="8"
-                />
-                <!-- Template Mode Editor -->
-                <div
-                  v-show="usePromptTemplate === 'template'"
-                  class="border rounded p-3 bg-gray-50"
-                  style="min-height: 150px"
-                >
-                  <PromptTemplateEditor v-model="templateFields" />
-                </div>
-              </div>
-            </el-form-item>
-          </el-col>
-        </el-row>
+              <el-col :span="12" v-if="specialModelType === 'gpts'">
+                <el-form-item v-if="false" label="gizmoID" prop="gizmoID">
+                  <el-input
+                    v-model="formPackage.gizmoID"
+                    placeholder="请填写 GPTs 使用的 gizmoID"
+                  />
+                </el-form-item>
+              </el-col>
+              <el-col :span="12" v-if="specialModelType === 'gpts'">
+                <!-- Placeholder Column -->
+              </el-col>
+
+              <el-col :span="12">
+                <el-form-item v-if="false" label="App背景图" prop="backgroundImg">
+                  <el-input
+                    v-model="formPackage.backgroundImg"
+                    placeholder="填写或上传背景图"
+                    clearable
+                  >
+                    <template #append>
+                      <!-- Upload Component -->
+                      <el-upload
+                        class="avatar-uploader"
+                        :http-request="customUpload"
+                        :show-file-list="false"
+                        :on-success="handleBackgroundSuccess"
+                        :before-upload="beforeAvatarUpload"
+                        style="
+                          display: inline-flex;
+                          align-items: center;
+                          justify-content: center;
+                          vertical-align: middle;
+                        "
+                      >
+                        <img
+                          v-if="formPackage.backgroundImg"
+                          :src="formPackage.backgroundImg"
+                          style="
+                            max-width: 1.5rem;
+                            max-height: 1.5rem;
+                            margin: 5px 0;
+                            object-fit: contain;
+                          "
+                        />
+                        <el-icon v-else style="width: 1rem">
+                          <Plus />
+                        </el-icon>
+                      </el-upload>
+                      <!-- Re-upload Icon (Separate) -->
+                      <el-icon
+                        v-if="formPackage.backgroundImg"
+                        @click="reuploadBackgroundImg"
+                        style="
+                          margin-left: 10px;
+                          width: 1rem;
+                          cursor: pointer;
+                          vertical-align: middle;
+                        "
+                        class="hover:text-primary"
+                      >
+                        <Refresh />
+                      </el-icon>
+                    </template>
+                  </el-input>
+                </el-form-item>
+              </el-col>
+              <el-col :span="24">
+                <el-form-item v-if="false" label="提问模版" prop="prompt">
+                  <el-radio-group v-model="usePromptTemplate" size="small" class="mb-2">
+                    <el-radio-button label="plain">普通模式</el-radio-button>
+                    <el-radio-button label="template">模板模式</el-radio-button>
+                  </el-radio-group>
+
+                  <!-- Container for both modes, use v-show -->
+                  <div class="w-full mt-2">
+                    <!-- Plain Mode Textarea -->
+                    <el-input
+                      v-show="usePromptTemplate === 'plain'"
+                      v-model="formPackage.prompt"
+                      type="textarea"
+                      :placeholder="plainModePlaceholder"
+                      :rows="8"
+                    />
+                    <!-- Template Mode Editor -->
+                    <div
+                      v-show="usePromptTemplate === 'template'"
+                      class="border rounded p-3 bg-gray-50"
+                      style="min-height: 150px"
+                    >
+                      <PromptTemplateEditor v-model="templateFields" />
+                    </div>
+                  </div>
+                </el-form-item>
+              </el-col>
+            </el-row>
           </el-tab-pane>
         </el-tabs>
       </el-form>

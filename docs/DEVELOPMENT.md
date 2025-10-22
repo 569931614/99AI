@@ -1,8 +1,8 @@
-# 99AI 项目开发文档
+# AI项目开发文档
 
 ## 项目概述
 
-99AI 是一个基于 Vue.js 和 NestJS 构建的现代化 AI 对话平台，本文档旨在帮助开发者快速理解和参与项目开发。
+本项目是一个基于 Vue.js 和 NestJS 构建的现代化 AI 对话平台,本文档旨在帮助开发者快速理解和参与项目开发。
 
 ## 核心模块
 
@@ -14,7 +14,7 @@
 
 ### 2. 管理后台（admin）
 
-- **技术栈：** [Fantastic Admin Basic](https://github.com/fantastic-admin/basic)
+- **技术栈：** Fantastic Admin Basic
 - **功能特性：**
   - 多级管理员权限控制
   - 积分系统管理
@@ -50,11 +50,7 @@
 
 ## 问题反馈
 
-如果您在开发过程中遇到任何问题，或有改进建议，欢迎通过以下方式反馈：
-
-- 提交 [Issue](https://github.com/vastxie/99AI/issues)
-- 参与项目讨论
-- 提交 Pull Request
+如果您在开发过程中遇到任何问题,或有改进建议,欢迎通过项目管理系统反馈。
 
 ## 贡献指南
 

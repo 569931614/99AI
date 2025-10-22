@@ -45,8 +45,18 @@ export class AffectionController {
   @ApiOperation({ summary: '获取当前用户在某app的好感度与阶段' })
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
-  status(@Query('userId') userId: string, @Query('appId') appId: string, @Req() req) {
-    const uid = userId ?? (req?.user?.id as any);
-    return this.affectionService.getUserAffection(uid as any, Number(appId));
+  async status(@Query('userId') userId: string, @Query('appId') appId: string, @Req() req) {
+    // 优先使用JWT token中的用户ID，如果URL中没有传userId参数的话
+    const uid = userId ? userId : (req?.user?.id as any);
+    console.log('[AffectionController] status接口被调用:', {
+      queryUserId: userId,
+      queryAppId: appId,
+      jwtUserId: req?.user?.id,
+      finalUserId: uid,
+      finalAppId: Number(appId),
+    });
+    const result = await this.affectionService.getUserAffection(uid as any, Number(appId));
+    console.log('[AffectionController] getUserAffection返回:', result);
+    return result;
   }
 }

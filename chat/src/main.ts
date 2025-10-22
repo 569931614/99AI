@@ -58,7 +58,7 @@ async function bootstrap() {
 
   // 在开发环境下打印控制台信息
   print99aiInfo()
-  printAppInfo('99AI', '5.0.1')
+  printAppInfo('AI智能助手', '5.0.1')
 
   const domain = `${window.location.protocol}//${window.location.hostname}${
     window.location.port ? `:${window.location.port}` : ''

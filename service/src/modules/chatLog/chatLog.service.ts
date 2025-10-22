@@ -268,6 +268,9 @@ export class ChatLogService {
         reasoning_content,
         tool_calls,
         content,
+        promptTokens,
+        completionTokens,
+        totalTokens,
       } = item;
       return {
         chatId: id,
@@ -297,6 +300,9 @@ export class ChatLogService {
         networkSearchResult: networkSearchResult,
         fileVectorResult: fileVectorResult,
         taskId: taskId,
+        promptTokens: promptTokens,
+        completionTokens: completionTokens,
+        totalTokens: totalTokens,
       };
     });
   }

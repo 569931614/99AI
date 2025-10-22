@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { fetchQueryOneCatAPI } from '@/api/appStore'
-import { useChatStore } from '@/store'
+import { useAuthStore, useChatStore } from '@/store'
 import { message } from '@/utils/message'
 import { onMounted, onUnmounted, reactive, ref } from 'vue'
 
@@ -43,13 +43,49 @@ const voiceId = ref('') // 可手填，留空则只展示 ASR/LLM，不播报
 const sampleRate = 8000
 const format: 'pcm' = 'pcm'
 
+// VAD (Voice Activity Detection) 参数
+const vadConfig = {
+  silenceThreshold: 100, // 静音阈值（RMS）
+  silenceDuration: 1500, // 静音持续时长（ms）才认为说话结束
+  voiceThreshold: 200, // 有声音阈值（RMS），用于检测打断
+}
+let silenceStartTime = 0 // 静音开始时间
+const isSpeaking = ref(false) // 是否正在说话
+let lastProcessTime = 0 // 上次处理时间，用于防抖
+
 // 自动带入当前应用的默认音色（若后端配置了 app_voice）
 const chatStore = useChatStore()
+const authStore = useAuthStore()
+
+// 当前实际使用的 appId（如果 props 没传，则从 chatStore 获取）
+const effectiveAppId = ref<number | undefined>(props.appId)
+
+// 确保 effectiveAppId 被正确赋值的辅助函数
+function ensureEffectiveAppId() {
+  if (effectiveAppId.value) return effectiveAppId.value
+
+  const chatAppId = chatStore.getChatByGroupInfo()?.appId
+  if (chatAppId) {
+    effectiveAppId.value = chatAppId
+    console.log(`[VoiceCall] 从 chatStore 获取到 appId: ${chatAppId}`)
+  } else if (props.appId) {
+    effectiveAppId.value = props.appId
+    console.log(`[VoiceCall] 使用 props 传递的 appId: ${props.appId}`)
+  } else {
+    console.warn('[VoiceCall] 未找到 appId，将无法加载角色预设')
+  }
+
+  return effectiveAppId.value
+}
+
 onMounted(async () => {
   try {
-    const appId = chatStore.getChatByGroupInfo()?.appId
-    if (appId) {
-      const res: any = await fetchQueryOneCatAPI({ id: appId })
+    // 确保 appId 被赋值
+    ensureEffectiveAppId()
+
+    // 获取默认音色
+    if (effectiveAppId.value) {
+      const res: any = await fetchQueryOneCatAPI({ id: effectiveAppId.value })
       const vid = res?.data?.voiceId
       if (vid && !voiceId.value) voiceId.value = String(vid)
     }
@@ -92,19 +128,31 @@ function safeSendJSON(obj: any) {
   try {
     const ws = wsRef.value
     if (!ws || ws.readyState !== WebSocket.OPEN) {
-      log(`WS未就绪，忽略消息: ${obj?.type || 'unknown'}`)
+      const msg = `WS未就绪，忽略消息: ${obj?.type || 'unknown'}`
+      log(msg)
+      console.warn(`[VoiceCall] ${msg}`)
       return
     }
-    ws.send(JSON.stringify(obj))
-  } catch {}
+    const jsonStr = JSON.stringify(obj)
+    console.log(`[VoiceCall] 发送消息: type=${obj?.type}, data=${jsonStr.substring(0, 200)}`)
+    ws.send(jsonStr)
+  } catch (err) {
+    console.error('[VoiceCall] safeSendJSON 错误:', err)
+  }
 }
 
 function safeSendBinary(buf: ArrayBuffer) {
   try {
     const ws = wsRef.value
-    if (!ws || ws.readyState !== WebSocket.OPEN) return
+    if (!ws || ws.readyState !== WebSocket.OPEN) {
+      console.warn('[VoiceCall] WS未就绪，无法发送音频')
+      return
+    }
+    console.log(`[VoiceCall] 发送音频: ${buf.byteLength} bytes`)
     ws.send(buf)
-  } catch {}
+  } catch (err) {
+    console.error('[VoiceCall] safeSendBinary 错误:', err)
+  }
 }
 
 function ensureCtx() {
@@ -252,6 +300,13 @@ function encodeWAV(samples: Int16Array, sr: number) {
 async function connectWS() {
   if (wsRef.value || connecting.value) return
   connecting.value = true
+
+  // 在连接前确保 effectiveAppId 已正确获取
+  ensureEffectiveAppId()
+  console.log(
+    `[VoiceCall] connectWS: effectiveAppId=${effectiveAppId.value}, userId=${authStore.userInfo?.id}`
+  )
+
   try {
     // 优化：智能构造 WebSocket 地址
     // 1. 优先使用当前页面的协议和主机
@@ -294,20 +349,26 @@ async function connectWS() {
         connecting.value = false
         status.value = '已连接'
         log('WS 已连接')
-        // 发送开始通话消息，包含角色配置信息（用于情绪识别）
+        // 发送开始通话消息，包含角色配置信息（用于情绪识别和星尘API）
+        log(
+          `准备发送start_call: userId=${authStore.userInfo?.id}, appId=${effectiveAppId.value}, prompt=${props.prompt?.substring(0, 30)}`
+        )
         safeSendJSON({
           type: 'start_call',
           sampleRate,
           format,
           voice_id: voiceId.value || '',
-          appId: props.appId,
+          userId: authStore.userInfo?.id, // 添加用户ID用于星尘API
+          appId: effectiveAppId.value, // 使用实际获取到的 appId
           model: props.model || 'gpt-4o-mini',
           modelName: props.modelName || 'AI助手',
           prompt: props.prompt || '',
           temperature: props.temperature || 1,
           config: props.config || {},
         })
-        log(`角色配置已发送: appId=${props.appId}, model=${props.model}`)
+        log(
+          `start_call已发送: userId=${authStore.userInfo?.id}, appId=${effectiveAppId.value}, model=${props.model}`
+        )
         resolve()
       }
 
@@ -426,12 +487,15 @@ async function startRec() {
     rec.processor = processor
     rec.inputSampleRate = ctx.sampleRate
     sentAudioChunkCount = 0
+    silenceStartTime = 0
+    lastProcessTime = 0
+
     processor.onaudioprocess = e => {
       const input = e.inputBuffer.getChannelData(0)
       const ds = downsampleBuffer(input, rec.inputSampleRate, sampleRate)
       const pcm16 = floatTo16BitPCM(ds)
 
-      // 优化：简化VAD逻辑，只过滤完全静音的音频
+      // 计算音频能量（RMS）
       let sumSq = 0
       for (let i = 0; i < pcm16.length; i++) {
         const v = pcm16[i]
@@ -439,21 +503,59 @@ async function startRec() {
       }
       const rms = Math.sqrt(sumSq / Math.max(1, pcm16.length))
 
-      // 只过滤完全静音（rms < 3），其他全部发送
-      if (rms < 3) {
-        // 仍发送一些静音帧以保持连接活跃
-        // 可选：每10帧发送一次静音帧
-        // 这里简化处理：直接跳过
-        return
+      const now = Date.now()
+
+      // VAD: 检测用户是否正在说话
+      if (rms > vadConfig.voiceThreshold) {
+        // 检测到有声音
+        if (!isSpeaking.value) {
+          log(`[VAD] 检测到说话开始 (RMS: ${Math.round(rms)})`)
+          isSpeaking.value = true
+
+          // 如果当前正在播放TTS，立即打断
+          if (ttsStreaming || audioEl?.currentTime) {
+            log('[VAD] 检测到打断，停止当前播放')
+            teardownMSE()
+            safeSendJSON({ type: 'cancel' })
+          }
+        }
+        silenceStartTime = now // 重置静音计时
+      } else if (rms < vadConfig.silenceThreshold) {
+        // 检测到静音
+        if (isSpeaking.value) {
+          // 如果之前在说话，现在开始静音
+          if (silenceStartTime === 0) {
+            silenceStartTime = now
+            log(`[VAD] 检测到静音开始 (RMS: ${Math.round(rms)})`)
+          } else {
+            // 检查静音持续时间
+            const silenceDuration = now - silenceStartTime
+            if (silenceDuration >= vadConfig.silenceDuration && now - lastProcessTime > 2000) {
+              // 静音超过阈值时长，认为说话结束，自动触发处理
+              log(`[VAD] 检测到说话结束（静音 ${silenceDuration}ms），自动发送`)
+              isSpeaking.value = false
+              silenceStartTime = 0
+              lastProcessTime = now
+              // 发送 stop 信号触发 ASR + LLM + TTS
+              safeSendJSON({ type: 'stop' })
+            }
+          }
+        }
+      } else {
+        // 中等能量，重置静音计时但不改变说话状态
+        silenceStartTime = now
       }
 
-      safeSendBinary(pcm16.buffer)
-      sentAudioChunkCount++
+      // 只要不是完全静音，就发送音频数据
+      if (rms >= 3) {
+        safeSendBinary(pcm16.buffer)
+        sentAudioChunkCount++
+      }
     }
     source.connect(processor)
     processor.connect(ctx.destination)
     isRecording.value = true
-    log('开始录音')
+    log('开始连续录音（自动检测说话停顿）')
   } catch (e) {
     ms.error('无法访问麦克风')
   }
@@ -468,11 +570,11 @@ function stopRec() {
     rec.stream?.getTracks().forEach(t => t.stop())
   } catch {}
   isRecording.value = false
+  isSpeaking.value = false
+  silenceStartTime = 0
 
-  // 优化：总是发送 stop 信号，移除补帧逻辑
-  // 后端会处理空音频的情况
-  safeSendJSON({ type: 'stop' })
-  log(`已停止并提交本轮音频 (发送了 ${sentAudioChunkCount} 块音频)`)
+  console.log(`[VoiceCall] stopRec: 共发送了 ${sentAudioChunkCount} 块音频`)
+  log(`已停止录音 (共发送 ${sentAudioChunkCount} 块音频)`)
 }
 
 function closePanel() {
@@ -497,7 +599,9 @@ onUnmounted(() => {
       <div class="bg-gradient-to-r from-primary-500 to-primary-600 px-6 py-4">
         <div class="flex items-center justify-between text-white">
           <div class="flex items-center space-x-3">
-            <div class="w-12 h-12 rounded-full bg-white/20 flex items-center justify-center text-2xl">
+            <div
+              class="w-12 h-12 rounded-full bg-white/20 flex items-center justify-center text-2xl"
+            >
               🎙️
             </div>
             <div>
@@ -532,9 +636,7 @@ onUnmounted(() => {
           <div
             class="relative w-32 h-32 rounded-full flex items-center justify-center"
             :class="[
-              isRecording
-                ? 'bg-red-100 dark:bg-red-900/30'
-                : 'bg-gray-100 dark:bg-gray-700',
+              isRecording ? 'bg-red-100 dark:bg-red-900/30' : 'bg-gray-100 dark:bg-gray-700',
             ]"
           >
             <div
@@ -556,22 +658,20 @@ onUnmounted(() => {
                 ? 'bg-red-500 hover:bg-red-600 text-white shadow-lg shadow-red-500/50'
                 : 'bg-primary-500 hover:bg-primary-600 text-white shadow-lg shadow-primary-500/50',
             ]"
-            @mousedown.prevent="startRec"
-            @mouseup.prevent="stopRec"
-            @mouseleave.prevent="stopRec"
-            @touchstart.prevent="startRec"
-            @touchend.prevent="stopRec"
+            @click="isRecording ? stopRec() : startRec()"
           >
-            {{ isRecording ? '松开发送' : '按住说话' }}
+            {{ isRecording ? '停止录音' : '开始通话' }}
           </button>
+
+          <!-- 说话状态指示 -->
+          <div v-if="isRecording" class="text-sm text-gray-600 dark:text-gray-400 text-center">
+            <span v-if="isSpeaking" class="text-green-600 dark:text-green-400">● 正在说话...</span>
+            <span v-else class="text-gray-500">● 等待说话...</span>
+          </div>
 
           <!-- 辅助按钮 -->
           <div class="flex items-center space-x-2 w-full">
-            <button
-              v-if="!connected"
-              class="flex-1 btn-pill py-2"
-              @click="connectWS"
-            >
+            <button v-if="!connected" class="flex-1 btn-pill py-2" @click="connectWS">
               连接通话
             </button>
             <button
@@ -591,17 +691,23 @@ onUnmounted(() => {
 
         <!-- 调试日志（可折叠） -->
         <details class="mt-4">
-          <summary class="text-sm text-gray-500 cursor-pointer hover:text-gray-700 dark:hover:text-gray-300">
+          <summary
+            class="text-sm text-gray-500 cursor-pointer hover:text-gray-700 dark:hover:text-gray-300"
+          >
             调试日志 ({{ logs.length }})
           </summary>
-          <div class="mt-2 h-40 overflow-auto text-xs bg-gray-50 dark:bg-gray-900 p-3 rounded-lg font-mono">
+          <div
+            class="mt-2 h-40 overflow-auto text-xs bg-gray-50 dark:bg-gray-900 p-3 rounded-lg font-mono"
+          >
             <div v-for="(l, i) in logs" :key="i" class="py-0.5">{{ l }}</div>
           </div>
         </details>
 
         <!-- 高级设置（可折叠） -->
         <details>
-          <summary class="text-sm text-gray-500 cursor-pointer hover:text-gray-700 dark:hover:text-gray-300">
+          <summary
+            class="text-sm text-gray-500 cursor-pointer hover:text-gray-700 dark:hover:text-gray-300"
+          >
             高级设置
           </summary>
           <div class="mt-2 space-y-2">

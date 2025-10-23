@@ -9,12 +9,14 @@ export class Options {
   temperature?: number;
   top_p?: number;
   groupId?: number;
+  isFirstMember?: boolean;
+  skipPromptInHistory?: boolean;
 }
 
 export class ChatProcessDto {
   @ApiProperty({
     example: 'hello, Who are you',
-    description: '对话信息（当存在audioUrl时可为空，由服务端识别后填充）',
+    description: '对话信息（当存在audioUrl或imageUrl时可为空，由服务端识别后填充）',
     required: false,
   })
   @IsOptional()
@@ -27,6 +29,14 @@ export class ChatProcessDto {
   })
   @IsOptional()
   audioUrl?: string;
+
+  @ApiProperty({
+    example: 'https://oss/xxx.jpg',
+    description: '图片文件URL（可选，支持多张图片用逗号分隔）',
+    required: false,
+  })
+  @IsOptional()
+  imageUrl?: string;
 
   @ApiProperty({
     example: 'https://aiweb.com',

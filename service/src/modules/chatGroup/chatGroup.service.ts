@@ -291,6 +291,75 @@ export class ChatGroupService {
     return g;
   }
 
+  async addMembers(
+    body: {
+      groupId: number;
+      members: Array<{
+        appId: number;
+        order: number;
+        role: string;
+        taskDetail?: string;
+      }>;
+    },
+    req: Request,
+  ) {
+    const { groupId, members: newMembers } = body;
+    const g = await this.ensureGroupOwned(groupId, req);
+    const existingMembers = this.parseMembers(g.members);
+
+    // 批量添加成员
+    for (const member of newMembers) {
+      // 使用 appId 作为成员的 userId
+      const memberId = member.appId;
+
+      // 检查成员是否已存在
+      if (existingMembers.some(m => Number(m.userId) === Number(memberId))) {
+        continue; // 跳过已存在的成员
+      }
+
+      // 查询应用信息获取名称
+      let appName = null;
+      try {
+        const app = await this.appEntity.findOne({ where: { id: member.appId } });
+        appName = app?.name || `角色_${member.appId}`;
+      } catch {
+        appName = `角色_${member.appId}`;
+      }
+
+      // 处理任务：如果传入了 taskDetail，自动生成任务
+      let tasksList = [];
+      if (member.taskDetail && member.taskDetail.trim()) {
+        tasksList = [
+          {
+            taskId: `${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+            title: member.taskDetail,
+            detail: '',
+            status: 'todo',
+            createdAt: new Date().toISOString(),
+          },
+        ];
+      }
+
+      existingMembers.push({
+        userId: memberId,
+        name: appName,
+        role: member.role,
+        order: member.order,
+        appId: member.appId,
+        appName: appName,
+        tasks: tasksList,
+      });
+    }
+
+    // 添加成员时，自动设置为群聊
+    await this.chatGroupEntity.update(
+      { id: groupId },
+      { members: this.stringifyMembers(existingMembers), isGroupChat: true },
+    );
+    return { success: true, count: newMembers.length };
+  }
+
+  // 添加单个成员（兼容旧接口）
   async addMember(
     body: {
       groupId: number;
@@ -304,24 +373,22 @@ export class ChatGroupService {
     req: Request,
   ) {
     const { groupId, userId, name, role, order, appId, appName } = body;
-    const g = await this.ensureGroupOwned(groupId, req);
-    const members = this.parseMembers(g.members);
-    if (members.some(m => Number(m.userId) === Number(userId))) return true;
-    members.push({
-      userId,
-      name: name || String(userId),
-      role: role || 'member',
-      order: typeof order === 'number' ? order : members.length + 1,
-      appId: appId || null,
-      appName: appName || null,
-      tasks: [],
-    });
-    // 添加成员时，自动设置为群聊
-    await this.chatGroupEntity.update(
-      { id: groupId },
-      { members: this.stringifyMembers(members), isGroupChat: true },
+
+    // 将单个成员转换为数组格式，调用批量添加方法
+    return this.addMembers(
+      {
+        groupId,
+        members: [
+          {
+            appId: appId || userId, // 兼容：如果没有 appId，使用 userId
+            order: order || 999,
+            role: role || 'member',
+            taskDetail: undefined,
+          },
+        ],
+      },
+      req,
     );
-    return true;
   }
 
   async removeMember(body: { groupId: number; userId: number }, req: Request) {

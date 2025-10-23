@@ -172,6 +172,10 @@ async function bootstrap() {
       '【对话接口】文字对话、语音对话（ASR+LLM）、TTS 文字转语音（需显式 userId）',
     )
     .addTag('open-chatLog', '【聊天记录】查询对话列表、按应用查询、查询单条消息（需显式 userId）')
+    .addTag(
+      'open-chatGroup',
+      '【对话组管理】创建/查询/更新/删除对话组、群聊成员管理、任务分配（需显式 userId）',
+    )
     .build();
 
   const fullDoc = SwaggerModule.createDocument(app, swaggerConfig);

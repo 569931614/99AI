@@ -432,27 +432,27 @@ const autoReply_module_1 = __webpack_require__(145);
 const badWords_module_1 = __webpack_require__(153);
 const chat_module_1 = __webpack_require__(163);
 const chatGroup_module_1 = __webpack_require__(202);
-const chatLog_module_1 = __webpack_require__(207);
+const chatLog_module_1 = __webpack_require__(208);
 const conversationSummary_module_1 = __webpack_require__(195);
-const crami_module_1 = __webpack_require__(219);
-const database_module_1 = __webpack_require__(231);
+const crami_module_1 = __webpack_require__(220);
+const database_module_1 = __webpack_require__(232);
 const globalConfig_module_1 = __webpack_require__(181);
-const models_module_1 = __webpack_require__(236);
-const official_module_1 = __webpack_require__(242);
-const order_module_1 = __webpack_require__(247);
-const pay_module_1 = __webpack_require__(254);
-const plugin_module_1 = __webpack_require__(256);
+const models_module_1 = __webpack_require__(237);
+const official_module_1 = __webpack_require__(243);
+const order_module_1 = __webpack_require__(248);
+const pay_module_1 = __webpack_require__(255);
+const plugin_module_1 = __webpack_require__(257);
 const redisCache_module_1 = __webpack_require__(26);
-const share_module_1 = __webpack_require__(259);
-const signin_module_1 = __webpack_require__(262);
-const spa_module_1 = __webpack_require__(265);
-const statistic_module_1 = __webpack_require__(267);
-const task_module_1 = __webpack_require__(271);
-const test_module_1 = __webpack_require__(274);
+const share_module_1 = __webpack_require__(260);
+const signin_module_1 = __webpack_require__(263);
+const spa_module_1 = __webpack_require__(266);
+const statistic_module_1 = __webpack_require__(268);
+const task_module_1 = __webpack_require__(272);
+const test_module_1 = __webpack_require__(275);
 const upload_module_1 = __webpack_require__(186);
 const user_module_1 = __webpack_require__(134);
-const userBalance_module_1 = __webpack_require__(276);
-const verification_module_1 = __webpack_require__(278);
+const userBalance_module_1 = __webpack_require__(277);
+const verification_module_1 = __webpack_require__(279);
 const voice_module_1 = __webpack_require__(180);
 let AppModule = class AppModule {
     configure(consumer) {
@@ -4706,12 +4706,13 @@ let UserBalanceService = class UserBalanceService {
     }
     async validateBalance(req, type, amount) {
         const { id: userId, role } = req.user;
+        if (role === 'visitor') {
+            common_1.Logger.debug(`[validateBalance] visitor 角色跳过额度检查`, 'UserBalanceService');
+            return true;
+        }
         let b = await this.userBalanceEntity.findOne({ where: { userId } });
         if (!b) {
             b = await this.createBaseUserBalance(userId);
-        }
-        if (role === 'visitor') {
-            return this.validateVisitorBalance(req, type, amount);
         }
         const memberKey = type === 1
             ? 'memberModel3Count'
@@ -4798,7 +4799,11 @@ let UserBalanceService = class UserBalanceService {
         const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
         return date >= todayStart;
     }
-    async deductFromBalance(userId, deductionType, amount, UseAmount = 0) {
+    async deductFromBalance(userId, deductionType, amount, UseAmount = 0, role = null) {
+        if (role === 'visitor') {
+            common_1.Logger.debug(`[deductFromBalance] visitor 角色跳过扣费`, 'UserBalanceService');
+            return;
+        }
         const b = await this.userBalanceEntity.findOne({ where: { userId } });
         if (!b) {
             throw new common_1.HttpException('缺失当前用户账户记录！', common_1.HttpStatus.BAD_REQUEST);
@@ -12924,23 +12929,61 @@ let ChatGroupService = class ChatGroupService {
             throw new common_1.HttpException('非法操作、您无权限访问该对话组！', common_1.HttpStatus.BAD_REQUEST);
         return g;
     }
+    async addMembers(body, req) {
+        const { groupId, members: newMembers } = body;
+        const g = await this.ensureGroupOwned(groupId, req);
+        const existingMembers = this.parseMembers(g.members);
+        for (const member of newMembers) {
+            const memberId = member.appId;
+            if (existingMembers.some(m => Number(m.userId) === Number(memberId))) {
+                continue;
+            }
+            let appName = null;
+            try {
+                const app = await this.appEntity.findOne({ where: { id: member.appId } });
+                appName = app?.name || `角色_${member.appId}`;
+            }
+            catch {
+                appName = `角色_${member.appId}`;
+            }
+            let tasksList = [];
+            if (member.taskDetail && member.taskDetail.trim()) {
+                tasksList = [
+                    {
+                        taskId: `${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+                        title: member.taskDetail,
+                        detail: '',
+                        status: 'todo',
+                        createdAt: new Date().toISOString(),
+                    },
+                ];
+            }
+            existingMembers.push({
+                userId: memberId,
+                name: appName,
+                role: member.role,
+                order: member.order,
+                appId: member.appId,
+                appName: appName,
+                tasks: tasksList,
+            });
+        }
+        await this.chatGroupEntity.update({ id: groupId }, { members: this.stringifyMembers(existingMembers), isGroupChat: true });
+        return { success: true, count: newMembers.length };
+    }
     async addMember(body, req) {
         const { groupId, userId, name, role, order, appId, appName } = body;
-        const g = await this.ensureGroupOwned(groupId, req);
-        const members = this.parseMembers(g.members);
-        if (members.some(m => Number(m.userId) === Number(userId)))
-            return true;
-        members.push({
-            userId,
-            name: name || String(userId),
-            role: role || 'member',
-            order: typeof order === 'number' ? order : members.length + 1,
-            appId: appId || null,
-            appName: appName || null,
-            tasks: [],
-        });
-        await this.chatGroupEntity.update({ id: groupId }, { members: this.stringifyMembers(members), isGroupChat: true });
-        return true;
+        return this.addMembers({
+            groupId,
+            members: [
+                {
+                    appId: appId || userId,
+                    order: order || 999,
+                    role: role || 'member',
+                    taskDetail: undefined,
+                },
+            ],
+        }, req);
     }
     async removeMember(body, req) {
         const { groupId, userId } = body;
@@ -13457,7 +13500,8 @@ let ChatLogService = class ChatLogService {
                 return [];
         }
         const list = await this.chatLogEntity.find({ where });
-        return list.map(item => {
+        return list
+            .map(item => {
             const { prompt, role, answer, createdAt, model, modelName, type, status, action, drawId, id, imageUrl, fileInfo, fileUrl, ttsUrl, videoUrl, audioUrl, customId, pluginParam, progress, modelAvatar, taskData, promptReference, networkSearchResult, fileVectorResult, taskId, reasoning_content, tool_calls, content, promptTokens, completionTokens, totalTokens, } = item;
             return {
                 chatId: id,
@@ -13491,6 +13535,9 @@ let ChatLogService = class ChatLogService {
                 completionTokens: completionTokens,
                 totalTokens: totalTokens,
             };
+        })
+            .filter(item => {
+            return item.content && item.content.trim() !== '';
         });
     }
     async chatHistory(groupId, rounds) {
@@ -16905,7 +16952,10 @@ let ChatController = class ChatController {
                     body.prompt = text;
             }
             if (!body?.prompt || body.prompt.trim() === '') {
-                throw new common_1.HttpException('提问信息不能为空！', common_1.HttpStatus.BAD_REQUEST);
+                const isAutoChat = body?.options?.skipPromptInHistory === true;
+                if (!body?.imageUrl && !isAutoChat) {
+                    throw new common_1.HttpException('提问信息不能为空！', common_1.HttpStatus.BAD_REQUEST);
+                }
             }
             return this.chatService.chatProcess(body, req, res);
         }
@@ -17033,7 +17083,6 @@ exports.ChatService = void 0;
 const utils_1 = __webpack_require__(37);
 const common_1 = __webpack_require__(2);
 const typeorm_1 = __webpack_require__(33);
-const openai_1 = __webpack_require__(165);
 const typeorm_2 = __webpack_require__(3);
 const affection_service_1 = __webpack_require__(102);
 const chat_service_1 = __webpack_require__(164);
@@ -17572,10 +17621,66 @@ ${numberedOptions}
     escapeRegex(s) {
         return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     }
+    async recognizeImageWithQwen(imageUrl) {
+        try {
+            const dashscopeApiKey = (await this.globalConfigService.getConfigs(['dashscopeApiKey'])) ||
+                process.env.DASHSCOPE_API_KEY;
+            if (!dashscopeApiKey) {
+                common_1.Logger.warn('[图片识别] 未配置通义千问API Key，跳过图片识别', 'ChatService');
+                return null;
+            }
+            common_1.Logger.debug(`[图片识别] 开始识别图片: ${imageUrl}`, 'ChatService');
+            const axios = __webpack_require__(40);
+            const response = await axios.post('https://dashscope.aliyuncs.com/api/v1/services/aigc/multimodal-generation/generation', {
+                model: 'qwen-vl-plus',
+                input: {
+                    messages: [
+                        {
+                            role: 'user',
+                            content: [
+                                {
+                                    image: imageUrl,
+                                },
+                                {
+                                    text: '请详细描述这张图片的内容，包括图片中的物体、场景、人物、文字等信息。',
+                                },
+                            ],
+                        },
+                    ],
+                },
+                parameters: {},
+            }, {
+                headers: {
+                    Authorization: `Bearer ${dashscopeApiKey}`,
+                    'Content-Type': 'application/json',
+                },
+                timeout: 30000,
+            });
+            const result = response.data?.output?.choices?.[0]?.message?.content?.[0]?.text || '';
+            common_1.Logger.debug(`[图片识别] 识别结果: ${result}`, 'ChatService');
+            return result || null;
+        }
+        catch (error) {
+            common_1.Logger.error(`[图片识别] 识别失败: ${error?.message || error}`, error?.stack || '', 'ChatService');
+            return null;
+        }
+    }
     async chatProcess(body, req, res) {
         await this.userBalanceService.checkUserCertification(req.user.id);
-        const { options = {}, usingPluginId, prompt, fileUrl, imageUrl, extraParam, model, action, modelName, modelAvatar, } = body;
+        let { options = {}, usingPluginId, prompt, fileUrl, imageUrl, extraParam, model, action, modelName, modelAvatar, } = body;
         common_1.Logger.debug(`body: ${JSON.stringify(body)}`, 'ChatService');
+        if (imageUrl && (!prompt || prompt.trim().length === 0)) {
+            common_1.Logger.debug('[图片识别] 检测到用户只发送图片，开始识别...', 'ChatService');
+            const imageDescription = await this.recognizeImageWithQwen(imageUrl);
+            if (imageDescription) {
+                prompt = `[这是一张图片，内容如下]\n${imageDescription}\n\n请根据图片内容进行回复。`;
+                common_1.Logger.debug(`[图片识别] 已将识别结果设置为prompt: ${prompt}`, 'ChatService');
+            }
+            else {
+                common_1.Logger.warn('[图片识别] 图片识别失败，使用默认提示', 'ChatService');
+                prompt = '请看这张图片，这是什么？';
+            }
+        }
         let appId = body?.appId ?? null;
         common_1.Logger.debug(`[好感度调试] 初始 appId=${appId}, body.appId=${body?.appId}, groupId=${options?.groupId}`, 'ChatService');
         if (!appId && options?.groupId) {
@@ -17614,7 +17719,7 @@ ${numberedOptions}
                 }
             }
         }
-        const { groupId, usingNetwork, usingDeepThinking, usingMcpTool } = options;
+        const { groupId, usingNetwork, usingDeepThinking, usingMcpTool, isFirstMember } = options || {};
         let isGroupChat = false;
         if (groupId) {
             try {
@@ -17872,35 +17977,69 @@ ${numberedOptions}
         }
         let userSaveLog;
         let userLogId;
-        if (isGroupChat && groupId) {
-            const existingUserLog = await this.chatLogService.findRecentUserLogInGroup(groupId, prompt, 10);
-            if (existingUserLog) {
-                userLogId = existingUserLog.id;
-                userSaveLog = existingUserLog;
-                common_1.Logger.debug(`[群聊] 使用已存在的用户消息，id=${userLogId}, appId=${appId}`, 'ChatService');
+        const isAutoChat = options?.skipPromptInHistory === true && (!prompt || prompt.trim() === '');
+        if (isGroupChat && groupId && !isAutoChat) {
+            if (isFirstMember) {
+                const existingUserLog = await this.chatLogService.findRecentUserLogInGroup(groupId, prompt, 10);
+                if (existingUserLog) {
+                    userLogId = existingUserLog.id;
+                    userSaveLog = existingUserLog;
+                    common_1.Logger.debug(`[群聊] 使用已存在的用户消息，id=${userLogId}, appId=${appId}`, 'ChatService');
+                }
+                else {
+                    userSaveLog = await this.chatLogService.saveChatLog({
+                        appId: appId,
+                        curIp,
+                        userId: req.user.id,
+                        type: modelType ? modelType : 1,
+                        fileUrl: fileUrl ? fileUrl : null,
+                        imageUrl: imageUrl ? imageUrl : null,
+                        content: prompt,
+                        promptTokens: 0,
+                        completionTokens: 0,
+                        totalTokens: 0,
+                        model: useModel,
+                        modelName: realUserName,
+                        role: 'user',
+                        groupId: groupId ? groupId : null,
+                    });
+                    userLogId = userSaveLog.id;
+                    common_1.Logger.debug(`[群聊] 保存新的用户消息，id=${userLogId}, appId=${appId}`, 'ChatService');
+                }
             }
             else {
-                userSaveLog = await this.chatLogService.saveChatLog({
-                    appId: appId,
-                    curIp,
-                    userId: req.user.id,
-                    type: modelType ? modelType : 1,
-                    fileUrl: fileUrl ? fileUrl : null,
-                    imageUrl: imageUrl ? imageUrl : null,
-                    content: prompt,
-                    promptTokens: 0,
-                    completionTokens: 0,
-                    totalTokens: 0,
-                    model: useModel,
-                    modelName: realUserName,
-                    role: 'user',
-                    groupId: groupId ? groupId : null,
-                });
-                userLogId = userSaveLog.id;
-                common_1.Logger.debug(`[群聊] 保存新的用户消息，id=${userLogId}, appId=${appId}`, 'ChatService');
+                const existingUserLog = await this.chatLogService.findRecentUserLogInGroup(groupId, prompt, 30);
+                if (existingUserLog) {
+                    userLogId = existingUserLog.id;
+                    userSaveLog = existingUserLog;
+                    common_1.Logger.debug(`[群聊] 非第一成员，复用已有用户消息，id=${userLogId}, appId=${appId}`, 'ChatService');
+                }
+                else {
+                    common_1.Logger.warn(`[群聊] 非第一成员但未找到已有用户消息，可能是并发问题，appId=${appId}`, 'ChatService');
+                    let foundUserLog = null;
+                    const maxRetries = 5;
+                    const retryDelay = 1000;
+                    for (let i = 0; i < maxRetries; i++) {
+                        await new Promise(resolve => setTimeout(resolve, retryDelay));
+                        foundUserLog = await this.chatLogService.findRecentUserLogInGroup(groupId, prompt, 60);
+                        if (foundUserLog) {
+                            common_1.Logger.debug(`[群聊] 第${i + 1}次重试后找到用户消息，id=${foundUserLog.id}`, 'ChatService');
+                            break;
+                        }
+                    }
+                    if (foundUserLog) {
+                        userLogId = foundUserLog.id;
+                        userSaveLog = foundUserLog;
+                    }
+                    else {
+                        common_1.Logger.error(`[群聊] 非第一成员经过${maxRetries}次重试后仍未找到用户消息，跳过用户消息保存，appId=${appId}`, 'ChatService');
+                        userLogId = null;
+                        userSaveLog = null;
+                    }
+                }
             }
         }
-        else {
+        else if (!isGroupChat && !isAutoChat) {
             userSaveLog = await this.chatLogService.saveChatLog({
                 appId: appId,
                 curIp,
@@ -17918,6 +18057,10 @@ ${numberedOptions}
                 groupId: groupId ? groupId : null,
             });
             userLogId = userSaveLog.id;
+        }
+        else if (isAutoChat) {
+            common_1.Logger.debug(`[自动对话] 跳过用户消息保存，skipPromptInHistory=true`, 'ChatService');
+            userLogId = null;
         }
         let assistantName = useModeName;
         if (groupId && appId) {
@@ -18109,7 +18252,7 @@ ${numberedOptions}
                         : undefined;
                     const xingchenResult = await this.openAIChatService.chatFree(prompt || '', setSystemMessage, messagesHistory, imageUrl, {
                         onProgress: (delta) => {
-                            if (!isGroupChat && delta) {
+                            if (delta) {
                                 accumulatedText += delta;
                                 const payload = { content: [{ type: 'text', text: accumulatedText }] };
                                 try {
@@ -18230,7 +18373,7 @@ ${numberedOptions}
                                 Math.ceil((promptTokens + completionTokens) / tokenFeeRatio) *
                                 (usingDeepThinking ? deductDeepThink : 1);
                     }
-                    await this.userBalanceService.deductFromBalance(req.user.id, deductType, charge, promptTokens + completionTokens);
+                    await this.userBalanceService.deductFromBalance(req.user.id, deductType, charge, promptTokens + completionTokens, req.user.role);
                     await this.modelsService.saveUseLog(keyId, promptTokens + completionTokens);
                     common_1.Logger.log(`对话完成 - 用户: ${req.user.id}, 模型: ${useModeName}(${model}), Token: ${promptTokens + completionTokens}, 积分: ${charge}`, 'ChatService');
                     const userBalance = await this.userBalanceService.queryUserBalance(req.user.id);
@@ -18571,7 +18714,7 @@ ${numberedOptions}
             messages.length = 0;
             messages.push(...fixedMessages);
         }
-        if (prompt) {
+        if (prompt && !options?.skipPromptInHistory) {
             const lastMessage = messages[messages.length - 1];
             const isLastMessageCurrentPrompt = lastMessage && lastMessage.role === 'user' && lastMessage.content === prompt;
             if (!isLastMessageCurrentPrompt) {
@@ -18596,6 +18739,9 @@ ${numberedOptions}
                 messages.push(currentUserMessage);
                 common_1.Logger.debug(`[群聊历史] 添加当前用户提问: ${typeof userPrompt === 'string' ? userPrompt.substring(0, 50) : '[复杂内容]'}`, 'ChatService');
             }
+        }
+        else if (options?.skipPromptInHistory) {
+            common_1.Logger.debug(`[群聊自动对话] skipPromptInHistory=true，跳过将 prompt 添加到历史`, 'ChatService');
         }
         if (isGroupChat && groupId && appId) {
             try {
@@ -18627,7 +18773,7 @@ ${numberedOptions}
         };
     }
     async ttsProcess(body, req, res) {
-        const { chatId, prompt, emotion } = body;
+        const { chatId, prompt, emotion, appId: bodyAppId } = body;
         common_1.Logger.debug(`开始TTS处理: ${String(prompt || '').substring(0, 50)}${(prompt || '').length > 50 ? '...' : ''}`, 'TTSService');
         const psychologicalDesc = this.extractPsychologicalDescription(prompt);
         common_1.Logger.debug(`提取心理描述: ${psychologicalDesc || '无'}`, 'TTSService');
@@ -18650,9 +18796,14 @@ ${numberedOptions}
             const { url } = await this.voiceService.preview(previewPayload);
             try {
                 const detailKeyInfo = await this.modelsService.getCurrentModelKeyInfo('tts-1');
-                const { deduct, deductType } = detailKeyInfo;
-                await this.userBalanceService.validateBalance(req, deductType, deduct);
-                await this.userBalanceService.deductFromBalance(req.user.id, deductType, deduct);
+                if (detailKeyInfo) {
+                    const { deduct, deductType } = detailKeyInfo;
+                    await this.userBalanceService.validateBalance(req, deductType, deduct);
+                    await this.userBalanceService.deductFromBalance(req.user.id, deductType, deduct, 0, req.user.role);
+                }
+                else {
+                    common_1.Logger.warn(`[TTSService] 未找到 tts-1 模型配置，跳过扣费`, 'TTSService');
+                }
             }
             catch (e) {
                 common_1.Logger.warn(`[TTSService] 扣费配置缺失或校验失败，已跳过扣费: ${e?.message || e}`, 'TTSService');
@@ -18661,8 +18812,12 @@ ${numberedOptions}
             return res.status(200).send({ ttsUrl: url });
         };
         try {
-            const chatLog = await this.chatLogService.findOneChatLog(chatId);
-            const appId = chatLog?.appId ?? null;
+            let appId = bodyAppId;
+            if (!appId) {
+                const chatLog = await this.chatLogService.findOneChatLog(chatId);
+                appId = chatLog?.appId ?? null;
+            }
+            common_1.Logger.debug(`[TTSService] 使用的appId: ${appId}`, 'TTSService');
             let detectedEmotion = null;
             if (emotion) {
                 detectedEmotion = emotion;
@@ -18724,54 +18879,20 @@ ${numberedOptions}
                     }
                 }
                 catch (e) {
-                    common_1.Logger.warn(`[TTSService] 读取应用默认音色失败: ${e?.message || e}`, 'TTSService');
+                    common_1.Logger.warn(`[TTSService] 音色合成失败: ${e?.message || e}`, 'TTSService');
+                    const errorMsg = e?.message || '音色合成失败';
+                    return res.status(500).send({
+                        message: `语音合成失败: ${errorMsg}`,
+                        detail: '请检查音色配置是否正确，或联系管理员',
+                    });
                 }
             }
         }
         catch (e) {
             common_1.Logger.warn(`[TTSService] 情绪/角色音色路径检查失败: ${e?.message || e}`, 'TTSService');
         }
-        try {
-            const detailKeyInfo = await this.modelsService.getCurrentModelKeyInfo('tts-1');
-            const { key, proxyUrl, deduct, deductType, timeout } = detailKeyInfo;
-            const { openaiBaseUrl, openaiBaseKey, openaiVoice } = await this.globalConfigService.getConfigs([
-                'openaiBaseUrl',
-                'openaiBaseKey',
-                'openaiVoice',
-            ]);
-            const useKey = key || openaiBaseKey;
-            const useTimeout = timeout * 1000;
-            await this.userBalanceService.validateBalance(req, deductType, deduct);
-            const formattedUrl = (0, utils_1.formatUrl)(proxyUrl || openaiBaseUrl);
-            const correctedProxyUrl = await (0, utils_1.correctApiBaseUrl)(formattedUrl);
-            const openai = new openai_1.OpenAI({
-                apiKey: useKey,
-                baseURL: correctedProxyUrl,
-                timeout: useTimeout,
-            });
-            const response = await openai.audio.speech.create({
-                model: 'tts-1',
-                input: textToSpeak,
-                voice: openaiVoice || 'onyx',
-            });
-            const buffer = Buffer.from(await response.arrayBuffer());
-            common_1.Logger.debug('TTS音频数据生成成功', 'TTSService');
-            const now = new Date();
-            const year = now.getFullYear();
-            const month = String(now.getMonth() + 1).padStart(2, '0');
-            const day = String(now.getDate()).padStart(2, '0');
-            const currentDate = `${year}${month}/${day}`;
-            const ttsUrl = await this.uploadService.uploadFile({ buffer, mimetype: 'audio/mpeg' }, `audio/openai/${currentDate}`);
-            await Promise.all([
-                this.chatLogService.updateChatLog(chatId, { ttsUrl }),
-                this.userBalanceService.deductFromBalance(req.user.id, deductType, deduct),
-            ]);
-            return res.status(200).send({ ttsUrl });
-        }
-        catch (error) {
-            common_1.Logger.error('TTS处理失败', error, 'TTSService');
-            return res.status(500).send({ message: error?.message || '语音合成请求处理失败' });
-        }
+        common_1.Logger.error('[TTSService] 未配置任何音色，无法进行TTS', 'TTSService');
+        return res.status(400).send({ message: '请先为角色配置音色后再进行语音合成' });
     }
 };
 exports.ChatService = ChatService;
@@ -18812,6 +18933,8 @@ class Options {
     temperature;
     top_p;
     groupId;
+    isFirstMember;
+    skipPromptInHistory;
 }
 exports.Options = Options;
 __decorate([
@@ -18821,6 +18944,7 @@ __decorate([
 class ChatProcessDto {
     prompt;
     audioUrl;
+    imageUrl;
     url;
     options;
     systemMessage;
@@ -18831,7 +18955,7 @@ exports.ChatProcessDto = ChatProcessDto;
 __decorate([
     (0, swagger_1.ApiProperty)({
         example: 'hello, Who are you',
-        description: '对话信息（当存在audioUrl时可为空，由服务端识别后填充）',
+        description: '对话信息（当存在audioUrl或imageUrl时可为空，由服务端识别后填充）',
         required: false,
     }),
     (0, class_validator_1.IsOptional)(),
@@ -18846,6 +18970,15 @@ __decorate([
     (0, class_validator_1.IsOptional)(),
     __metadata("design:type", String)
 ], ChatProcessDto.prototype, "audioUrl", void 0);
+__decorate([
+    (0, swagger_1.ApiProperty)({
+        example: 'https://oss/xxx.jpg',
+        description: '图片文件URL（可选，支持多张图片用逗号分隔）',
+        required: false,
+    }),
+    (0, class_validator_1.IsOptional)(),
+    __metadata("design:type", String)
+], ChatProcessDto.prototype, "imageUrl", void 0);
 __decorate([
     (0, swagger_1.ApiProperty)({
         example: 'https://aiweb.com',
@@ -18949,9 +19082,19 @@ let OpenChatController = class OpenChatController {
                     body.prompt = text;
             }
             if (!body?.prompt || body.prompt.trim() === '') {
-                throw new common_1.HttpException('提问信息不能为空！', common_1.HttpStatus.BAD_REQUEST);
+                const isAutoChat = body?.options?.skipPromptInHistory === true;
+                if (!body?.imageUrl && !isAutoChat) {
+                    throw new common_1.HttpException('提问信息不能为空！', common_1.HttpStatus.BAD_REQUEST);
+                }
             }
-            const fakeReq = { user: { id: userId } };
+            const fakeReq = {
+                user: { id: userId, role: 'visitor' },
+                header: (name) => _req.header(name),
+                headers: _req.headers,
+                connection: _req.connection,
+                socket: _req.socket,
+                ip: _req.ip,
+            };
             return this.chatService.chatProcess(body, fakeReq, res);
         }
         catch (e) {
@@ -18964,7 +19107,14 @@ let OpenChatController = class OpenChatController {
         const { userId } = body || {};
         if (!userId)
             throw new common_1.HttpException('userId 必填', common_1.HttpStatus.BAD_REQUEST);
-        const fakeReq = { user: { id: userId } };
+        const fakeReq = {
+            user: { id: userId, role: 'visitor' },
+            header: (name) => _req.header(name),
+            headers: _req.headers,
+            connection: _req.connection,
+            socket: _req.socket,
+            ip: _req.ip,
+        };
         return this.chatService.ttsProcess(body, fakeReq, res);
     }
     async chatProcessVoice(body, _req, res) {
@@ -18997,7 +19147,14 @@ let OpenChatController = class OpenChatController {
                 throw new common_1.HttpException('未识别到有效语音内容', common_1.HttpStatus.BAD_REQUEST);
             }
             const payload = { ...body, prompt: text };
-            const fakeReq = { user: { id: userId } };
+            const fakeReq = {
+                user: { id: userId, role: 'visitor' },
+                header: (name) => _req.header(name),
+                headers: _req.headers,
+                connection: _req.connection,
+                socket: _req.socket,
+                ip: _req.ip,
+            };
             return this.chatService.chatProcess(payload, fakeReq, res);
         }
         catch (e) {
@@ -19022,28 +19179,98 @@ __decorate([
         schema: {
             type: 'object',
             properties: {
-                userId: { type: 'number', description: '外部用户ID（必须为系统中存在的用户）' },
-                model: { type: 'string', description: '使用的模型标识（可选）' },
-                modelName: { type: 'string', description: '模型名称（可选）' },
-                modelType: { type: 'number', description: '模型类型（可选）' },
-                modelAvatar: { type: 'string', description: '模型头像URL（可选）' },
+                userId: { type: 'number', description: '外部用户ID（任意数字即可，用于区分不同用户会话）' },
                 prompt: { type: 'string', description: '用户提问内容；若传 audioUrl 将自动识别为文本' },
+                options: {
+                    type: 'object',
+                    description: '对话附加选项（可选）',
+                    properties: {
+                        parentMessageId: { type: 'string', description: '上一条消息ID，用于连续对话' },
+                        groupId: { type: 'number', description: '会话组ID' },
+                        isFirstMember: {
+                            type: 'boolean',
+                            description: '是否为第一个成员（群聊模式专用，true时保存用户消息）',
+                        },
+                        skipPromptInHistory: {
+                            type: 'boolean',
+                            description: '是否跳过将prompt添加到历史（群聊自动对话模式专用，true时不将prompt加入上下文）',
+                        },
+                    },
+                },
                 audioUrl: { type: 'string', description: '音频URL，自动进行ASR识别为文本（可选）' },
                 imageUrl: { type: 'string', description: '图片URL（可选）' },
                 fileUrl: { type: 'string', description: '文件URL（可选）' },
                 appId: { type: 'number', description: '角色(App) ID（可选）' },
-                options: { type: 'object', description: '对话附加选项（可选）' },
+                model: { type: 'string', description: '使用的模型标识（可选）' },
+                modelName: { type: 'string', description: '模型名称（可选）' },
+                modelType: { type: 'number', description: '模型类型（可选）' },
+                modelAvatar: { type: 'string', description: '模型头像URL（可选）' },
                 extraParam: { type: 'object', description: '扩展参数（可选）' },
                 usingPluginId: { type: 'number', description: '插件ID（可选）' },
             },
-            required: ['userId'],
+            required: ['userId', 'prompt'],
         },
         examples: {
-            demo: {
+            basic: {
+                summary: '基础对话',
                 value: {
-                    userId: 1,
-                    model: 'deepseek-chat',
+                    userId: 1001,
+                    prompt: '你好，请介绍一下你自己',
+                },
+            },
+            withOptions: {
+                summary: '连续对话（带上下文）',
+                value: {
+                    userId: 1001,
+                    prompt: '继续说',
+                    options: {
+                        parentMessageId: 'chatcmpl-xxxxx',
+                    },
+                },
+            },
+            withApp: {
+                summary: '使用特定角色',
+                value: {
+                    userId: 1001,
                     prompt: '你好',
+                    appId: 123,
+                },
+            },
+            groupChatFirst: {
+                summary: '群聊模式 - 第一个成员',
+                value: {
+                    userId: 1001,
+                    prompt: '大家好，请自我介绍',
+                    appId: 101,
+                    options: {
+                        groupId: 456,
+                        isFirstMember: true,
+                    },
+                },
+            },
+            groupChatOther: {
+                summary: '群聊模式 - 后续成员',
+                value: {
+                    userId: 1001,
+                    prompt: '大家好，请自我介绍',
+                    appId: 102,
+                    options: {
+                        groupId: 456,
+                        isFirstMember: false,
+                    },
+                },
+            },
+            groupChatAuto: {
+                summary: '群聊自动对话 - 角色自动发言（无需用户提问）',
+                value: {
+                    userId: 1001,
+                    prompt: '',
+                    appId: 102,
+                    options: {
+                        groupId: 456,
+                        isFirstMember: false,
+                        skipPromptInHistory: true,
+                    },
                 },
             },
         },
@@ -19062,7 +19289,7 @@ __decorate([
         schema: {
             type: 'object',
             properties: {
-                userId: { type: 'number', description: '外部用户ID' },
+                userId: { type: 'number', description: '外部用户ID（任意数字即可）' },
                 chatId: { type: 'number', description: '可选：继续某个会话ID' },
                 prompt: { type: 'string', description: '要合成的文本' },
             },
@@ -19083,7 +19310,7 @@ __decorate([
         schema: {
             type: 'object',
             properties: {
-                userId: { type: 'number', description: '外部用户ID（必须为系统中存在的用户）' },
+                userId: { type: 'number', description: '外部用户ID（任意数字即可，用于区分不同用户会话）' },
                 audioUrl: { type: 'string', description: '音频URL（与 audioBase64 二选一）' },
                 audioBase64: { type: 'string', description: '音频base64（与 audioUrl 二选一）' },
                 model: { type: 'string', description: '使用的模型标识（可选）' },
@@ -19139,12 +19366,13 @@ var __decorate = (this && this.__decorate) || function (decorators, target, key,
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.ChatGroupModule = void 0;
 const common_1 = __webpack_require__(2);
-const chatGroup_controller_1 = __webpack_require__(203);
-const chatGroup_service_1 = __webpack_require__(166);
 const typeorm_1 = __webpack_require__(33);
-const chatGroup_entity_1 = __webpack_require__(96);
-const app_entity_1 = __webpack_require__(115);
 const affection_module_1 = __webpack_require__(32);
+const app_entity_1 = __webpack_require__(115);
+const chatGroup_controller_1 = __webpack_require__(203);
+const chatGroup_entity_1 = __webpack_require__(96);
+const chatGroup_service_1 = __webpack_require__(166);
+const open_chatGroup_controller_1 = __webpack_require__(207);
 let ChatGroupModule = class ChatGroupModule {
 };
 exports.ChatGroupModule = ChatGroupModule;
@@ -19152,7 +19380,7 @@ exports.ChatGroupModule = ChatGroupModule = __decorate([
     (0, common_1.Global)(),
     (0, common_1.Module)({
         imports: [typeorm_1.TypeOrmModule.forFeature([chatGroup_entity_1.ChatGroupEntity, app_entity_1.AppEntity]), affection_module_1.AffectionModule],
-        controllers: [chatGroup_controller_1.ChatGroupController],
+        controllers: [chatGroup_controller_1.ChatGroupController, open_chatGroup_controller_1.OpenChatGroupController],
         providers: [chatGroup_service_1.ChatGroupService],
         exports: [chatGroup_service_1.ChatGroupService],
     })
@@ -19488,16 +19716,747 @@ var __decorate = (this && this.__decorate) || function (decorators, target, key,
     else for (var i = decorators.length - 1; i >= 0; i--) if (d = decorators[i]) r = (c < 3 ? d(r) : c > 3 ? d(target, key, r) : d(target, key)) || r;
     return c > 3 && r && Object.defineProperty(target, key, r), r;
 };
+var __metadata = (this && this.__metadata) || function (k, v) {
+    if (typeof Reflect === "object" && typeof Reflect.metadata === "function") return Reflect.metadata(k, v);
+};
+var __param = (this && this.__param) || function (paramIndex, decorator) {
+    return function (target, key) { decorator(target, key, paramIndex); }
+};
+var _a, _b, _c, _d, _e, _f, _g, _h, _j, _k, _l, _m, _o, _p, _q, _r, _s, _t, _u, _v, _w, _x, _y;
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.OpenChatGroupController = void 0;
+const common_1 = __webpack_require__(2);
+const swagger_1 = __webpack_require__(14);
+const express_1 = __webpack_require__(113);
+const chatGroup_service_1 = __webpack_require__(166);
+let OpenChatGroupController = class OpenChatGroupController {
+    chatGroupService;
+    constructor(chatGroupService) {
+        this.chatGroupService = chatGroupService;
+    }
+    async create(body, _req, res) {
+        try {
+            const { userId, appId, modelConfig, params } = body || {};
+            if (!userId)
+                throw new common_1.HttpException('userId 必填', common_1.HttpStatus.BAD_REQUEST);
+            const fakeReq = {
+                user: { id: userId, role: 'visitor' },
+                header: (name) => _req.header(name),
+                headers: _req.headers,
+                connection: _req.connection,
+                socket: _req.socket,
+                ip: _req.ip,
+            };
+            const result = await this.chatGroupService.create({ appId, modelConfig, params }, fakeReq);
+            return res.status(200).json({ success: true, data: result });
+        }
+        catch (e) {
+            const status = e instanceof common_1.HttpException ? e.getStatus() : common_1.HttpStatus.INTERNAL_SERVER_ERROR;
+            const message = e?.message || '创建对话组失败';
+            return res.status(status).json({ success: false, message });
+        }
+    }
+    async query(body, _req, res) {
+        try {
+            const { userId } = body || {};
+            if (!userId)
+                throw new common_1.HttpException('userId 必填', common_1.HttpStatus.BAD_REQUEST);
+            const fakeReq = {
+                user: { id: userId, role: 'visitor' },
+                header: (name) => _req.header(name),
+                headers: _req.headers,
+                connection: _req.connection,
+                socket: _req.socket,
+                ip: _req.ip,
+            };
+            const result = await this.chatGroupService.query(fakeReq);
+            return res.status(200).json({ success: true, data: result });
+        }
+        catch (e) {
+            const status = e instanceof common_1.HttpException ? e.getStatus() : common_1.HttpStatus.INTERNAL_SERVER_ERROR;
+            const message = e?.message || '查询对话组失败';
+            return res.status(status).json({ success: false, message });
+        }
+    }
+    async del(body, _req, res) {
+        try {
+            const { userId, groupId } = body || {};
+            if (!userId)
+                throw new common_1.HttpException('userId 必填', common_1.HttpStatus.BAD_REQUEST);
+            if (!groupId)
+                throw new common_1.HttpException('groupId 必填', common_1.HttpStatus.BAD_REQUEST);
+            const fakeReq = {
+                user: { id: userId, role: 'visitor' },
+                header: (name) => _req.header(name),
+                headers: _req.headers,
+                connection: _req.connection,
+                socket: _req.socket,
+                ip: _req.ip,
+            };
+            const result = await this.chatGroupService.del({ groupId }, fakeReq);
+            return res.status(200).json({ success: true, message: result });
+        }
+        catch (e) {
+            const status = e instanceof common_1.HttpException ? e.getStatus() : common_1.HttpStatus.INTERNAL_SERVER_ERROR;
+            const message = e?.message || '删除对话组失败';
+            return res.status(status).json({ success: false, message });
+        }
+    }
+    async delAll(body, _req, res) {
+        try {
+            const { userId } = body || {};
+            if (!userId)
+                throw new common_1.HttpException('userId 必填', common_1.HttpStatus.BAD_REQUEST);
+            const fakeReq = {
+                user: { id: userId, role: 'visitor' },
+                header: (name) => _req.header(name),
+                headers: _req.headers,
+                connection: _req.connection,
+                socket: _req.socket,
+                ip: _req.ip,
+            };
+            const result = await this.chatGroupService.delAll(fakeReq);
+            return res.status(200).json({ success: true, message: result });
+        }
+        catch (e) {
+            const status = e instanceof common_1.HttpException ? e.getStatus() : common_1.HttpStatus.INTERNAL_SERVER_ERROR;
+            const message = e?.message || '删除所有对话组失败';
+            return res.status(status).json({ success: false, message });
+        }
+    }
+    async update(body, _req, res) {
+        try {
+            const { userId, groupId, title, isSticky, config, fileUrl } = body || {};
+            if (!userId)
+                throw new common_1.HttpException('userId 必填', common_1.HttpStatus.BAD_REQUEST);
+            if (!groupId)
+                throw new common_1.HttpException('groupId 必填', common_1.HttpStatus.BAD_REQUEST);
+            const fakeReq = {
+                user: { id: userId, role: 'visitor' },
+                header: (name) => _req.header(name),
+                headers: _req.headers,
+                connection: _req.connection,
+                socket: _req.socket,
+                ip: _req.ip,
+            };
+            const result = await this.chatGroupService.update({ groupId, title, isSticky, config, fileUrl }, fakeReq);
+            return res.status(200).json({ success: true, data: result });
+        }
+        catch (e) {
+            const status = e instanceof common_1.HttpException ? e.getStatus() : common_1.HttpStatus.INTERNAL_SERVER_ERROR;
+            const message = e?.message || '更新对话组失败';
+            return res.status(status).json({ success: false, message });
+        }
+    }
+    async addMembers(body, _req, res) {
+        try {
+            const { userId, groupId, members } = body || {};
+            if (!userId)
+                throw new common_1.HttpException('userId 必填', common_1.HttpStatus.BAD_REQUEST);
+            if (!groupId)
+                throw new common_1.HttpException('groupId 必填', common_1.HttpStatus.BAD_REQUEST);
+            if (!members || !Array.isArray(members) || members.length === 0) {
+                throw new common_1.HttpException('members 必填且不能为空数组', common_1.HttpStatus.BAD_REQUEST);
+            }
+            const fakeReq = {
+                user: { id: userId, role: 'visitor' },
+                header: (name) => _req.header(name),
+                headers: _req.headers,
+                connection: _req.connection,
+                socket: _req.socket,
+                ip: _req.ip,
+            };
+            const result = await this.chatGroupService.addMembers({ groupId, members }, fakeReq);
+            return res.status(200).json({ success: true, data: result });
+        }
+        catch (e) {
+            const status = e instanceof common_1.HttpException ? e.getStatus() : common_1.HttpStatus.INTERNAL_SERVER_ERROR;
+            const message = e?.message || '添加成员失败';
+            return res.status(status).json({ success: false, message });
+        }
+    }
+    async removeMember(body, _req, res) {
+        try {
+            const { userId, groupId, memberId } = body || {};
+            if (!userId)
+                throw new common_1.HttpException('userId 必填', common_1.HttpStatus.BAD_REQUEST);
+            if (!groupId)
+                throw new common_1.HttpException('groupId 必填', common_1.HttpStatus.BAD_REQUEST);
+            if (!memberId)
+                throw new common_1.HttpException('memberId 必填', common_1.HttpStatus.BAD_REQUEST);
+            const fakeReq = {
+                user: { id: userId, role: 'visitor' },
+                header: (name) => _req.header(name),
+                headers: _req.headers,
+                connection: _req.connection,
+                socket: _req.socket,
+                ip: _req.ip,
+            };
+            const result = await this.chatGroupService.removeMember({ groupId, userId: memberId }, fakeReq);
+            return res.status(200).json({ success: true, data: result });
+        }
+        catch (e) {
+            const status = e instanceof common_1.HttpException ? e.getStatus() : common_1.HttpStatus.INTERNAL_SERVER_ERROR;
+            const message = e?.message || '移除成员失败';
+            return res.status(status).json({ success: false, message });
+        }
+    }
+    async listMembers(body, _req, res) {
+        try {
+            const { userId, groupId } = body || {};
+            if (!userId)
+                throw new common_1.HttpException('userId 必填', common_1.HttpStatus.BAD_REQUEST);
+            if (!groupId)
+                throw new common_1.HttpException('groupId 必填', common_1.HttpStatus.BAD_REQUEST);
+            const fakeReq = {
+                user: { id: userId, role: 'visitor' },
+                header: (name) => _req.header(name),
+                headers: _req.headers,
+                connection: _req.connection,
+                socket: _req.socket,
+                ip: _req.ip,
+            };
+            const result = await this.chatGroupService.listMembers({ groupId }, fakeReq);
+            return res.status(200).json({ success: true, data: result });
+        }
+        catch (e) {
+            const status = e instanceof common_1.HttpException ? e.getStatus() : common_1.HttpStatus.INTERNAL_SERVER_ERROR;
+            const message = e?.message || '获取成员列表失败';
+            return res.status(status).json({ success: false, message });
+        }
+    }
+    async updateMember(body, _req, res) {
+        try {
+            const { userId, groupId, memberId, name, role, order, appId, appName } = body || {};
+            if (!userId)
+                throw new common_1.HttpException('userId 必填', common_1.HttpStatus.BAD_REQUEST);
+            if (!groupId)
+                throw new common_1.HttpException('groupId 必填', common_1.HttpStatus.BAD_REQUEST);
+            if (!memberId)
+                throw new common_1.HttpException('memberId 必填', common_1.HttpStatus.BAD_REQUEST);
+            const fakeReq = {
+                user: { id: userId, role: 'visitor' },
+                header: (name) => _req.header(name),
+                headers: _req.headers,
+                connection: _req.connection,
+                socket: _req.socket,
+                ip: _req.ip,
+            };
+            const result = await this.chatGroupService.updateMember({ groupId, userId: memberId, name, role, order, appId, appName }, fakeReq);
+            return res.status(200).json({ success: true, data: result });
+        }
+        catch (e) {
+            const status = e instanceof common_1.HttpException ? e.getStatus() : common_1.HttpStatus.INTERNAL_SERVER_ERROR;
+            const message = e?.message || '更新成员信息失败';
+            return res.status(status).json({ success: false, message });
+        }
+    }
+    async assignTask(body, _req, res) {
+        try {
+            const { userId, groupId, memberId, title, detail, status } = body || {};
+            if (!userId)
+                throw new common_1.HttpException('userId 必填', common_1.HttpStatus.BAD_REQUEST);
+            if (!groupId)
+                throw new common_1.HttpException('groupId 必填', common_1.HttpStatus.BAD_REQUEST);
+            if (!memberId)
+                throw new common_1.HttpException('memberId 必填', common_1.HttpStatus.BAD_REQUEST);
+            if (!title)
+                throw new common_1.HttpException('title 必填', common_1.HttpStatus.BAD_REQUEST);
+            const fakeReq = {
+                user: { id: userId, role: 'visitor' },
+                header: (name) => _req.header(name),
+                headers: _req.headers,
+                connection: _req.connection,
+                socket: _req.socket,
+                ip: _req.ip,
+            };
+            const result = await this.chatGroupService.assignTask({ groupId, userId: memberId, title, detail, status }, fakeReq);
+            return res.status(200).json({ success: true, data: result });
+        }
+        catch (e) {
+            const status = e instanceof common_1.HttpException ? e.getStatus() : common_1.HttpStatus.INTERNAL_SERVER_ERROR;
+            const message = e?.message || '分配任务失败';
+            return res.status(status).json({ success: false, message });
+        }
+    }
+    async updateTask(body, _req, res) {
+        try {
+            const { userId, groupId, memberId, taskId, title, detail, status } = body || {};
+            if (!userId)
+                throw new common_1.HttpException('userId 必填', common_1.HttpStatus.BAD_REQUEST);
+            if (!groupId)
+                throw new common_1.HttpException('groupId 必填', common_1.HttpStatus.BAD_REQUEST);
+            if (!memberId)
+                throw new common_1.HttpException('memberId 必填', common_1.HttpStatus.BAD_REQUEST);
+            if (!taskId)
+                throw new common_1.HttpException('taskId 必填', common_1.HttpStatus.BAD_REQUEST);
+            const fakeReq = {
+                user: { id: userId, role: 'visitor' },
+                header: (name) => _req.header(name),
+                headers: _req.headers,
+                connection: _req.connection,
+                socket: _req.socket,
+                ip: _req.ip,
+            };
+            const result = await this.chatGroupService.updateTask({ groupId, userId: memberId, taskId, title, detail, status }, fakeReq);
+            return res.status(200).json({ success: true, data: result });
+        }
+        catch (e) {
+            const status = e instanceof common_1.HttpException ? e.getStatus() : common_1.HttpStatus.INTERNAL_SERVER_ERROR;
+            const message = e?.message || '更新任务失败';
+            return res.status(status).json({ success: false, message });
+        }
+    }
+};
+exports.OpenChatGroupController = OpenChatGroupController;
+__decorate([
+    (0, common_1.Post)('create'),
+    (0, swagger_1.ApiOperation)({ summary: '【开放】创建对话组（无鉴权，需显式传 userId）' }),
+    (0, swagger_1.ApiBody)({
+        schema: {
+            type: 'object',
+            properties: {
+                userId: { type: 'number', description: '外部用户ID（任意数字即可，用于区分不同用户会话）' },
+                appId: { type: 'number', description: '应用ID（可选）' },
+                modelConfig: {
+                    type: 'object',
+                    description: '对话模型配置项（可选，不传则使用默认配置）',
+                },
+                params: { type: 'string', description: '对话组参数序列化的字符串（可选）' },
+            },
+            required: ['userId'],
+        },
+        examples: {
+            basic: {
+                summary: '创建基础对话组',
+                value: {
+                    userId: 1001,
+                },
+            },
+            withApp: {
+                summary: '创建带角色的对话组',
+                value: {
+                    userId: 1001,
+                    appId: 123,
+                },
+            },
+        },
+    }),
+    __param(0, (0, common_1.Body)()),
+    __param(1, (0, common_1.Req)()),
+    __param(2, (0, common_1.Res)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object, typeof (_b = typeof express_1.Request !== "undefined" && express_1.Request) === "function" ? _b : Object, typeof (_c = typeof express_1.Response !== "undefined" && express_1.Response) === "function" ? _c : Object]),
+    __metadata("design:returntype", Promise)
+], OpenChatGroupController.prototype, "create", null);
+__decorate([
+    (0, common_1.Post)('query'),
+    (0, swagger_1.ApiOperation)({ summary: '【开放】查询对话组列表（无鉴权，需显式传 userId）' }),
+    (0, swagger_1.ApiBody)({
+        schema: {
+            type: 'object',
+            properties: {
+                userId: { type: 'number', description: '外部用户ID（任意数字即可，用于区分不同用户会话）' },
+            },
+            required: ['userId'],
+        },
+        examples: {
+            basic: {
+                summary: '查询对话组列表',
+                value: {
+                    userId: 1001,
+                },
+            },
+        },
+    }),
+    __param(0, (0, common_1.Body)()),
+    __param(1, (0, common_1.Req)()),
+    __param(2, (0, common_1.Res)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object, typeof (_d = typeof express_1.Request !== "undefined" && express_1.Request) === "function" ? _d : Object, typeof (_e = typeof express_1.Response !== "undefined" && express_1.Response) === "function" ? _e : Object]),
+    __metadata("design:returntype", Promise)
+], OpenChatGroupController.prototype, "query", null);
+__decorate([
+    (0, common_1.Post)('del'),
+    (0, swagger_1.ApiOperation)({ summary: '【开放】删除对话组（无鉴权，需显式传 userId）' }),
+    (0, swagger_1.ApiBody)({
+        schema: {
+            type: 'object',
+            properties: {
+                userId: { type: 'number', description: '外部用户ID（任意数字即可，用于区分不同用户会话）' },
+                groupId: { type: 'number', description: '对话分组ID' },
+            },
+            required: ['userId', 'groupId'],
+        },
+        examples: {
+            basic: {
+                summary: '删除对话组',
+                value: {
+                    userId: 1001,
+                    groupId: 123,
+                },
+            },
+        },
+    }),
+    __param(0, (0, common_1.Body)()),
+    __param(1, (0, common_1.Req)()),
+    __param(2, (0, common_1.Res)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object, typeof (_f = typeof express_1.Request !== "undefined" && express_1.Request) === "function" ? _f : Object, typeof (_g = typeof express_1.Response !== "undefined" && express_1.Response) === "function" ? _g : Object]),
+    __metadata("design:returntype", Promise)
+], OpenChatGroupController.prototype, "del", null);
+__decorate([
+    (0, common_1.Post)('delAll'),
+    (0, swagger_1.ApiOperation)({ summary: '【开放】删除所有非置顶对话组（无鉴权，需显式传 userId）' }),
+    (0, swagger_1.ApiBody)({
+        schema: {
+            type: 'object',
+            properties: {
+                userId: { type: 'number', description: '外部用户ID（任意数字即可，用于区分不同用户会话）' },
+            },
+            required: ['userId'],
+        },
+        examples: {
+            basic: {
+                summary: '删除所有非置顶对话组',
+                value: {
+                    userId: 1001,
+                },
+            },
+        },
+    }),
+    __param(0, (0, common_1.Body)()),
+    __param(1, (0, common_1.Req)()),
+    __param(2, (0, common_1.Res)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object, typeof (_h = typeof express_1.Request !== "undefined" && express_1.Request) === "function" ? _h : Object, typeof (_j = typeof express_1.Response !== "undefined" && express_1.Response) === "function" ? _j : Object]),
+    __metadata("design:returntype", Promise)
+], OpenChatGroupController.prototype, "delAll", null);
+__decorate([
+    (0, common_1.Post)('update'),
+    (0, swagger_1.ApiOperation)({ summary: '【开放】更新对话组（无鉴权，需显式传 userId）' }),
+    (0, swagger_1.ApiBody)({
+        schema: {
+            type: 'object',
+            properties: {
+                userId: { type: 'number', description: '外部用户ID（任意数字即可，用于区分不同用户会话）' },
+                groupId: { type: 'number', description: '对话分组ID' },
+                title: { type: 'string', description: '对话组标题（可选）' },
+                isSticky: { type: 'boolean', description: '是否置顶（可选）' },
+                config: { type: 'string', description: '配置JSON字符串（可选）' },
+                fileUrl: { type: 'string', description: '文件链接（可选）' },
+            },
+            required: ['userId', 'groupId'],
+        },
+        examples: {
+            updateTitle: {
+                summary: '更新对话组标题',
+                value: {
+                    userId: 1001,
+                    groupId: 123,
+                    title: '新标题',
+                },
+            },
+            updateSticky: {
+                summary: '置顶对话组',
+                value: {
+                    userId: 1001,
+                    groupId: 123,
+                    isSticky: true,
+                },
+            },
+        },
+    }),
+    __param(0, (0, common_1.Body)()),
+    __param(1, (0, common_1.Req)()),
+    __param(2, (0, common_1.Res)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object, typeof (_k = typeof express_1.Request !== "undefined" && express_1.Request) === "function" ? _k : Object, typeof (_l = typeof express_1.Response !== "undefined" && express_1.Response) === "function" ? _l : Object]),
+    __metadata("design:returntype", Promise)
+], OpenChatGroupController.prototype, "update", null);
+__decorate([
+    (0, common_1.Post)('members/add'),
+    (0, swagger_1.ApiOperation)({ summary: '【开放】批量新增群组成员（无鉴权，需显式传 userId）' }),
+    (0, swagger_1.ApiBody)({
+        schema: {
+            type: 'object',
+            properties: {
+                userId: { type: 'number', description: '外部用户ID（任意数字即可，用于区分不同用户会话）' },
+                groupId: { type: 'number', description: '对话分组ID' },
+                members: {
+                    type: 'array',
+                    description: '成员列表（数组），一次可添加多个成员',
+                    items: {
+                        type: 'object',
+                        properties: {
+                            appId: { type: 'number', description: '角色应用ID（必填，将作为成员标识）' },
+                            order: { type: 'number', description: '发言顺序（必填，数字越小越靠前）' },
+                            role: { type: 'string', description: '成员角色（必填，如 member, leader 等）' },
+                            taskDetail: { type: 'string', description: '任务描述（可选，如：完成需求分析文档）' },
+                        },
+                        required: ['appId', 'order', 'role'],
+                    },
+                },
+            },
+            required: ['userId', 'groupId', 'members'],
+        },
+        examples: {
+            basic: {
+                summary: '批量添加成员（不带任务）',
+                value: {
+                    userId: 1001,
+                    groupId: 123,
+                    members: [
+                        {
+                            appId: 456,
+                            order: 1,
+                            role: 'leader',
+                        },
+                        {
+                            appId: 457,
+                            order: 2,
+                            role: 'member',
+                        },
+                    ],
+                },
+            },
+            withTasks: {
+                summary: '批量添加成员（带任务）',
+                value: {
+                    userId: 1001,
+                    groupId: 123,
+                    members: [
+                        {
+                            appId: 456,
+                            order: 1,
+                            role: 'leader',
+                            taskDetail: '完成需求分析文档',
+                        },
+                        {
+                            appId: 457,
+                            order: 2,
+                            role: 'member',
+                            taskDetail: '设计系统架构',
+                        },
+                        {
+                            appId: 458,
+                            order: 3,
+                            role: 'member',
+                            taskDetail: '实现核心功能',
+                        },
+                    ],
+                },
+            },
+        },
+    }),
+    __param(0, (0, common_1.Body)()),
+    __param(1, (0, common_1.Req)()),
+    __param(2, (0, common_1.Res)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object, typeof (_m = typeof express_1.Request !== "undefined" && express_1.Request) === "function" ? _m : Object, typeof (_o = typeof express_1.Response !== "undefined" && express_1.Response) === "function" ? _o : Object]),
+    __metadata("design:returntype", Promise)
+], OpenChatGroupController.prototype, "addMembers", null);
+__decorate([
+    (0, common_1.Post)('members/remove'),
+    (0, swagger_1.ApiOperation)({ summary: '【开放】群组移除成员（无鉴权，需显式传 userId）' }),
+    (0, swagger_1.ApiBody)({
+        schema: {
+            type: 'object',
+            properties: {
+                userId: { type: 'number', description: '外部用户ID（任意数字即可，用于区分不同用户会话）' },
+                groupId: { type: 'number', description: '对话分组ID' },
+                memberId: { type: 'number', description: '要移除的成员ID' },
+            },
+            required: ['userId', 'groupId', 'memberId'],
+        },
+        examples: {
+            basic: {
+                summary: '移除成员',
+                value: {
+                    userId: 1001,
+                    groupId: 123,
+                    memberId: 456,
+                },
+            },
+        },
+    }),
+    __param(0, (0, common_1.Body)()),
+    __param(1, (0, common_1.Req)()),
+    __param(2, (0, common_1.Res)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object, typeof (_p = typeof express_1.Request !== "undefined" && express_1.Request) === "function" ? _p : Object, typeof (_q = typeof express_1.Response !== "undefined" && express_1.Response) === "function" ? _q : Object]),
+    __metadata("design:returntype", Promise)
+], OpenChatGroupController.prototype, "removeMember", null);
+__decorate([
+    (0, common_1.Post)('members/list'),
+    (0, swagger_1.ApiOperation)({ summary: '【开放】群组成员列表（无鉴权，需显式传 userId）' }),
+    (0, swagger_1.ApiBody)({
+        schema: {
+            type: 'object',
+            properties: {
+                userId: { type: 'number', description: '外部用户ID（任意数字即可，用于区分不同用户会话）' },
+                groupId: { type: 'number', description: '对话分组ID' },
+            },
+            required: ['userId', 'groupId'],
+        },
+        examples: {
+            basic: {
+                summary: '获取成员列表',
+                value: {
+                    userId: 1001,
+                    groupId: 123,
+                },
+            },
+        },
+    }),
+    __param(0, (0, common_1.Body)()),
+    __param(1, (0, common_1.Req)()),
+    __param(2, (0, common_1.Res)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object, typeof (_r = typeof express_1.Request !== "undefined" && express_1.Request) === "function" ? _r : Object, typeof (_s = typeof express_1.Response !== "undefined" && express_1.Response) === "function" ? _s : Object]),
+    __metadata("design:returntype", Promise)
+], OpenChatGroupController.prototype, "listMembers", null);
+__decorate([
+    (0, common_1.Post)('members/update'),
+    (0, swagger_1.ApiOperation)({ summary: '【开放】更新群员信息（无鉴权，需显式传 userId）' }),
+    (0, swagger_1.ApiBody)({
+        schema: {
+            type: 'object',
+            properties: {
+                userId: { type: 'number', description: '外部用户ID（任意数字即可，用于区分不同用户会话）' },
+                groupId: { type: 'number', description: '对话分组ID' },
+                memberId: { type: 'number', description: '要更新的成员ID' },
+                name: { type: 'string', description: '成员昵称（可选）' },
+                role: { type: 'string', description: '成员角色（可选）' },
+                order: { type: 'number', description: '成员排序（可选）' },
+                appId: { type: 'number', description: '关联的应用ID（可选）' },
+                appName: { type: 'string', description: '应用名称（可选）' },
+            },
+            required: ['userId', 'groupId', 'memberId'],
+        },
+        examples: {
+            basic: {
+                summary: '更新成员信息',
+                value: {
+                    userId: 1001,
+                    groupId: 123,
+                    memberId: 456,
+                    name: '新昵称',
+                    role: 'leader',
+                    order: 1,
+                },
+            },
+        },
+    }),
+    __param(0, (0, common_1.Body)()),
+    __param(1, (0, common_1.Req)()),
+    __param(2, (0, common_1.Res)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object, typeof (_t = typeof express_1.Request !== "undefined" && express_1.Request) === "function" ? _t : Object, typeof (_u = typeof express_1.Response !== "undefined" && express_1.Response) === "function" ? _u : Object]),
+    __metadata("design:returntype", Promise)
+], OpenChatGroupController.prototype, "updateMember", null);
+__decorate([
+    (0, common_1.Post)('task/assign'),
+    (0, swagger_1.ApiOperation)({ summary: '【开放】为成员分配任务（无鉴权，需显式传 userId）' }),
+    (0, swagger_1.ApiBody)({
+        schema: {
+            type: 'object',
+            properties: {
+                userId: { type: 'number', description: '外部用户ID（任意数字即可，用于区分不同用户会话）' },
+                groupId: { type: 'number', description: '对话分组ID' },
+                memberId: { type: 'number', description: '成员ID' },
+                title: { type: 'string', description: '任务标题' },
+                detail: { type: 'string', description: '任务详情（可选）' },
+                status: { type: 'string', description: '任务状态（可选，如 todo, doing, done）' },
+            },
+            required: ['userId', 'groupId', 'memberId', 'title'],
+        },
+        examples: {
+            basic: {
+                summary: '分配任务',
+                value: {
+                    userId: 1001,
+                    groupId: 123,
+                    memberId: 456,
+                    title: '完成需求分析',
+                    detail: '分析用户需求并输出文档',
+                    status: 'todo',
+                },
+            },
+        },
+    }),
+    __param(0, (0, common_1.Body)()),
+    __param(1, (0, common_1.Req)()),
+    __param(2, (0, common_1.Res)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object, typeof (_v = typeof express_1.Request !== "undefined" && express_1.Request) === "function" ? _v : Object, typeof (_w = typeof express_1.Response !== "undefined" && express_1.Response) === "function" ? _w : Object]),
+    __metadata("design:returntype", Promise)
+], OpenChatGroupController.prototype, "assignTask", null);
+__decorate([
+    (0, common_1.Post)('task/update'),
+    (0, swagger_1.ApiOperation)({ summary: '【开放】更新成员任务（无鉴权，需显式传 userId）' }),
+    (0, swagger_1.ApiBody)({
+        schema: {
+            type: 'object',
+            properties: {
+                userId: { type: 'number', description: '外部用户ID（任意数字即可，用于区分不同用户会话）' },
+                groupId: { type: 'number', description: '对话分组ID' },
+                memberId: { type: 'number', description: '成员ID' },
+                taskId: { type: 'string', description: '任务ID' },
+                title: { type: 'string', description: '任务标题（可选）' },
+                detail: { type: 'string', description: '任务详情（可选）' },
+                status: { type: 'string', description: '任务状态（可选）' },
+            },
+            required: ['userId', 'groupId', 'memberId', 'taskId'],
+        },
+        examples: {
+            basic: {
+                summary: '更新任务状态',
+                value: {
+                    userId: 1001,
+                    groupId: 123,
+                    memberId: 456,
+                    taskId: '1234567890_abc123',
+                    status: 'done',
+                },
+            },
+        },
+    }),
+    __param(0, (0, common_1.Body)()),
+    __param(1, (0, common_1.Req)()),
+    __param(2, (0, common_1.Res)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object, typeof (_x = typeof express_1.Request !== "undefined" && express_1.Request) === "function" ? _x : Object, typeof (_y = typeof express_1.Response !== "undefined" && express_1.Response) === "function" ? _y : Object]),
+    __metadata("design:returntype", Promise)
+], OpenChatGroupController.prototype, "updateTask", null);
+exports.OpenChatGroupController = OpenChatGroupController = __decorate([
+    (0, swagger_1.ApiTags)('open-chatGroup'),
+    (0, common_1.Controller)('open/group'),
+    __metadata("design:paramtypes", [typeof (_a = typeof chatGroup_service_1.ChatGroupService !== "undefined" && chatGroup_service_1.ChatGroupService) === "function" ? _a : Object])
+], OpenChatGroupController);
+
+
+/***/ }),
+/* 208 */
+/***/ (function(__unused_webpack_module, exports, __webpack_require__) {
+
+
+var __decorate = (this && this.__decorate) || function (decorators, target, key, desc) {
+    var c = arguments.length, r = c < 3 ? target : desc === null ? desc = Object.getOwnPropertyDescriptor(target, key) : desc, d;
+    if (typeof Reflect === "object" && typeof Reflect.decorate === "function") r = Reflect.decorate(decorators, target, key, desc);
+    else for (var i = decorators.length - 1; i >= 0; i--) if (d = decorators[i]) r = (c < 3 ? d(r) : c > 3 ? d(target, key, r) : d(target, key)) || r;
+    return c > 3 && r && Object.defineProperty(target, key, r), r;
+};
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.ChatLogModule = void 0;
 const common_1 = __webpack_require__(2);
 const typeorm_1 = __webpack_require__(33);
 const chatGroup_entity_1 = __webpack_require__(96);
 const user_entity_1 = __webpack_require__(97);
-const chatLog_controller_1 = __webpack_require__(208);
+const chatLog_controller_1 = __webpack_require__(209);
 const chatLog_entity_1 = __webpack_require__(72);
 const chatLog_service_1 = __webpack_require__(170);
-const open_chatLog_controller_1 = __webpack_require__(218);
+const open_chatLog_controller_1 = __webpack_require__(219);
 let ChatLogModule = class ChatLogModule {
 };
 exports.ChatLogModule = ChatLogModule;
@@ -19513,7 +20472,7 @@ exports.ChatLogModule = ChatLogModule = __decorate([
 
 
 /***/ }),
-/* 208 */
+/* 209 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
@@ -19539,15 +20498,15 @@ const common_1 = __webpack_require__(2);
 const swagger_1 = __webpack_require__(14);
 const express_1 = __webpack_require__(113);
 const chatLog_service_1 = __webpack_require__(170);
-const chatList_dto_1 = __webpack_require__(209);
-const del_dto_1 = __webpack_require__(210);
-const delByGroup_dto_1 = __webpack_require__(211);
-const exportExcelChatlog_dto_1 = __webpack_require__(212);
-const queryAllChatLog_dto_1 = __webpack_require__(213);
-const queryByAppId_dto_1 = __webpack_require__(214);
-const queryMyChatLog_dto_1 = __webpack_require__(215);
-const querySingleChat_dto_1 = __webpack_require__(216);
-const recDrawImg_dto_1 = __webpack_require__(217);
+const chatList_dto_1 = __webpack_require__(210);
+const del_dto_1 = __webpack_require__(211);
+const delByGroup_dto_1 = __webpack_require__(212);
+const exportExcelChatlog_dto_1 = __webpack_require__(213);
+const queryAllChatLog_dto_1 = __webpack_require__(214);
+const queryByAppId_dto_1 = __webpack_require__(215);
+const queryMyChatLog_dto_1 = __webpack_require__(216);
+const querySingleChat_dto_1 = __webpack_require__(217);
+const recDrawImg_dto_1 = __webpack_require__(218);
 let ChatLogController = class ChatLogController {
     chatLogService;
     constructor(chatLogService) {
@@ -19701,7 +20660,7 @@ exports.ChatLogController = ChatLogController = __decorate([
 
 
 /***/ }),
-/* 209 */
+/* 210 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
@@ -19730,7 +20689,7 @@ __decorate([
 
 
 /***/ }),
-/* 210 */
+/* 211 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
@@ -19757,7 +20716,7 @@ __decorate([
 
 
 /***/ }),
-/* 211 */
+/* 212 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
@@ -19784,7 +20743,7 @@ __decorate([
 
 
 /***/ }),
-/* 212 */
+/* 213 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
@@ -19839,7 +20798,7 @@ __decorate([
 
 
 /***/ }),
-/* 213 */
+/* 214 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
@@ -19907,7 +20866,7 @@ __decorate([
 
 
 /***/ }),
-/* 214 */
+/* 215 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
@@ -19948,7 +20907,7 @@ __decorate([
 
 
 /***/ }),
-/* 215 */
+/* 216 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
@@ -19977,7 +20936,7 @@ __decorate([
 
 
 /***/ }),
-/* 216 */
+/* 217 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
@@ -20006,7 +20965,7 @@ __decorate([
 
 
 /***/ }),
-/* 217 */
+/* 218 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
@@ -20033,7 +20992,7 @@ __decorate([
 
 
 /***/ }),
-/* 218 */
+/* 219 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
@@ -20148,7 +21107,7 @@ exports.OpenChatLogController = OpenChatLogController = __decorate([
 
 
 /***/ }),
-/* 219 */
+/* 220 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
@@ -20171,9 +21130,9 @@ const balance_entity_1 = __webpack_require__(94);
 const fingerprint_entity_1 = __webpack_require__(98);
 const userBalance_entity_1 = __webpack_require__(95);
 const userBalance_service_1 = __webpack_require__(91);
-const crami_controller_1 = __webpack_require__(220);
-const crami_entity_1 = __webpack_require__(222);
-const crami_service_1 = __webpack_require__(221);
+const crami_controller_1 = __webpack_require__(221);
+const crami_entity_1 = __webpack_require__(223);
+const crami_service_1 = __webpack_require__(222);
 const cramiPackage_entity_1 = __webpack_require__(92);
 let CramiModule = class CramiModule {
 };
@@ -20203,7 +21162,7 @@ exports.CramiModule = CramiModule = __decorate([
 
 
 /***/ }),
-/* 220 */
+/* 221 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
@@ -20228,15 +21187,15 @@ const superAuth_guard_1 = __webpack_require__(112);
 const common_1 = __webpack_require__(2);
 const swagger_1 = __webpack_require__(14);
 const express_1 = __webpack_require__(113);
-const crami_service_1 = __webpack_require__(221);
-const batchDelCrami_dto_1 = __webpack_require__(223);
-const createCrami_dto_1 = __webpack_require__(224);
-const createPackage_dto_1 = __webpack_require__(225);
-const deletePackage_dto_1 = __webpack_require__(226);
-const queryAllCrami_dto_1 = __webpack_require__(227);
-const queryAllPackage_dto_1 = __webpack_require__(228);
-const updatePackage_dto_1 = __webpack_require__(229);
-const useCrami_dto_1 = __webpack_require__(230);
+const crami_service_1 = __webpack_require__(222);
+const batchDelCrami_dto_1 = __webpack_require__(224);
+const createCrami_dto_1 = __webpack_require__(225);
+const createPackage_dto_1 = __webpack_require__(226);
+const deletePackage_dto_1 = __webpack_require__(227);
+const queryAllCrami_dto_1 = __webpack_require__(228);
+const queryAllPackage_dto_1 = __webpack_require__(229);
+const updatePackage_dto_1 = __webpack_require__(230);
+const useCrami_dto_1 = __webpack_require__(231);
 let CramiController = class CramiController {
     cramiService;
     constructor(cramiService) {
@@ -20380,7 +21339,7 @@ exports.CramiController = CramiController = __decorate([
 
 
 /***/ }),
-/* 221 */
+/* 222 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
@@ -20406,7 +21365,7 @@ const typeorm_1 = __webpack_require__(33);
 const typeorm_2 = __webpack_require__(3);
 const user_entity_1 = __webpack_require__(97);
 const userBalance_service_1 = __webpack_require__(91);
-const crami_entity_1 = __webpack_require__(222);
+const crami_entity_1 = __webpack_require__(223);
 const cramiPackage_entity_1 = __webpack_require__(92);
 let CramiService = class CramiService {
     cramiEntity;
@@ -20624,7 +21583,7 @@ exports.CramiService = CramiService = __decorate([
 
 
 /***/ }),
-/* 222 */
+/* 223 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
@@ -20709,7 +21668,7 @@ exports.CramiEntity = CramiEntity = __decorate([
 
 
 /***/ }),
-/* 223 */
+/* 224 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
@@ -20739,7 +21698,7 @@ __decorate([
 
 
 /***/ }),
-/* 224 */
+/* 225 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
@@ -20799,7 +21758,7 @@ __decorate([
 
 
 /***/ }),
-/* 225 */
+/* 226 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
@@ -20920,7 +21879,7 @@ __decorate([
 
 
 /***/ }),
-/* 226 */
+/* 227 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
@@ -20949,7 +21908,7 @@ __decorate([
 
 
 /***/ }),
-/* 227 */
+/* 228 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
@@ -21000,7 +21959,7 @@ __decorate([
 
 
 /***/ }),
-/* 228 */
+/* 229 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
@@ -21061,7 +22020,7 @@ __decorate([
 
 
 /***/ }),
-/* 229 */
+/* 230 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
@@ -21078,7 +22037,7 @@ Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.UpdatePackageDto = void 0;
 const class_validator_1 = __webpack_require__(106);
 const swagger_1 = __webpack_require__(14);
-const createPackage_dto_1 = __webpack_require__(225);
+const createPackage_dto_1 = __webpack_require__(226);
 class UpdatePackageDto extends createPackage_dto_1.CreatePackageDto {
     id;
 }
@@ -21091,7 +22050,7 @@ __decorate([
 
 
 /***/ }),
-/* 230 */
+/* 231 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
@@ -21124,7 +22083,7 @@ __decorate([
 
 
 /***/ }),
-/* 231 */
+/* 232 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
@@ -21144,7 +22103,7 @@ exports.DatabaseModule = void 0;
 const common_1 = __webpack_require__(2);
 const typeorm_1 = __webpack_require__(33);
 const typeorm_2 = __webpack_require__(3);
-const database_service_1 = __webpack_require__(232);
+const database_service_1 = __webpack_require__(233);
 const affection_entity_1 = __webpack_require__(103);
 const app_entity_1 = __webpack_require__(115);
 const appCats_entity_1 = __webpack_require__(116);
@@ -21158,14 +22117,14 @@ const violationLog_entity_1 = __webpack_require__(157);
 const chatGroup_entity_1 = __webpack_require__(96);
 const chatLog_entity_1 = __webpack_require__(72);
 const conversationSummary_entity_1 = __webpack_require__(196);
-const crami_entity_1 = __webpack_require__(222);
+const crami_entity_1 = __webpack_require__(223);
 const cramiPackage_entity_1 = __webpack_require__(92);
 const config_entity_1 = __webpack_require__(77);
 const models_entity_1 = __webpack_require__(76);
-const order_entity_1 = __webpack_require__(233);
+const order_entity_1 = __webpack_require__(234);
 const plugin_entity_1 = __webpack_require__(172);
-const share_entity_1 = __webpack_require__(234);
-const signIn_entity_1 = __webpack_require__(235);
+const share_entity_1 = __webpack_require__(235);
+const signIn_entity_1 = __webpack_require__(236);
 const user_entity_1 = __webpack_require__(97);
 const accountLog_entity_1 = __webpack_require__(93);
 const balance_entity_1 = __webpack_require__(94);
@@ -21267,7 +22226,7 @@ exports.DatabaseModule = DatabaseModule = DatabaseModule_1 = __decorate([
 
 
 /***/ }),
-/* 232 */
+/* 233 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
@@ -21452,7 +22411,7 @@ exports.DatabaseService = DatabaseService = __decorate([
 
 
 /***/ }),
-/* 233 */
+/* 234 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
@@ -21546,7 +22505,7 @@ exports.OrderEntity = OrderEntity = __decorate([
 
 
 /***/ }),
-/* 234 */
+/* 235 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
@@ -21592,7 +22551,7 @@ exports.Share = Share = __decorate([
 
 
 /***/ }),
-/* 235 */
+/* 236 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
@@ -21639,7 +22598,7 @@ exports.SigninEntity = SigninEntity = __decorate([
 
 
 /***/ }),
-/* 236 */
+/* 237 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
@@ -21652,7 +22611,7 @@ var __decorate = (this && this.__decorate) || function (decorators, target, key,
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.ModelsModule = void 0;
 const common_1 = __webpack_require__(2);
-const models_controller_1 = __webpack_require__(237);
+const models_controller_1 = __webpack_require__(238);
 const models_service_1 = __webpack_require__(74);
 const typeorm_1 = __webpack_require__(33);
 const models_entity_1 = __webpack_require__(76);
@@ -21671,7 +22630,7 @@ exports.ModelsModule = ModelsModule = __decorate([
 
 
 /***/ }),
-/* 237 */
+/* 238 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
@@ -21694,10 +22653,10 @@ const adminAuth_guard_1 = __webpack_require__(111);
 const superAuth_guard_1 = __webpack_require__(112);
 const common_1 = __webpack_require__(2);
 const swagger_1 = __webpack_require__(14);
-const queryModel_dto_1 = __webpack_require__(238);
-const queryModelType_dto_1 = __webpack_require__(239);
-const setModel_dto_1 = __webpack_require__(240);
-const setModelType_dto_1 = __webpack_require__(241);
+const queryModel_dto_1 = __webpack_require__(239);
+const queryModelType_dto_1 = __webpack_require__(240);
+const setModel_dto_1 = __webpack_require__(241);
+const setModelType_dto_1 = __webpack_require__(242);
 const models_service_1 = __webpack_require__(74);
 let ModelsController = class ModelsController {
     modelsService;
@@ -21811,7 +22770,7 @@ exports.ModelsController = ModelsController = __decorate([
 
 
 /***/ }),
-/* 238 */
+/* 239 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
@@ -21875,7 +22834,7 @@ __decorate([
 
 
 /***/ }),
-/* 239 */
+/* 240 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
@@ -21921,7 +22880,7 @@ __decorate([
 
 
 /***/ }),
-/* 240 */
+/* 241 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
@@ -22074,7 +23033,7 @@ __decorate([
 
 
 /***/ }),
-/* 241 */
+/* 242 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
@@ -22215,7 +23174,7 @@ __decorate([
 
 
 /***/ }),
-/* 242 */
+/* 243 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
@@ -22228,8 +23187,8 @@ var __decorate = (this && this.__decorate) || function (decorators, target, key,
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.OfficialModule = void 0;
 const common_1 = __webpack_require__(2);
-const official_controller_1 = __webpack_require__(243);
-const official_service_1 = __webpack_require__(246);
+const official_controller_1 = __webpack_require__(244);
+const official_service_1 = __webpack_require__(247);
 let OfficialModule = class OfficialModule {
 };
 exports.OfficialModule = OfficialModule;
@@ -22244,7 +23203,7 @@ exports.OfficialModule = OfficialModule = __decorate([
 
 
 /***/ }),
-/* 243 */
+/* 244 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
@@ -22269,9 +23228,9 @@ const utils_1 = __webpack_require__(37);
 const common_1 = __webpack_require__(2);
 const swagger_1 = __webpack_require__(14);
 const express_1 = __webpack_require__(113);
-const createMenu_dto_1 = __webpack_require__(244);
-const getQrCode_dto_1 = __webpack_require__(245);
-const official_service_1 = __webpack_require__(246);
+const createMenu_dto_1 = __webpack_require__(245);
+const getQrCode_dto_1 = __webpack_require__(246);
+const official_service_1 = __webpack_require__(247);
 let OfficialController = class OfficialController {
     officialService;
     constructor(officialService) {
@@ -22623,7 +23582,7 @@ exports.OfficialController = OfficialController = __decorate([
 
 
 /***/ }),
-/* 244 */
+/* 245 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
@@ -22759,7 +23718,7 @@ __decorate([
 
 
 /***/ }),
-/* 245 */
+/* 246 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
@@ -22792,7 +23751,7 @@ __decorate([
 
 
 /***/ }),
-/* 246 */
+/* 247 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
@@ -23222,7 +24181,7 @@ exports.OfficialService = OfficialService = __decorate([
 
 
 /***/ }),
-/* 247 */
+/* 248 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
@@ -23236,9 +24195,9 @@ Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.OrderModule = void 0;
 const cramiPackage_entity_1 = __webpack_require__(92);
 const common_1 = __webpack_require__(2);
-const order_controller_1 = __webpack_require__(248);
-const order_service_1 = __webpack_require__(249);
-const order_entity_1 = __webpack_require__(233);
+const order_controller_1 = __webpack_require__(249);
+const order_service_1 = __webpack_require__(250);
+const order_entity_1 = __webpack_require__(234);
 const typeorm_1 = __webpack_require__(33);
 const user_entity_1 = __webpack_require__(97);
 let OrderModule = class OrderModule {
@@ -23254,7 +24213,7 @@ exports.OrderModule = OrderModule = __decorate([
 
 
 /***/ }),
-/* 248 */
+/* 249 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
@@ -23277,12 +24236,12 @@ const superAuth_guard_1 = __webpack_require__(112);
 const jwtAuth_guard_1 = __webpack_require__(35);
 const common_1 = __webpack_require__(2);
 const swagger_1 = __webpack_require__(14);
-const order_service_1 = __webpack_require__(249);
+const order_service_1 = __webpack_require__(250);
 const express_1 = __webpack_require__(113);
-const buy_dto_1 = __webpack_require__(251);
-const queryByOrder_dto_1 = __webpack_require__(252);
+const buy_dto_1 = __webpack_require__(252);
+const queryByOrder_dto_1 = __webpack_require__(253);
 const adminAuth_guard_1 = __webpack_require__(111);
-const queryAllOrder_dto_1 = __webpack_require__(253);
+const queryAllOrder_dto_1 = __webpack_require__(254);
 let OrderController = class OrderController {
     orderService;
     constructor(orderService) {
@@ -23362,7 +24321,7 @@ exports.OrderController = OrderController = __decorate([
 
 
 /***/ }),
-/* 249 */
+/* 250 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
@@ -23387,9 +24346,9 @@ const typeorm_1 = __webpack_require__(33);
 const typeorm_2 = __webpack_require__(3);
 const cramiPackage_entity_1 = __webpack_require__(92);
 const globalConfig_service_1 = __webpack_require__(36);
-const pay_service_1 = __webpack_require__(250);
+const pay_service_1 = __webpack_require__(251);
 const user_entity_1 = __webpack_require__(97);
-const order_entity_1 = __webpack_require__(233);
+const order_entity_1 = __webpack_require__(234);
 let OrderService = class OrderService {
     orderEntity;
     cramiPackageEntity;
@@ -23524,7 +24483,7 @@ exports.OrderService = OrderService = __decorate([
 
 
 /***/ }),
-/* 250 */
+/* 251 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
@@ -23551,7 +24510,7 @@ const crypto = __webpack_require__(16);
 const typeorm_2 = __webpack_require__(3);
 const cramiPackage_entity_1 = __webpack_require__(92);
 const globalConfig_service_1 = __webpack_require__(36);
-const order_entity_1 = __webpack_require__(233);
+const order_entity_1 = __webpack_require__(234);
 const user_service_1 = __webpack_require__(87);
 const userBalance_service_1 = __webpack_require__(91);
 let PayService = class PayService {
@@ -24246,7 +25205,7 @@ exports.PayService = PayService = __decorate([
 
 
 /***/ }),
-/* 251 */
+/* 252 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
@@ -24283,7 +25242,7 @@ __decorate([
 
 
 /***/ }),
-/* 252 */
+/* 253 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
@@ -24314,7 +25273,7 @@ __decorate([
 
 
 /***/ }),
-/* 253 */
+/* 254 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
@@ -24367,7 +25326,7 @@ __decorate([
 
 
 /***/ }),
-/* 254 */
+/* 255 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
@@ -24380,9 +25339,9 @@ var __decorate = (this && this.__decorate) || function (decorators, target, key,
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.PayModule = void 0;
 const common_1 = __webpack_require__(2);
-const pay_controller_1 = __webpack_require__(255);
-const pay_service_1 = __webpack_require__(250);
-const order_entity_1 = __webpack_require__(233);
+const pay_controller_1 = __webpack_require__(256);
+const pay_service_1 = __webpack_require__(251);
+const order_entity_1 = __webpack_require__(234);
 const cramiPackage_entity_1 = __webpack_require__(92);
 const typeorm_1 = __webpack_require__(33);
 let PayModule = class PayModule {
@@ -24400,7 +25359,7 @@ exports.PayModule = PayModule = __decorate([
 
 
 /***/ }),
-/* 255 */
+/* 256 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
@@ -24421,7 +25380,7 @@ Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.PayController = void 0;
 const common_1 = __webpack_require__(2);
 const swagger_1 = __webpack_require__(14);
-const pay_service_1 = __webpack_require__(250);
+const pay_service_1 = __webpack_require__(251);
 let PayController = class PayController {
     payService;
     constructor(payService) {
@@ -24485,7 +25444,7 @@ exports.PayController = PayController = __decorate([
 
 
 /***/ }),
-/* 256 */
+/* 257 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
@@ -24499,9 +25458,9 @@ Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.PluginModule = void 0;
 const common_1 = __webpack_require__(2);
 const typeorm_1 = __webpack_require__(33);
-const plugin_controller_1 = __webpack_require__(257);
+const plugin_controller_1 = __webpack_require__(258);
 const plugin_entity_1 = __webpack_require__(172);
-const plugin_service_1 = __webpack_require__(258);
+const plugin_service_1 = __webpack_require__(259);
 let PluginModule = class PluginModule {
 };
 exports.PluginModule = PluginModule;
@@ -24515,7 +25474,7 @@ exports.PluginModule = PluginModule = __decorate([
 
 
 /***/ }),
-/* 257 */
+/* 258 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
@@ -24538,7 +25497,7 @@ const superAuth_guard_1 = __webpack_require__(112);
 const common_1 = __webpack_require__(2);
 const swagger_1 = __webpack_require__(14);
 const express_1 = __webpack_require__(113);
-const plugin_service_1 = __webpack_require__(258);
+const plugin_service_1 = __webpack_require__(259);
 let PluginController = class PluginController {
     pluginService;
     constructor(pluginService) {
@@ -24604,7 +25563,7 @@ exports.PluginController = PluginController = __decorate([
 
 
 /***/ }),
-/* 258 */
+/* 259 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
@@ -24734,7 +25693,7 @@ exports.PluginService = PluginService = __decorate([
 
 
 /***/ }),
-/* 259 */
+/* 260 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
@@ -24748,9 +25707,9 @@ Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.ShareModule = void 0;
 const common_1 = __webpack_require__(2);
 const typeorm_1 = __webpack_require__(33);
-const share_controller_1 = __webpack_require__(260);
-const share_entity_1 = __webpack_require__(234);
-const share_service_1 = __webpack_require__(261);
+const share_controller_1 = __webpack_require__(261);
+const share_entity_1 = __webpack_require__(235);
+const share_service_1 = __webpack_require__(262);
 let ShareModule = class ShareModule {
 };
 exports.ShareModule = ShareModule;
@@ -24764,7 +25723,7 @@ exports.ShareModule = ShareModule = __decorate([
 
 
 /***/ }),
-/* 260 */
+/* 261 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
@@ -24786,7 +25745,7 @@ exports.ShareController = void 0;
 const jwtAuth_guard_1 = __webpack_require__(35);
 const common_1 = __webpack_require__(2);
 const swagger_1 = __webpack_require__(14);
-const share_service_1 = __webpack_require__(261);
+const share_service_1 = __webpack_require__(262);
 let ShareController = class ShareController {
     shareService;
     constructor(shareService) {
@@ -24834,7 +25793,7 @@ exports.ShareController = ShareController = __decorate([
 
 
 /***/ }),
-/* 261 */
+/* 262 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
@@ -24857,7 +25816,7 @@ const common_1 = __webpack_require__(2);
 const typeorm_1 = __webpack_require__(33);
 const typeorm_2 = __webpack_require__(3);
 const globalConfig_service_1 = __webpack_require__(36);
-const share_entity_1 = __webpack_require__(234);
+const share_entity_1 = __webpack_require__(235);
 let ShareService = class ShareService {
     shareRepository;
     globalConfigService;
@@ -24913,7 +25872,7 @@ exports.ShareService = ShareService = __decorate([
 
 
 /***/ }),
-/* 262 */
+/* 263 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
@@ -24926,10 +25885,10 @@ var __decorate = (this && this.__decorate) || function (decorators, target, key,
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.SigninModule = void 0;
 const common_1 = __webpack_require__(2);
-const signin_controller_1 = __webpack_require__(263);
-const signin_service_1 = __webpack_require__(264);
+const signin_controller_1 = __webpack_require__(264);
+const signin_service_1 = __webpack_require__(265);
 const typeorm_1 = __webpack_require__(33);
-const signIn_entity_1 = __webpack_require__(235);
+const signIn_entity_1 = __webpack_require__(236);
 const user_entity_1 = __webpack_require__(97);
 let SigninModule = class SigninModule {
 };
@@ -24946,7 +25905,7 @@ exports.SigninModule = SigninModule = __decorate([
 
 
 /***/ }),
-/* 263 */
+/* 264 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
@@ -24966,7 +25925,7 @@ var _a, _b, _c;
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.SigninController = void 0;
 const common_1 = __webpack_require__(2);
-const signin_service_1 = __webpack_require__(264);
+const signin_service_1 = __webpack_require__(265);
 const swagger_1 = __webpack_require__(14);
 const jwtAuth_guard_1 = __webpack_require__(35);
 const express_1 = __webpack_require__(113);
@@ -25011,7 +25970,7 @@ exports.SigninController = SigninController = __decorate([
 
 
 /***/ }),
-/* 264 */
+/* 265 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
@@ -25033,7 +25992,7 @@ exports.SigninService = void 0;
 const globalConfig_service_1 = __webpack_require__(36);
 const userBalance_service_1 = __webpack_require__(91);
 const common_1 = __webpack_require__(2);
-const signIn_entity_1 = __webpack_require__(235);
+const signIn_entity_1 = __webpack_require__(236);
 const typeorm_1 = __webpack_require__(33);
 const typeorm_2 = __webpack_require__(3);
 const date_1 = __webpack_require__(48);
@@ -25146,7 +26105,7 @@ exports.SigninService = SigninService = __decorate([
 
 
 /***/ }),
-/* 265 */
+/* 266 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
@@ -25159,7 +26118,7 @@ var __decorate = (this && this.__decorate) || function (decorators, target, key,
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.SpaModule = void 0;
 const common_1 = __webpack_require__(2);
-const spa_controller_1 = __webpack_require__(266);
+const spa_controller_1 = __webpack_require__(267);
 let SpaModule = class SpaModule {
 };
 exports.SpaModule = SpaModule;
@@ -25171,7 +26130,7 @@ exports.SpaModule = SpaModule = __decorate([
 
 
 /***/ }),
-/* 266 */
+/* 267 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
@@ -25249,7 +26208,7 @@ exports.SpaController = SpaController = SpaController_1 = __decorate([
 
 
 /***/ }),
-/* 267 */
+/* 268 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
@@ -25265,10 +26224,10 @@ const common_1 = __webpack_require__(2);
 const typeorm_1 = __webpack_require__(33);
 const chatLog_entity_1 = __webpack_require__(72);
 const config_entity_1 = __webpack_require__(77);
-const order_entity_1 = __webpack_require__(233);
+const order_entity_1 = __webpack_require__(234);
 const user_entity_1 = __webpack_require__(97);
-const statistic_controller_1 = __webpack_require__(268);
-const statistic_service_1 = __webpack_require__(270);
+const statistic_controller_1 = __webpack_require__(269);
+const statistic_service_1 = __webpack_require__(271);
 let StatisticModule = class StatisticModule {
 };
 exports.StatisticModule = StatisticModule;
@@ -25282,7 +26241,7 @@ exports.StatisticModule = StatisticModule = __decorate([
 
 
 /***/ }),
-/* 268 */
+/* 269 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
@@ -25304,8 +26263,8 @@ exports.StatisticController = void 0;
 const adminAuth_guard_1 = __webpack_require__(111);
 const common_1 = __webpack_require__(2);
 const swagger_1 = __webpack_require__(14);
-const queryStatisticDto_dto_1 = __webpack_require__(269);
-const statistic_service_1 = __webpack_require__(270);
+const queryStatisticDto_dto_1 = __webpack_require__(270);
+const statistic_service_1 = __webpack_require__(271);
 let StatisticController = class StatisticController {
     statisticService;
     constructor(statisticService) {
@@ -25359,7 +26318,7 @@ exports.StatisticController = StatisticController = __decorate([
 
 
 /***/ }),
-/* 269 */
+/* 270 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
@@ -25386,7 +26345,7 @@ __decorate([
 
 
 /***/ }),
-/* 270 */
+/* 271 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
@@ -25414,7 +26373,7 @@ const typeorm_2 = __webpack_require__(3);
 const chatLog_entity_1 = __webpack_require__(72);
 const config_entity_1 = __webpack_require__(77);
 const globalConfig_service_1 = __webpack_require__(36);
-const order_entity_1 = __webpack_require__(233);
+const order_entity_1 = __webpack_require__(234);
 const user_entity_1 = __webpack_require__(97);
 let StatisticService = class StatisticService {
     userEntity;
@@ -25670,7 +26629,7 @@ exports.StatisticService = StatisticService = __decorate([
 
 
 /***/ }),
-/* 271 */
+/* 272 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
@@ -25683,12 +26642,12 @@ var __decorate = (this && this.__decorate) || function (decorators, target, key,
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.TaskModule = void 0;
 const common_1 = __webpack_require__(2);
-const schedule_1 = __webpack_require__(272);
+const schedule_1 = __webpack_require__(273);
 const typeorm_1 = __webpack_require__(33);
 const globalConfig_module_1 = __webpack_require__(181);
-const models_module_1 = __webpack_require__(236);
+const models_module_1 = __webpack_require__(237);
 const userBalance_entity_1 = __webpack_require__(95);
-const task_service_1 = __webpack_require__(273);
+const task_service_1 = __webpack_require__(274);
 let TaskModule = class TaskModule {
 };
 exports.TaskModule = TaskModule;
@@ -25706,13 +26665,13 @@ exports.TaskModule = TaskModule = __decorate([
 
 
 /***/ }),
-/* 272 */
+/* 273 */
 /***/ ((module) => {
 
 module.exports = require("@nestjs/schedule");
 
 /***/ }),
-/* 273 */
+/* 274 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
@@ -25732,7 +26691,7 @@ var _a, _b, _c;
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.TaskService = void 0;
 const common_1 = __webpack_require__(2);
-const schedule_1 = __webpack_require__(272);
+const schedule_1 = __webpack_require__(273);
 const typeorm_1 = __webpack_require__(33);
 const fs = __webpack_require__(18);
 const path = __webpack_require__(20);
@@ -25812,7 +26771,7 @@ exports.TaskService = TaskService = __decorate([
 
 
 /***/ }),
-/* 274 */
+/* 275 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
@@ -25826,7 +26785,7 @@ Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.TestModule = void 0;
 const common_1 = __webpack_require__(2);
 const voice_module_1 = __webpack_require__(180);
-const test_controller_1 = __webpack_require__(275);
+const test_controller_1 = __webpack_require__(276);
 let TestModule = class TestModule {
 };
 exports.TestModule = TestModule;
@@ -25839,7 +26798,7 @@ exports.TestModule = TestModule = __decorate([
 
 
 /***/ }),
-/* 275 */
+/* 276 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
@@ -25988,7 +26947,7 @@ exports.TestController = TestController = TestController_1 = __decorate([
 
 
 /***/ }),
-/* 276 */
+/* 277 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
@@ -26021,7 +26980,7 @@ const verification_service_1 = __webpack_require__(99);
 const accountLog_entity_1 = __webpack_require__(93);
 const balance_entity_1 = __webpack_require__(94);
 const fingerprint_entity_1 = __webpack_require__(98);
-const userBalance_controller_1 = __webpack_require__(277);
+const userBalance_controller_1 = __webpack_require__(278);
 const userBalance_entity_1 = __webpack_require__(95);
 const userBalance_service_1 = __webpack_require__(91);
 let UserBalanceModule = class UserBalanceModule {
@@ -26059,7 +27018,7 @@ exports.UserBalanceModule = UserBalanceModule = __decorate([
 
 
 /***/ }),
-/* 277 */
+/* 278 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
@@ -26166,7 +27125,7 @@ exports.UserBalanceController = UserBalanceController = __decorate([
 
 
 /***/ }),
-/* 278 */
+/* 279 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
@@ -26195,7 +27154,7 @@ exports.VerificationModule = VerificationModule = __decorate([
 
 
 /***/ }),
-/* 279 */
+/* 280 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
@@ -26245,7 +27204,7 @@ exports.AllExceptionsFilter = AllExceptionsFilter = __decorate([
 
 
 /***/ }),
-/* 280 */
+/* 281 */
 /***/ ((__unused_webpack_module, exports, __webpack_require__) => {
 
 
@@ -26253,7 +27212,7 @@ Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.initDatabase = initDatabase;
 const common_1 = __webpack_require__(2);
 const dotenv_1 = __webpack_require__(17);
-const mysql = __webpack_require__(281);
+const mysql = __webpack_require__(282);
 const typeorm_1 = __webpack_require__(3);
 const app_entity_1 = __webpack_require__(115);
 const appCats_entity_1 = __webpack_require__(116);
@@ -26268,14 +27227,14 @@ const badWords_entity_1 = __webpack_require__(156);
 const violationLog_entity_1 = __webpack_require__(157);
 const chatGroup_entity_1 = __webpack_require__(96);
 const chatLog_entity_1 = __webpack_require__(72);
-const crami_entity_1 = __webpack_require__(222);
+const crami_entity_1 = __webpack_require__(223);
 const cramiPackage_entity_1 = __webpack_require__(92);
 const config_entity_1 = __webpack_require__(77);
 const models_entity_1 = __webpack_require__(76);
-const order_entity_1 = __webpack_require__(233);
+const order_entity_1 = __webpack_require__(234);
 const plugin_entity_1 = __webpack_require__(172);
-const share_entity_1 = __webpack_require__(234);
-const signIn_entity_1 = __webpack_require__(235);
+const share_entity_1 = __webpack_require__(235);
+const signIn_entity_1 = __webpack_require__(236);
 const user_entity_1 = __webpack_require__(97);
 const accountLog_entity_1 = __webpack_require__(93);
 const balance_entity_1 = __webpack_require__(94);
@@ -26472,7 +27431,7 @@ async function initDatabase() {
 
 
 /***/ }),
-/* 281 */
+/* 282 */
 /***/ ((module) => {
 
 module.exports = require("mysql2/promise");
@@ -26526,7 +27485,7 @@ const ioredis_1 = __webpack_require__(19);
 const path = __webpack_require__(20);
 __webpack_require__(21);
 const app_module_1 = __webpack_require__(22);
-const allExceptions_filter_1 = __webpack_require__(279);
+const allExceptions_filter_1 = __webpack_require__(280);
 const chat_service_1 = __webpack_require__(164);
 const voice_service_1 = __webpack_require__(190);
 Dotenv.config({ path: '.env' });
@@ -26548,7 +27507,7 @@ function findFilePath(filename) {
 }
 async function bootstrap() {
     console.log('\n======================================');
-    console.log('        99AI 服务启动中...            ');
+    console.log('        AI服务启动中...            ');
     console.log('======================================\n');
     const redis = new ioredis_1.default({
         host: process.env.REDIS_HOST,
@@ -26562,7 +27521,7 @@ async function bootstrap() {
         common_1.Logger.log('Generating and setting new JWT_SECRET');
         await redis.set('JWT_SECRET', jwtSecret);
     }
-    const { initDatabase } = __webpack_require__(280);
+    const { initDatabase } = __webpack_require__(281);
     const app = await core_1.NestFactory.create(app_module_1.AppModule, {
         bufferLogs: true,
         logger: ['log', 'error', 'warn', 'debug', 'verbose'],
@@ -26602,9 +27561,9 @@ async function bootstrap() {
     app.getHttpAdapter().getInstance().set('views', 'templates/pages');
     app.getHttpAdapter().getInstance().set('view engine', 'hbs');
     const swaggerConfig = new swagger_1.DocumentBuilder()
-        .setTitle('99AI 开放 API')
+        .setTitle('AI服务 开放 API')
         .setDescription(`
-# 99AI 服务 API 文档
+# AI服务 API 文档
 
 ## 开放接口说明
 
@@ -26645,6 +27604,7 @@ async function bootstrap() {
         .addTag('open-affection', '【好感度系统】规则查询/维护、用户好感度状态查询')
         .addTag('open-chat', '【对话接口】文字对话、语音对话（ASR+LLM）、TTS 文字转语音（需显式 userId）')
         .addTag('open-chatLog', '【聊天记录】查询对话列表、按应用查询、查询单条消息（需显式 userId）')
+        .addTag('open-chatGroup', '【对话组管理】创建/查询/更新/删除对话组、群聊成员管理、任务分配（需显式 userId）')
         .build();
     const fullDoc = swagger_1.SwaggerModule.createDocument(app, swaggerConfig);
     const responseSchema = {
@@ -27282,9 +28242,9 @@ async function bootstrap() {
                         const abortController = new AbortController();
                         session.llmAbort = abortController;
                         let llmFull = '';
+                        let appInfo = null;
                         try {
                             let rolePrompt = '';
-                            let appInfo = null;
                             if (session.chatConfig?.appId) {
                                 appInfo = await getAppInfo(session.chatConfig.appId);
                             }

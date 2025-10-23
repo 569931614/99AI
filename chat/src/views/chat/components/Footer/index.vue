@@ -453,6 +453,33 @@ const triggerUpload = () => {
   fileInput?.value?.click()
 }
 
+// 触发独立图片上传（用于星尘等不直接支持图片的模型）
+const triggerImageUpload = () => {
+  imageInput?.value?.click()
+}
+
+// 处理拖放图片（用于独立图片按钮）
+const handleImageDrop = async (event: DragEvent) => {
+  event.preventDefault()
+  event.stopPropagation()
+  isDragging.value = false
+  isFileDraggingOverPage.value = false
+
+  const files = event.dataTransfer?.files
+  if (!files || files.length === 0) return
+
+  const imageFiles = Array.from(files).filter(file => file.type.startsWith('image/'))
+
+  if (imageFiles.length === 0) {
+    ms.warning('请拖放图片文件')
+    return
+  }
+
+  for (const file of imageFiles) {
+    await processImageFile(file)
+  }
+}
+
 const fileList = ref<File[]>([]) // 使用 ref 来创建响应式的文件列表
 const dataBase64List = ref<string[]>([]) // 使用 ref 来创建响应式的 Base64 数据列表
 
@@ -582,7 +609,8 @@ const handlePaste = async (event: ClipboardEvent) => {
     if (item.kind === 'file') {
       const file = item.getAsFile()
       if (file) {
-        if (file.type.startsWith('image/') && isImageModel.value) {
+        // 图片文件：即使模型不支持，也允许上传（后端会处理识别）
+        if (file.type.startsWith('image/')) {
           await processImageFile(file)
         } else if (!file.type.startsWith('image/') && isFilesModel.value) {
           await processDocumentFile(file)
@@ -717,9 +745,9 @@ const processImageFile = async (file: File) => {
 
   const savedImageCount = existingFiles.filter(f => f.type === 'image').length
 
-  // 检查图片总数是否超过限制
+  // 检查图片总数是否超过限制（即使模型不支持，也允许上传，后端会用通义千问识别）
   if (currentImageCount + savedImageCount >= 4) {
-    ms.warning('图片数量已达上限')
+    ms.warning('图片数量已达上限（最多4张）')
     return
   }
 
@@ -733,7 +761,7 @@ const processImageFile = async (file: File) => {
       trimmedFileName.substring(0, maxLength - extension.length - 1) + '….' + extension
   }
 
-  // 处理图片文件，支持多图片
+  // 处理图片文件，支持多图片（不再检查isImageModel，允许所有模型上传图片）
   isFile.value = false
   handleSetFile(file)
 }
@@ -748,8 +776,8 @@ const handleFileSelect = async (event: Event) => {
   const imageFiles = Array.from(files).filter(file => file.type.startsWith('image/'))
   const documentFiles = Array.from(files).filter(file => !file.type.startsWith('image/'))
 
-  // 处理图片文件
-  if (imageFiles.length > 0 && isImageModel.value) {
+  // 处理图片文件（即使模型不支持，也允许上传，后端会用通义千问识别）
+  if (imageFiles.length > 0) {
     // 获取当前已有图片数量
     const currentImageCount = fileList.value.filter(f => f.type.startsWith('image/')).length
     // 计算已保存的图片数量
@@ -782,8 +810,6 @@ const handleFileSelect = async (event: Event) => {
     for (const file of imagesToProcess) {
       await processImageFile(file)
     }
-  } else if (imageFiles.length > 0 && !isImageModel.value) {
-    ms.warning('当前模型不支持图片上传')
   }
 
   // 处理文档文件
@@ -1279,25 +1305,15 @@ const handleUnifiedFileDrop = async (event: DragEvent, source: 'button' | 'area'
   const documentFiles = fileArray.filter(file => !file.type.startsWith('image/'))
 
   // 检查文件类型支持情况
-  const canUploadImages = isImageModel.value
   const canUploadDocuments = isFilesModel.value
 
   // 准备处理的文件数组
   const filesToProcess = []
   const unsupportedFiles = []
 
-  // 检查图片文件
+  // 检查图片文件（即使模型不支持，也允许上传，后端会用通义千问识别）
   if (imageFiles.length > 0) {
-    if (canUploadImages) {
-      filesToProcess.push(...imageFiles)
-    } else {
-      unsupportedFiles.push(
-        ...imageFiles.map(f => ({
-          name: f.name,
-          reason: '当前模型不支持图片上传',
-        }))
-      )
-    }
+    filesToProcess.push(...imageFiles)
   }
 
   // 检查文档文件
@@ -1719,6 +1735,42 @@ function toggleRecording() {
                 <div v-if="!isMobile" class="tooltip tooltip-top">{{ uploadButtonTooltip }}</div>
               </div>
 
+              <!-- 独立的图片上传按钮（即使模型不支持也显示，后端会处理识别） -->
+              <div
+                v-if="!showUploadButton && !isUploading"
+                class="group relative"
+                @dragover.prevent="
+                  e => {
+                    e.stopPropagation()
+                    isDragging = true
+                  }
+                "
+                @dragleave.prevent="
+                  e => {
+                    e.stopPropagation()
+                    isDragging = false
+                  }
+                "
+                @drop.prevent="
+                  e => {
+                    e.stopPropagation()
+                    isDragging = false
+                    isFileDraggingOverPage = false
+                    handleImageDrop(e)
+                  }
+                "
+              >
+                <button
+                  type="button"
+                  class="btn-pill mx-1"
+                  @click="triggerImageUpload"
+                  aria-label="上传图片"
+                >
+                  <AddPicture size="15" />
+                </button>
+                <div v-if="!isMobile" class="tooltip tooltip-top">上传图片（使用AI识别）</div>
+              </div>
+
               <LoadingFour
                 v-if="isUploading"
                 size="15"
@@ -1732,6 +1784,7 @@ function toggleRecording() {
                 type="file"
                 accept="image/*"
                 class="hidden"
+                multiple
                 @change="handleImageSelect"
               />
 

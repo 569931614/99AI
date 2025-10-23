@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { fetchQueryAppsAPI } from '@/api/appStore'
+import { fetchChatAPIProcess } from '@/api'
 import {
   fetchGroupAddMemberAPI,
   fetchGroupAssignTaskAPI,
@@ -9,7 +10,7 @@ import {
 } from '@/api/group'
 import { useChatStore, useGlobalStoreWithOut } from '@/store'
 import { message } from '@/utils/message'
-import { computed, onMounted, onUnmounted, ref } from 'vue'
+import { computed, onMounted, onUnmounted, ref, nextTick } from 'vue'
 
 interface Props {
   title?: string
@@ -33,6 +34,15 @@ const addUserOrder = ref<number | null>(null)
 const showInlinePicker = ref(false)
 const picking = ref(false)
 const appOptions = ref<any[]>([])
+
+// 自动对话相关状态
+const isAutoChat = ref(false)
+const autoChatRounds = ref(1)
+
+// Emit 定义（用于关闭面板）
+const emit = defineEmits<{
+  (e: 'close'): void
+}>()
 
 // 编辑群聊信息
 const isEditingGroupInfo = ref(false)
@@ -188,6 +198,178 @@ function pickApp(app: any) {
   addUserName.value = app.name || ''
   showInlinePicker.value = false
 }
+
+// 自动对话功能
+async function startAutoChat() {
+  if (!activeGroupId.value || members.value.length === 0) {
+    ms.warning('请先添加群聊成员')
+    return
+  }
+
+  if (isAutoChat.value) {
+    ms.warning('自动对话正在进行中...')
+    return
+  }
+
+  try {
+    isAutoChat.value = true
+    const sortedMembers = [...members.value].sort((a, b) => (a.order || 999) - (b.order || 999))
+
+    // 关闭群聊设置面板
+    emit('close')
+
+    // 等待面板关闭动画完成
+    await new Promise(resolve => setTimeout(resolve, 300))
+
+    for (let round = 0; round < autoChatRounds.value; round++) {
+      console.log(`[自动对话] 开始第 ${round + 1} 轮对话`)
+
+      for (let i = 0; i < sortedMembers.length; i++) {
+        const member = sortedMembers[i]
+        const memberName = member.name || member.appName || `角色${i + 1}`
+
+        console.log(`[自动对话] ${memberName} 开始发言...`)
+
+        // 为该成员添加一条loading状态的消息到聊天列表
+        chatStore.addGroupChat({
+          role: 'assistant',
+          content: '',
+          loading: true,
+          modelName: memberName,
+          modelAvatar: member.appAvatar || '',
+          appId: member.appId || member.userId,
+          memberIndex: i,
+          model: 'gpt-3.5-turbo',
+          modelType: 1,
+          error: false,
+          status: 1,
+          dateTime: new Date().toLocaleString(),
+          text: '',
+        } as any)
+
+        // 记录当前消息在列表中的索引
+        const currentMessageIndex = chatStore.chatList.length - 1
+
+        // 等待Vue渲染完成并滚动到底部
+        await nextTick()
+        // 触发滚动（需要通过window事件通知父组件）
+        window.dispatchEvent(new CustomEvent('scroll-to-bottom'))
+
+        try {
+          // 调用聊天API，让角色自动发言（流式）
+          await fetchChatAPIProcess({
+            model: 'gpt-3.5-turbo',
+            modelName: memberName,
+            modelType: 1,
+            prompt: '',
+            appId: member.appId || member.userId,
+            groupId: Number(activeGroupId.value),
+            options: {
+              groupId: Number(activeGroupId.value),
+              isFirstMember: false,
+              skipPromptInHistory: true,
+              usingNetwork: false,
+              usingMcpTool: false,
+            } as any,
+            // 添加流式回调，实时更新聊天界面（参考单聊的处理方式）
+            onDownloadProgress: ({ event }: any) => {
+              const chunk = event.target.responseText
+
+              try {
+                // 解析chunk中的JSON行
+                const jsonLines = chunk.split('\n').filter((line: string) => line.trim())
+
+                jsonLines.forEach((line: string) => {
+                  try {
+                    const jsonObj = JSON.parse(line)
+
+                    // 处理内容（参考单聊逻辑）
+                    if (jsonObj.content && jsonObj.content[0]?.text) {
+                      const completeText = jsonObj.content[0].text
+                        .replace(/\\n/g, '\n')
+                        .replace(/\\t/g, '\t')
+
+                      // 实时更新聊天消息内容
+                      const currentChat = chatStore.chatList[currentMessageIndex]
+                      if (currentChat) {
+                        chatStore.updateGroupChat(currentMessageIndex, {
+                          ...currentChat,
+                          content: completeText,
+                          loading: true,
+                        } as any)
+                      }
+                    }
+
+                    // 处理chatId
+                    if (jsonObj.chatId) {
+                      const currentChat = chatStore.chatList[currentMessageIndex]
+                      if (currentChat && !currentChat.chatId) {
+                        chatStore.updateGroupChat(currentMessageIndex, {
+                          ...currentChat,
+                          chatId: Number(jsonObj.chatId),
+                        } as any)
+                      }
+                    }
+                  } catch (e) {
+                    // 忽略单行JSON解析错误
+                  }
+                })
+              } catch (e) {
+                // 忽略整体解析错误
+                console.error('[自动对话] 解析流式响应失败:', e)
+              }
+            },
+          })
+
+          // 发言完成，将loading状态改为false
+          const finalChat = chatStore.chatList[currentMessageIndex]
+          if (finalChat) {
+            chatStore.updateGroupChat(currentMessageIndex, {
+              ...finalChat,
+              loading: false,
+            } as any)
+          }
+
+          console.log(`[自动对话] ${memberName} 发言完成`)
+
+          // 触发滚动
+          await nextTick()
+          window.dispatchEvent(new CustomEvent('scroll-to-bottom'))
+
+          // 添加延迟让对话更自然
+          await new Promise(resolve => setTimeout(resolve, 1000))
+        } catch (error) {
+          console.error(`[自动对话] ${memberName} 发言失败:`, error)
+
+          // 更新为错误状态
+          const errorChat = chatStore.chatList[currentMessageIndex]
+          if (errorChat) {
+            chatStore.updateGroupChat(currentMessageIndex, {
+              ...errorChat,
+              content: '发言失败，请重试',
+              loading: false,
+              error: true,
+            } as any)
+          }
+
+          ms.error(`${memberName} 发言失败`)
+        }
+      }
+    }
+
+    ms.success(`自动对话完成（${autoChatRounds.value} 轮）`)
+  } catch (error: any) {
+    console.error('[自动对话] 失败:', error)
+    ms.error(error?.message || '自动对话失败')
+  } finally {
+    isAutoChat.value = false
+  }
+}
+
+function stopAutoChat() {
+  isAutoChat.value = false
+  ms.info('已停止自动对话')
+}
 </script>
 
 <template>
@@ -232,6 +414,44 @@ function pickApp(app: any) {
         </div>
       </div>
     </div>
+
+    <!-- 自动对话控制区域 -->
+    <div
+      class="rounded-lg border border-blue-200 dark:border-blue-700 p-4 mb-4 bg-blue-50 dark:bg-blue-900/20"
+    >
+      <div class="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">🤖 自动对话控制</div>
+      <div class="space-y-3">
+        <div class="text-xs text-gray-600 dark:text-gray-400">
+          让群组角色基于历史对话自动发言，无需用户输入
+        </div>
+        <div class="flex items-center gap-3 flex-wrap">
+          <div class="flex items-center gap-2">
+            <label class="text-xs text-gray-600 dark:text-gray-400">对话轮数:</label>
+            <input
+              v-model.number="autoChatRounds"
+              type="number"
+              min="1"
+              max="10"
+              class="input input-sm w-16"
+              :disabled="isAutoChat"
+            />
+          </div>
+          <button
+            v-if="!isAutoChat"
+            class="btn btn-sm btn-primary"
+            @click="startAutoChat"
+            :disabled="members.length === 0"
+          >
+            🎬 开始自动对话
+          </button>
+          <button v-else class="btn btn-sm btn-error" @click="stopAutoChat">⏸️ 停止对话</button>
+          <div v-if="isAutoChat" class="text-xs text-blue-600 dark:text-blue-400 animate-pulse">
+            对话进行中...
+          </div>
+        </div>
+      </div>
+    </div>
+
     <!-- 添加成员区域 -->
     <div class="rounded-lg border border-gray-200 dark:border-gray-700 p-4 mb-4">
       <div class="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">添加群聊角色</div>

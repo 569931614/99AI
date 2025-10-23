@@ -289,6 +289,13 @@ onMounted(async () => {
   // 默认显示工作流预览器并清空旧内容
   useGlobalStore.clearWorkflowContent()
   // useGlobalStore.updateMarkdownPreviewer(false)
+
+  // 监听自动对话的滚动事件
+  window.addEventListener('scroll-to-bottom', () => {
+    nextTick(() => {
+      scrollToBottom()
+    })
+  })
 })
 
 // ============== 弹窗相关方法 ==============
@@ -636,18 +643,23 @@ const onConversation = async ({
     }
   }
 
-  // 发送群聊成员请求（非流式）
+  // 发送群聊成员请求（流式）
   const sendGroupMemberRequest = async (member: any, memberIndex: number) => {
     const memberAppId = member.appId || member.userId
     const memberName = member.appName || member.name || `角色${memberIndex + 1}`
 
     if (memberAppId) {
+      // 流式处理变量
+      let fullText = ''
+      let displayedText = ''
+      let assistantLogId = ''
+
       try {
         console.log(
           `[群聊] 成员 ${memberName} (appId=${memberAppId}) 开始请求，memberIndex=${memberIndex}`
         )
 
-        // 群聊使用非流式请求，不传 onDownloadProgress 回调
+        // 群聊使用流式请求，添加 onDownloadProgress 回调
         const response: any = await fetchChatAPIProcess({
           prompt: message,
           model: useModel,
@@ -659,17 +671,73 @@ const onConversation = async ({
           appId: memberAppId,
           groupId: activeGroupId.value,
           modelAvatar: useModelAvatar,
-          options: { ...options, appId: memberAppId, groupId: activeGroupId.value },
+          options: {
+            ...options,
+            appId: memberAppId,
+            groupId: activeGroupId.value,
+            memberIndex: memberIndex, // 传递成员索引
+            isFirstMember: memberIndex === 0, // 标记是否为第一个成员
+          },
           signal: controller.value.signal,
           extraParam: updatedExtraParam,
-          // 群聊不传 onDownloadProgress，使用非流式响应
+          // 添加流式回调，实现逐字展示
+          onDownloadProgress: ({ event }) => {
+            const chunk = event.target.responseText
+
+            try {
+              // 解析chunk中的JSON行
+              const jsonLines = chunk.split('\n').filter((line: string) => line.trim())
+
+              jsonLines.forEach((line: string) => {
+                try {
+                  const jsonObj = JSON.parse(line)
+
+                  // 处理内容
+                  if (jsonObj.content) {
+                    const completeText = jsonObj.content[0].text
+                      .replace(/\\n/g, '\n')
+                      .replace(/\\t/g, '\t')
+
+                    // 只有当新文本长度 >= 旧文本长度时才更新
+                    if (completeText.length >= fullText.length) {
+                      fullText = completeText
+                      displayedText = completeText
+
+                      // 查找当前成员的聊天记录并更新
+                      for (let i = dataSources.value.length - 1; i >= 0; i--) {
+                        const chat = dataSources.value[i] as any
+                        if (chat.memberIndex === memberIndex && chat.loading) {
+                          updateGroupChat(i, {
+                            ...chat,
+                            chatId: jsonObj.chatId ? Number(jsonObj.chatId) : chat.chatId,
+                            content: displayedText,
+                            loading: true,
+                          } as any)
+                          break
+                        }
+                      }
+
+                      // 滚动到底部
+                      scrollToBottomIfAtBottom()
+                    }
+                  }
+
+                  // 保存 chatId
+                  if (jsonObj.chatId) {
+                    assistantLogId = jsonObj.chatId
+                  }
+                } catch (error) {
+                  // JSON解析失败，忽略该行
+                  console.log('[群聊流式] JSON解析失败，忽略该行')
+                }
+              })
+            } catch (error) {
+              console.log('[群聊流式] 整体解析错误:', error)
+            }
+          },
         })
 
-        // 请求完成后，处理响应
-        if (response && response.data) {
-          console.log(`[群聊] 成员 ${memberName} 请求完成，处理响应:`, response.data)
-          handleGroupChatCompleteResponse(response.data, memberIndex, memberName)
-        }
+        console.log(`[群聊] 成员 ${memberName} 流式请求完成`)
       } catch (error) {
         console.error(`[群聊] 成员 ${memberName} 请求失败:`, error)
         // 更新失败状态
@@ -681,6 +749,20 @@ const onConversation = async ({
               content: '回复失败，请重试',
               loading: false,
               error: true,
+            } as any)
+            break
+          }
+        }
+      } finally {
+        // 确保最终状态正确
+        for (let i = dataSources.value.length - 1; i >= 0; i--) {
+          const chat = dataSources.value[i] as any
+          if (chat.memberIndex === memberIndex && chat.loading) {
+            updateGroupChat(i, {
+              ...chat,
+              chatId: assistantLogId ? Number(assistantLogId) : chat.chatId,
+              content: displayedText || fullText || chat.content,
+              loading: false,
             } as any)
             break
           }

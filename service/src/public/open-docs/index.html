@@ -60,6 +60,20 @@
             </tr>
           </thead>
           <tbody>
+            <tr><td><code>/api/open/group/update</code></td><td>POST</td><td>2025-10-23</td><td>更新对话组（标题、置顶、配置等）</td></tr>
+            <tr><td><code>/api/open/group/members/add</code></td><td>POST</td><td>2025-10-23</td><td>群组新增成员</td></tr>
+            <tr><td><code>/api/open/group/members/remove</code></td><td>POST</td><td>2025-10-23</td><td>群组移除成员</td></tr>
+            <tr><td><code>/api/open/group/members/list</code></td><td>POST</td><td>2025-10-23</td><td>查询群组成员列表</td></tr>
+            <tr><td><code>/api/open/group/members/update</code></td><td>POST</td><td>2025-10-23</td><td>更新群员信息（角色/顺序/昵称）</td></tr>
+            <tr><td><code>/api/open/group/task/assign</code></td><td>POST</td><td>2025-10-23</td><td>为群组成员分配任务</td></tr>
+            <tr><td><code>/api/open/group/task/update</code></td><td>POST</td><td>2025-10-23</td><td>更新成员任务状态</td></tr>
+            <tr><td><code>/api/open/group/create</code></td><td>POST</td><td>2025-10-22</td><td>创建对话组（无鉴权）</td></tr>
+            <tr><td><code>/api/open/group/query</code></td><td>POST</td><td>2025-10-22</td><td>查询对话组列表（无鉴权）</td></tr>
+            <tr><td><code>/api/open/group/del</code></td><td>POST</td><td>2025-10-22</td><td>删除指定对话组（无鉴权）</td></tr>
+            <tr><td><code>/api/open/group/delAll</code></td><td>POST</td><td>2025-10-22</td><td>删除所有非置顶对话组（无鉴权）</td></tr>
+            <tr><td><code>ws://your-domain/api/realtime/voice-call</code></td><td>WebSocket</td><td>2025-10-21</td><td>实时语音通话（ASR+LLM+TTS），支持VAD、打断、情绪检测</td></tr>
+            <tr><td><code>/api/open/affection/increment</code></td><td>POST</td><td>2025-10-20</td><td>增加/减少好感度（支持正负值）</td></tr>
+            <tr><td><code>/api/open/affection/score</code></td><td>PUT</td><td>2025-10-20</td><td>直接设置好感度分数</td></tr>
             <tr><td><code>/api/open/chat/tts-process</code></td><td>POST</td><td>2025-10-18</td><td>TTS 文字转语音，支持 appId 传参和情绪识别</td></tr>
             <tr><td><code>/api/open/app/createApp</code></td><td>POST</td><td>2025-10-15</td><td>支持情绪音色映射、星尘API字段</td></tr>
             <tr><td><code>/api/open/app/updateApp</code></td><td>POST</td><td>2025-10-15</td><td>支持情绪音色映射、星尘API字段</td></tr>
@@ -79,13 +93,10 @@
             <tr><td><code>/api/open/voice/preview</code></td><td>POST</td><td>2025-10-15</td><td>音色试听</td></tr>
             <tr><td><code>/api/open/affection/rules</code></td><td>GET</td><td>2025-10-15</td><td>好感度规则列表</td></tr>
             <tr><td><code>/api/open/affection/status</code></td><td>GET</td><td>2025-10-15</td><td>用户好感度状态</td></tr>
-            <tr><td><code>/api/open/affection/increment</code></td><td>POST</td><td>2025-10-20</td><td>增加/减少好感度（支持正负值）</td></tr>
-            <tr><td><code>/api/open/affection/score</code></td><td>PUT</td><td>2025-10-20</td><td>直接设置好感度分数</td></tr>
             <tr><td><code>/api/open/affection/rule</code></td><td>POST</td><td>2025-10-15</td><td>新增/更新好感度规则</td></tr>
             <tr><td><code>/api/open/affection/rule/:id</code></td><td>DELETE</td><td>2025-10-15</td><td>删除好感度规则</td></tr>
             <tr><td><code>/api/open/chatLog/chatList</code></td><td>GET</td><td>2025-10-15</td><td>我的问答记录</td></tr>
             <tr><td><code>/api/open/chatLog/byAppId</code></td><td>GET</td><td>2025-10-15</td><td>按角色查询聊天记录</td></tr>
-            <tr><td><code>ws://your-domain/api/realtime/voice-call</code></td><td>WebSocket</td><td>2025-10-21</td><td>实时语音通话（ASR+LLM+TTS），支持VAD、打断、情绪检测</td></tr>
           </tbody>
         </table>
         <div class="tip" style="margin-top: 12px;">💡 此表记录各接口的最后更新时间，方便追踪变更。有改动时请更新对应日期和说明。</div>
@@ -102,6 +113,11 @@
           <div class="tip">在线调试与示例</div>
           <div><a href="/open-api-docs" target="_blank">/open-api-docs</a></div>
         </div>
+        <div class="card">
+          <h3>🎭 群聊接入指南</h3>
+          <div class="tip">完整接入教程</div>
+          <div><a href="/open-docs/group-chat-guide.html" target="_blank">查看完整指南 →</a></div>
+        </div>
       </div>
       <div class="nav">
         <a class="pill" href="#websocket-voice">🎙️ WebSocket语音通话</a>
@@ -116,6 +132,7 @@
         <a class="pill" href="#open-voice">开放·音色</a>
         <a class="pill" href="#open-affection">开放·好感度</a>
         <a class="pill" href="#open-chatlog">开放·聊天记录</a>
+        <a class="pill" href="#open-chatgroup">开放·对话组</a>
       </div>
     </header>
 
@@ -568,6 +585,239 @@
         <tr><td><code>page</code></td><td>页码</td><td>否</td></tr>
         <tr><td><code>size</code></td><td>每页数量</td><td>否</td></tr>
       </tbody></table>
+    </section>
+
+    <section id="open-chatgroup">
+      <h2>开放·对话组</h2>
+      <div class="tip" style="margin-bottom: 16px;">
+        对话组（会话组）用于管理用户的多个对话上下文，每个对话组是一个独立的聊天会话，可以关联不同的角色和模型配置。
+      </div>
+
+      <h3>创建对话组（POST <code>/api/open/group/create</code>）</h3>
+      <div class="tip" style="margin-bottom: 12px;">创建一个新的对话组，用于开始新的会话上下文</div>
+      <table><thead><tr><th>字段</th><th>说明</th><th>是否必填</th></tr></thead><tbody>
+        <tr><td><code>userId</code></td><td>外部用户ID（任意数字即可，用于区分不同用户会话）</td><td>是</td></tr>
+        <tr><td><code>appId</code></td><td>应用ID（角色ID，可选）</td><td>否</td></tr>
+        <tr><td><code>modelConfig</code></td><td>对话模型配置项（JSON对象，可选，不传则使用默认配置）</td><td>否</td></tr>
+        <tr><td><code>params</code></td><td>对话组参数序列化的字符串（可选）</td><td>否</td></tr>
+      </tbody></table>
+      <h3>返回体</h3>
+      <table><thead><tr><th>字段</th><th>说明</th></tr></thead><tbody>
+        <tr><td><code>success</code></td><td>是否成功（布尔值）</td></tr>
+        <tr><td><code>data</code></td><td>创建的对话组对象（包含 groupId 等信息）</td></tr>
+      </tbody></table>
+      <h3>请求示例</h3>
+      <table><thead><tr><th>场景</th><th>请求</th></tr></thead><tbody>
+        <tr><td>创建基础对话组</td><td><code>{ "userId": 1001 }</code></td></tr>
+        <tr><td>创建带角色的对话组</td><td><code>{ "userId": 1001, "appId": 123 }</code></td></tr>
+      </tbody></table>
+
+      <h3>查询对话组列表（POST <code>/api/open/group/query</code>）</h3>
+      <div class="tip" style="margin-bottom: 12px;">查询指定用户的所有对话组</div>
+      <table><thead><tr><th>字段</th><th>说明</th><th>是否必填</th></tr></thead><tbody>
+        <tr><td><code>userId</code></td><td>外部用户ID</td><td>是</td></tr>
+      </tbody></table>
+      <h3>返回体</h3>
+      <table><thead><tr><th>字段</th><th>说明</th></tr></thead><tbody>
+        <tr><td><code>success</code></td><td>是否成功（布尔值）</td></tr>
+        <tr><td><code>data</code></td><td>对话组列表数组（每项包含 groupId、appId、创建时间等信息）</td></tr>
+      </tbody></table>
+
+      <h3>删除对话组（POST <code>/api/open/group/del</code>）</h3>
+      <div class="tip" style="margin-bottom: 12px;">删除指定的对话组及其所有聊天记录</div>
+      <table><thead><tr><th>字段</th><th>说明</th><th>是否必填</th></tr></thead><tbody>
+        <tr><td><code>userId</code></td><td>外部用户ID</td><td>是</td></tr>
+        <tr><td><code>groupId</code></td><td>对话分组ID</td><td>是</td></tr>
+      </tbody></table>
+      <h3>返回体</h3>
+      <table><thead><tr><th>字段</th><th>说明</th></tr></thead><tbody>
+        <tr><td><code>success</code></td><td>是否成功（布尔值）</td></tr>
+        <tr><td><code>message</code></td><td>操作结果消息</td></tr>
+      </tbody></table>
+      <h3>请求示例</h3>
+      <table><thead><tr><th>场景</th><th>请求</th></tr></thead><tbody>
+        <tr><td>删除对话组</td><td><code>{ "userId": 1001, "groupId": 123 }</code></td></tr>
+      </tbody></table>
+
+      <h3>删除所有非置顶对话组（POST <code>/api/open/group/delAll</code>）</h3>
+      <div class="tip" style="margin-bottom: 12px;">批量删除用户所有非置顶的对话组</div>
+      <table><thead><tr><th>字段</th><th>说明</th><th>是否必填</th></tr></thead><tbody>
+        <tr><td><code>userId</code></td><td>外部用户ID</td><td>是</td></tr>
+      </tbody></table>
+      <h3>返回体</h3>
+      <table><thead><tr><th>字段</th><th>说明</th></tr></thead><tbody>
+        <tr><td><code>success</code></td><td>是否成功（布尔值）</td></tr>
+        <tr><td><code>message</code></td><td>操作结果消息（包含删除数量等信息）</td></tr>
+      </tbody></table>
+
+      <h3>更新对话组（POST <code>/api/open/group/update</code>）</h3>
+      <div class="tip" style="margin-bottom: 12px;">更新对话组的标题、置顶状态、配置等信息</div>
+      <table><thead><tr><th>字段</th><th>说明</th><th>是否必填</th></tr></thead><tbody>
+        <tr><td><code>userId</code></td><td>外部用户ID</td><td>是</td></tr>
+        <tr><td><code>groupId</code></td><td>对话分组ID</td><td>是</td></tr>
+        <tr><td><code>title</code></td><td>对话组标题</td><td>否</td></tr>
+        <tr><td><code>isSticky</code></td><td>是否置顶（布尔值）</td><td>否</td></tr>
+        <tr><td><code>config</code></td><td>配置JSON字符串</td><td>否</td></tr>
+        <tr><td><code>fileUrl</code></td><td>文件链接</td><td>否</td></tr>
+      </tbody></table>
+      <h3>返回体</h3>
+      <table><thead><tr><th>字段</th><th>说明</th></tr></thead><tbody>
+        <tr><td><code>success</code></td><td>是否成功（布尔值）</td></tr>
+        <tr><td><code>data</code></td><td>更新结果（布尔值）</td></tr>
+      </tbody></table>
+      <h3>请求示例</h3>
+      <table><thead><tr><th>场景</th><th>请求</th></tr></thead><tbody>
+        <tr><td>更新标题</td><td><code>{ "userId": 1001, "groupId": 123, "title": "我的新对话" }</code></td></tr>
+        <tr><td>设置置顶</td><td><code>{ "userId": 1001, "groupId": 123, "isSticky": true }</code></td></tr>
+      </tbody></table>
+
+      <h3>群组成员管理</h3>
+      <div class="tip" style="margin-bottom: 16px;">
+        群聊功能允许在一个对话组中添加多个AI角色成员，实现多角色协作对话。每个成员可以有独立的角色设定、任务分配和发言顺序。
+      </div>
+
+      <h4>批量添加成员（POST <code>/api/open/group/members/add</code>）</h4>
+      <div class="tip" style="margin-bottom: 12px;"><strong>批量添加</strong>多个AI角色成员，每个成员可以分配<strong>一个任务</strong>，添加成员后会自动启用群聊模式</div>
+      <table><thead><tr><th>字段</th><th>说明</th><th>是否必填</th></tr></thead><tbody>
+        <tr><td><code>userId</code></td><td>外部用户ID</td><td>是</td></tr>
+        <tr><td><code>groupId</code></td><td>对话分组ID</td><td>是</td></tr>
+        <tr><td><code>members</code></td><td>成员列表（数组），一次可添加多个成员</td><td>是</td></tr>
+      </tbody></table>
+      <h3>members 数组元素字段</h3>
+      <table><thead><tr><th>字段</th><th>说明</th><th>是否必填</th></tr></thead><tbody>
+        <tr><td><code>appId</code></td><td>角色应用ID（将作为成员标识）</td><td>是</td></tr>
+        <tr><td><code>order</code></td><td>发言顺序（数字越小越靠前）</td><td>是</td></tr>
+        <tr><td><code>role</code></td><td>成员角色（如：member、leader、assistant）</td><td>是</td></tr>
+        <tr><td><code>taskDetail</code></td><td>任务描述（如："完成需求分析文档"）</td><td>否</td></tr>
+      </tbody></table>
+      <h3>返回体</h3>
+      <table><thead><tr><th>字段</th><th>说明</th></tr></thead><tbody>
+        <tr><td><code>success</code></td><td>是否成功（布尔值）</td></tr>
+        <tr><td><code>data</code></td><td>操作结果对象 { success: true, count: 添加的成员数量 }</td></tr>
+      </tbody></table>
+      <h3>请求示例</h3>
+      <table><thead><tr><th>场景</th><th>请求</th></tr></thead><tbody>
+        <tr><td>批量添加成员（不带任务）</td><td><code>{ "userId": 1001, "groupId": 123, "members": [{ "appId": 456, "order": 1, "role": "leader" }, { "appId": 457, "order": 2, "role": "member" }] }</code></td></tr>
+        <tr><td>批量添加成员（带任务）</td><td><code>{ "userId": 1001, "groupId": 123, "members": [{ "appId": 456, "order": 1, "role": "leader", "taskDetail": "完成需求分析文档" }, { "appId": 457, "order": 2, "role": "member", "taskDetail": "设计系统架构" }] }</code></td></tr>
+      </tbody></table>
+
+      <h4>移除成员（POST <code>/api/open/group/members/remove</code>）</h4>
+      <div class="tip" style="margin-bottom: 12px;">从对话组移除指定成员，如果移除后没有成员则自动取消群聊模式</div>
+      <table><thead><tr><th>字段</th><th>说明</th><th>是否必填</th></tr></thead><tbody>
+        <tr><td><code>userId</code></td><td>外部用户ID</td><td>是</td></tr>
+        <tr><td><code>groupId</code></td><td>对话分组ID</td><td>是</td></tr>
+        <tr><td><code>memberId</code></td><td>要移除的成员ID</td><td>是</td></tr>
+      </tbody></table>
+      <h3>返回体</h3>
+      <table><thead><tr><th>字段</th><th>说明</th></tr></thead><tbody>
+        <tr><td><code>success</code></td><td>是否成功（布尔值）</td></tr>
+        <tr><td><code>data</code></td><td>操作结果（布尔值）</td></tr>
+      </tbody></table>
+
+      <h4>查询成员列表（POST <code>/api/open/group/members/list</code>）</h4>
+      <div class="tip" style="margin-bottom: 12px;">获取对话组的所有成员信息，包含成员头像、角色、任务等</div>
+      <table><thead><tr><th>字段</th><th>说明</th><th>是否必填</th></tr></thead><tbody>
+        <tr><td><code>userId</code></td><td>外部用户ID</td><td>是</td></tr>
+        <tr><td><code>groupId</code></td><td>对话分组ID</td><td>是</td></tr>
+      </tbody></table>
+      <h3>返回体</h3>
+      <table><thead><tr><th>字段</th><th>说明</th></tr></thead><tbody>
+        <tr><td><code>success</code></td><td>是否成功（布尔值）</td></tr>
+        <tr><td><code>data</code></td><td>成员列表数组</td></tr>
+      </tbody></table>
+      <h3>data 数组元素字段</h3>
+      <table><thead><tr><th>字段</th><th>说明</th></tr></thead><tbody>
+        <tr><td><code>userId</code></td><td>成员ID</td></tr>
+        <tr><td><code>name</code></td><td>成员昵称</td></tr>
+        <tr><td><code>role</code></td><td>成员角色</td></tr>
+        <tr><td><code>order</code></td><td>发言顺序</td></tr>
+        <tr><td><code>appId</code></td><td>关联的应用ID</td></tr>
+        <tr><td><code>appName</code></td><td>应用名称</td></tr>
+        <tr><td><code>appAvatar</code></td><td>应用头像URL（自动查询）</td></tr>
+        <tr><td><code>tasks</code></td><td>成员任务列表（数组）</td></tr>
+      </tbody></table>
+
+      <h4>更新成员信息（POST <code>/api/open/group/members/update</code>）</h4>
+      <div class="tip" style="margin-bottom: 12px;">更新成员的昵称、角色、发言顺序等信息</div>
+      <table><thead><tr><th>字段</th><th>说明</th><th>是否必填</th></tr></thead><tbody>
+        <tr><td><code>userId</code></td><td>外部用户ID</td><td>是</td></tr>
+        <tr><td><code>groupId</code></td><td>对话分组ID</td><td>是</td></tr>
+        <tr><td><code>memberId</code></td><td>要更新的成员ID</td><td>是</td></tr>
+        <tr><td><code>name</code></td><td>成员昵称</td><td>否</td></tr>
+        <tr><td><code>role</code></td><td>成员角色</td><td>否</td></tr>
+        <tr><td><code>order</code></td><td>发言顺序</td><td>否</td></tr>
+        <tr><td><code>appId</code></td><td>关联的应用ID</td><td>否</td></tr>
+        <tr><td><code>appName</code></td><td>应用名称</td><td>否</td></tr>
+      </tbody></table>
+      <h3>返回体</h3>
+      <table><thead><tr><th>字段</th><th>说明</th></tr></thead><tbody>
+        <tr><td><code>success</code></td><td>是否成功（布尔值）</td></tr>
+        <tr><td><code>data</code></td><td>操作结果（布尔值）</td></tr>
+      </tbody></table>
+      <h3>请求示例</h3>
+      <table><thead><tr><th>场景</th><th>请求</th></tr></thead><tbody>
+        <tr><td>调整发言顺序</td><td><code>{ "userId": 1001, "groupId": 123, "memberId": 456, "order": 2 }</code></td></tr>
+        <tr><td>修改角色</td><td><code>{ "userId": 1001, "groupId": 123, "memberId": 456, "role": "leader" }</code></td></tr>
+      </tbody></table>
+
+      <h3>任务管理</h3>
+      <div class="tip" style="margin-bottom: 16px;">
+        为群聊成员分配任务，AI会根据任务内容调整对话重点。任务状态包括：todo（待办）、doing（进行中）、done（已完成）。
+      </div>
+
+      <h4>分配任务（POST <code>/api/open/group/task/assign</code>）</h4>
+      <div class="tip" style="margin-bottom: 12px;">为指定成员分配新任务，任务会影响AI的回复内容和方向</div>
+      <table><thead><tr><th>字段</th><th>说明</th><th>是否必填</th></tr></thead><tbody>
+        <tr><td><code>userId</code></td><td>外部用户ID</td><td>是</td></tr>
+        <tr><td><code>groupId</code></td><td>对话分组ID</td><td>是</td></tr>
+        <tr><td><code>memberId</code></td><td>成员ID</td><td>是</td></tr>
+        <tr><td><code>title</code></td><td>任务标题（如："完成需求分析文档"）</td><td>是</td></tr>
+        <tr><td><code>detail</code></td><td>任务详情（详细说明）</td><td>否</td></tr>
+        <tr><td><code>status</code></td><td>任务状态（todo/doing/done，默认todo）</td><td>否</td></tr>
+      </tbody></table>
+      <h3>返回体</h3>
+      <table><thead><tr><th>字段</th><th>说明</th></tr></thead><tbody>
+        <tr><td><code>success</code></td><td>是否成功（布尔值）</td></tr>
+        <tr><td><code>data</code></td><td>创建的任务对象（包含taskId、title、detail、status、createdAt）</td></tr>
+      </tbody></table>
+      <h3>请求示例</h3>
+      <table><thead><tr><th>场景</th><th>请求</th></tr></thead><tbody>
+        <tr><td>分配需求分析任务</td><td><code>{ "userId": 1001, "groupId": 123, "memberId": 456, "title": "完成需求分析", "detail": "分析用户需求并输出文档", "status": "todo" }</code></td></tr>
+      </tbody></table>
+
+      <h4>更新任务（POST <code>/api/open/group/task/update</code>）</h4>
+      <div class="tip" style="margin-bottom: 12px;">更新任务的标题、详情或状态</div>
+      <table><thead><tr><th>字段</th><th>说明</th><th>是否必填</th></tr></thead><tbody>
+        <tr><td><code>userId</code></td><td>外部用户ID</td><td>是</td></tr>
+        <tr><td><code>groupId</code></td><td>对话分组ID</td><td>是</td></tr>
+        <tr><td><code>memberId</code></td><td>成员ID</td><td>是</td></tr>
+        <tr><td><code>taskId</code></td><td>任务ID（创建任务时返回）</td><td>是</td></tr>
+        <tr><td><code>title</code></td><td>任务标题</td><td>否</td></tr>
+        <tr><td><code>detail</code></td><td>任务详情</td><td>否</td></tr>
+        <tr><td><code>status</code></td><td>任务状态（todo/doing/done）</td><td>否</td></tr>
+      </tbody></table>
+      <h3>返回体</h3>
+      <table><thead><tr><th>字段</th><th>说明</th></tr></thead><tbody>
+        <tr><td><code>success</code></td><td>是否成功（布尔值）</td></tr>
+        <tr><td><code>data</code></td><td>操作结果（布尔值）</td></tr>
+      </tbody></table>
+      <h3>请求示例</h3>
+      <table><thead><tr><th>场景</th><th>请求</th></tr></thead><tbody>
+        <tr><td>标记任务完成</td><td><code>{ "userId": 1001, "groupId": 123, "memberId": 456, "taskId": "1234567890_abc123", "status": "done" }</code></td></tr>
+      </tbody></table>
+
+      <div class="tip" style="margin-top: 12px;">
+        💡 <strong>注意事项：</strong><br>
+        • 所有对话组接口均为开放接口，无需登录鉴权<br>
+        • 必须显式传递 <code>userId</code> 参数来标识用户<br>
+        • <code>userId</code> 可以是任意数字，用于区分不同用户的会话数据<br>
+        • 删除对话组会同时删除该组下的所有聊天记录，操作不可恢复<br>
+        • <code>delAll</code> 操作会保留用户置顶的对话组，只删除未置顶的对话组<br>
+        • 添加成员后会自动启用群聊模式，移除所有成员后会自动取消群聊模式<br>
+        • 群聊模式下，AI会根据成员的发言顺序（order）和任务内容调整对话策略<br>
+        • 成员的 <code>order</code> 决定发言顺序，数字越小越靠前<br>
+        • 任务会影响AI的回复内容，未完成的任务会成为对话的重点
+      </div>
     </section>
 
     <section id="delete">

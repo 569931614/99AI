@@ -18,8 +18,8 @@ pnpm install
 pnpm build
 cd ..
 
-rm -rf ./AIWebQuickDeploy/dist/* ./AIWebQuickDeploy/public/admin/* ./AIWebQuickDeploy/public/chat/*
-mkdir -p ./AIWebQuickDeploy/dist ./AIWebQuickDeploy/public/admin ./AIWebQuickDeploy/public/chat
+rm -rf ./AIWebQuickDeploy/dist/* ./AIWebQuickDeploy/public/admin/* ./AIWebQuickDeploy/public/chat/* ./AIWebQuickDeploy/public/open-docs/*
+mkdir -p ./AIWebQuickDeploy/dist ./AIWebQuickDeploy/public/admin ./AIWebQuickDeploy/public/chat ./AIWebQuickDeploy/public/open-docs
 
 cp service/pm2.conf.json ./AIWebQuickDeploy/pm2.conf.json
 cp service/package.json ./AIWebQuickDeploy/package.json
@@ -33,5 +33,6 @@ cp service/.dockerignore ./AIWebQuickDeploy/.dockerignore
 cp -a service/dist/* ./AIWebQuickDeploy/dist
 cp -r admin/dist/* ./AIWebQuickDeploy/public/admin
 cp -r chat/dist/* ./AIWebQuickDeploy/public/chat
+cp -r service/src/public/open-docs/* ./AIWebQuickDeploy/public/open-docs
 
 echo "打包完成"

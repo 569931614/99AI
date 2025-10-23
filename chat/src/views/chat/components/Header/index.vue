@@ -672,7 +672,7 @@ function toggleMembers() {
         </button>
       </div>
       <div class="flex-1 min-h-0 overflow-auto">
-        <MemberList class="h-full" />
+        <MemberList class="h-full" @close="showMembers = false" />
       </div>
     </div>
   </div>

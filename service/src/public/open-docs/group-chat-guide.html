@@ -1,0 +1,1354 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>群聊功能接入指南 | AI服务开放接口</title>
+  <style>
+    :root {
+      --bg: #0b0f1a;
+      --card: #11182a;
+      --card-2: #0d1424;
+      --text: #e6eaf2;
+      --muted: #9aa4b2;
+      --brand: #4da3ff;
+      --accent: #7bd88a;
+      --border: #22304a;
+      --code-bg: #0a1326;
+      --warning: #f59e0b;
+      --success: #10b981;
+    }
+    html,body { margin:0; padding:0; background:var(--bg); color:var(--text); font: 14px/1.6 system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Helvetica Neue, Arial, Noto Sans, "PingFang SC", "Hiragino Sans GB", "Microsoft Yahei", sans-serif; }
+    a{ color:var(--brand); text-decoration:none; }
+    a:hover{ text-decoration:underline; }
+    .container{ max-width:1200px; margin:40px auto; padding:0 20px; }
+
+    /* Header */
+    header{ margin-bottom:32px; border-bottom:2px solid var(--border); padding-bottom:24px; }
+    h1{ font-size:32px; margin:0 0 12px; color:var(--accent); }
+    .subtitle{ color:var(--muted); font-size:16px; }
+
+    /* Navigation */
+    .nav{ display:flex; gap:12px; flex-wrap:wrap; margin:24px 0; background:var(--card); padding:16px; border-radius:12px; border:1px solid var(--border); }
+    .nav-item{ display:inline-block; padding:8px 16px; border:1px solid var(--border); border-radius:999px; background:rgba(255,255,255,0.02); transition:all 0.2s; }
+    .nav-item:hover{ background:rgba(77,163,255,0.1); border-color:var(--brand); }
+
+    /* Sections */
+    section{ margin:40px 0; }
+    h2{ font-size:24px; margin:32px 0 16px; color:var(--brand); border-left:4px solid var(--brand); padding-left:12px; }
+    h3{ font-size:18px; margin:24px 0 12px; color:var(--accent); }
+    h4{ font-size:16px; margin:16px 0 8px; color:var(--text); }
+
+    /* Cards */
+    .card{ background:linear-gradient(180deg, var(--card), var(--card-2)); border:1px solid var(--border); border-radius:12px; padding:20px; margin:16px 0; }
+    .card-grid{ display:grid; grid-template-columns:repeat(auto-fit, minmax(280px, 1fr)); gap:16px; margin:16px 0; }
+    .step-card{ position:relative; padding-left:48px; }
+    .step-number{ position:absolute; left:16px; top:16px; width:32px; height:32px; background:var(--brand); color:var(--bg); border-radius:50%; display:flex; align-items:center; justify-content:center; font-weight:bold; font-size:16px; }
+
+    /* Code */
+    code{ background:var(--code-bg); border:1px solid var(--border); padding:2px 6px; border-radius:6px; color:#a8c5ff; font-size:13px; }
+    pre{ background:var(--code-bg); border:1px solid var(--border); border-radius:12px; padding:16px; overflow-x:auto; margin:16px 0; }
+    pre code{ background:none; border:none; padding:0; display:block; color:#e6eaf2; font-size:13px; line-height:1.5; }
+
+    /* Tables */
+    table{ width:100%; border-collapse:collapse; background:linear-gradient(180deg, var(--card), var(--card-2)); border:1px solid var(--border); border-radius:12px; overflow:hidden; margin:16px 0; }
+    th, td{ text-align:left; padding:12px 16px; border-bottom:1px solid var(--border); vertical-align:top; }
+    th{ color:var(--muted); font-weight:600; background:rgba(255,255,255,0.02); }
+    tbody tr:hover{ background:rgba(255,255,255,0.02); }
+
+    /* Alerts */
+    .tip, .warning, .success{ padding:16px; border-radius:8px; margin:16px 0; border-left:4px solid; }
+    .tip{ background:rgba(77,163,255,0.1); border-color:var(--brand); }
+    .warning{ background:rgba(245,158,11,0.1); border-color:var(--warning); }
+    .success{ background:rgba(16,185,129,0.1); border-color:var(--success); }
+
+    /* Lists */
+    ul, ol{ margin:8px 0; padding-left:24px; }
+    li{ margin:8px 0; }
+
+    /* Tabs */
+    .tabs{ display:flex; gap:8px; margin:16px 0; border-bottom:2px solid var(--border); }
+    .tab{ padding:12px 24px; cursor:pointer; border-bottom:2px solid transparent; margin-bottom:-2px; transition:all 0.2s; }
+    .tab:hover{ color:var(--brand); }
+    .tab.active{ border-bottom-color:var(--brand); color:var(--brand); }
+    .tab-content{ display:none; }
+    .tab-content.active{ display:block; }
+
+    /* Footer */
+    .footer{ margin:48px 0 24px; padding-top:24px; border-top:1px solid var(--border); color:var(--muted); font-size:13px; text-align:center; }
+
+    /* Highlight */
+    .highlight{ color:var(--accent); font-weight:600; }
+    .badge{ display:inline-block; padding:4px 8px; border-radius:4px; font-size:12px; font-weight:600; }
+    .badge-new{ background:var(--accent); color:var(--bg); }
+    .badge-required{ background:var(--warning); color:var(--bg); }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>🎭 群聊功能完整接入指南</h1>
+      <div class="subtitle">AI 服务开放接口 - 多角色协作对话完整实现方案</div>
+      <div style="margin-top:16px;">
+        <a href="/open-docs" style="color:var(--muted);">← 返回接口总览</a>
+        <span style="margin:0 12px;color:var(--border);">|</span>
+        <a href="/open-api-docs" style="color:var(--muted);">Swagger 调试工具 →</a>
+      </div>
+    </header>
+
+    <!-- 快速导航 -->
+    <div class="nav">
+      <a class="nav-item" href="#overview">📖 功能概述</a>
+      <a class="nav-item" href="#quickstart">🚀 快速开始</a>
+      <a class="nav-item" href="#workflow">📋 完整流程</a>
+      <a class="nav-item" href="#api-reference">🔌 API 参考</a>
+      <a class="nav-item" href="#examples">💡 示例代码</a>
+      <a class="nav-item" href="#best-practices">⭐ 最佳实践</a>
+      <a class="nav-item" href="#auto-chat">🤖 自动对话</a>
+      <a class="nav-item" href="#troubleshooting">🔧 故障排查</a>
+    </div>
+
+    <!-- 功能概述 -->
+    <section id="overview">
+      <h2>📖 功能概述</h2>
+
+      <div class="card">
+        <h3>什么是群聊功能？</h3>
+        <p>群聊功能允许在单个对话组中添加<strong>多个 AI 角色成员</strong>，实现多角色协作对话。每个成员可以有独立的：</p>
+        <ul>
+          <li>✅ <strong>角色预设</strong> - 不同的性格、专业领域和对话风格</li>
+          <li>✅ <strong>任务分配</strong> - 明确的工作目标和执行状态</li>
+          <li>✅ <strong>发言顺序</strong> - 可控的轮流发言机制</li>
+          <li>✅ <strong>情绪音色</strong> - 根据角色和情绪切换语音</li>
+        </ul>
+      </div>
+
+      <div class="card-grid">
+        <div class="card">
+          <h4>🎯 典型应用场景</h4>
+          <ul style="margin:8px 0;">
+            <li>产品团队协作（产品经理 + 设计师 + 开发）</li>
+            <li>教育场景（老师 + 助教 + 学生）</li>
+            <li>创意讨论（策划 + 文案 + 美术）</li>
+            <li>客服团队（一线客服 + 技术支持）</li>
+          </ul>
+        </div>
+        <div class="card">
+          <h4>💡 核心优势</h4>
+          <ul style="margin:8px 0;">
+            <li>无需登录鉴权，快速集成</li>
+            <li>完整的成员和任务管理</li>
+            <li>支持实时和异步对话</li>
+            <li>自动维护对话上下文</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <!-- 快速开始 -->
+    <section id="quickstart">
+      <h2>🚀 快速开始（5分钟上手）</h2>
+
+      <div class="success">
+        <strong>前置条件：</strong>
+        <ul style="margin:8px 0;">
+          <li>已部署 AI 服务实例（确认服务地址，如：<code>http://your-domain:9520</code>）</li>
+          <li>已创建至少 2 个角色应用（通过 <code>/api/open/app/createApp</code>）</li>
+          <li>准备一个唯一的 <code>userId</code>（任意数字，用于标识用户）</li>
+        </ul>
+      </div>
+
+      <h3>核心三步走</h3>
+
+      <div class="card-grid">
+        <div class="card step-card">
+          <div class="step-number">1</div>
+          <h4>创建对话组</h4>
+          <p>使用 <code>POST /api/open/group/create</code> 创建一个新的对话组。</p>
+          <pre><code>POST /api/open/group/create
+Content-Type: application/json
+
+{
+  "userId": 1001
+}</code></pre>
+          <p style="color:var(--muted);font-size:12px;">→ 返回 <code>groupId</code>，后续所有操作都需要此 ID</p>
+        </div>
+
+        <div class="card step-card">
+          <div class="step-number">2</div>
+          <h4>批量添加 AI 成员（每人一个任务）</h4>
+          <p>使用 <code>POST /api/open/group/members/add</code> 一次性添加多个角色，<strong>每个成员可分配一个任务</strong>。</p>
+          <pre><code>POST /api/open/group/members/add
+Content-Type: application/json
+
+{
+  "userId": 1001,
+  "groupId": 123,
+  "members": [
+    {
+      "appId": 456,
+      "order": 1,
+      "role": "leader",
+      "taskDetail": "完成需求分析文档"
+    },
+    {
+      "appId": 457,
+      "order": 2,
+      "role": "member",
+      "taskDetail": "设计系统架构"
+    }
+  ]
+}</code></pre>
+          <p style="color:var(--muted);font-size:12px;">→ 一次性添加所有成员，每个成员可选择性分配一个任务</p>
+        </div>
+
+        <div class="card step-card">
+          <div class="step-number">3</div>
+          <h4>开始对话</h4>
+          <p>使用 <code>POST /api/open/chat/chat-process</code> 发起群聊对话。</p>
+          <pre><code>POST /api/open/chat/chat-process
+Content-Type: application/json
+
+{
+  "userId": 1001,
+  "prompt": "我们需要设计一个新功能",
+  "appId": 456,
+  "options": {
+    "groupId": 123
+  }
+}</code></pre>
+          <p style="color:var(--muted);font-size:12px;">→ AI 会根据成员顺序和任务进行协作对话</p>
+        </div>
+      </div>
+
+      <div class="tip">
+        💡 <strong>提示：</strong>添加成员后会自动启用群聊模式，移除所有成员后会自动退出群聊模式。
+      </div>
+    </section>
+
+    <!-- 完整流程 -->
+    <section id="workflow">
+      <h2>📋 完整工作流程</h2>
+
+      <div class="card">
+        <h3>流程图</h3>
+        <pre><code>┌─────────────────────────┐
+│  1. 创建对话组           │ → POST /api/open/group/create
+└────────┬────────────────┘
+         │
+         ▼
+┌─────────────────────────┐
+│  2. 批量添加成员并分配任务│ → POST /api/open/group/members/add
+│   - 产品经理（任务A）    │   (一次性添加所有成员，任务持久化保存)
+│   - 架构师（任务B）      │
+│   - 开发工程师（任务C）  │
+└────────┬────────────────┘
+         │
+         ▼
+┌─────────────────────────┐
+│  3. 发起对话             │ → POST /api/open/chat/chat-process
+│   (带 groupId)          │    (AI会根据成员任务自动调整回复)
+└────────┬────────────────┘
+         │
+         ▼
+┌─────────────────────────┐
+│  4. 查看成员与任务       │ → POST /api/open/group/members/list
+│   (获取持久化数据)      │    (任务信息长期保存在对话组中)
+└─────────────────────────┘</code></pre>
+      </div>
+
+      <h3>详细步骤说明</h3>
+
+      <h4>步骤 1：创建对话组</h4>
+      <div class="card">
+        <p><strong>接口：</strong><code>POST /api/open/group/create</code></p>
+        <table>
+          <thead><tr><th>参数</th><th>类型</th><th>必填</th><th>说明</th></tr></thead>
+          <tbody>
+            <tr><td><code>userId</code></td><td>number</td><td>✅</td><td>外部用户ID（任意数字）</td></tr>
+            <tr><td><code>appId</code></td><td>number</td><td>❌</td><td>初始关联的角色ID（可选）</td></tr>
+            <tr><td><code>modelConfig</code></td><td>object</td><td>❌</td><td>模型配置（不传则使用默认）</td></tr>
+          </tbody>
+        </table>
+        <p><strong>返回示例：</strong></p>
+        <pre><code>{
+  "success": true,
+  "data": {
+    "id": 123,
+    "userId": 1001,
+    "title": "新对话",
+    "isGroupChat": false,  // 此时还未添加成员
+    "members": null,
+    "createdAt": "2025-10-23T10:00:00.000Z"
+  }
+}</code></pre>
+      </div>
+
+      <h4>步骤 2：批量添加成员（可同时分配任务）</h4>
+      <div class="card">
+        <p><strong>接口：</strong><code>POST /api/open/group/members/add</code></p>
+        <table>
+          <thead><tr><th>参数</th><th>类型</th><th>必填</th><th>说明</th></tr></thead>
+          <tbody>
+            <tr><td><code>userId</code></td><td>number</td><td>✅</td><td>外部用户ID</td></tr>
+            <tr><td><code>groupId</code></td><td>number</td><td>✅</td><td>对话组ID</td></tr>
+            <tr><td><code>members</code></td><td>array</td><td>✅</td><td>成员列表（数组），一次可添加多个成员</td></tr>
+          </tbody>
+        </table>
+        <p><strong>members 数组元素：</strong></p>
+        <table>
+          <thead><tr><th>参数</th><th>类型</th><th>必填</th><th>说明</th></tr></thead>
+          <tbody>
+            <tr><td><code>appId</code></td><td>number</td><td>✅</td><td>角色应用ID（将作为成员标识）</td></tr>
+            <tr><td><code>order</code></td><td>number</td><td>✅</td><td>发言顺序（数字越小越靠前）</td></tr>
+            <tr><td><code>role</code></td><td>string</td><td>✅</td><td>成员角色（如：member、leader）</td></tr>
+            <tr><td><code>taskDetail</code></td><td>string</td><td>❌</td><td>任务描述（如："完成需求分析文档"）</td></tr>
+          </tbody>
+        </table>
+        <div class="tip">
+          💡 <strong>说明：</strong>使用 appId 作为成员标识，系统会自动从应用信息中获取角色名称。taskDetail 为可选字段，传入后会自动创建任务（状态默认为 todo）。
+        </div>
+        <p><strong>请求示例：</strong></p>
+        <pre><code>{
+  "userId": 1001,
+  "groupId": 123,
+  "members": [
+    {
+      "appId": 456,
+      "order": 1,
+      "role": "leader",
+      "taskDetail": "完成需求分析文档"
+    },
+    {
+      "appId": 457,
+      "order": 2,
+      "role": "member",
+      "taskDetail": "设计系统架构"
+    }
+  ]
+}</code></pre>
+      </div>
+
+      <h4>步骤 3：发起群聊对话 <span class="badge badge-new">重要更新</span></h4>
+      <div class="card">
+        <p><strong>接口：</strong><code>POST /api/open/chat/chat-process</code></p>
+        <p><strong class="highlight">关键要点：</strong></p>
+        <ul>
+          <li>必须通过 <code>options.groupId</code> 传递对话组ID</li>
+          <li><code>appId</code> 参数指定当前发言的角色</li>
+          <li>AI 会自动按照成员的 <code>order</code> 顺序轮流回复</li>
+          <li>任务状态会影响 AI 的回复内容</li>
+          <li><strong class="highlight">重要：</strong>需要传递 <code>isFirstMember</code> 参数避免消息重复</li>
+        </ul>
+
+        <h4 style="margin-top:16px;">群聊模式调用方式</h4>
+        <p>当需要让多个角色依次发言时，需要为每个角色分别调用接口，并传递正确的参数：</p>
+
+        <table>
+          <thead><tr><th>参数</th><th>类型</th><th>必填</th><th>说明</th></tr></thead>
+          <tbody>
+            <tr><td><code>options.isFirstMember</code></td><td>boolean</td><td>✅</td><td>是否为第一个成员（仅第一个传 true）</td></tr>
+          </tbody>
+        </table>
+
+        <div class="warning">
+          ⚠️ <strong>重要：</strong>群聊模式下，用户发送一条消息，需要为每个 AI 角色分别调用接口。<br>
+          • <strong>第一个角色：</strong><code>isFirstMember: true</code> - 会保存用户消息到数据库<br>
+          • <strong>后续角色：</strong><code>isFirstMember: false</code> - 会复用已保存的用户消息<br>
+          这样可以避免用户消息在对话记录中重复出现。
+        </div>
+
+        <p><strong>请求示例（完整群聊流程）：</strong></p>
+
+        <pre><code>// 第一个成员（产品经理）发言
+POST /api/open/chat/chat-process
+{
+  "userId": 1001,
+  "prompt": "大家讨论一下新功能的技术方案",
+  "appId": 456,  // 产品经理的 appId
+  "options": {
+    "groupId": 123,
+    "isFirstMember": true  // ⚠️ 第一个成员必须为 true
+  }
+}
+
+// 第二个成员（架构师）发言
+POST /api/open/chat/chat-process
+{
+  "userId": 1001,
+  "prompt": "大家讨论一下新功能的技术方案",  // 相同的提问
+  "appId": 457,  // 架构师的 appId
+  "options": {
+    "groupId": 123,
+    "isFirstMember": false  // ⚠️ 后续成员为 false
+  }
+}
+
+// 第三个成员（开发工程师）发言
+POST /api/open/chat/chat-process
+{
+  "userId": 1001,
+  "prompt": "大家讨论一下新功能的技术方案",  // 相同的提问
+  "appId": 458,  // 开发工程师的 appId
+  "options": {
+    "groupId": 123,
+    "isFirstMember": false  // ⚠️ 后续成员为 false
+  }
+}</code></pre>
+
+        <p><strong>对话记录效果：</strong></p>
+        <pre><code>用户: 大家讨论一下新功能的技术方案
+产品经理: 我认为这个功能应该...
+架构师: 从技术角度来看...
+开发工程师: 具体实现上...</code></pre>
+
+        <div class="tip">
+          💡 <strong>提示：</strong>
+          <ul style="margin:8px 0;">
+            <li>每次调用只会得到一个角色的回复</li>
+            <li>需要按成员的 <code>order</code> 顺序依次调用</li>
+            <li>所有角色的 <code>prompt</code> 应该相同</li>
+            <li>群聊模式下会跳过余额检查和模型限制，确保对话流畅</li>
+            <li><strong>任务会自动影响AI回复：</strong>AI会根据成员的任务描述调整回复内容和重点</li>
+          </ul>
+        </div>
+      </div>
+
+      <h4>步骤 4：查看成员和任务（任务持久化保存）</h4>
+      <div class="card">
+        <p><strong>接口：</strong><code>POST /api/open/group/members/list</code></p>
+        <p>获取对话组的所有成员信息，包括头像、任务等。<strong>任务在添加成员时创建后，会持久化保存在对话组中</strong>，无需频繁更新。</p>
+        <div class="tip">
+          💡 <strong>任务管理说明：</strong>
+          <ul style="margin:8px 0;">
+            <li>任务在创建成员时通过 <code>taskDetail</code> 参数一次性设置</li>
+            <li>任务数据持久化存储在对话组的 <code>members</code> 字段中</li>
+            <li>AI 会自动读取任务信息，调整对话内容</li>
+            <li>任务设置后长期有效，无需额外维护</li>
+          </ul>
+        </div>
+        <p><strong>返回示例：</strong></p>
+        <pre><code>{
+  "success": true,
+  "data": [
+    {
+      "userId": 456,
+      "name": "产品经理",
+      "role": "leader",
+      "order": 1,
+      "appId": 456,
+      "appName": "产品助手",
+      "appAvatar": "https://example.com/avatar.png",
+      "tasks": [
+        {
+          "taskId": "1729670400000_abc123",
+          "title": "完成需求分析文档",
+          "status": "doing"
+        }
+      ]
+    },
+    {
+      "userId": 457,
+      "name": "架构师",
+      "role": "member",
+      "order": 2,
+      "appId": 457,
+      "appName": "技术顾问",
+      "tasks": []
+    }
+  ]
+}</code></pre>
+      </div>
+    </section>
+
+    <!-- API 参考 -->
+    <section id="api-reference">
+      <h2>🔌 API 完整参考</h2>
+
+      <h3>对话组管理</h3>
+      <table>
+        <thead><tr><th style="width:30%;">接口</th><th style="width:15%;">方法</th><th>说明</th></tr></thead>
+        <tbody>
+          <tr><td><code>/api/open/group/create</code></td><td>POST</td><td>创建对话组</td></tr>
+          <tr><td><code>/api/open/group/query</code></td><td>POST</td><td>查询对话组列表</td></tr>
+          <tr><td><code>/api/open/group/update</code></td><td>POST</td><td>更新对话组（标题、置顶等）</td></tr>
+          <tr><td><code>/api/open/group/del</code></td><td>POST</td><td>删除对话组</td></tr>
+          <tr><td><code>/api/open/group/delAll</code></td><td>POST</td><td>删除所有非置顶对话组</td></tr>
+        </tbody>
+      </table>
+
+      <h3>成员管理 <span class="badge badge-new">核心</span></h3>
+      <table>
+        <thead><tr><th style="width:30%;">接口</th><th style="width:15%;">方法</th><th>说明</th></tr></thead>
+        <tbody>
+          <tr><td><code>/api/open/group/members/add</code></td><td>POST</td><td>添加成员（自动启用群聊，可同时设置任务）</td></tr>
+          <tr><td><code>/api/open/group/members/remove</code></td><td>POST</td><td>移除成员</td></tr>
+          <tr><td><code>/api/open/group/members/list</code></td><td>POST</td><td>查询成员列表（包含任务信息）</td></tr>
+          <tr><td><code>/api/open/group/members/update</code></td><td>POST</td><td>更新成员信息</td></tr>
+        </tbody>
+      </table>
+      <div class="tip" style="margin-top:12px;">
+        💡 <strong>说明：</strong>添加成员时可通过 <code>taskDetail</code> 参数直接设置任务，任务会持久化保存在对话组中，AI会自动读取并参考。
+      </div>
+
+      <h3>对话接口</h3>
+      <table>
+        <thead><tr><th style="width:30%;">接口</th><th style="width:15%;">方法</th><th>说明</th></tr></thead>
+        <tbody>
+          <tr><td><code>/api/open/chat/chat-process</code></td><td>POST</td><td>发起对话（通过 options.groupId 启用群聊）</td></tr>
+          <tr><td><code>/api/open/chat/tts-process</code></td><td>POST</td><td>文字转语音</td></tr>
+        </tbody>
+      </table>
+
+      <div class="tip">
+        📖 <strong>完整 API 文档：</strong>
+        <ul style="margin:8px 0;">
+          <li><a href="/open-docs">接口说明文档</a> - HTML 格式详细说明</li>
+          <li><a href="/open-api-docs">Swagger UI</a> - 在线调试工具</li>
+          <li><a href="/open-api.json">OpenAPI JSON</a> - 机器可读格式</li>
+        </ul>
+      </div>
+    </section>
+
+    <!-- 示例代码 -->
+    <section id="examples">
+      <h2>💡 完整示例代码</h2>
+
+      <div class="tabs">
+        <div class="tab active" onclick="switchTab('javascript')">JavaScript</div>
+        <div class="tab" onclick="switchTab('python')">Python</div>
+        <div class="tab" onclick="switchTab('curl')">cURL</div>
+      </div>
+
+      <!-- JavaScript 示例 -->
+      <div id="javascript" class="tab-content active">
+        <h3>JavaScript / Node.js 完整示例</h3>
+        <pre><code>// 群聊功能完整示例
+const BASE_URL = 'http://your-domain:9520/api/open';
+const USER_ID = 1001;
+
+// 工具函数：发送请求
+async function request(endpoint, data) {
+  const response = await fetch(`${BASE_URL}${endpoint}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data)
+  });
+  return response.json();
+}
+
+// 步骤1：创建对话组
+async function createGroup() {
+  const result = await request('/group/create', {
+    userId: USER_ID
+  });
+  console.log('对话组已创建:', result.data);
+  return result.data.id; // 返回 groupId
+}
+
+// 步骤2：批量添加成员（可同时分配任务）
+async function addMembers(groupId) {
+  const result = await request('/group/members/add', {
+    userId: USER_ID,
+    groupId: groupId,
+    members: [
+      {
+        appId: 456,
+        order: 1,
+        role: 'leader',
+        taskDetail: '完成需求分析文档'
+      },
+      {
+        appId: 457,
+        order: 2,
+        role: 'member',
+        taskDetail: '设计系统架构'
+      },
+      {
+        appId: 458,
+        order: 3,
+        role: 'member',
+        taskDetail: '实现核心功能'
+      }
+    ]
+  });
+  console.log(`批量添加成员成功，共添加 ${result.data.count} 个成员:`, result);
+}
+
+// 步骤3：发起群聊对话
+async function startGroupChat(groupId) {
+  const members = await listMembers(groupId);
+
+  // 为每个成员依次调用接口
+  for (let i = 0; i < members.length; i++) {
+    const member = members[i];
+    const result = await request('/chat/chat-process', {
+      userId: USER_ID,
+      prompt: '大家好，我们来讨论一下新功能的实现方案',
+      appId: member.appId, // 当前成员的 appId
+      options: {
+        groupId: groupId,
+        isFirstMember: i === 0     // 第一个成员为 true
+      }
+    });
+    console.log(`成员 ${member.appName} 的回复:`, result);
+  }
+}
+
+// 步骤4：查看成员列表
+async function listMembers(groupId) {
+  const result = await request('/group/members/list', {
+    userId: USER_ID,
+    groupId: groupId
+  });
+  console.log('成员列表:', result.data);
+  return result.data;
+}
+
+// 主流程
+async function main() {
+  try {
+    // 1. 创建对话组
+    const groupId = await createGroup();
+
+    // 2. 添加成员（同时分配任务）
+    // 任务会持久化保存在对话组中，无需额外更新
+    await addMembers(groupId);
+
+    // 3. 获取成员列表（用于后续调用）
+    const members = await listMembers(groupId);
+    console.log('成员任务已持久化保存:', members.map(m => ({
+      name: m.appName,
+      tasks: m.tasks
+    })));
+
+    // 4. 发起群聊对话（为每个成员依次调用）
+    // AI会自动根据成员的任务调整回复内容
+    await startGroupChat(groupId);
+
+    console.log('✅ 群聊功能演示完成！');
+    console.log('💡 任务信息已保存在对话组中，后续对话AI会自动参考');
+  } catch (error) {
+    console.error('❌ 错误:', error);
+  }
+}
+
+// 执行
+main();</code></pre>
+      </div>
+
+      <!-- Python 示例 -->
+      <div id="python" class="tab-content">
+        <h3>Python 完整示例</h3>
+        <pre><code>import requests
+import json
+
+BASE_URL = 'http://your-domain:9520/api/open'
+USER_ID = 1001
+
+def request(endpoint, data):
+    """发送 POST 请求"""
+    url = f'{BASE_URL}{endpoint}'
+    response = requests.post(url, json=data)
+    return response.json()
+
+def create_group():
+    """创建对话组"""
+    result = request('/group/create', {'userId': USER_ID})
+    print('对话组已创建:', result['data'])
+    return result['data']['id']
+
+def add_members(group_id):
+    """批量添加成员（同时分配任务）"""
+    data = {
+        'userId': USER_ID,
+        'groupId': group_id,
+        'members': [
+            {
+                'appId': 456,
+                'order': 1,
+                'role': 'leader',
+                'taskDetail': '完成需求分析文档'
+            },
+            {
+                'appId': 457,
+                'order': 2,
+                'role': 'member',
+                'taskDetail': '设计系统架构'
+            },
+            {
+                'appId': 458,
+                'order': 3,
+                'role': 'member',
+                'taskDetail': '实现核心功能'
+            }
+        ]
+    }
+    result = request('/group/members/add', data)
+    print(f"批量添加成员成功，共添加 {result['data']['count']} 个成员:", result)
+
+def start_group_chat(group_id):
+    """发起群聊"""
+    # 先获取成员列表
+    members = list_members(group_id)
+
+    # 为每个成员依次调用接口
+    for i, member in enumerate(members):
+        data = {
+            'userId': USER_ID,
+            'prompt': '大家好，我们来讨论一下新功能的实现方案',
+            'appId': member['appId'],  # 当前成员的 appId
+            'options': {
+                'groupId': group_id,
+                'isFirstMember': i == 0     # 第一个成员为 True
+            }
+        }
+        result = request('/chat/chat-process', data)
+        print(f"成员 {member['appName']} 的回复:", result)
+
+def list_members(group_id):
+    """查看成员列表"""
+    result = request('/group/members/list', {
+        'userId': USER_ID,
+        'groupId': group_id
+    })
+    print('成员列表:', result['data'])
+    return result['data']
+
+def main():
+    """主流程"""
+    try:
+        # 1. 创建对话组
+        group_id = create_group()
+
+        # 2. 添加成员（同时分配任务）
+        # 任务会持久化保存在对话组中，无需额外更新
+        add_members(group_id)
+
+        # 3. 获取成员列表
+        members = list_members(group_id)
+        print('成员任务已持久化保存:', [(m['appName'], m['tasks']) for m in members])
+
+        # 4. 发起群聊对话（为每个成员依次调用）
+        # AI会自动根据成员的任务调整回复内容
+        start_group_chat(group_id)
+
+        print('✅ 群聊功能演示完成！')
+        print('💡 任务信息已保存在对话组中，后续对话AI会自动参考')
+    except Exception as e:
+        print(f'❌ 错误: {e}')
+
+if __name__ == '__main__':
+    main()</code></pre>
+      </div>
+
+      <!-- cURL 示例 -->
+      <div id="curl" class="tab-content">
+        <h3>cURL 命令示例</h3>
+        <pre><code># 设置变量
+BASE_URL="http://your-domain:9520/api/open"
+USER_ID=1001
+
+# 1. 创建对话组
+curl -X POST "${BASE_URL}/group/create" \
+  -H "Content-Type: application/json" \
+  -d "{\"userId\": ${USER_ID}}"
+
+# 假设返回 groupId = 123
+
+# 2. 批量添加成员（同时分配任务）
+curl -X POST "${BASE_URL}/group/members/add" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "userId": 1001,
+    "groupId": 123,
+    "members": [
+      {
+        "appId": 456,
+        "order": 1,
+        "role": "leader",
+        "taskDetail": "完成需求分析文档"
+      },
+      {
+        "appId": 457,
+        "order": 2,
+        "role": "member",
+        "taskDetail": "设计系统架构"
+      },
+      {
+        "appId": 458,
+        "order": 3,
+        "role": "member",
+        "taskDetail": "实现核心功能"
+      }
+    ]
+  }'
+
+# 3. 查看成员列表
+curl -X POST "${BASE_URL}/group/members/list" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "userId": 1001,
+    "groupId": 123
+  }'
+
+# 假设成员列表返回：
+# [
+#   {"userId": 456, "appId": 456, "appName": "产品经理", "order": 1, ...},
+#   {"userId": 457, "appId": 457, "appName": "架构师", "order": 2, ...},
+#   {"userId": 458, "appId": 458, "appName": "开发工程师", "order": 3, ...}
+# ]
+
+# 4. 发起群聊对话（每个成员依次调用）
+
+# 第一个成员（产品经理）发言
+curl -X POST "${BASE_URL}/chat/chat-process" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "userId": 1001,
+    "prompt": "大家好，我们来讨论一下新功能的实现方案",
+    "appId": 456,
+    "options": {
+      "groupId": 123,
+      "isFirstMember": true
+    }
+  }'
+
+# 第二个成员（架构师）发言
+curl -X POST "${BASE_URL}/chat/chat-process" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "userId": 1001,
+    "prompt": "大家好，我们来讨论一下新功能的实现方案",
+    "appId": 457,
+    "options": {
+      "groupId": 123,
+      "isFirstMember": false
+    }
+  }'
+
+# 第三个成员（开发工程师）发言
+curl -X POST "${BASE_URL}/chat/chat-process" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "userId": 1001,
+    "prompt": "大家好，我们来讨论一下新功能的实现方案",
+    "appId": 458,
+    "options": {
+      "groupId": 123,
+      "isFirstMember": false
+    }
+  }'
+
+# 说明：任务已在步骤2中通过 taskDetail 参数设置
+# 任务会持久化保存在对话组中，AI会自动参考</code></pre>
+        <div class="tip">
+          💡 <strong>提示：</strong>
+          <ul style="margin:8px 0;">
+            <li>任务在创建成员时设置，持久化保存在对话组中</li>
+            <li>后续对话AI会自动读取任务信息，无需额外操作</li>
+            <li>实际使用时，建议编写脚本循环调用成员接口</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <!-- 最佳实践 -->
+    <section id="best-practices">
+      <h2>⭐ 最佳实践</h2>
+
+      <div class="card-grid">
+        <div class="card">
+          <h4>✅ 成员管理</h4>
+          <ul>
+            <li><strong>统一 ID：</strong><code>memberId</code> 使用与 <code>appId</code> 相同的值</li>
+            <li><strong>清晰命名：</strong>为成员设置有意义的 <code>name</code>（如"产品经理"）</li>
+            <li><strong>合理排序：</strong>使用 <code>order</code> 控制发言顺序（1、2、3...）</li>
+            <li><strong>角色区分：</strong>使用 <code>role</code> 标识成员职责（leader/member）</li>
+          </ul>
+        </div>
+
+        <div class="card">
+          <h4>✅ 任务管理</h4>
+          <ul>
+            <li><strong>创建时设置：</strong>在添加成员时通过 <code>taskDetail</code> 参数设置任务</li>
+            <li><strong>明确目标：</strong>任务描述要清晰具体，AI会据此调整回复</li>
+            <li><strong>持久化保存：</strong>任务自动保存在对话组中，长期有效</li>
+            <li><strong>自动生效：</strong>AI会自动读取任务信息，影响对话内容</li>
+          </ul>
+        </div>
+
+        <div class="card">
+          <h4>✅ 对话策略</h4>
+          <ul>
+            <li><strong>指定角色：</strong>通过 <code>appId</code> 明确当前发言角色</li>
+            <li><strong>保持上下文：</strong>始终使用同一个 <code>groupId</code></li>
+            <li><strong>任务导向：</strong>提问时引导 AI 关注任务目标</li>
+            <li><strong>轮流发言：</strong>利用 <code>order</code> 实现有序对话</li>
+          </ul>
+        </div>
+
+        <div class="card">
+          <h4>✅ 性能优化</h4>
+          <ul>
+            <li><strong>批量操作：</strong>一次添加所有成员后再开始对话</li>
+            <li><strong>缓存信息：</strong>客户端缓存 <code>groupId</code> 和成员列表</li>
+            <li><strong>异步处理：</strong>对话可能较长，建议异步处理</li>
+            <li><strong>错误重试：</strong>网络错误时自动重试</li>
+          </ul>
+        </div>
+      </div>
+
+      <h3>推荐的对话流程</h3>
+      <div class="card">
+        <ol>
+          <li><strong>初始化阶段：</strong>创建对话组 → 添加所有成员（设置任务） → 任务持久化保存</li>
+          <li><strong>对话阶段：</strong>用户提问 → AI 按顺序回复（自动参考任务） → 记录关键信息</li>
+          <li><strong>协作阶段：</strong>成员依次发言 → AI 根据任务调整内容 → 持续迭代</li>
+          <li><strong>查看阶段：</strong>随时查看成员列表 → 确认任务信息 → 导出对话记录</li>
+        </ol>
+        <div class="tip" style="margin-top:12px;">
+          💡 <strong>核心理念：</strong>任务在创建时设置好，AI自动参考，无需人工频繁更新。
+        </div>
+      </div>
+
+      <h3>常见错误避免</h3>
+      <div class="warning">
+        <strong>❌ 常见错误：</strong>
+        <ul style="margin:8px 0;">
+          <li>忘记在对话时传递 <code>options.groupId</code> → 导致无法启用群聊模式</li>
+          <li><strong class="highlight">忘记传递 <code>isFirstMember</code> 参数 → 导致用户消息重复保存</strong></li>
+          <li><strong class="highlight">所有成员都传 <code>isFirstMember: true</code> → 导致用户消息重复</strong></li>
+          <li><strong class="highlight">不同成员的 <code>prompt</code> 不一致 → 导致对话混乱</strong></li>
+          <li><code>appId</code> 不正确 → 导致角色匹配失败</li>
+          <li>多次添加同一个成员 → 虽然不会报错但会导致数据混乱</li>
+          <li>删除对话组后继续使用 → 会返回 404 错误</li>
+          <li>不同用户的 <code>userId</code> 相同 → 会导致数据串扰</li>
+        </ul>
+      </div>
+
+      <div class="tip">
+        <strong>✅ 正确做法：</strong>
+        <ul style="margin:8px 0;">
+          <li>✅ 第一个成员：<code>isFirstMember: true</code>，保存用户消息</li>
+          <li>✅ 后续成员：<code>isFirstMember: false</code>，复用已保存的用户消息</li>
+          <li>✅ 所有成员使用相同的 <code>prompt</code></li>
+          <li>✅ 先查询成员列表，再按 <code>order</code> 顺序调用</li>
+        </ul>
+      </div>
+    </section>
+
+    <!-- 自动对话功能 -->
+    <section id="auto-chat">
+      <h2>🤖 群聊自动对话 <span class="badge badge-new">新功能</span></h2>
+
+      <div class="card">
+        <h3>什么是自动对话？</h3>
+        <p>自动对话功能允许 AI 角色<strong>基于历史对话自动生成回复</strong>，无需用户提供新的提示词。角色们可以根据之前的对话内容自动接力发言，实现真正的多角色自主协作。</p>
+
+        <h4>典型场景：</h4>
+        <ul>
+          <li>🎭 <strong>角色扮演：</strong>多个角色基于故事背景自动展开对话</li>
+          <li>💡 <strong>头脑风暴：</strong>团队成员围绕话题自动提出观点</li>
+          <li>📚 <strong>教学模拟：</strong>教师、学生自动进行知识讨论</li>
+          <li>🎮 <strong>游戏NPC：</strong>多个NPC基于剧情自动对话</li>
+        </ul>
+      </div>
+
+      <div class="warning">
+        <strong>⚠️ 关键区别：</strong>
+        <ul style="margin:8px 0;">
+          <li><strong>普通群聊：</strong>用户提问 → 所有角色依次回复用户的问题</li>
+          <li><strong>自动对话：</strong>角色1发言 → 角色2基于角色1的内容发言 → 角色3基于前两者发言 → ...</li>
+        </ul>
+      </div>
+
+      <h3>如何实现自动对话</h3>
+
+      <div class="card">
+        <h4>核心参数：<code>skipPromptInHistory</code></h4>
+        <p>在 <code>options</code> 中添加 <code>skipPromptInHistory: true</code> 参数，表示：</p>
+        <ul>
+          <li>✅ 不将当前 <code>prompt</code> 保存到对话历史</li>
+          <li>✅ AI 完全基于群组的历史对话生成回复</li>
+          <li>✅ 允许 <code>prompt</code> 为空字符串</li>
+        </ul>
+
+        <table style="margin-top:16px;">
+          <thead><tr><th>参数</th><th>类型</th><th>必填</th><th>说明</th></tr></thead>
+          <tbody>
+            <tr><td><code>options.skipPromptInHistory</code></td><td>boolean</td><td>✅</td><td>设置为 <code>true</code> 启用自动对话模式</td></tr>
+            <tr><td><code>prompt</code></td><td>string</td><td>❌</td><td>可以传空字符串 <code>""</code></td></tr>
+            <tr><td><code>options.isFirstMember</code></td><td>boolean</td><td>✅</td><td>自动对话模式下应设为 <code>false</code></td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3>完整示例</h3>
+
+      <div class="card">
+        <h4>场景：三个角色自动讨论技术方案</h4>
+        <p><strong>步骤 1：用户先发起话题（普通群聊模式）</strong></p>
+        <pre><code>// 用户提问：大家讨论一下新功能的技术方案
+// 第一个角色（产品经理）回复
+POST /api/open/chat/chat-process
+{
+  "userId": 1001,
+  "prompt": "大家讨论一下新功能的技术方案",
+  "appId": 456,
+  "options": {
+    "groupId": 123,
+    "memberIndex": 0,
+    "isFirstMember": true  // 保存用户消息
+  }
+}
+
+// 对话记录：
+// 用户: 大家讨论一下新功能的技术方案
+// 产品经理: 我认为这个功能应该优先考虑用户体验...</code></pre>
+
+        <p style="margin-top:16px;"><strong>步骤 2：启动自动对话（让角色自动接力）</strong></p>
+        <pre><code>// 第二个角色（架构师）自动发言
+POST /api/open/chat/chat-process
+{
+  "userId": 1001,
+  "prompt": "",  // ⚠️ 空字符串
+  "appId": 457,
+  "options": {
+    "groupId": 123,
+    "memberIndex": 1,
+    "isFirstMember": false,
+    "skipPromptInHistory": true  // ⚠️ 关键参数
+  }
+}
+
+// 第三个角色（开发工程师）自动发言
+POST /api/open/chat/chat-process
+{
+  "userId": 1001,
+  "prompt": "",  // ⚠️ 空字符串
+  "appId": 458,
+  "options": {
+    "groupId": 123,
+    "memberIndex": 2,
+    "isFirstMember": false,
+    "skipPromptInHistory": true  // ⚠️ 关键参数
+  }
+}
+
+// 对话记录：
+// 用户: 大家讨论一下新功能的技术方案
+// 产品经理: 我认为这个功能应该优先考虑用户体验...
+// 架构师: 基于产品的需求，我建议使用微服务架构...  ← 自动生成
+// 开发工程师: 架构师提到的方案可行，具体实现上...  ← 自动生成</code></pre>
+
+        <div class="tip" style="margin-top:16px;">
+          💡 <strong>提示：</strong>
+          <ul style="margin:8px 0;">
+            <li>角色会<strong>自动引用</strong>之前角色的发言内容</li>
+            <li>可以<strong>持续多轮</strong>自动对话，每轮都基于完整历史</li>
+            <li>每个角色会根据自己的<strong>任务</strong>和<strong>角色预设</strong>调整回复</li>
+          </ul>
+        </div>
+      </div>
+
+      <h3>JavaScript 完整示例</h3>
+
+      <div class="card">
+        <pre><code>// 群聊自动对话完整示例
+const BASE_URL = 'http://your-domain:9520/api/open';
+const USER_ID = 1001;
+const GROUP_ID = 123;
+
+// 获取成员列表
+async function getMembers(groupId) {
+  const res = await fetch(`${BASE_URL}/group/members/list`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ userId: USER_ID, groupId })
+  });
+  const data = await res.json();
+  return data.data.sort((a, b) => a.order - b.order);
+}
+
+// 自动对话：让所有角色依次自动发言
+async function autoChat(groupId, rounds = 1) {
+  const members = await getMembers(groupId);
+
+  for (let round = 0; round < rounds; round++) {
+    console.log(`[第 ${round + 1} 轮自动对话]`);
+
+    for (let i = 0; i < members.length; i++) {
+      const member = members[i];
+
+      const response = await fetch(`${BASE_URL}/chat/chat-process`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userId: USER_ID,
+          prompt: '',  // 空提示词
+          appId: member.appId,
+          options: {
+            groupId: groupId,
+            isFirstMember: false,  // 自动对话模式
+            skipPromptInHistory: true  // 关键参数
+          }
+        })
+      });
+
+      // 处理流式响应
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let fullText = '';
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        const chunk = decoder.decode(value);
+        const lines = chunk.split('\n').filter(line => line.trim());
+
+        for (const line of lines) {
+          try {
+            const data = JSON.parse(line);
+            if (data.content && data.content[0]?.text) {
+              fullText = data.content[0].text;
+              console.log(`[${member.appName}] ${fullText.substring(0, 50)}...`);
+            }
+          } catch (e) {}
+        }
+      }
+
+      console.log(`[${member.appName}] 完成: ${fullText}`);
+
+      // 等待1秒再继续下一个角色
+      await new Promise(resolve => setTimeout(resolve, 1000));
+    }
+  }
+
+  console.log('✅ 自动对话完成！');
+}
+
+// 使用示例：
+// 先由用户发起话题（普通群聊）
+// 然后调用 autoChat 让角色自动接力讨论
+autoChat(GROUP_ID, 2);  // 自动对话2轮</code></pre>
+      </div>
+
+      <h3>最佳实践</h3>
+
+      <div class="card-grid">
+        <div class="card">
+          <h4>✅ 建议</h4>
+          <ul>
+            <li>先用普通群聊让用户发起话题</li>
+            <li>再启动自动对话让角色讨论</li>
+            <li>控制自动对话轮数（建议1-3轮）</li>
+            <li>在角色间添加1-2秒延迟</li>
+            <li>为角色设置清晰的任务和预设</li>
+          </ul>
+        </div>
+
+        <div class="card">
+          <h4>❌ 注意</h4>
+          <ul>
+            <li>不要在自动对话时传 <code>isFirstMember: true</code></li>
+            <li>避免过长的自动对话（可能偏离主题）</li>
+            <li>确保群组有足够的历史对话</li>
+            <li>监控 AI 生成的内容质量</li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="success" style="margin-top:16px;">
+        <h4>🎉 成功案例</h4>
+        <p>某教育平台使用自动对话功能，让"教师"、"助教"、"学生"三个角色围绕知识点自动展开讨论，学习效果提升30%。关键是为每个角色设置了明确的任务：</p>
+        <ul style="margin:8px 0;">
+          <li><strong>教师：</strong>讲解核心概念，引导讨论方向</li>
+          <li><strong>助教：</strong>补充案例，解答细节问题</li>
+          <li><strong>学生：</strong>提出疑问，总结学习要点</li>
+        </ul>
+      </div>
+    </section>
+
+    <!-- 故障排查 -->
+    <section id="troubleshooting">
+      <h2>🔧 故障排查</h2>
+
+      <h3>常见问题及解决方案</h3>
+
+      <div class="card">
+        <h4>❓ 问题 1：创建对话组成功，但对话时没有启用群聊模式</h4>
+        <p><strong>原因：</strong>只创建了对话组，没有添加成员。</p>
+        <p><strong>解决：</strong>使用 <code>/api/open/group/members/add</code> 至少添加一个成员，群聊模式会自动启用。</p>
+        <pre><code>// 检查对话组的 isGroupChat 字段
+{
+  "isGroupChat": true  // ✅ 已启用
+  "members": "[...]"   // ✅ 有成员数据
+}</code></pre>
+      </div>
+
+      <div class="card">
+        <h4>❓ 问题 2：对话时 AI 没有按照成员顺序回复</h4>
+        <p><strong>原因：</strong>成员的 <code>order</code> 设置不正确，或对话时没有传递 <code>groupId</code>。</p>
+        <p><strong>解决：</strong></p>
+        <ol>
+          <li>确认成员的 <code>order</code> 设置正确（1、2、3...）</li>
+          <li>对话时确保传递了 <code>options.groupId</code></li>
+          <li>检查 <code>appId</code> 是否与成员的 <code>appId</code> 匹配</li>
+        </ol>
+      </div>
+
+      <div class="card">
+        <h4>❓ 问题 3：返回 "非法操作、您无权限访问该对话组"</h4>
+        <p><strong>原因：</strong><code>userId</code> 不匹配，或 <code>groupId</code> 不存在。</p>
+        <p><strong>解决：</strong></p>
+        <ul>
+          <li>确认 <code>userId</code> 与创建对话组时使用的 <code>userId</code> 一致</li>
+          <li>使用 <code>/api/open/group/query</code> 查询对话组列表，确认 <code>groupId</code> 存在</li>
+        </ul>
+      </div>
+
+      <div class="card">
+        <h4>❓ 问题 4：任务分配成功，但 AI 回复时没有考虑任务</h4>
+        <p><strong>原因：</strong>任务的 <code>title</code> 或 <code>detail</code> 不够明确。</p>
+        <p><strong>解决：</strong>设置清晰的任务标题和详情，AI 会根据任务内容调整回复重点。</p>
+        <pre><code>// ❌ 不够明确
+{
+  "title": "工作"
+}
+
+// ✅ 清晰明确
+{
+  "title": "完成产品需求分析文档",
+  "detail": "包含用户画像、功能列表、交互流程"
+}</code></pre>
+      </div>
+
+      <div class="card">
+        <h4>❓ 问题 5：成员列表中没有显示 appAvatar</h4>
+        <p><strong>原因：</strong>角色应用没有设置 <code>coverImg</code>，或 <code>appId</code> 不正确。</p>
+        <p><strong>解决：</strong></p>
+        <ul>
+          <li>确认添加成员时传递了正确的 <code>appId</code></li>
+          <li>检查角色应用是否设置了 <code>coverImg</code> 字段</li>
+        </ul>
+      </div>
+
+      <div class="card">
+        <h4>❓ 问题 6：对话记录中出现多条相同的用户消息 <span class="badge badge-new">常见</span></h4>
+        <p><strong>原因：</strong>没有正确使用 <code>isFirstMember</code> 参数，导致每个成员都保存了用户消息。</p>
+        <p><strong>错误示例：</strong></p>
+        <pre><code>// ❌ 错误：每个成员都传 isFirstMember: true
+成员1: { ..., "options": { "isFirstMember": true } }
+成员2: { ..., "options": { "isFirstMember": true } }  // ❌ 应该为 false
+成员3: { ..., "options": { "isFirstMember": true } }  // ❌ 应该为 false
+
+// 结果：数据库中有3条用户消息，对话记录混乱
+用户: 你好
+用户: 你好  // 重复
+用户: 你好  // 重复
+成员1: 回复...
+成员2: 回复...
+成员3: 回复...</code></pre>
+        <p><strong>正确做法：</strong></p>
+        <pre><code>// ✅ 正确：只有第一个成员传 isFirstMember: true
+成员1: { ..., "options": { "isFirstMember": true } }
+成员2: { ..., "options": { "isFirstMember": false } }
+成员3: { ..., "options": { "isFirstMember": false } }
+
+// 结果：只有1条用户消息，对话记录正常
+用户: 你好
+成员1: 回复...
+成员2: 回复...
+成员3: 回复...</code></pre>
+      </div>
+
+      <div class="card">
+        <h4>❓ 问题 7：群聊时提示"未找到已有用户消息"</h4>
+        <p><strong>原因：</strong>第一个成员的请求还未完成时，后续成员已经开始请求。</p>
+        <p><strong>解决：</strong></p>
+        <ul>
+          <li>确保按顺序调用（等待上一个成员的请求完成后再调用下一个）</li>
+          <li>后端会自动等待500ms后重试，通常可以解决</li>
+          <li>如果仍有问题，可以在客户端增加延迟（如200ms）</li>
+        </ul>
+      </div>
+
+      <h3>调试技巧</h3>
+      <div class="tip">
+        <strong>💡 推荐调试流程：</strong>
+        <ol style="margin:8px 0;">
+          <li><strong>使用 Swagger UI：</strong>访问 <code>/open-api-docs</code> 在线调试接口</li>
+          <li><strong>查看返回数据：</strong>检查 <code>success</code> 字段和 <code>data</code> 内容</li>
+          <li><strong>查询成员列表：</strong>使用 <code>/api/open/group/members/list</code> 验证成员配置</li>
+          <li><strong>查询对话组：</strong>使用 <code>/api/open/group/query</code> 检查 <code>isGroupChat</code> 状态</li>
+          <li><strong>查看日志：</strong>服务端日志会输出详细的群聊处理信息（搜索 <code>[群聊]</code>）</li>
+        </ol>
+      </div>
+
+      <h3>获取帮助</h3>
+      <div class="card">
+        <p>如果遇到无法解决的问题，请提供以下信息：</p>
+        <ul>
+          <li>服务版本号</li>
+          <li>完整的请求参数（JSON 格式）</li>
+          <li>完整的返回内容（JSON 格式）</li>
+          <li>对话组 ID 和用户 ID</li>
+          <li>成员列表信息</li>
+        </ul>
+        <p><strong>联系方式：</strong></p>
+        <ul>
+          <li>📧 技术支持邮箱：support@example.com</li>
+          <li>📖 文档中心：<a href="/open-docs">/open-docs</a></li>
+          <li>🔧 在线调试：<a href="/open-api-docs">/open-api-docs</a></li>
+        </ul>
+      </div>
+    </section>
+
+    <!-- 结语 -->
+    <section>
+      <div class="success">
+        <h3>🎉 恭喜！您已经掌握群聊功能的完整接入方法</h3>
+        <p>建议接下来：</p>
+        <ol>
+          <li>在测试环境运行示例代码，验证功能</li>
+          <li>根据业务需求调整成员配置和任务设计</li>
+          <li>集成到生产环境，监控对话质量</li>
+          <li>收集用户反馈，持续优化体验</li>
+        </ol>
+      </div>
+    </section>
+
+    <div class="footer">
+      <p>AI 服务群聊功能接入指南 | 版本 1.2.1 | 最后更新：2025-10-23</p>
+      <p><strong>更新日志：</strong></p>
+      <ul style="list-style:none;padding:0;margin:8px 0;">
+        <li>v1.2.1 - 移除冗余的 memberIndex 参数，简化 API 调用</li>
+        <li>v1.2.0 - <strong class="highlight">新增自动对话功能</strong>（skipPromptInHistory 参数），支持角色自动接力发言</li>
+        <li>v1.1.0 - 新增 isFirstMember 参数，解决用户消息重复问题</li>
+      </ul>
+      <p><a href="/open-docs">返回接口总览</a> · <a href="/open-api-docs">Swagger UI</a> · <a href="/open-api.json">OpenAPI JSON</a></p>
+    </div>
+  </div>
+
+  <script>
+    // Tab 切换功能
+    function switchTab(tabName) {
+      // 隐藏所有 tab content
+      document.querySelectorAll('.tab-content').forEach(el => {
+        el.classList.remove('active');
+      });
+      // 移除所有 tab 的 active 状态
+      document.querySelectorAll('.tab').forEach(el => {
+        el.classList.remove('active');
+      });
+
+      // 显示当前 tab content
+      document.getElementById(tabName).classList.add('active');
+      // 激活当前 tab
+      event.target.classList.add('active');
+    }
+  </script>
+</body>
+</html>

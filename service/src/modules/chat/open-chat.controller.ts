@@ -39,6 +39,15 @@ export class OpenChatController {
           properties: {
             parentMessageId: { type: 'string', description: '上一条消息ID，用于连续对话' },
             groupId: { type: 'number', description: '会话组ID' },
+            isFirstMember: {
+              type: 'boolean',
+              description: '是否为第一个成员（群聊模式专用，true时保存用户消息）',
+            },
+            skipPromptInHistory: {
+              type: 'boolean',
+              description:
+                '是否跳过将prompt添加到历史（群聊自动对话模式专用，true时不将prompt加入上下文）',
+            },
           },
         },
         audioUrl: { type: 'string', description: '音频URL，自动进行ASR识别为文本（可选）' },
@@ -80,6 +89,43 @@ export class OpenChatController {
           appId: 123,
         },
       },
+      groupChatFirst: {
+        summary: '群聊模式 - 第一个成员',
+        value: {
+          userId: 1001,
+          prompt: '大家好，请自我介绍',
+          appId: 101,
+          options: {
+            groupId: 456,
+            isFirstMember: true,
+          },
+        },
+      },
+      groupChatOther: {
+        summary: '群聊模式 - 后续成员',
+        value: {
+          userId: 1001,
+          prompt: '大家好，请自我介绍',
+          appId: 102,
+          options: {
+            groupId: 456,
+            isFirstMember: false,
+          },
+        },
+      },
+      groupChatAuto: {
+        summary: '群聊自动对话 - 角色自动发言（无需用户提问）',
+        value: {
+          userId: 1001,
+          prompt: '',
+          appId: 102,
+          options: {
+            groupId: 456,
+            isFirstMember: false,
+            skipPromptInHistory: true,
+          },
+        },
+      },
     },
   })
   async chatProcess(@Body() body: any, @Req() _req: Request, @Res() res: Response) {
@@ -108,7 +154,12 @@ export class OpenChatController {
         if (text) body.prompt = text;
       }
       if (!body?.prompt || body.prompt.trim() === '') {
-        throw new HttpException('提问信息不能为空！', HttpStatus.BAD_REQUEST);
+        // 允许只发送图片（prompt为空但有imageUrl）
+        // 允许群聊自动对话模式（skipPromptInHistory=true）
+        const isAutoChat = body?.options?.skipPromptInHistory === true;
+        if (!(body as any)?.imageUrl && !isAutoChat) {
+          throw new HttpException('提问信息不能为空！', HttpStatus.BAD_REQUEST);
+        }
       }
 
       // 构造伪造的 req 对象，使用 visitor 角色跳过用户验证

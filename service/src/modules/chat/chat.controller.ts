@@ -52,7 +52,12 @@ export class ChatController {
         if (text) body.prompt = text;
       }
       if (!body?.prompt || body.prompt.trim() === '') {
-        throw new HttpException('提问信息不能为空！', HttpStatus.BAD_REQUEST);
+        // 允许只发送图片（prompt为空但有imageUrl）
+        // 允许群聊自动对话模式（skipPromptInHistory=true）
+        const isAutoChat = body?.options?.skipPromptInHistory === true;
+        if (!(body as any)?.imageUrl && !isAutoChat) {
+          throw new HttpException('提问信息不能为空！', HttpStatus.BAD_REQUEST);
+        }
       }
       return this.chatService.chatProcess(body as any, req, res);
     } catch (e: any) {

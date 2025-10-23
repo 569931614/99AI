@@ -33,6 +33,11 @@ if exist "%ROOT%AIWebQuickDeploy\public\chat" (
 )
 mkdir "%ROOT%AIWebQuickDeploy\public\chat"
 
+if exist "%ROOT%AIWebQuickDeploy\public\open-docs" (
+    rd /s /q "%ROOT%AIWebQuickDeploy\public\open-docs"
+)
+mkdir "%ROOT%AIWebQuickDeploy\public\open-docs"
+
 if exist "%ROOT%AIWebQuickDeploy\dist" (
     rd /s /q "%ROOT%AIWebQuickDeploy\dist"
 )
@@ -42,6 +47,7 @@ echo 复制文件...
 xcopy "%ROOT%admin\dist\*" "%ROOT%AIWebQuickDeploy\public\admin\" /s /e /y /i
 xcopy "%ROOT%chat\dist\*" "%ROOT%AIWebQuickDeploy\public\chat\" /s /e /y /i
 xcopy "%ROOT%service\dist\*" "%ROOT%AIWebQuickDeploy\dist\" /s /e /y /i
+xcopy "%ROOT%service\src\public\open-docs\*" "%ROOT%AIWebQuickDeploy\public\open-docs\" /s /e /y /i
 
 echo 复制 service 部署文件...
 copy /y "%ROOT%service\pm2.conf.json" "%ROOT%AIWebQuickDeploy\pm2.conf.json" >nul

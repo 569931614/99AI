@@ -625,10 +625,71 @@ ${numberedOptions}
     return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   }
 
+  /**
+   * 使用通义千问识别图片内容
+   */
+  private async recognizeImageWithQwen(imageUrl: string): Promise<string | null> {
+    try {
+      const dashscopeApiKey =
+        (await this.globalConfigService.getConfigs(['dashscopeApiKey'])) ||
+        process.env.DASHSCOPE_API_KEY;
+
+      if (!dashscopeApiKey) {
+        Logger.warn('[图片识别] 未配置通义千问API Key，跳过图片识别', 'ChatService');
+        return null;
+      }
+
+      Logger.debug(`[图片识别] 开始识别图片: ${imageUrl}`, 'ChatService');
+
+      const axios = require('axios');
+      const response = await axios.post(
+        'https://dashscope.aliyuncs.com/api/v1/services/aigc/multimodal-generation/generation',
+        {
+          model: 'qwen-vl-plus',
+          input: {
+            messages: [
+              {
+                role: 'user',
+                content: [
+                  {
+                    image: imageUrl,
+                  },
+                  {
+                    text: '请详细描述这张图片的内容，包括图片中的物体、场景、人物、文字等信息。',
+                  },
+                ],
+              },
+            ],
+          },
+          parameters: {},
+        },
+        {
+          headers: {
+            Authorization: `Bearer ${dashscopeApiKey}`,
+            'Content-Type': 'application/json',
+          },
+          timeout: 30000,
+        },
+      );
+
+      const result = response.data?.output?.choices?.[0]?.message?.content?.[0]?.text || '';
+      Logger.debug(`[图片识别] 识别结果: ${result}`, 'ChatService');
+
+      return result || null;
+    } catch (error: any) {
+      Logger.error(
+        `[图片识别] 识别失败: ${error?.message || error}`,
+        error?.stack || '',
+        'ChatService',
+      );
+      return null;
+    }
+  }
+
   async chatProcess(body: any, req?: Request, res?: Response) {
     await this.userBalanceService.checkUserCertification(req.user.id);
     /* 获取对话参数 */
-    const {
+    let {
       options = {},
       usingPluginId,
       prompt,
@@ -642,6 +703,19 @@ ${numberedOptions}
     } = body;
 
     Logger.debug(`body: ${JSON.stringify(body)}`, 'ChatService');
+
+    // 图片识别逻辑：当用户只发送图片时，先调用通义千问识别图片
+    if (imageUrl && (!prompt || prompt.trim().length === 0)) {
+      Logger.debug('[图片识别] 检测到用户只发送图片，开始识别...', 'ChatService');
+      const imageDescription = await this.recognizeImageWithQwen(imageUrl);
+      if (imageDescription) {
+        prompt = `[这是一张图片，内容如下]\n${imageDescription}\n\n请根据图片内容进行回复。`;
+        Logger.debug(`[图片识别] 已将识别结果设置为prompt: ${prompt}`, 'ChatService');
+      } else {
+        Logger.warn('[图片识别] 图片识别失败，使用默认提示', 'ChatService');
+        prompt = '请看这张图片，这是什么？';
+      }
+    }
 
     // 解析 appId：优先使用 body.appId；若缺失且存在 groupId，则尝试从群组信息推断
     let appId = body?.appId ?? null;
@@ -702,7 +776,7 @@ ${numberedOptions}
       }
     }
 
-    const { groupId, usingNetwork, usingDeepThinking, usingMcpTool } = options;
+    const { groupId, usingNetwork, usingDeepThinking, usingMcpTool, isFirstMember } = options || {};
 
     // 判断是否为真正的群聊模式（需要检查 isGroupChat 字段）
     let isGroupChat = false;
@@ -1033,42 +1107,107 @@ ${numberedOptions}
     let userSaveLog;
     let userLogId;
 
-    if (isGroupChat && groupId) {
-      // 查询最近10秒内是否有相同的用户消息
-      const existingUserLog = await this.chatLogService.findRecentUserLogInGroup(
-        groupId,
-        prompt,
-        10,
-      );
+    // 自动对话模式：跳过用户消息保存
+    const isAutoChat = options?.skipPromptInHistory === true && (!prompt || prompt.trim() === '');
 
-      if (existingUserLog) {
-        // 使用已存在的用户消息
-        userLogId = existingUserLog.id;
-        userSaveLog = existingUserLog;
-        Logger.debug(`[群聊] 使用已存在的用户消息，id=${userLogId}, appId=${appId}`, 'ChatService');
+    if (isGroupChat && groupId && !isAutoChat) {
+      // 关键修复：只在第一个成员（isFirstMember=true）时才保存/查询用户消息
+      if (isFirstMember) {
+        // 查询最近10秒内是否有相同的用户消息
+        const existingUserLog = await this.chatLogService.findRecentUserLogInGroup(
+          groupId,
+          prompt,
+          10,
+        );
+
+        if (existingUserLog) {
+          // 使用已存在的用户消息
+          userLogId = existingUserLog.id;
+          userSaveLog = existingUserLog;
+          Logger.debug(
+            `[群聊] 使用已存在的用户消息，id=${userLogId}, appId=${appId}`,
+            'ChatService',
+          );
+        } else {
+          // 第一次保存用户消息
+          userSaveLog = await this.chatLogService.saveChatLog({
+            appId: appId,
+            curIp,
+            userId: req.user.id,
+            type: modelType ? modelType : 1,
+            fileUrl: fileUrl ? fileUrl : null,
+            imageUrl: imageUrl ? imageUrl : null,
+            content: prompt,
+            promptTokens: 0,
+            completionTokens: 0,
+            totalTokens: 0,
+            model: useModel,
+            modelName: realUserName,
+            role: 'user',
+            groupId: groupId ? groupId : null,
+          });
+          userLogId = userSaveLog.id;
+          Logger.debug(`[群聊] 保存新的用户消息，id=${userLogId}, appId=${appId}`, 'ChatService');
+        }
       } else {
-        // 第一次保存用户消息
-        userSaveLog = await this.chatLogService.saveChatLog({
-          appId: appId,
-          curIp,
-          userId: req.user.id,
-          type: modelType ? modelType : 1,
-          fileUrl: fileUrl ? fileUrl : null,
-          imageUrl: imageUrl ? imageUrl : null,
-          content: prompt,
-          promptTokens: 0,
-          completionTokens: 0,
-          totalTokens: 0,
-          model: useModel,
-          modelName: realUserName,
-          role: 'user',
-          groupId: groupId ? groupId : null,
-        });
-        userLogId = userSaveLog.id;
-        Logger.debug(`[群聊] 保存新的用户消息，id=${userLogId}, appId=${appId}`, 'ChatService');
+        // 非第一个成员，查询已保存的用户消息（应该由第一个成员保存了）
+        const existingUserLog = await this.chatLogService.findRecentUserLogInGroup(
+          groupId,
+          prompt,
+          30, // 扩大时间窗口到30秒，确保能找到第一个成员保存的消息
+        );
+
+        if (existingUserLog) {
+          userLogId = existingUserLog.id;
+          userSaveLog = existingUserLog;
+          Logger.debug(
+            `[群聊] 非第一成员，复用已有用户消息，id=${userLogId}, appId=${appId}`,
+            'ChatService',
+          );
+        } else {
+          // 理论上不应该走到这里，如果走到了说明第一个成员还没保存完
+          Logger.warn(
+            `[群聊] 非第一成员但未找到已有用户消息，可能是并发问题，appId=${appId}`,
+            'ChatService',
+          );
+
+          // 多次重试，增加等待时间
+          let foundUserLog = null;
+          const maxRetries = 5;
+          const retryDelay = 1000; // 1秒
+
+          for (let i = 0; i < maxRetries; i++) {
+            await new Promise(resolve => setTimeout(resolve, retryDelay));
+            foundUserLog = await this.chatLogService.findRecentUserLogInGroup(
+              groupId,
+              prompt,
+              60, // 扩大时间窗口到60秒
+            );
+            if (foundUserLog) {
+              Logger.debug(
+                `[群聊] 第${i + 1}次重试后找到用户消息，id=${foundUserLog.id}`,
+                'ChatService',
+              );
+              break;
+            }
+          }
+
+          if (foundUserLog) {
+            userLogId = foundUserLog.id;
+            userSaveLog = foundUserLog;
+          } else {
+            // 多次重试后仍未找到，跳过用户消息（避免重复保存）
+            Logger.error(
+              `[群聊] 非第一成员经过${maxRetries}次重试后仍未找到用户消息，跳过用户消息保存，appId=${appId}`,
+              'ChatService',
+            );
+            userLogId = null;
+            userSaveLog = null;
+          }
+        }
       }
-    } else {
-      // 普通模式，正常保存
+    } else if (!isGroupChat && !isAutoChat) {
+      // 普通模式，正常保存（自动对话模式不保存）
       userSaveLog = await this.chatLogService.saveChatLog({
         appId: appId,
         curIp,
@@ -1086,6 +1225,10 @@ ${numberedOptions}
         groupId: groupId ? groupId : null,
       });
       userLogId = userSaveLog.id;
+    } else if (isAutoChat) {
+      // 自动对话模式：不保存用户消息
+      Logger.debug(`[自动对话] 跳过用户消息保存，skipPromptInHistory=true`, 'ChatService');
+      userLogId = null;
     }
 
     // 群聊模式：根据appId设置助手消息的name字段
@@ -1331,7 +1474,8 @@ ${numberedOptions}
             imageUrl,
             {
               onProgress: (delta: string) => {
-                if (!isGroupChat && delta) {
+                // 修改：群聊和单聊都应该发送流式数据
+                if (delta) {
                   accumulatedText += delta;
                   const payload = { content: [{ type: 'text', text: accumulatedText }] };
                   try {
@@ -2057,7 +2201,8 @@ ${numberedOptions}
     }
 
     // 添加当前用户提问到消息历史
-    if (prompt) {
+    // 如果 skipPromptInHistory 为 true（用于群聊自动对话），则跳过添加
+    if (prompt && !options?.skipPromptInHistory) {
       // 检查最后一条消息是否已经是当前用户的提问
       const lastMessage = messages[messages.length - 1];
       const isLastMessageCurrentPrompt =
@@ -2101,6 +2246,11 @@ ${numberedOptions}
           'ChatService',
         );
       }
+    } else if (options?.skipPromptInHistory) {
+      Logger.debug(
+        `[群聊自动对话] skipPromptInHistory=true，跳过将 prompt 添加到历史`,
+        'ChatService',
+      );
     }
 
     // 群聊模式：添加prefill消息（根据星尘API文档）
@@ -2147,7 +2297,7 @@ ${numberedOptions}
   }
 
   async ttsProcess(body: any, req: any, res?: any) {
-    const { chatId, prompt, emotion } = body;
+    const { chatId, prompt, emotion, appId: bodyAppId } = body;
 
     Logger.debug(
       `开始TTS处理: ${String(prompt || '').substring(0, 50)}${
@@ -2188,15 +2338,19 @@ ${numberedOptions}
       const { url } = await this.voiceService.preview(previewPayload);
       try {
         const detailKeyInfo = await this.modelsService.getCurrentModelKeyInfo('tts-1');
-        const { deduct, deductType } = detailKeyInfo;
-        await this.userBalanceService.validateBalance(req, deductType, deduct);
-        await this.userBalanceService.deductFromBalance(
-          req.user.id,
-          deductType,
-          deduct,
-          0,
-          req.user.role,
-        );
+        if (detailKeyInfo) {
+          const { deduct, deductType } = detailKeyInfo;
+          await this.userBalanceService.validateBalance(req, deductType, deduct);
+          await this.userBalanceService.deductFromBalance(
+            req.user.id,
+            deductType,
+            deduct,
+            0,
+            req.user.role,
+          );
+        } else {
+          Logger.warn(`[TTSService] 未找到 tts-1 模型配置，跳过扣费`, 'TTSService');
+        }
       } catch (e: any) {
         Logger.warn(
           `[TTSService] 扣费配置缺失或校验失败，已跳过扣费: ${e?.message || e}`,
@@ -2207,10 +2361,14 @@ ${numberedOptions}
       return res.status(200).send({ ttsUrl: url });
     };
 
-    // 3) 读取聊天所属 appId，并优先根据 情绪→音色 映射选择音色
+    // 3) 读取聊天所属 appId，优先使用传入的 appId，否则从 chatLog 获取
     try {
-      const chatLog = await this.chatLogService.findOneChatLog(chatId);
-      const appId = (chatLog as any)?.appId ?? null;
+      let appId = bodyAppId;
+      if (!appId) {
+        const chatLog = await this.chatLogService.findOneChatLog(chatId);
+        appId = (chatLog as any)?.appId ?? null;
+      }
+      Logger.debug(`[TTSService] 使用的appId: ${appId}`, 'TTSService');
 
       // 从完整文本（包括括号内容）识别情绪，用于选择音色
       let detectedEmotion: string | null = null;
@@ -2314,73 +2472,21 @@ ${numberedOptions}
             return await doTtsWithVoice(voiceId, ttsParams);
           }
         } catch (e: any) {
-          Logger.warn(`[TTSService] 读取应用默认音色失败: ${e?.message || e}`, 'TTSService');
+          Logger.warn(`[TTSService] 音色合成失败: ${e?.message || e}`, 'TTSService');
+          // 音色合成失败，返回具体错误信息
+          const errorMsg = e?.message || '音色合成失败';
+          return res.status(500).send({
+            message: `语音合成失败: ${errorMsg}`,
+            detail: '请检查音色配置是否正确，或联系管理员',
+          });
         }
       }
     } catch (e: any) {
       Logger.warn(`[TTSService] 情绪/角色音色路径检查失败: ${e?.message || e}`, 'TTSService');
     }
 
-    // 3) 最终回退：OpenAI TTS
-    try {
-      const detailKeyInfo = await this.modelsService.getCurrentModelKeyInfo('tts-1');
-      const { key, proxyUrl, deduct, deductType, timeout } = detailKeyInfo;
-      const { openaiBaseUrl, openaiBaseKey, openaiVoice } =
-        await this.globalConfigService.getConfigs([
-          'openaiBaseUrl',
-          'openaiBaseKey',
-          'openaiVoice',
-        ]);
-      const useKey = key || openaiBaseKey;
-      const useTimeout = timeout * 1000;
-
-      // 用户余额检测（仅在走 OpenAI TTS 时强制校验）
-      await this.userBalanceService.validateBalance(req, deductType, deduct);
-
-      const formattedUrl = formatUrl(proxyUrl || openaiBaseUrl);
-      const correctedProxyUrl = await correctApiBaseUrl(formattedUrl);
-      const openai = new OpenAI({
-        apiKey: useKey,
-        baseURL: correctedProxyUrl,
-        timeout: useTimeout,
-      });
-
-      const response = await openai.audio.speech.create({
-        model: 'tts-1',
-        // 使用移除括号后的文本，避免朗读心理描述/舞台指令
-        input: textToSpeak,
-        voice: openaiVoice || 'onyx',
-      });
-
-      const buffer = Buffer.from(await response.arrayBuffer());
-      Logger.debug('TTS音频数据生成成功', 'TTSService');
-
-      const now = new Date();
-      const year = now.getFullYear();
-      const month = String(now.getMonth() + 1).padStart(2, '0');
-      const day = String(now.getDate()).padStart(2, '0');
-      const currentDate = `${year}${month}/${day}`;
-
-      const ttsUrl = await this.uploadService.uploadFile(
-        { buffer, mimetype: 'audio/mpeg' },
-        `audio/openai/${currentDate}`,
-      );
-
-      await Promise.all([
-        this.chatLogService.updateChatLog(chatId, { ttsUrl }),
-        this.userBalanceService.deductFromBalance(
-          req.user.id,
-          deductType,
-          deduct,
-          0,
-          req.user.role,
-        ),
-      ]);
-
-      return res.status(200).send({ ttsUrl });
-    } catch (error) {
-      Logger.error('TTS处理失败', error, 'TTSService');
-      return res.status(500).send({ message: error?.message || '语音合成请求处理失败' });
-    }
+    // 3) 没有配置任何音色，返回错误提示
+    Logger.error('[TTSService] 未配置任何音色，无法进行TTS', 'TTSService');
+    return res.status(400).send({ message: '请先为角色配置音色后再进行语音合成' });
   }
 }

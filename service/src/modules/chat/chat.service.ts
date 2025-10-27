@@ -1251,6 +1251,70 @@ ${numberedOptions}
       }
     }
 
+    // 检查是否需要插入开场白（群聊模式下，检查每个角色的开场白状态）
+    if (groupId && appId) {
+      try {
+        // 查询该角色在该群组中是否已有助手消息
+        const assistantCountForApp = await this.chatLogService.getAssistantChatLogsCountByAppId(
+          groupId,
+          appId,
+        );
+
+        if (assistantCountForApp === 0) {
+          // 该角色第一次发言，尝试获取该角色的开场白
+          let openingRemark: string | null = null;
+
+          // 从群组成员数据中获取该角色的开场白
+          const groupInfo = await this.chatGroupService.getGroupInfoFromId(groupId);
+          if (groupInfo?.members) {
+            try {
+              const members = JSON.parse(groupInfo.members);
+              const currentMember = members.find(m => m.appId === appId || m.userId === appId);
+              if (currentMember?.openingRemark) {
+                openingRemark = currentMember.openingRemark;
+              }
+            } catch (error) {
+              Logger.debug(`解析成员数据失败: ${error.message}`, 'ChatService');
+            }
+          }
+
+          // 如果成员数据中没有开场白，且有 appId，则从应用信息中获取
+          if (!openingRemark && appId) {
+            const appInfo = await this.appEntity.findOne({ where: { id: appId } });
+            if (appInfo?.openingRemark) {
+              openingRemark = appInfo.openingRemark;
+            }
+          }
+
+          // 如果有开场白，保存为该角色的第一条助手消息
+          if (openingRemark) {
+            await this.chatLogService.saveChatLog({
+              appId: appId,
+              curIp,
+              userId: req.user.id,
+              type: modelType ? modelType : 1,
+              model: useModel,
+              modelName: assistantName,
+              role: 'assistant',
+              groupId: groupId,
+              content: openingRemark,
+              promptTokens: 0,
+              completionTokens: 0,
+              totalTokens: 0,
+              status: 3, // 已完成
+              modelAvatar: usingPlugin?.pluginImg || useModelAvatar || modelAvatar || '',
+            });
+            Logger.debug(
+              `[开场白] 已插入角色开场白到会话记录，groupId=${groupId}, appId=${appId}`,
+              'ChatService',
+            );
+          }
+        }
+      } catch (error) {
+        Logger.debug(`检查或插入角色开场白失败: ${error.message}`, 'ChatService');
+      }
+    }
+
     const assistantSaveLog = await this.chatLogService.saveChatLog({
       appId: appId ? appId : null,
       action: action ? action : null,
@@ -2323,7 +2387,7 @@ ${numberedOptions}
       return res.status(400).send({ error: '文本内容为空，无法进行语音合成' });
     }
 
-    // 小工具：使用指定 voiceId 进行合成 + 记录 + 尝试扣费
+    // 小工具:使用指定 voiceId 进行合成 + 记录 + 尝试扣费
     const doTtsWithVoice = async (
       voiceId: string,
       params?: { rate?: number; pitch?: number; volume?: number },
@@ -2335,7 +2399,9 @@ ${numberedOptions}
         if (params.pitch !== undefined) previewPayload.pitch = params.pitch;
         if (params.volume !== undefined) previewPayload.volume = params.volume;
       }
-      const { url } = await this.voiceService.preview(previewPayload);
+      const { url, duration } = await this.voiceService.preview(previewPayload);
+      // 将时长四舍五入为整数（秒）
+      const durationInt = Math.round(duration);
       try {
         const detailKeyInfo = await this.modelsService.getCurrentModelKeyInfo('tts-1');
         if (detailKeyInfo) {
@@ -2357,8 +2423,8 @@ ${numberedOptions}
           'TTSService',
         );
       }
-      await this.chatLogService.updateChatLog(chatId, { ttsUrl: url });
-      return res.status(200).send({ ttsUrl: url });
+      await this.chatLogService.updateChatLog(chatId, { ttsUrl: url, ttsDuration: durationInt });
+      return res.status(200).send({ ttsUrl: url, duration: durationInt });
     };
 
     // 3) 读取聊天所属 appId，优先使用传入的 appId，否则从 chatLog 获取

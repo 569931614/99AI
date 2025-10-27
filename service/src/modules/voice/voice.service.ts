@@ -785,7 +785,37 @@ export class VoiceService {
   }
 
   /**
-   * 语音识别（ASR）：接收 base64 音频（建议 WAV PCM 单声道 16kHz），调用 DashScope Paraformer 实时识别（WebSocket）
+   * 辅助方法：检测并处理音频URL，下载后转换为Base64
+   */
+  private async convertAudioUrlToBase64(audioInput: string): Promise<string> {
+    // 检测是否为URL（http或https开头）
+    const isUrl = /^https?:\/\//i.test(audioInput);
+    if (!isUrl) {
+      return audioInput; // 不是URL，直接返回原始输入（假定已是Base64）
+    }
+
+    Logger.debug(`检测到音频URL，开始下载: ${audioInput}`, 'VoiceService');
+    try {
+      const response = await axios.get(audioInput, {
+        responseType: 'arraybuffer',
+        timeout: 30000, // 30秒超时
+      });
+
+      const audioBuffer = Buffer.from(response.data);
+      const base64Audio = audioBuffer.toString('base64');
+      Logger.debug(
+        `音频下载成功，大小: ${audioBuffer.length} bytes, Base64长度: ${base64Audio.length}`,
+        'VoiceService',
+      );
+      return base64Audio;
+    } catch (error) {
+      Logger.error(`下载音频URL失败: ${audioInput}`, error.message, 'VoiceService');
+      throw new HttpException(`下载音频URL失败: ${error.message}`, HttpStatus.BAD_REQUEST);
+    }
+  }
+
+  /**
+   * 语音识别（ASR）：接收 base64 音频或音频URL（建议 WAV PCM 单声道 16kHz），调用 DashScope Paraformer 实时识别（WebSocket）
    * 返回聚合后的文本与句子列表
    */
   async asr(
@@ -802,8 +832,11 @@ export class VoiceService {
     text: string;
     sentences?: Array<{ begin_time: number; end_time: number | null; text: string }>;
   }> {
-    const { audioBase64 } = body || ({} as any);
+    let { audioBase64 } = body || ({} as any);
     if (!audioBase64) throw new HttpException('audioBase64 必填', HttpStatus.BAD_REQUEST);
+
+    // 如果传入的是URL，先下载并转换为Base64
+    audioBase64 = await this.convertAudioUrlToBase64(audioBase64);
 
     const fmt = (body.format || 'wav') as 'wav' | 'pcm' | 'mp3' | 'opus' | 'speex' | 'aac' | 'amr';
     const sampleRate = Number(body.sample_rate ?? 16000);
@@ -1125,7 +1158,105 @@ export class VoiceService {
   }
 
   /**
-   * 合成试听音频并上传至当前配置的存储（本地/S3/OSS等），返回可访问URL
+   * 计算音频时长（秒）
+   * 使用 ffprobe 获取精确的音频时长
+   */
+  private async getAudioDuration(
+    audioBuffer: Buffer,
+    format: 'mp3' | 'wav' | 'pcm',
+    sampleRate: number,
+  ): Promise<number> {
+    // 方案1: 使用 ffprobe 获取精确时长（适用于所有格式）
+    try {
+      // 动态引入 fluent-ffmpeg
+      const mod: any = await import('fluent-ffmpeg');
+      const ffmpeg = mod?.default || mod;
+
+      // 创建临时文件
+      const tempDir = os.tmpdir();
+      const tempFile = path.join(
+        tempDir,
+        `audio-duration-${Date.now()}.${format === 'pcm' ? 'wav' : format}`,
+      );
+
+      // 写入音频数据
+      fs.writeFileSync(tempFile, audioBuffer);
+
+      // 使用 ffprobe 获取时长
+      return new Promise<number>((resolve, reject) => {
+        ffmpeg.ffprobe(tempFile, (err, metadata) => {
+          // 清理临时文件
+          try {
+            if (fs.existsSync(tempFile)) fs.unlinkSync(tempFile);
+          } catch {}
+
+          if (err) {
+            Logger.warn(
+              `[getAudioDuration] ffprobe 失败: ${err.message}，使用估算方法`,
+              'VoiceService',
+            );
+            // 回退到估算方法
+            resolve(this.estimateAudioDuration(audioBuffer, format, sampleRate));
+          } else {
+            const duration = metadata?.format?.duration || 0;
+            Logger.debug(`[getAudioDuration] ffprobe 获取时长: ${duration}秒`, 'VoiceService');
+            resolve(duration);
+          }
+        });
+      });
+    } catch (error) {
+      Logger.warn(
+        `[getAudioDuration] 无法使用 ffprobe: ${error.message}，使用估算方法`,
+        'VoiceService',
+      );
+      // 回退到估算方法
+      return this.estimateAudioDuration(audioBuffer, format, sampleRate);
+    }
+  }
+
+  /**
+   * 估算音频时长（备用方法）
+   * 基于数据大小和格式参数估算
+   */
+  private estimateAudioDuration(
+    audioBuffer: Buffer,
+    format: 'mp3' | 'wav' | 'pcm',
+    sampleRate: number,
+  ): number {
+    const dataSize = audioBuffer.length;
+
+    if (format === 'pcm' || format === 'wav') {
+      // PCM/WAV: duration = dataSize / (sampleRate * channels * bytesPerSample)
+      // 假设单声道、16位采样（2字节）
+      const channels = 1;
+      const bytesPerSample = 2;
+
+      // 如果是 WAV 格式，去掉44字节的头部
+      const audioDataSize =
+        format === 'wav' && dataSize > 44 && audioBuffer.toString('ascii', 0, 4) === 'RIFF'
+          ? dataSize - 44
+          : dataSize;
+
+      const duration = audioDataSize / (sampleRate * channels * bytesPerSample);
+      Logger.debug(`[estimateAudioDuration] PCM/WAV 估算时长: ${duration}秒`, 'VoiceService');
+      return duration;
+    } else if (format === 'mp3') {
+      // MP3: 使用比特率估算
+      // 假设平均比特率 128kbps (16KB/s)
+      const bitrate = 128 * 1024; // bits per second
+      const bytesPerSecond = bitrate / 8; // bytes per second
+      const duration = dataSize / bytesPerSecond;
+      Logger.debug(`[estimateAudioDuration] MP3 估算时长: ${duration}秒`, 'VoiceService');
+      return duration;
+    }
+
+    // 其他格式，使用保守估算
+    Logger.warn(`[estimateAudioDuration] 未知格式 ${format}，使用保守估算`, 'VoiceService');
+    return dataSize / (sampleRate * 2); // 假设单声道16位
+  }
+
+  /**
+   * 合成试听音频并上传至当前配置的存储（本地/S3/OSS等），返回可访问URL和时长
    */
   async preview(body: {
     voice_id: string;
@@ -1136,7 +1267,7 @@ export class VoiceService {
     volume?: number;
     rate?: number;
     pitch?: number;
-  }) {
+  }): Promise<{ url: string; duration: number }> {
     const { voice_id, text } = body;
     if (!voice_id || !text)
       throw new HttpException('voice_id 与 text 必填', HttpStatus.BAD_REQUEST);
@@ -1183,7 +1314,7 @@ export class VoiceService {
 
     const audioBuffers: Uint8Array[] = [];
 
-    const uploadOnFinish = new Promise<string>((resolve, reject) => {
+    const uploadOnFinish = new Promise<{ url: string; duration: number }>((resolve, reject) => {
       ws.on('open', () => {
         const runTask = {
           header: { action: 'run-task', task_id: taskId, streaming: 'duplex' },
@@ -1258,7 +1389,15 @@ export class VoiceService {
             { buffer, mimetype } as any,
             'voicePreview',
           );
-          resolve(url as any);
+
+          // 计算音频时长
+          const duration = await this.getAudioDuration(buffer, format, sample_rate);
+          Logger.log(
+            `[preview] 音频生成完成 - URL: ${url}, 时长: ${Math.round(duration)}秒`,
+            'VoiceService',
+          );
+
+          resolve({ url: url as any, duration });
         } catch (e: any) {
           // 透传上传模块的异常状态码，避免一律 500
           if (e instanceof HttpException) return reject(e);
@@ -1271,8 +1410,8 @@ export class VoiceService {
       });
     });
 
-    const url = await uploadOnFinish;
-    return { url };
+    const result = await uploadOnFinish;
+    return result;
   }
 
   /**

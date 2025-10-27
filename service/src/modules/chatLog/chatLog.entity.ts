@@ -90,6 +90,9 @@ export class ChatLogEntity extends BaseEntity {
   @Column({ comment: '对话转语音的链接', nullable: true, type: 'text' })
   ttsUrl: string;
 
+  @Column({ comment: '语音时长（秒）', nullable: true, type: 'int' })
+  ttsDuration: number;
+
   @Column({ comment: '是否推荐0: 默认 1: 推荐', nullable: true, default: 0 })
   rec: number;
 

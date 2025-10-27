@@ -169,7 +169,10 @@
 Content-Type: application/json
 
 {
-  "userId": 1001
+  "userId": 1001,
+  "title": "技术交流群",
+  "description": "前端技术讨论群",
+  "ownerNickname": "张三"
 }</code></pre>
           <p style="color:var(--muted);font-size:12px;">→ 返回 <code>groupId</code>，后续所有操作都需要此 ID</p>
         </div>
@@ -266,10 +269,21 @@ Content-Type: application/json
           <thead><tr><th>参数</th><th>类型</th><th>必填</th><th>说明</th></tr></thead>
           <tbody>
             <tr><td><code>userId</code></td><td>number</td><td>✅</td><td>外部用户ID（任意数字）</td></tr>
-            <tr><td><code>appId</code></td><td>number</td><td>❌</td><td>初始关联的角色ID（可选）</td></tr>
+            <tr><td><code>title</code></td><td>string</td><td>❌</td><td>群聊名称（不传则默认为"新对话"）</td></tr>
+            <tr><td><code>description</code></td><td>string</td><td>❌</td><td>群聊描述信息</td></tr>
+            <tr><td><code>ownerNickname</code></td><td>string</td><td>❌</td><td>群主在群内的昵称</td></tr>
             <tr><td><code>modelConfig</code></td><td>object</td><td>❌</td><td>模型配置（不传则使用默认）</td></tr>
           </tbody>
         </table>
+        <div class="tip" style="margin-top:12px;">
+          💡 <strong>参数说明：</strong>
+          <ul style="margin:8px 0;">
+            <li><code>title</code>：自定义群聊名称，如"技术交流群"</li>
+            <li><code>description</code>：群聊的详细描述信息，用于说明群聊用途</li>
+            <li><code>ownerNickname</code>：创建者在群内的昵称展示</li>
+            <li>创建对话组后，通过添加成员接口为每个成员设置角色和开场白</li>
+          </ul>
+        </div>
         <p><strong>返回示例：</strong></p>
         <pre><code>{
   "success": true,
@@ -303,10 +317,11 @@ Content-Type: application/json
             <tr><td><code>order</code></td><td>number</td><td>✅</td><td>发言顺序（数字越小越靠前）</td></tr>
             <tr><td><code>role</code></td><td>string</td><td>✅</td><td>成员角色（如：member、leader）</td></tr>
             <tr><td><code>taskDetail</code></td><td>string</td><td>❌</td><td>任务描述（如："完成需求分析文档"）</td></tr>
+            <tr><td><code>openingRemark</code></td><td>string</td><td>❌</td><td>该成员的开场白（不传则使用应用默认开场白）</td></tr>
           </tbody>
         </table>
         <div class="tip">
-          💡 <strong>说明：</strong>使用 appId 作为成员标识，系统会自动从应用信息中获取角色名称。taskDetail 为可选字段，传入后会自动创建任务（状态默认为 todo）。
+          💡 <strong>说明：</strong>使用 appId 作为成员标识，系统会自动从应用信息中获取角色名称。<code>taskDetail</code> 和 <code>openingRemark</code> 为可选字段，传入后会持久化保存。每个成员首次发言时会自动插入其开场白。
         </div>
         <p><strong>请求示例：</strong></p>
         <pre><code>{
@@ -484,7 +499,7 @@ POST /api/open/chat/chat-process
           <tr><td><code>/api/open/group/members/add</code></td><td>POST</td><td>添加成员（自动启用群聊，可同时设置任务）</td></tr>
           <tr><td><code>/api/open/group/members/remove</code></td><td>POST</td><td>移除成员</td></tr>
           <tr><td><code>/api/open/group/members/list</code></td><td>POST</td><td>查询成员列表（包含任务信息）</td></tr>
-          <tr><td><code>/api/open/group/members/update</code></td><td>POST</td><td>更新成员信息</td></tr>
+          <tr><td><code>/api/open/group/members/update</code></td><td>POST</td><td>更新成员信息（昵称/角色/顺序/开场白）</td></tr>
         </tbody>
       </table>
       <div class="tip" style="margin-top:12px;">
@@ -540,7 +555,10 @@ async function request(endpoint, data) {
 // 步骤1：创建对话组
 async function createGroup() {
   const result = await request('/group/create', {
-    userId: USER_ID
+    userId: USER_ID,
+    title: '技术交流群',
+    description: '前端技术讨论与分享',
+    ownerNickname: '项目负责人'
   });
   console.log('对话组已创建:', result.data);
   return result.data.id; // 返回 groupId
@@ -654,7 +672,12 @@ def request(endpoint, data):
 
 def create_group():
     """创建对话组"""
-    result = request('/group/create', {'userId': USER_ID})
+    result = request('/group/create', {
+        'userId': USER_ID,
+        'title': '技术交流群',
+        'description': '前端技术讨论与分享',
+        'ownerNickname': '项目负责人'
+    })
     print('对话组已创建:', result['data'])
     return result['data']['id']
 
@@ -752,7 +775,12 @@ USER_ID=1001
 # 1. 创建对话组
 curl -X POST "${BASE_URL}/group/create" \
   -H "Content-Type: application/json" \
-  -d "{\"userId\": ${USER_ID}}"
+  -d '{
+    "userId": 1001,
+    "title": "技术交流群",
+    "description": "前端技术讨论与分享",
+    "ownerNickname": "项目负责人"
+  }'
 
 # 假设返回 groupId = 123
 

@@ -24,7 +24,7 @@ export class ChatGroupService {
 
   async create(body: CreateGroupDto, req: Request) {
     const { id } = req.user; // 从请求中获取用户ID
-    const { appId, modelConfig: bodyModelConfig, params } = body; // 从请求体中提取appId和modelConfig
+    const { modelConfig: bodyModelConfig, params, title, description, ownerNickname, appId } = body; // 从请求体中提取参数
 
     // 尝试使用从请求体中提供的 modelConfig，否则获取默认配置
     let modelConfig = bodyModelConfig || (await this.modelsService.getBaseConfig());
@@ -51,67 +51,15 @@ export class ChatGroupService {
     modelConfig = JSON.parse(JSON.stringify(modelConfig));
 
     // 初始化创建对话组的参数
-    const groupParams = { title: '新对话', userId: id, appId, params };
+    const groupParams: any = {
+      title: title || '新对话',
+      userId: id,
+      params,
+      description,
+      ownerNickname,
+      appId: appId || 0, // 保存应用ID（角色ID）
+    };
     // const params = { title: 'New chat', userId: id };
-
-    // 如果指定了appId，查找并验证应用信息
-    if (appId) {
-      const appInfo = await this.appEntity.findOne({ where: { id: appId } });
-      if (!appInfo) {
-        throw new HttpException('非法操作、您在使用一个不存在的应用！', HttpStatus.BAD_REQUEST);
-      }
-
-      // 应用存在，提取并验证应用信息
-      const { status, name, isFixedModel, isGPTs, coverImg, appModel, isFlowith } = appInfo;
-
-      if (isFixedModel && appModel) {
-        const modelDetail = await this.modelsService.getModelDetailByName(appModel);
-        Logger.debug(`modelDetail: ${modelDetail}`);
-        if (modelDetail) {
-          modelConfig.modelInfo.modelName = modelDetail.modelName;
-          modelConfig.modelInfo.deductType = modelDetail.deductType;
-          modelConfig.modelInfo.deduct = modelDetail.deduct;
-          modelConfig.modelInfo.isFileUpload = modelDetail.isFileUpload;
-          modelConfig.modelInfo.isImageUpload = modelDetail.isImageUpload;
-          modelConfig.modelInfo.isNetworkSearch = modelDetail.isNetworkSearch;
-          modelConfig.modelInfo.deepThinkingType = modelDetail.deepThinkingType;
-          modelConfig.modelInfo.isMcpTool = modelDetail.isMcpTool;
-        }
-      }
-
-      // 更新 modelConfig 以反映应用的特定配置
-      Object.assign(modelConfig.modelInfo, {
-        isGPTs,
-        isFixedModel,
-        isFlowith,
-        modelAvatar: coverImg,
-        modelName: name,
-      });
-
-      // 如果是固定模型或GPTs模型，获取并设置额外的模型信息
-      if (isGPTs === 1 || isFixedModel === 1 || isFlowith === 1) {
-        const appModelKey = await this.modelsService.getCurrentModelKeyInfo(
-          isFixedModel === 1 ? appModel : isFlowith === 1 ? 'flowith' : isGPTs === 1 ? 'gpts' : '',
-        );
-        Object.assign(modelConfig.modelInfo, {
-          deductType: appModelKey.deductType,
-          deduct: appModelKey.deduct,
-          model: appModel,
-          isFileUpload: appModelKey.isFileUpload,
-          isImageUpload: appModelKey.isImageUpload,
-        });
-      }
-
-      // 检查应用状态是否允许创建对话组
-      if (![1, 3, 4, 5].includes(status)) {
-        throw new HttpException('非法操作、您在使用一个未启用的应用！', HttpStatus.BAD_REQUEST);
-      }
-
-      // 如果应用有名称，则使用它作为对话组标题
-      if (name) {
-        groupParams.title = name;
-      }
-    }
 
     // 创建新的聊天组并保存
     const newGroup = await this.chatGroupEntity.save({
@@ -299,6 +247,7 @@ export class ChatGroupService {
         order: number;
         role: string;
         taskDetail?: string;
+        openingRemark?: string; // 添加开场白参数
       }>;
     },
     req: Request,
@@ -317,11 +266,16 @@ export class ChatGroupService {
         continue; // 跳过已存在的成员
       }
 
-      // 查询应用信息获取名称
+      // 查询应用信息获取名称和开场白
       let appName = null;
+      let finalOpeningRemark = member.openingRemark || null;
       try {
         const app = await this.appEntity.findOne({ where: { id: member.appId } });
         appName = app?.name || `角色_${member.appId}`;
+        // 如果没有传入开场白，使用应用的默认开场白
+        if (!finalOpeningRemark && app?.openingRemark) {
+          finalOpeningRemark = app.openingRemark;
+        }
       } catch {
         appName = `角色_${member.appId}`;
       }
@@ -348,6 +302,7 @@ export class ChatGroupService {
         appId: member.appId,
         appName: appName,
         tasks: tasksList,
+        openingRemark: finalOpeningRemark, // 保存开场白到成员数据中
       });
     }
 
@@ -498,10 +453,11 @@ export class ChatGroupService {
       order?: number;
       appId?: number;
       appName?: string;
+      openingRemark?: string;
     },
     req: Request,
   ) {
-    const { groupId, userId, name, role, order, appId, appName } = body;
+    const { groupId, userId, name, role, order, appId, appName, openingRemark } = body;
     const g = await this.ensureGroupOwned(groupId, req);
     const members = this.parseMembers(g.members);
     const m = members.find(x => Number(x.userId) === Number(userId));
@@ -511,6 +467,7 @@ export class ChatGroupService {
     if (typeof order === 'number') m.order = order;
     if (typeof appId !== 'undefined') m.appId = appId;
     if (typeof appName !== 'undefined') m.appName = appName;
+    if (typeof openingRemark !== 'undefined') m.openingRemark = openingRemark;
     // 按 order 排序，缺省放最后
     members.sort(
       (a, b) =>

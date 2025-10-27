@@ -5,7 +5,7 @@
   "packageManager": "pnpm",
   "compilerOptions": {
     "deleteOutDir": true,
-    "assets": ["src/common/mailTemplates/**/*", "src/views/**/*", "src/rpc/*"],
+    "assets": ["src/common/mailTemplates/**/*", "src/views/**/*", "src/rpc/*", "src/public/**/*"],
     "sourceMap": false,
     "declaration": false,
     "webpack": true,

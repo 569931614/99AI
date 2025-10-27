@@ -2594,6 +2594,7 @@ let ChatLogEntity = class ChatLogEntity extends baseEntity_1.BaseEntity {
     customId;
     drawId;
     ttsUrl;
+    ttsDuration;
     rec;
     groupId;
     appId;
@@ -2718,6 +2719,10 @@ __decorate([
     (0, typeorm_1.Column)({ comment: '对话转语音的链接', nullable: true, type: 'text' }),
     __metadata("design:type", String)
 ], ChatLogEntity.prototype, "ttsUrl", void 0);
+__decorate([
+    (0, typeorm_1.Column)({ comment: '语音时长（秒）', nullable: true, type: 'int' }),
+    __metadata("design:type", Number)
+], ChatLogEntity.prototype, "ttsDuration", void 0);
 __decorate([
     (0, typeorm_1.Column)({ comment: '是否推荐0: 默认 1: 推荐', nullable: true, default: 0 }),
     __metadata("design:type", Number)
@@ -5581,6 +5586,9 @@ let ChatGroupEntity = class ChatGroupEntity extends baseEntity_1.BaseEntity {
     pdfTextContent;
     members;
     isGroupChat;
+    openingRemark;
+    description;
+    ownerNickname;
 };
 exports.ChatGroupEntity = ChatGroupEntity;
 __decorate([
@@ -5627,6 +5635,18 @@ __decorate([
     (0, typeorm_1.Column)({ comment: '是否为群聊', default: false }),
     __metadata("design:type", Boolean)
 ], ChatGroupEntity.prototype, "isGroupChat", void 0);
+__decorate([
+    (0, typeorm_1.Column)({ comment: '开场白（角色初始问候语）', type: 'text', nullable: true }),
+    __metadata("design:type", String)
+], ChatGroupEntity.prototype, "openingRemark", void 0);
+__decorate([
+    (0, typeorm_1.Column)({ comment: '群聊描述信息', type: 'text', nullable: true }),
+    __metadata("design:type", String)
+], ChatGroupEntity.prototype, "description", void 0);
+__decorate([
+    (0, typeorm_1.Column)({ comment: '群主在群内的昵称', nullable: true }),
+    __metadata("design:type", String)
+], ChatGroupEntity.prototype, "ownerNickname", void 0);
 exports.ChatGroupEntity = ChatGroupEntity = __decorate([
     (0, typeorm_1.Entity)({ name: 'chat_group' })
 ], ChatGroupEntity);
@@ -12708,7 +12728,7 @@ let ChatGroupService = class ChatGroupService {
     }
     async create(body, req) {
         const { id } = req.user;
-        const { appId, modelConfig: bodyModelConfig, params } = body;
+        const { modelConfig: bodyModelConfig, params, title, description, ownerNickname } = body;
         let modelConfig = bodyModelConfig || (await this.modelsService.getBaseConfig());
         const modelDetail = await this.modelsService.getModelDetailByName(modelConfig.modelInfo.model);
         if (modelDetail) {
@@ -12725,51 +12745,13 @@ let ChatGroupService = class ChatGroupService {
             throw new common_1.HttpException('管理员未配置任何AI模型、请先联系管理员开通聊天模型配置！', common_1.HttpStatus.BAD_REQUEST);
         }
         modelConfig = JSON.parse(JSON.stringify(modelConfig));
-        const groupParams = { title: '新对话', userId: id, appId, params };
-        if (appId) {
-            const appInfo = await this.appEntity.findOne({ where: { id: appId } });
-            if (!appInfo) {
-                throw new common_1.HttpException('非法操作、您在使用一个不存在的应用！', common_1.HttpStatus.BAD_REQUEST);
-            }
-            const { status, name, isFixedModel, isGPTs, coverImg, appModel, isFlowith } = appInfo;
-            if (isFixedModel && appModel) {
-                const modelDetail = await this.modelsService.getModelDetailByName(appModel);
-                common_1.Logger.debug(`modelDetail: ${modelDetail}`);
-                if (modelDetail) {
-                    modelConfig.modelInfo.modelName = modelDetail.modelName;
-                    modelConfig.modelInfo.deductType = modelDetail.deductType;
-                    modelConfig.modelInfo.deduct = modelDetail.deduct;
-                    modelConfig.modelInfo.isFileUpload = modelDetail.isFileUpload;
-                    modelConfig.modelInfo.isImageUpload = modelDetail.isImageUpload;
-                    modelConfig.modelInfo.isNetworkSearch = modelDetail.isNetworkSearch;
-                    modelConfig.modelInfo.deepThinkingType = modelDetail.deepThinkingType;
-                    modelConfig.modelInfo.isMcpTool = modelDetail.isMcpTool;
-                }
-            }
-            Object.assign(modelConfig.modelInfo, {
-                isGPTs,
-                isFixedModel,
-                isFlowith,
-                modelAvatar: coverImg,
-                modelName: name,
-            });
-            if (isGPTs === 1 || isFixedModel === 1 || isFlowith === 1) {
-                const appModelKey = await this.modelsService.getCurrentModelKeyInfo(isFixedModel === 1 ? appModel : isFlowith === 1 ? 'flowith' : isGPTs === 1 ? 'gpts' : '');
-                Object.assign(modelConfig.modelInfo, {
-                    deductType: appModelKey.deductType,
-                    deduct: appModelKey.deduct,
-                    model: appModel,
-                    isFileUpload: appModelKey.isFileUpload,
-                    isImageUpload: appModelKey.isImageUpload,
-                });
-            }
-            if (![1, 3, 4, 5].includes(status)) {
-                throw new common_1.HttpException('非法操作、您在使用一个未启用的应用！', common_1.HttpStatus.BAD_REQUEST);
-            }
-            if (name) {
-                groupParams.title = name;
-            }
-        }
+        const groupParams = {
+            title: title || '新对话',
+            userId: id,
+            params,
+            description,
+            ownerNickname,
+        };
         const newGroup = await this.chatGroupEntity.save({
             ...groupParams,
             config: JSON.stringify(modelConfig),
@@ -12939,9 +12921,13 @@ let ChatGroupService = class ChatGroupService {
                 continue;
             }
             let appName = null;
+            let finalOpeningRemark = member.openingRemark || null;
             try {
                 const app = await this.appEntity.findOne({ where: { id: member.appId } });
                 appName = app?.name || `角色_${member.appId}`;
+                if (!finalOpeningRemark && app?.openingRemark) {
+                    finalOpeningRemark = app.openingRemark;
+                }
             }
             catch {
                 appName = `角色_${member.appId}`;
@@ -12966,6 +12952,7 @@ let ChatGroupService = class ChatGroupService {
                 appId: member.appId,
                 appName: appName,
                 tasks: tasksList,
+                openingRemark: finalOpeningRemark,
             });
         }
         await this.chatGroupEntity.update({ id: groupId }, { members: this.stringifyMembers(existingMembers), isGroupChat: true });
@@ -13055,7 +13042,7 @@ let ChatGroupService = class ChatGroupService {
         return true;
     }
     async updateMember(body, req) {
-        const { groupId, userId, name, role, order, appId, appName } = body;
+        const { groupId, userId, name, role, order, appId, appName, openingRemark } = body;
         const g = await this.ensureGroupOwned(groupId, req);
         const members = this.parseMembers(g.members);
         const m = members.find(x => Number(x.userId) === Number(userId));
@@ -13071,6 +13058,8 @@ let ChatGroupService = class ChatGroupService {
             m.appId = appId;
         if (typeof appName !== 'undefined')
             m.appName = appName;
+        if (typeof openingRemark !== 'undefined')
+            m.openingRemark = openingRemark;
         members.sort((a, b) => Number(a.order || 999999) - Number(b.order || 999999) ||
             Number(a.userId) - Number(b.userId));
         await this.chatGroupEntity.update({ id: groupId }, { members: this.stringifyMembers(members) });
@@ -13360,6 +13349,16 @@ let ChatLogService = class ChatLogService {
         const count = await this.chatLogEntity.count({
             where: {
                 groupId: groupId,
+                role: 'assistant',
+            },
+        });
+        return count;
+    }
+    async getAssistantChatLogsCountByAppId(groupId, appId) {
+        const count = await this.chatLogEntity.count({
+            where: {
+                groupId: groupId,
+                appId: appId,
                 role: 'assistant',
             },
         });
@@ -14880,7 +14879,10 @@ __decorate([
         schema: {
             type: 'object',
             properties: {
-                audioBase64: { type: 'string', description: '音频 Base64（dataURL 或纯base64）' },
+                audioBase64: {
+                    type: 'string',
+                    description: '音频数据：支持Base64编码（dataURL或纯base64）或音频文件URL（http/https）',
+                },
                 format: { type: 'string', description: '音频格式，如 wav/mp3 等（可选）' },
                 sample_rate: { type: 'number', description: '采样率（可选）' },
                 model: { type: 'string', description: 'ASR 模型（可选）' },
@@ -14893,7 +14895,20 @@ __decorate([
             },
             required: ['audioBase64'],
         },
-        examples: { demo: { value: { audioBase64: '<base64>', format: 'wav', sample_rate: 16000 } } },
+        examples: {
+            withBase64: {
+                summary: '使用Base64编码',
+                value: { audioBase64: '<base64>', format: 'wav', sample_rate: 16000 },
+            },
+            withUrl: {
+                summary: '使用音频URL',
+                value: {
+                    audioBase64: 'https://example.com/audio.mp3',
+                    format: 'mp3',
+                    sample_rate: 16000,
+                },
+            },
+        },
     }),
     __param(0, (0, common_1.Body)()),
     __metadata("design:type", Function),
@@ -15565,10 +15580,32 @@ let VoiceService = class VoiceService {
             throw new common_1.HttpException(`删除音色失败: ${error.message}`, common_1.HttpStatus.BAD_REQUEST);
         }
     }
+    async convertAudioUrlToBase64(audioInput) {
+        const isUrl = /^https?:\/\//i.test(audioInput);
+        if (!isUrl) {
+            return audioInput;
+        }
+        common_1.Logger.debug(`检测到音频URL，开始下载: ${audioInput}`, 'VoiceService');
+        try {
+            const response = await axios_1.default.get(audioInput, {
+                responseType: 'arraybuffer',
+                timeout: 30000,
+            });
+            const audioBuffer = Buffer.from(response.data);
+            const base64Audio = audioBuffer.toString('base64');
+            common_1.Logger.debug(`音频下载成功，大小: ${audioBuffer.length} bytes, Base64长度: ${base64Audio.length}`, 'VoiceService');
+            return base64Audio;
+        }
+        catch (error) {
+            common_1.Logger.error(`下载音频URL失败: ${audioInput}`, error.message, 'VoiceService');
+            throw new common_1.HttpException(`下载音频URL失败: ${error.message}`, common_1.HttpStatus.BAD_REQUEST);
+        }
+    }
     async asr(body, opts) {
-        const { audioBase64 } = body || {};
+        let { audioBase64 } = body || {};
         if (!audioBase64)
             throw new common_1.HttpException('audioBase64 必填', common_1.HttpStatus.BAD_REQUEST);
+        audioBase64 = await this.convertAudioUrlToBase64(audioBase64);
         const fmt = (body.format || 'wav');
         const sampleRate = Number(body.sample_rate ?? 16000);
         const defaultModel = sampleRate <= 8000 ? 'paraformer-realtime-8k-v2' : 'paraformer-realtime-v2';
@@ -15840,6 +15877,59 @@ let VoiceService = class VoiceService {
             throw new common_1.HttpException(`设置音色元信息失败: ${error.message}`, common_1.HttpStatus.BAD_REQUEST);
         }
     }
+    async getAudioDuration(audioBuffer, format, sampleRate) {
+        try {
+            const mod = await Promise.resolve().then(() => __webpack_require__(192));
+            const ffmpeg = mod?.default || mod;
+            const tempDir = os.tmpdir();
+            const tempFile = path.join(tempDir, `audio-duration-${Date.now()}.${format === 'pcm' ? 'wav' : format}`);
+            fs.writeFileSync(tempFile, audioBuffer);
+            return new Promise((resolve, reject) => {
+                ffmpeg.ffprobe(tempFile, (err, metadata) => {
+                    try {
+                        if (fs.existsSync(tempFile))
+                            fs.unlinkSync(tempFile);
+                    }
+                    catch { }
+                    if (err) {
+                        common_1.Logger.warn(`[getAudioDuration] ffprobe 失败: ${err.message}，使用估算方法`, 'VoiceService');
+                        resolve(this.estimateAudioDuration(audioBuffer, format, sampleRate));
+                    }
+                    else {
+                        const duration = metadata?.format?.duration || 0;
+                        common_1.Logger.debug(`[getAudioDuration] ffprobe 获取时长: ${duration}秒`, 'VoiceService');
+                        resolve(duration);
+                    }
+                });
+            });
+        }
+        catch (error) {
+            common_1.Logger.warn(`[getAudioDuration] 无法使用 ffprobe: ${error.message}，使用估算方法`, 'VoiceService');
+            return this.estimateAudioDuration(audioBuffer, format, sampleRate);
+        }
+    }
+    estimateAudioDuration(audioBuffer, format, sampleRate) {
+        const dataSize = audioBuffer.length;
+        if (format === 'pcm' || format === 'wav') {
+            const channels = 1;
+            const bytesPerSample = 2;
+            const audioDataSize = format === 'wav' && dataSize > 44 && audioBuffer.toString('ascii', 0, 4) === 'RIFF'
+                ? dataSize - 44
+                : dataSize;
+            const duration = audioDataSize / (sampleRate * channels * bytesPerSample);
+            common_1.Logger.debug(`[estimateAudioDuration] PCM/WAV 估算时长: ${duration}秒`, 'VoiceService');
+            return duration;
+        }
+        else if (format === 'mp3') {
+            const bitrate = 128 * 1024;
+            const bytesPerSecond = bitrate / 8;
+            const duration = dataSize / bytesPerSecond;
+            common_1.Logger.debug(`[estimateAudioDuration] MP3 估算时长: ${duration}秒`, 'VoiceService');
+            return duration;
+        }
+        common_1.Logger.warn(`[estimateAudioDuration] 未知格式 ${format}，使用保守估算`, 'VoiceService');
+        return dataSize / (sampleRate * 2);
+    }
     async preview(body) {
         const { voice_id, text } = body;
         if (!voice_id || !text)
@@ -15945,7 +16035,9 @@ let VoiceService = class VoiceService {
                             ? 'audio/wav'
                             : 'application/octet-stream';
                     const url = await this.uploadService.uploadFile({ buffer, mimetype }, 'voicePreview');
-                    resolve(url);
+                    const duration = await this.getAudioDuration(buffer, format, sample_rate);
+                    common_1.Logger.log(`[preview] 音频生成完成 - URL: ${url}, 时长: ${Math.round(duration)}秒`, 'VoiceService');
+                    resolve({ url: url, duration });
                 }
                 catch (e) {
                     if (e instanceof common_1.HttpException)
@@ -15957,8 +16049,8 @@ let VoiceService = class VoiceService {
                 reject(new common_1.HttpException(err?.message || 'WebSocket错误', common_1.HttpStatus.BAD_GATEWAY));
             });
         });
-        const url = await uploadOnFinish;
-        return { url };
+        const result = await uploadOnFinish;
+        return result;
     }
     async ttsStream(body, opts) {
         const { voice_id, text } = body || {};
@@ -18081,6 +18173,55 @@ ${numberedOptions}
                 common_1.Logger.debug(`获取群聊助手名称失败: ${error.message}`, 'ChatService');
             }
         }
+        if (groupId && appId) {
+            try {
+                const assistantCountForApp = await this.chatLogService.getAssistantChatLogsCountByAppId(groupId, appId);
+                if (assistantCountForApp === 0) {
+                    let openingRemark = null;
+                    const groupInfo = await this.chatGroupService.getGroupInfoFromId(groupId);
+                    if (groupInfo?.members) {
+                        try {
+                            const members = JSON.parse(groupInfo.members);
+                            const currentMember = members.find(m => m.appId === appId || m.userId === appId);
+                            if (currentMember?.openingRemark) {
+                                openingRemark = currentMember.openingRemark;
+                            }
+                        }
+                        catch (error) {
+                            common_1.Logger.debug(`解析成员数据失败: ${error.message}`, 'ChatService');
+                        }
+                    }
+                    if (!openingRemark && appId) {
+                        const appInfo = await this.appEntity.findOne({ where: { id: appId } });
+                        if (appInfo?.openingRemark) {
+                            openingRemark = appInfo.openingRemark;
+                        }
+                    }
+                    if (openingRemark) {
+                        await this.chatLogService.saveChatLog({
+                            appId: appId,
+                            curIp,
+                            userId: req.user.id,
+                            type: modelType ? modelType : 1,
+                            model: useModel,
+                            modelName: assistantName,
+                            role: 'assistant',
+                            groupId: groupId,
+                            content: openingRemark,
+                            promptTokens: 0,
+                            completionTokens: 0,
+                            totalTokens: 0,
+                            status: 3,
+                            modelAvatar: usingPlugin?.pluginImg || useModelAvatar || modelAvatar || '',
+                        });
+                        common_1.Logger.debug(`[开场白] 已插入角色开场白到会话记录，groupId=${groupId}, appId=${appId}`, 'ChatService');
+                    }
+                }
+            }
+            catch (error) {
+                common_1.Logger.debug(`检查或插入角色开场白失败: ${error.message}`, 'ChatService');
+            }
+        }
         const assistantSaveLog = await this.chatLogService.saveChatLog({
             appId: appId ? appId : null,
             action: action ? action : null,
@@ -18793,7 +18934,8 @@ ${numberedOptions}
                 if (params.volume !== undefined)
                     previewPayload.volume = params.volume;
             }
-            const { url } = await this.voiceService.preview(previewPayload);
+            const { url, duration } = await this.voiceService.preview(previewPayload);
+            const durationInt = Math.round(duration);
             try {
                 const detailKeyInfo = await this.modelsService.getCurrentModelKeyInfo('tts-1');
                 if (detailKeyInfo) {
@@ -18808,8 +18950,8 @@ ${numberedOptions}
             catch (e) {
                 common_1.Logger.warn(`[TTSService] 扣费配置缺失或校验失败，已跳过扣费: ${e?.message || e}`, 'TTSService');
             }
-            await this.chatLogService.updateChatLog(chatId, { ttsUrl: url });
-            return res.status(200).send({ ttsUrl: url });
+            await this.chatLogService.updateChatLog(chatId, { ttsUrl: url, ttsDuration: durationInt });
+            return res.status(200).send({ ttsUrl: url, duration: durationInt });
         };
         try {
             let appId = bodyAppId;
@@ -19600,16 +19742,36 @@ exports.CreateGroupDto = void 0;
 const swagger_1 = __webpack_require__(14);
 const class_validator_1 = __webpack_require__(106);
 class CreateGroupDto {
-    appId;
+    title;
+    description;
+    ownerNickname;
     modelConfig;
     params;
 }
 exports.CreateGroupDto = CreateGroupDto;
 __decorate([
-    (0, swagger_1.ApiProperty)({ example: 10, description: '应用ID', required: false }),
+    (0, swagger_1.ApiProperty)({ example: '我的群聊', description: '群聊名称', required: false }),
     (0, class_validator_1.IsOptional)(),
-    __metadata("design:type", Number)
-], CreateGroupDto.prototype, "appId", void 0);
+    __metadata("design:type", String)
+], CreateGroupDto.prototype, "title", void 0);
+__decorate([
+    (0, swagger_1.ApiProperty)({
+        example: '这是一个关于技术交流的群聊',
+        description: '群聊描述信息',
+        required: false,
+    }),
+    (0, class_validator_1.IsOptional)(),
+    __metadata("design:type", String)
+], CreateGroupDto.prototype, "description", void 0);
+__decorate([
+    (0, swagger_1.ApiProperty)({
+        example: '张三',
+        description: '群主在群内的昵称',
+        required: false,
+    }),
+    (0, class_validator_1.IsOptional)(),
+    __metadata("design:type", String)
+], CreateGroupDto.prototype, "ownerNickname", void 0);
 __decorate([
     (0, swagger_1.ApiProperty)({
         example: '',
@@ -19736,7 +19898,7 @@ let OpenChatGroupController = class OpenChatGroupController {
     }
     async create(body, _req, res) {
         try {
-            const { userId, appId, modelConfig, params } = body || {};
+            const { userId, modelConfig, params, title, description, ownerNickname } = body || {};
             if (!userId)
                 throw new common_1.HttpException('userId 必填', common_1.HttpStatus.BAD_REQUEST);
             const fakeReq = {
@@ -19747,7 +19909,7 @@ let OpenChatGroupController = class OpenChatGroupController {
                 socket: _req.socket,
                 ip: _req.ip,
             };
-            const result = await this.chatGroupService.create({ appId, modelConfig, params }, fakeReq);
+            const result = await this.chatGroupService.create({ modelConfig, params, title, description, ownerNickname }, fakeReq);
             return res.status(200).json({ success: true, data: result });
         }
         catch (e) {
@@ -19927,7 +20089,7 @@ let OpenChatGroupController = class OpenChatGroupController {
     }
     async updateMember(body, _req, res) {
         try {
-            const { userId, groupId, memberId, name, role, order, appId, appName } = body || {};
+            const { userId, groupId, memberId, name, role, order, appId, appName, openingRemark } = body || {};
             if (!userId)
                 throw new common_1.HttpException('userId 必填', common_1.HttpStatus.BAD_REQUEST);
             if (!groupId)
@@ -19942,7 +20104,7 @@ let OpenChatGroupController = class OpenChatGroupController {
                 socket: _req.socket,
                 ip: _req.ip,
             };
-            const result = await this.chatGroupService.updateMember({ groupId, userId: memberId, name, role, order, appId, appName }, fakeReq);
+            const result = await this.chatGroupService.updateMember({ groupId, userId: memberId, name, role, order, appId, appName, openingRemark }, fakeReq);
             return res.status(200).json({ success: true, data: result });
         }
         catch (e) {
@@ -20017,7 +20179,9 @@ __decorate([
             type: 'object',
             properties: {
                 userId: { type: 'number', description: '外部用户ID（任意数字即可，用于区分不同用户会话）' },
-                appId: { type: 'number', description: '应用ID（可选）' },
+                title: { type: 'string', description: '群聊名称（可选，不传则默认为"新对话"）' },
+                description: { type: 'string', description: '群聊描述信息（可选）' },
+                ownerNickname: { type: 'string', description: '群主在群内的昵称（可选）' },
                 modelConfig: {
                     type: 'object',
                     description: '对话模型配置项（可选，不传则使用默认配置）',
@@ -20033,11 +20197,13 @@ __decorate([
                     userId: 1001,
                 },
             },
-            withApp: {
-                summary: '创建带角色的对话组',
+            withGroupInfo: {
+                summary: '创建带群信息的对话组',
                 value: {
                     userId: 1001,
-                    appId: 123,
+                    title: '技术交流群',
+                    description: '这是一个关于前端技术交流的群聊',
+                    ownerNickname: '张三',
                 },
             },
         },
@@ -20193,6 +20359,10 @@ __decorate([
                             order: { type: 'number', description: '发言顺序（必填，数字越小越靠前）' },
                             role: { type: 'string', description: '成员角色（必填，如 member, leader 等）' },
                             taskDetail: { type: 'string', description: '任务描述（可选，如：完成需求分析文档）' },
+                            openingRemark: {
+                                type: 'string',
+                                description: '该成员的开场白（可选，不传则使用应用默认开场白）',
+                            },
                         },
                         required: ['appId', 'order', 'role'],
                     },
@@ -20243,6 +20413,36 @@ __decorate([
                             order: 3,
                             role: 'member',
                             taskDetail: '实现核心功能',
+                        },
+                    ],
+                },
+            },
+            withOpeningRemarks: {
+                summary: '批量添加成员（带开场白）',
+                value: {
+                    userId: 1001,
+                    groupId: 123,
+                    members: [
+                        {
+                            appId: 456,
+                            order: 1,
+                            role: 'leader',
+                            taskDetail: '完成需求分析文档',
+                            openingRemark: '大家好，我是产品经理，负责需求分析。',
+                        },
+                        {
+                            appId: 457,
+                            order: 2,
+                            role: 'member',
+                            taskDetail: '设计系统架构',
+                            openingRemark: '你好，我是架构师，负责系统设计。',
+                        },
+                        {
+                            appId: 458,
+                            order: 3,
+                            role: 'member',
+                            taskDetail: '实现核心功能',
+                            openingRemark: '嗨，我是开发工程师，负责功能实现。',
                         },
                     ],
                 },
@@ -20331,6 +20531,7 @@ __decorate([
                 order: { type: 'number', description: '成员排序（可选）' },
                 appId: { type: 'number', description: '关联的应用ID（可选）' },
                 appName: { type: 'string', description: '应用名称（可选）' },
+                openingRemark: { type: 'string', description: '成员开场白（可选）' },
             },
             required: ['userId', 'groupId', 'memberId'],
         },
@@ -20344,6 +20545,15 @@ __decorate([
                     name: '新昵称',
                     role: 'leader',
                     order: 1,
+                },
+            },
+            updateOpeningRemark: {
+                summary: '更新成员开场白',
+                value: {
+                    userId: 1001,
+                    groupId: 123,
+                    memberId: 456,
+                    openingRemark: '大家好，我是产品经理，负责需求分析。',
                 },
             },
         },

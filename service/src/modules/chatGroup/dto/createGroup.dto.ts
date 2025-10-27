@@ -2,9 +2,33 @@ import { ApiProperty } from '@nestjs/swagger';
 import { IsOptional } from 'class-validator';
 
 export class CreateGroupDto {
-  @ApiProperty({ example: 10, description: '应用ID', required: false })
+  @ApiProperty({ example: '我的群聊', description: '群聊名称', required: false })
   @IsOptional()
-  appId: number;
+  title?: string;
+
+  @ApiProperty({
+    example: '这是一个关于技术交流的群聊',
+    description: '群聊描述信息',
+    required: false,
+  })
+  @IsOptional()
+  description?: string;
+
+  @ApiProperty({
+    example: '张三',
+    description: '群主在群内的昵称',
+    required: false,
+  })
+  @IsOptional()
+  ownerNickname?: string;
+
+  @ApiProperty({
+    example: 0,
+    description: '应用ID（角色ID）',
+    required: false,
+  })
+  @IsOptional()
+  appId?: number;
 
   @ApiProperty({
     example: '',

@@ -15,7 +15,9 @@ export class OpenChatGroupController {
       type: 'object',
       properties: {
         userId: { type: 'number', description: '外部用户ID（任意数字即可，用于区分不同用户会话）' },
-        appId: { type: 'number', description: '应用ID（可选）' },
+        title: { type: 'string', description: '群聊名称（可选，不传则默认为"新对话"）' },
+        description: { type: 'string', description: '群聊描述信息（可选）' },
+        ownerNickname: { type: 'string', description: '群主在群内的昵称（可选）' },
         modelConfig: {
           type: 'object',
           description: '对话模型配置项（可选，不传则使用默认配置）',
@@ -31,18 +33,20 @@ export class OpenChatGroupController {
           userId: 1001,
         },
       },
-      withApp: {
-        summary: '创建带角色的对话组',
+      withGroupInfo: {
+        summary: '创建带群信息的对话组',
         value: {
           userId: 1001,
-          appId: 123,
+          title: '技术交流群',
+          description: '这是一个关于前端技术交流的群聊',
+          ownerNickname: '张三',
         },
       },
     },
   })
   async create(@Body() body: any, @Req() _req: Request, @Res() res: Response) {
     try {
-      const { userId, appId, modelConfig, params } = body || {};
+      const { userId, modelConfig, params, title, description, ownerNickname } = body || {};
       if (!userId) throw new HttpException('userId 必填', HttpStatus.BAD_REQUEST);
 
       // 构造伪造的 req 对象，使用 visitor 角色跳过用户验证
@@ -55,7 +59,10 @@ export class OpenChatGroupController {
         ip: _req.ip,
       };
 
-      const result = await this.chatGroupService.create({ appId, modelConfig, params }, fakeReq);
+      const result = await this.chatGroupService.create(
+        { modelConfig, params, title, description, ownerNickname },
+        fakeReq,
+      );
       return res.status(200).json({ success: true, data: result });
     } catch (e: any) {
       const status = e instanceof HttpException ? e.getStatus() : HttpStatus.INTERNAL_SERVER_ERROR;
@@ -277,6 +284,10 @@ export class OpenChatGroupController {
               order: { type: 'number', description: '发言顺序（必填，数字越小越靠前）' },
               role: { type: 'string', description: '成员角色（必填，如 member, leader 等）' },
               taskDetail: { type: 'string', description: '任务描述（可选，如：完成需求分析文档）' },
+              openingRemark: {
+                type: 'string',
+                description: '该成员的开场白（可选，不传则使用应用默认开场白）',
+              },
             },
             required: ['appId', 'order', 'role'],
           },
@@ -327,6 +338,36 @@ export class OpenChatGroupController {
               order: 3,
               role: 'member',
               taskDetail: '实现核心功能',
+            },
+          ],
+        },
+      },
+      withOpeningRemarks: {
+        summary: '批量添加成员（带开场白）',
+        value: {
+          userId: 1001,
+          groupId: 123,
+          members: [
+            {
+              appId: 456,
+              order: 1,
+              role: 'leader',
+              taskDetail: '完成需求分析文档',
+              openingRemark: '大家好，我是产品经理，负责需求分析。',
+            },
+            {
+              appId: 457,
+              order: 2,
+              role: 'member',
+              taskDetail: '设计系统架构',
+              openingRemark: '你好，我是架构师，负责系统设计。',
+            },
+            {
+              appId: 458,
+              order: 3,
+              role: 'member',
+              taskDetail: '实现核心功能',
+              openingRemark: '嗨，我是开发工程师，负责功能实现。',
             },
           ],
         },
@@ -473,6 +514,7 @@ export class OpenChatGroupController {
         order: { type: 'number', description: '成员排序（可选）' },
         appId: { type: 'number', description: '关联的应用ID（可选）' },
         appName: { type: 'string', description: '应用名称（可选）' },
+        openingRemark: { type: 'string', description: '成员开场白（可选）' },
       },
       required: ['userId', 'groupId', 'memberId'],
     },
@@ -488,11 +530,21 @@ export class OpenChatGroupController {
           order: 1,
         },
       },
+      updateOpeningRemark: {
+        summary: '更新成员开场白',
+        value: {
+          userId: 1001,
+          groupId: 123,
+          memberId: 456,
+          openingRemark: '大家好，我是产品经理，负责需求分析。',
+        },
+      },
     },
   })
   async updateMember(@Body() body: any, @Req() _req: Request, @Res() res: Response) {
     try {
-      const { userId, groupId, memberId, name, role, order, appId, appName } = body || {};
+      const { userId, groupId, memberId, name, role, order, appId, appName, openingRemark } =
+        body || {};
       if (!userId) throw new HttpException('userId 必填', HttpStatus.BAD_REQUEST);
       if (!groupId) throw new HttpException('groupId 必填', HttpStatus.BAD_REQUEST);
       if (!memberId) throw new HttpException('memberId 必填', HttpStatus.BAD_REQUEST);
@@ -508,7 +560,7 @@ export class OpenChatGroupController {
       };
 
       const result = await this.chatGroupService.updateMember(
-        { groupId, userId: memberId, name, role, order, appId, appName },
+        { groupId, userId: memberId, name, role, order, appId, appName, openingRemark },
         fakeReq,
       );
       return res.status(200).json({ success: true, data: result });

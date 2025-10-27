@@ -60,21 +60,27 @@
             </tr>
           </thead>
           <tbody>
+            <tr><td><code>/api/open/chat/tts-process</code></td><td>POST</td><td>2025-10-27</td><td>【文档修正】删除不支持的 voice/speed/model 参数</td></tr>
+            <tr><td><code>/api/open/chat/chat-process-voice</code></td><td>POST</td><td>2025-10-27</td><td>【文档修正】修正参数完整性，appId改为可选，补充model等字段</td></tr>
+            <tr><td><code>/api/open/voice/params/:voiceId</code></td><td>GET</td><td>2025-10-27</td><td>【文档补充】获取音色默认参数</td></tr>
+            <tr><td><code>/api/open/voice/meta/:voiceId</code></td><td>GET</td><td>2025-10-27</td><td>【文档补充】获取音色元信息</td></tr>
+            <tr><td><code>/api/open/voice/update-status</code></td><td>POST</td><td>2025-10-27</td><td>【文档补充】更新音色状态</td></tr>
+            <tr><td><code>/api/open/voice/sync-pending-status</code></td><td>POST</td><td>2025-10-27</td><td>【文档补充】同步PENDING状态音色</td></tr>
+            <tr><td><code>/api/open/chatLog/querySingleChat</code></td><td>GET</td><td>2025-10-27</td><td>【文档补充】查询单条消息记录</td></tr>
+            <tr><td><code>/api/open/group/members/add</code></td><td>POST</td><td>2025-10-27</td><td>【文档补充】补充 openingRemark 参数（成员开场白）</td></tr>
+            <tr><td><code>/api/open/group/members/list</code></td><td>POST</td><td>2025-10-27</td><td>【文档补充】返回值补充 openingRemark 字段</td></tr>
+            <tr><td><code>/api/open/group/members/update</code></td><td>POST</td><td>2025-10-23</td><td>更新群员信息（角色/顺序/昵称/开场白）</td></tr>
+            <tr><td><code>/api/open/group/create</code></td><td>POST</td><td>2025-10-23</td><td>创建对话组，支持群名称、群描述、群主昵称参数</td></tr>
             <tr><td><code>/api/open/group/update</code></td><td>POST</td><td>2025-10-23</td><td>更新对话组（标题、置顶、配置等）</td></tr>
-            <tr><td><code>/api/open/group/members/add</code></td><td>POST</td><td>2025-10-23</td><td>群组新增成员</td></tr>
             <tr><td><code>/api/open/group/members/remove</code></td><td>POST</td><td>2025-10-23</td><td>群组移除成员</td></tr>
-            <tr><td><code>/api/open/group/members/list</code></td><td>POST</td><td>2025-10-23</td><td>查询群组成员列表</td></tr>
-            <tr><td><code>/api/open/group/members/update</code></td><td>POST</td><td>2025-10-23</td><td>更新群员信息（角色/顺序/昵称）</td></tr>
             <tr><td><code>/api/open/group/task/assign</code></td><td>POST</td><td>2025-10-23</td><td>为群组成员分配任务</td></tr>
             <tr><td><code>/api/open/group/task/update</code></td><td>POST</td><td>2025-10-23</td><td>更新成员任务状态</td></tr>
-            <tr><td><code>/api/open/group/create</code></td><td>POST</td><td>2025-10-22</td><td>创建对话组（无鉴权）</td></tr>
             <tr><td><code>/api/open/group/query</code></td><td>POST</td><td>2025-10-22</td><td>查询对话组列表（无鉴权）</td></tr>
             <tr><td><code>/api/open/group/del</code></td><td>POST</td><td>2025-10-22</td><td>删除指定对话组（无鉴权）</td></tr>
             <tr><td><code>/api/open/group/delAll</code></td><td>POST</td><td>2025-10-22</td><td>删除所有非置顶对话组（无鉴权）</td></tr>
             <tr><td><code>ws://your-domain/api/realtime/voice-call</code></td><td>WebSocket</td><td>2025-10-21</td><td>实时语音通话（ASR+LLM+TTS），支持VAD、打断、情绪检测</td></tr>
             <tr><td><code>/api/open/affection/increment</code></td><td>POST</td><td>2025-10-20</td><td>增加/减少好感度（支持正负值）</td></tr>
             <tr><td><code>/api/open/affection/score</code></td><td>PUT</td><td>2025-10-20</td><td>直接设置好感度分数</td></tr>
-            <tr><td><code>/api/open/chat/tts-process</code></td><td>POST</td><td>2025-10-18</td><td>TTS 文字转语音，支持 appId 传参和情绪识别</td></tr>
             <tr><td><code>/api/open/app/createApp</code></td><td>POST</td><td>2025-10-15</td><td>支持情绪音色映射、星尘API字段</td></tr>
             <tr><td><code>/api/open/app/updateApp</code></td><td>POST</td><td>2025-10-15</td><td>支持情绪音色映射、星尘API字段</td></tr>
             <tr><td><code>/api/open/app/list</code></td><td>GET</td><td>2025-10-15</td><td>角色列表查询</td></tr>
@@ -83,7 +89,6 @@
             <tr><td><code>/api/open/app/emotions</code></td><td>GET/POST</td><td>2025-10-15</td><td>全局情绪配置管理</td></tr>
             <tr><td><code>/api/open/app/psychologicalDesc</code></td><td>GET/POST</td><td>2025-10-15</td><td>心理描述开关</td></tr>
             <tr><td><code>/api/open/chat/chat-process</code></td><td>POST</td><td>2025-10-15</td><td>修复 groupId 参数传递（需通过 options）</td></tr>
-            <tr><td><code>/api/open/chat/chat-process-voice</code></td><td>POST</td><td>2025-10-15</td><td>语音对话支持群聊</td></tr>
             <tr><td><code>/api/open/voice/list</code></td><td>GET</td><td>2025-10-15</td><td>音色列表查询（支持前缀过滤）</td></tr>
             <tr><td><code>/api/open/voice/detail/:voiceId</code></td><td>GET</td><td>2025-10-15</td><td>音色详情</td></tr>
             <tr><td><code>/api/open/voice/enroll</code></td><td>POST</td><td>2025-10-15</td><td>声音复刻</td></tr>
@@ -383,13 +388,16 @@
       <div class="tip" style="margin-bottom: 12px;">一次性语音对话（ASR → LLM → TTS 完整流程），非实时流式，适合一问一答场景</div>
       <table><thead><tr><th>字段</th><th>说明</th><th>必填</th></tr></thead><tbody>
         <tr><td><code>userId</code></td><td>外部用户ID</td><td>是</td></tr>
-        <tr><td><code>appId</code></td><td>角色应用 ID</td><td>是</td></tr>
         <tr><td><code>audioUrl</code></td><td>音频文件URL（与 <code>audioBase64</code> 二选一）</td><td>否</td></tr>
         <tr><td><code>audioBase64</code></td><td>音频Base64（dataURL 或纯base64），与 <code>audioUrl</code> 二选一</td><td>否</td></tr>
-        <tr><td><code>voiceId</code></td><td>指定TTS音色 ID（不填则使用角色默认音色）</td><td>否</td></tr>
-        <tr><td><code>groupId</code></td><td>会话组 ID（用于上下文关联）</td><td>否</td></tr>
-        <tr><td><code>enableEmotion</code></td><td>是否启用情绪检测（默认 true）</td><td>否</td></tr>
-        <tr><td><code>enableAffection</code></td><td>是否启用好感度系统（默认 true）</td><td>否</td></tr>
+        <tr><td><code>appId</code></td><td>角色应用 ID</td><td>否</td></tr>
+        <tr><td><code>model</code></td><td>使用的模型标识</td><td>否</td></tr>
+        <tr><td><code>modelName</code></td><td>模型名称</td><td>否</td></tr>
+        <tr><td><code>modelType</code></td><td>模型类型</td><td>否</td></tr>
+        <tr><td><code>modelAvatar</code></td><td>模型头像URL</td><td>否</td></tr>
+        <tr><td><code>options</code></td><td>对话附加选项（可包含 groupId 等参数）</td><td>否</td></tr>
+        <tr><td><code>usingPluginId</code></td><td>插件ID</td><td>否</td></tr>
+        <tr><td><code>extraParam</code></td><td>扩展参数</td><td>否</td></tr>
       </tbody></table>
       <h3>返回体</h3>
       <table><thead><tr><th>字段</th><th>说明</th></tr></thead><tbody>
@@ -420,9 +428,6 @@
         <tr><td><code>appId</code></td><td>角色ID（用于情绪音色选择）</td><td>否</td></tr>
         <tr><td><code>chatId</code></td><td>聊天记录ID（若未传appId则从此获取）</td><td>否</td></tr>
         <tr><td><code>emotion</code></td><td>直接指定情绪类型（跳过AI识别），如：开心、难过</td><td>否</td></tr>
-        <tr><td><code>voice</code></td><td>音色类型，如：alloy、nova</td><td>否</td></tr>
-        <tr><td><code>speed</code></td><td>语速（0.25-4.0，默认1.0）</td><td>否</td></tr>
-        <tr><td><code>model</code></td><td>语音模型（默认tts-1）</td><td>否</td></tr>
       </tbody></table>
       <div class="tip" style="margin-top: 12px;">
         <strong>功能特性：</strong><br>
@@ -594,10 +599,12 @@
       </div>
 
       <h3>创建对话组（POST <code>/api/open/group/create</code>）</h3>
-      <div class="tip" style="margin-bottom: 12px;">创建一个新的对话组，用于开始新的会话上下文</div>
+      <div class="tip" style="margin-bottom: 12px;">创建一个新的对话组，用于开始新的会话上下文。添加成员后可以使用群聊功能。</div>
       <table><thead><tr><th>字段</th><th>说明</th><th>是否必填</th></tr></thead><tbody>
         <tr><td><code>userId</code></td><td>外部用户ID（任意数字即可，用于区分不同用户会话）</td><td>是</td></tr>
-        <tr><td><code>appId</code></td><td>应用ID（角色ID，可选）</td><td>否</td></tr>
+        <tr><td><code>title</code></td><td>群聊名称（可选，不传则默认为"新对话"）</td><td>否</td></tr>
+        <tr><td><code>description</code></td><td>群聊描述信息（可选）</td><td>否</td></tr>
+        <tr><td><code>ownerNickname</code></td><td>群主在群内的昵称（可选）</td><td>否</td></tr>
         <tr><td><code>modelConfig</code></td><td>对话模型配置项（JSON对象，可选，不传则使用默认配置）</td><td>否</td></tr>
         <tr><td><code>params</code></td><td>对话组参数序列化的字符串（可选）</td><td>否</td></tr>
       </tbody></table>
@@ -609,8 +616,9 @@
       <h3>请求示例</h3>
       <table><thead><tr><th>场景</th><th>请求</th></tr></thead><tbody>
         <tr><td>创建基础对话组</td><td><code>{ "userId": 1001 }</code></td></tr>
-        <tr><td>创建带角色的对话组</td><td><code>{ "userId": 1001, "appId": 123 }</code></td></tr>
+        <tr><td>创建带群信息的对话组</td><td><code>{ "userId": 1001, "title": "技术交流群", "description": "这是一个关于前端技术交流的群聊", "ownerNickname": "张三" }</code></td></tr>
       </tbody></table>
+      <div class="tip">💡 <strong>使用说明：</strong>创建对话组后，通过 <code>/api/open/group/members/add</code> 添加AI角色成员，每个成员可以设置自己的开场白。</div>
 
       <h3>查询对话组列表（POST <code>/api/open/group/query</code>）</h3>
       <div class="tip" style="margin-bottom: 12px;">查询指定用户的所有对话组</div>
@@ -689,6 +697,7 @@
         <tr><td><code>order</code></td><td>发言顺序（数字越小越靠前）</td><td>是</td></tr>
         <tr><td><code>role</code></td><td>成员角色（如：member、leader、assistant）</td><td>是</td></tr>
         <tr><td><code>taskDetail</code></td><td>任务描述（如："完成需求分析文档"）</td><td>否</td></tr>
+        <tr><td><code>openingRemark</code></td><td>该成员的开场白（不传则使用应用默认开场白）</td><td>否</td></tr>
       </tbody></table>
       <h3>返回体</h3>
       <table><thead><tr><th>字段</th><th>说明</th></tr></thead><tbody>
@@ -734,11 +743,12 @@
         <tr><td><code>appId</code></td><td>关联的应用ID</td></tr>
         <tr><td><code>appName</code></td><td>应用名称</td></tr>
         <tr><td><code>appAvatar</code></td><td>应用头像URL（自动查询）</td></tr>
+        <tr><td><code>openingRemark</code></td><td>成员的开场白（可能为null）</td></tr>
         <tr><td><code>tasks</code></td><td>成员任务列表（数组）</td></tr>
       </tbody></table>
 
       <h4>更新成员信息（POST <code>/api/open/group/members/update</code>）</h4>
-      <div class="tip" style="margin-bottom: 12px;">更新成员的昵称、角色、发言顺序等信息</div>
+      <div class="tip" style="margin-bottom: 12px;">更新成员的昵称、角色、发言顺序、开场白等信息</div>
       <table><thead><tr><th>字段</th><th>说明</th><th>是否必填</th></tr></thead><tbody>
         <tr><td><code>userId</code></td><td>外部用户ID</td><td>是</td></tr>
         <tr><td><code>groupId</code></td><td>对话分组ID</td><td>是</td></tr>
@@ -748,6 +758,7 @@
         <tr><td><code>order</code></td><td>发言顺序</td><td>否</td></tr>
         <tr><td><code>appId</code></td><td>关联的应用ID</td><td>否</td></tr>
         <tr><td><code>appName</code></td><td>应用名称</td><td>否</td></tr>
+        <tr><td><code>openingRemark</code></td><td>成员开场白</td><td>否</td></tr>
       </tbody></table>
       <h3>返回体</h3>
       <table><thead><tr><th>字段</th><th>说明</th></tr></thead><tbody>
@@ -758,6 +769,7 @@
       <table><thead><tr><th>场景</th><th>请求</th></tr></thead><tbody>
         <tr><td>调整发言顺序</td><td><code>{ "userId": 1001, "groupId": 123, "memberId": 456, "order": 2 }</code></td></tr>
         <tr><td>修改角色</td><td><code>{ "userId": 1001, "groupId": 123, "memberId": 456, "role": "leader" }</code></td></tr>
+        <tr><td>更新开场白</td><td><code>{ "userId": 1001, "groupId": 123, "memberId": 456, "openingRemark": "大家好，我是产品经理。" }</code></td></tr>
       </tbody></table>
 
       <h3>任务管理</h3>

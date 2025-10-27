@@ -53,4 +53,13 @@ export class ChatGroupEntity extends BaseEntity {
 
   @Column({ comment: '是否为群聊', default: false })
   isGroupChat: boolean;
+
+  @Column({ comment: '开场白（角色初始问候语）', type: 'text', nullable: true })
+  openingRemark: string;
+
+  @Column({ comment: '群聊描述信息', type: 'text', nullable: true })
+  description: string;
+
+  @Column({ comment: '群主在群内的昵称', nullable: true })
+  ownerNickname: string;
 }

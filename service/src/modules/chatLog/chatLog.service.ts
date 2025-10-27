@@ -84,6 +84,18 @@ export class ChatLogService {
     return count;
   }
 
+  /* 获取群聊中特定角色的助手消息数量 */
+  async getAssistantChatLogsCountByAppId(groupId: number, appId: number): Promise<number> {
+    const count = await this.chatLogEntity.count({
+      where: {
+        groupId: groupId,
+        appId: appId,
+        role: 'assistant',
+      },
+    });
+    return count;
+  }
+
   /* 查询我的绘制记录 */
   async querDrawLog(req: Request, query: QuerMyChatLogDto) {
     const { id } = req.user;

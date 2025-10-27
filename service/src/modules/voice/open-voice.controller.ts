@@ -222,7 +222,10 @@ export class OpenVoiceController {
     schema: {
       type: 'object',
       properties: {
-        audioBase64: { type: 'string', description: '音频 Base64（dataURL 或纯base64）' },
+        audioBase64: {
+          type: 'string',
+          description: '音频数据：支持Base64编码（dataURL或纯base64）或音频文件URL（http/https）',
+        },
         format: { type: 'string', description: '音频格式，如 wav/mp3 等（可选）' },
         sample_rate: { type: 'number', description: '采样率（可选）' },
         model: { type: 'string', description: 'ASR 模型（可选）' },
@@ -235,7 +238,20 @@ export class OpenVoiceController {
       },
       required: ['audioBase64'],
     },
-    examples: { demo: { value: { audioBase64: '<base64>', format: 'wav', sample_rate: 16000 } } },
+    examples: {
+      withBase64: {
+        summary: '使用Base64编码',
+        value: { audioBase64: '<base64>', format: 'wav', sample_rate: 16000 },
+      },
+      withUrl: {
+        summary: '使用音频URL',
+        value: {
+          audioBase64: 'https://example.com/audio.mp3',
+          format: 'mp3',
+          sample_rate: 16000,
+        },
+      },
+    },
   })
   asr(
     @Body()

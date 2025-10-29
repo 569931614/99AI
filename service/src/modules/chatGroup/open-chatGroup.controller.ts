@@ -212,9 +212,8 @@ export class OpenChatGroupController {
         userId: { type: 'number', description: '外部用户ID（任意数字即可，用于区分不同用户会话）' },
         groupId: { type: 'number', description: '对话分组ID' },
         title: { type: 'string', description: '对话组标题（可选）' },
-        isSticky: { type: 'boolean', description: '是否置顶（可选）' },
-        config: { type: 'string', description: '配置JSON字符串（可选）' },
-        fileUrl: { type: 'string', description: '文件链接（可选）' },
+        description: { type: 'string', description: '群聊描述信息（可选）' },
+        ownerNickname: { type: 'string', description: '群主在群内的昵称（可选）' },
       },
       required: ['userId', 'groupId'],
     },
@@ -227,19 +226,20 @@ export class OpenChatGroupController {
           title: '新标题',
         },
       },
-      updateSticky: {
-        summary: '置顶对话组',
+      updateGroupInfo: {
+        summary: '更新群组信息',
         value: {
           userId: 1001,
           groupId: 123,
-          isSticky: true,
+          description: '这是一个技术交流群',
+          ownerNickname: '张三',
         },
       },
     },
   })
   async update(@Body() body: any, @Req() _req: Request, @Res() res: Response) {
     try {
-      const { userId, groupId, title, isSticky, config, fileUrl } = body || {};
+      const { userId, groupId, title, description, ownerNickname } = body || {};
       if (!userId) throw new HttpException('userId 必填', HttpStatus.BAD_REQUEST);
       if (!groupId) throw new HttpException('groupId 必填', HttpStatus.BAD_REQUEST);
 
@@ -254,7 +254,7 @@ export class OpenChatGroupController {
       };
 
       const result = await this.chatGroupService.update(
-        { groupId, title, isSticky, config, fileUrl },
+        { groupId, title, description, ownerNickname },
         fakeReq,
       );
       return res.status(200).json({ success: true, data: result });

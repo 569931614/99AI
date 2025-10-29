@@ -490,11 +490,11 @@ export class AppService {
     const { name, catId } = body;
     body.role = 'system';
 
-    // 检查应用名称是否已存在
-    const a = await this.appEntity.findOne({ where: { name } });
-    if (a) {
-      throw new HttpException('该角色名称已存在！', HttpStatus.BAD_REQUEST);
-    }
+    // 检查应用名称是否已存在 - 已移除限制，允许重复应用名
+    // const a = await this.appEntity.findOne({ where: { name } });
+    // if (a) {
+    //   throw new HttpException('该角色名称已存在！', HttpStatus.BAD_REQUEST);
+    // }
 
     // 验证所有分类ID是否存在
     if (!catId) {
@@ -629,10 +629,11 @@ export class AppService {
       throw new HttpException('无效的应用ID！', HttpStatus.BAD_REQUEST);
     }
 
-    const a = await this.appEntity.findOne({ where: { name, id: Not(id) } });
-    if (a) {
-      throw new HttpException('该应用名称已存在！', HttpStatus.BAD_REQUEST);
-    }
+    // 检查应用名称是否重复 - 已移除限制，允许重复应用名
+    // const a = await this.appEntity.findOne({ where: { name, id: Not(id) } });
+    // if (a) {
+    //   throw new HttpException('该应用名称已存在！', HttpStatus.BAD_REQUEST);
+    // }
 
     // 验证所有分类ID是否存在（仅在传递了 catId 时校验）
     if (typeof (catId as any) === 'string' && String(catId).trim().length > 0) {
@@ -1043,13 +1044,13 @@ export class AppService {
     const { name, catId } = body;
     const userId = req.user.id;
 
-    // 检查该用户是否已创建同名角色
-    const existingRole = await this.appEntity.findOne({
-      where: { name, userId },
-    });
-    if (existingRole) {
-      throw new HttpException('您已经创建了同名的角色！', HttpStatus.BAD_REQUEST);
-    }
+    // 检查该用户是否已创建同名角色 - 已移除限制，允许重复应用名
+    // const existingRole = await this.appEntity.findOne({
+    //   where: { name, userId },
+    // });
+    // if (existingRole) {
+    //   throw new HttpException('您已经创建了同名的角色！', HttpStatus.BAD_REQUEST);
+    // }
 
     // 验证分类ID是否存在
     if (typeof (catId as any) === 'string' && String(catId).trim().length > 0) {
@@ -1135,15 +1136,15 @@ export class AppService {
       throw new HttpException('无权修改此角色！', HttpStatus.FORBIDDEN);
     }
 
-    // 检查同名（排除自己）
-    if (name) {
-      const existing = await this.appEntity.findOne({
-        where: { name, userId, id: Not(id) },
-      });
-      if (existing) {
-        throw new HttpException('您已有同名的角色！', HttpStatus.BAD_REQUEST);
-      }
-    }
+    // 检查同名（排除自己）- 已移除限制，允许重复应用名
+    // if (name) {
+    //   const existing = await this.appEntity.findOne({
+    //     where: { name, userId, id: Not(id) },
+    //   });
+    //   if (existing) {
+    //     throw new HttpException('您已有同名的角色！', HttpStatus.BAD_REQUEST);
+    //   }
+    // }
 
     // 验证分类ID
     if (typeof (catId as any) === 'string' && String(catId).trim().length > 0) {

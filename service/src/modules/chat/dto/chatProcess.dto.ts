@@ -11,6 +11,7 @@ export class Options {
   groupId?: number;
   isFirstMember?: boolean;
   skipPromptInHistory?: boolean;
+  skipSaveToDatabase?: boolean;
 }
 
 export class ChatProcessDto {

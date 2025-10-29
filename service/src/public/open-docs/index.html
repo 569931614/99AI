@@ -60,6 +60,7 @@
             </tr>
           </thead>
           <tbody>
+            <tr><td><code>/api/open/chat/chat-process</code></td><td>POST</td><td>2025-10-29</td><td>【文档补充】详细说明 options 参数（groupId/isFirstMember/skipPromptInHistory/skipSaveToDatabase）</td></tr>
             <tr><td><code>/api/open/chat/tts-process</code></td><td>POST</td><td>2025-10-27</td><td>【文档修正】删除不支持的 voice/speed/model 参数</td></tr>
             <tr><td><code>/api/open/chat/chat-process-voice</code></td><td>POST</td><td>2025-10-27</td><td>【文档修正】修正参数完整性，appId改为可选，补充model等字段</td></tr>
             <tr><td><code>/api/open/voice/params/:voiceId</code></td><td>GET</td><td>2025-10-27</td><td>【文档补充】获取音色默认参数</td></tr>
@@ -71,7 +72,7 @@
             <tr><td><code>/api/open/group/members/list</code></td><td>POST</td><td>2025-10-27</td><td>【文档补充】返回值补充 openingRemark 字段</td></tr>
             <tr><td><code>/api/open/group/members/update</code></td><td>POST</td><td>2025-10-23</td><td>更新群员信息（角色/顺序/昵称/开场白）</td></tr>
             <tr><td><code>/api/open/group/create</code></td><td>POST</td><td>2025-10-23</td><td>创建对话组，支持群名称、群描述、群主昵称参数</td></tr>
-            <tr><td><code>/api/open/group/update</code></td><td>POST</td><td>2025-10-23</td><td>更新对话组（标题、置顶、配置等）</td></tr>
+            <tr><td><code>/api/open/group/update</code></td><td>POST</td><td>2025-10-28</td><td>【参数调整】移除 isSticky/config/fileUrl，新增 description/ownerNickname</td></tr>
             <tr><td><code>/api/open/group/members/remove</code></td><td>POST</td><td>2025-10-23</td><td>群组移除成员</td></tr>
             <tr><td><code>/api/open/group/task/assign</code></td><td>POST</td><td>2025-10-23</td><td>为群组成员分配任务</td></tr>
             <tr><td><code>/api/open/group/task/update</code></td><td>POST</td><td>2025-10-23</td><td>更新成员任务状态</td></tr>
@@ -382,7 +383,8 @@
         <tr><td><code>fileUrl</code></td><td>文件URL</td><td>否</td></tr>
         <tr><td><code>appId</code></td><td>角色ID</td><td>否</td></tr>
         <tr><td><code>model / modelName / modelType / modelAvatar</code></td><td>模型相关参数</td><td>否</td></tr>
-        <tr><td><code>options / extraParam / usingPluginId</code></td><td>附加选项/插件/扩展参数</td><td>否</td></tr>
+        <tr><td><code>options</code></td><td>附加选项（对象），可包含：<br/>• <code>groupId</code>：会话组ID<br/>• <code>isFirstMember</code>：是否为第一个成员（群聊模式）<br/>• <code>skipPromptInHistory</code>：是否跳过将prompt添加到历史（群聊自动对话模式）<br/>• <code>skipSaveToDatabase</code>：是否跳过保存到数据库（true时prompt会加入上下文但不保存到chatLog表）</td><td>否</td></tr>
+        <tr><td><code>extraParam / usingPluginId</code></td><td>扩展参数/插件</td><td>否</td></tr>
       </tbody></table>
       <h3>语音对话（POST <code>/api/open/chat/chat-process-voice</code>）</h3>
       <div class="tip" style="margin-bottom: 12px;">一次性语音对话（ASR → LLM → TTS 完整流程），非实时流式，适合一问一答场景</div>
@@ -659,14 +661,13 @@
       </tbody></table>
 
       <h3>更新对话组（POST <code>/api/open/group/update</code>）</h3>
-      <div class="tip" style="margin-bottom: 12px;">更新对话组的标题、置顶状态、配置等信息</div>
+      <div class="tip" style="margin-bottom: 12px;">更新对话组的标题、描述、群主昵称等信息</div>
       <table><thead><tr><th>字段</th><th>说明</th><th>是否必填</th></tr></thead><tbody>
         <tr><td><code>userId</code></td><td>外部用户ID</td><td>是</td></tr>
         <tr><td><code>groupId</code></td><td>对话分组ID</td><td>是</td></tr>
         <tr><td><code>title</code></td><td>对话组标题</td><td>否</td></tr>
-        <tr><td><code>isSticky</code></td><td>是否置顶（布尔值）</td><td>否</td></tr>
-        <tr><td><code>config</code></td><td>配置JSON字符串</td><td>否</td></tr>
-        <tr><td><code>fileUrl</code></td><td>文件链接</td><td>否</td></tr>
+        <tr><td><code>description</code></td><td>群聊描述信息</td><td>否</td></tr>
+        <tr><td><code>ownerNickname</code></td><td>群主在群内的昵称</td><td>否</td></tr>
       </tbody></table>
       <h3>返回体</h3>
       <table><thead><tr><th>字段</th><th>说明</th></tr></thead><tbody>
@@ -676,7 +677,7 @@
       <h3>请求示例</h3>
       <table><thead><tr><th>场景</th><th>请求</th></tr></thead><tbody>
         <tr><td>更新标题</td><td><code>{ "userId": 1001, "groupId": 123, "title": "我的新对话" }</code></td></tr>
-        <tr><td>设置置顶</td><td><code>{ "userId": 1001, "groupId": 123, "isSticky": true }</code></td></tr>
+        <tr><td>更新群组信息</td><td><code>{ "userId": 1001, "groupId": 123, "description": "这是一个技术交流群", "ownerNickname": "张三" }</code></td></tr>
       </tbody></table>
 
       <h3>群组成员管理</h3>

@@ -968,10 +968,20 @@ export class VoiceService {
             }
 
             // 兼容多种返回结构，尽可能提取文本
-            const pushSentence = (text: string, b?: number, e?: number | null) => {
+            // 重要：只处理最终结果（is_final=true 或有 end_time），避免中间结果重复累加
+            const pushSentence = (text: string, b?: number, e?: number | null, isFinal?: boolean) => {
               if (!text) return;
-              sentences.push({ begin_time: b ?? 0, end_time: e ?? null, text });
-              finalText += text;
+
+              // 只累加最终结果到 finalText，避免重复
+              // 判断依据：有 end_time（句子结束）或 isFinal=true
+              const shouldAccumulate = isFinal || (e !== null && e !== undefined);
+
+              if (shouldAccumulate) {
+                sentences.push({ begin_time: b ?? 0, end_time: e ?? null, text });
+                finalText += text;
+              }
+
+              // 无论是否最终结果，都通知回调（用于实时显示）
               try {
                 opts?.onPartial?.(text, b, e ?? null);
               } catch {}
@@ -985,15 +995,22 @@ export class VoiceService {
             ) {
               const s = out?.sentence;
               if (s?.text) {
-                pushSentence(s.text, s.begin_time, s.end_time ?? null);
+                // 检查是否为最终结果
+                const isFinal = s?.is_final === true;
+                pushSentence(s.text, s.begin_time, s.end_time ?? null, isFinal);
               } else if (Array.isArray(out?.sentences)) {
-                for (const it of out.sentences)
-                  pushSentence(it?.text || '', it?.begin_time, it?.end_time ?? null);
+                for (const it of out.sentences) {
+                  const isFinal = it?.is_final === true;
+                  pushSentence(it?.text || '', it?.begin_time, it?.end_time ?? null, isFinal);
+                }
               } else if (typeof out?.text === 'string') {
-                pushSentence(out.text);
+                // 如果没有详细信息，假定为最终结果
+                const isFinal = out?.is_final !== false;
+                pushSentence(out.text, undefined, undefined, isFinal);
               } else if (Array.isArray(out?.nbest) && out.nbest.length > 0) {
                 const best = out.nbest[0];
-                pushSentence(best?.text || best?.sentence || '');
+                const isFinal = best?.is_final !== false;
+                pushSentence(best?.text || best?.sentence || '', undefined, undefined, isFinal);
               }
               return;
             }

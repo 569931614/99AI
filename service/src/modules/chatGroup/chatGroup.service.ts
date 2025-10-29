@@ -95,7 +95,7 @@ export class ChatGroupService {
 
   async update(body: any, req: Request) {
     // Logger.debug(`body: ${JSON.stringify(body)}`);
-    const { title, isSticky, groupId, config, fileUrl } = body;
+    const { title, groupId, description, ownerNickname } = body;
     const { id } = req.user;
     const g = await this.chatGroupEntity.findOne({
       where: { id: groupId, userId: id },
@@ -116,9 +116,8 @@ export class ChatGroupService {
     }
     const data = {};
     title && (data['title'] = title);
-    typeof isSticky !== 'undefined' && (data['isSticky'] = isSticky);
-    config && (data['config'] = config);
-    typeof fileUrl !== 'undefined' && (data['fileUrl'] = fileUrl);
+    typeof description !== 'undefined' && (data['description'] = description);
+    typeof ownerNickname !== 'undefined' && (data['ownerNickname'] = ownerNickname);
     const u = await this.chatGroupEntity.update({ id: groupId }, data);
     if (u.affected) {
       // // 如果 fileUrl 不为空，异步处理 PDF 内容读取

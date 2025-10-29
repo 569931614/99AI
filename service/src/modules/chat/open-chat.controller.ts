@@ -48,6 +48,11 @@ export class OpenChatController {
               description:
                 '是否跳过将prompt添加到历史（群聊自动对话模式专用，true时不将prompt加入上下文）',
             },
+            skipSaveToDatabase: {
+              type: 'boolean',
+              description:
+                '是否跳过保存到数据库（true时prompt会加入上下文但不保存到chatLog表）',
+            },
           },
         },
         audioUrl: { type: 'string', description: '音频URL，自动进行ASR识别为文本（可选）' },

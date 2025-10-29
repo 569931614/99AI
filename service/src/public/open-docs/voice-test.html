@@ -1,0 +1,1176 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>语音接口测试工具</title>
+  <style>
+    :root {
+      --bg: #0b0f1a;
+      --card: #11182a;
+      --card-2: #0d1424;
+      --text: #e6eaf2;
+      --muted: #9aa4b2;
+      --brand: #4da3ff;
+      --accent: #7bd88a;
+      --border: #22304a;
+      --code-bg: #0a1326;
+      --danger: #ff4d4f;
+      --success: #52c41a;
+      --warning: #faad14;
+    }
+
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      padding: 20px;
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+      line-height: 1.6;
+    }
+
+    .container { max-width: 1200px; margin: 0 auto; }
+
+    h1 {
+      font-size: 28px;
+      margin: 0 0 8px;
+      color: var(--brand);
+    }
+
+    .subtitle {
+      color: var(--muted);
+      margin-bottom: 24px;
+    }
+
+    .tabs {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 24px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .tab {
+      padding: 12px 24px;
+      background: none;
+      border: none;
+      color: var(--muted);
+      cursor: pointer;
+      border-bottom: 2px solid transparent;
+      transition: all 0.3s;
+    }
+
+    .tab:hover { color: var(--text); }
+    .tab.active {
+      color: var(--brand);
+      border-bottom-color: var(--brand);
+    }
+
+    .tab-content {
+      display: none;
+      animation: fadeIn 0.3s;
+    }
+
+    .tab-content.active { display: block; }
+
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(10px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    .card {
+      background: linear-gradient(180deg, var(--card), var(--card-2));
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 20px;
+      margin-bottom: 16px;
+    }
+
+    .card h3 {
+      margin: 0 0 16px;
+      font-size: 18px;
+      color: var(--brand);
+    }
+
+    .form-group {
+      margin-bottom: 16px;
+    }
+
+    label {
+      display: block;
+      margin-bottom: 6px;
+      color: var(--muted);
+      font-size: 14px;
+    }
+
+    input[type="text"],
+    input[type="number"],
+    textarea,
+    select {
+      width: 100%;
+      padding: 10px 12px;
+      background: var(--code-bg);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      color: var(--text);
+      font-size: 14px;
+    }
+
+    input:focus,
+    textarea:focus,
+    select:focus {
+      outline: none;
+      border-color: var(--brand);
+    }
+
+    textarea {
+      resize: vertical;
+      min-height: 80px;
+      font-family: 'Courier New', monospace;
+    }
+
+    .btn {
+      padding: 10px 20px;
+      border: none;
+      border-radius: 6px;
+      font-size: 14px;
+      cursor: pointer;
+      transition: all 0.3s;
+      font-weight: 500;
+    }
+
+    .btn-primary {
+      background: var(--brand);
+      color: white;
+    }
+
+    .btn-primary:hover {
+      background: #3d8fe6;
+    }
+
+    .btn-danger {
+      background: var(--danger);
+      color: white;
+    }
+
+    .btn-danger:hover {
+      background: #d9363e;
+    }
+
+    .btn-success {
+      background: var(--success);
+      color: white;
+    }
+
+    .btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    .btn-group {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .status {
+      padding: 8px 12px;
+      border-radius: 6px;
+      font-size: 13px;
+      margin-bottom: 12px;
+    }
+
+    .status-info {
+      background: rgba(77, 163, 255, 0.1);
+      border: 1px solid var(--brand);
+      color: var(--brand);
+    }
+
+    .status-success {
+      background: rgba(82, 196, 26, 0.1);
+      border: 1px solid var(--success);
+      color: var(--success);
+    }
+
+    .status-error {
+      background: rgba(255, 77, 79, 0.1);
+      border: 1px solid var(--danger);
+      color: var(--danger);
+    }
+
+    .status-warning {
+      background: rgba(250, 173, 20, 0.1);
+      border: 1px solid var(--warning);
+      color: var(--warning);
+    }
+
+    .log {
+      background: var(--code-bg);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 12px;
+      max-height: 300px;
+      overflow-y: auto;
+      font-family: 'Courier New', monospace;
+      font-size: 12px;
+      line-height: 1.5;
+    }
+
+    .log-entry {
+      margin-bottom: 4px;
+      padding: 4px 0;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+    }
+
+    .log-entry:last-child {
+      border-bottom: none;
+    }
+
+    .log-time {
+      color: var(--muted);
+      margin-right: 8px;
+    }
+
+    .log-type {
+      padding: 2px 6px;
+      border-radius: 3px;
+      font-size: 11px;
+      margin-right: 8px;
+    }
+
+    .log-type-send {
+      background: rgba(77, 163, 255, 0.2);
+      color: var(--brand);
+    }
+
+    .log-type-recv {
+      background: rgba(82, 196, 26, 0.2);
+      color: var(--success);
+    }
+
+    .log-type-error {
+      background: rgba(255, 77, 79, 0.2);
+      color: var(--danger);
+    }
+
+    .audio-player {
+      width: 100%;
+      margin-top: 12px;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+      gap: 12px;
+    }
+
+    .voice-item {
+      padding: 12px;
+      background: var(--code-bg);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      cursor: pointer;
+      transition: all 0.3s;
+    }
+
+    .voice-item:hover {
+      border-color: var(--brand);
+      background: rgba(77, 163, 255, 0.05);
+    }
+
+    .voice-item.selected {
+      border-color: var(--brand);
+      background: rgba(77, 163, 255, 0.1);
+    }
+
+    .voice-name {
+      font-weight: 500;
+      margin-bottom: 4px;
+    }
+
+    .voice-id {
+      font-size: 12px;
+      color: var(--muted);
+      font-family: 'Courier New', monospace;
+    }
+
+    .recording-indicator {
+      display: inline-block;
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      background: var(--danger);
+      margin-right: 8px;
+      animation: pulse 1.5s infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.5; }
+    }
+
+    .info-box {
+      background: rgba(77, 163, 255, 0.05);
+      border: 1px solid var(--brand);
+      border-radius: 6px;
+      padding: 12px;
+      margin-bottom: 16px;
+      font-size: 13px;
+      color: var(--muted);
+    }
+
+    code {
+      background: var(--code-bg);
+      padding: 2px 6px;
+      border-radius: 3px;
+      color: var(--brand);
+      font-family: 'Courier New', monospace;
+      font-size: 12px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>语音接口测试工具</h1>
+    <div class="subtitle">测试外部语音接口（ASR、TTS、WebSocket实时通话）</div>
+
+    <div class="tabs">
+      <button class="tab active" data-tab="websocket">WebSocket实时通话</button>
+      <button class="tab" data-tab="http-voice">HTTP语音对话</button>
+      <button class="tab" data-tab="asr">ASR语音识别</button>
+      <button class="tab" data-tab="tts">TTS语音合成</button>
+      <button class="tab" data-tab="voices">音色管理</button>
+    </div>
+
+    <!-- WebSocket 实时通话 -->
+    <div class="tab-content active" id="tab-websocket">
+      <div class="card">
+        <h3>WebSocket 实时语音通话</h3>
+        <div class="info-box">
+          支持实时语音识别、AI对话、语音合成全流程。支持VAD自动检测、打断、情绪识别。
+        </div>
+
+        <div class="form-group">
+          <label>WebSocket 地址</label>
+          <input type="text" id="ws-url" value="ws://localhost:9520/api/realtime/voice-call">
+        </div>
+
+        <div class="grid">
+          <div class="form-group">
+            <label>用户ID</label>
+            <input type="text" id="ws-userId" value="1001">
+          </div>
+          <div class="form-group">
+            <label>角色ID</label>
+            <input type="text" id="ws-appId" placeholder="输入角色ID">
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label>音色ID（可选，留空则使用角色默认音色）</label>
+          <input type="text" id="ws-voiceId" placeholder="如 cosyvoice-v2-xxx">
+        </div>
+
+        <div class="grid">
+          <div class="form-group">
+            <label>采样率</label>
+            <select id="ws-sampleRate">
+              <option value="8000">8000 Hz</option>
+              <option value="16000" selected>16000 Hz</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>音频格式</label>
+            <select id="ws-format">
+              <option value="pcm" selected>PCM</option>
+              <option value="wav">WAV</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label>
+            <input type="checkbox" id="ws-enableEmotion" checked> 启用情绪检测
+          </label>
+          <label>
+            <input type="checkbox" id="ws-enableAffection" checked> 启用好感度系统
+          </label>
+        </div>
+
+        <div id="ws-status" class="status status-info" style="display:none;"></div>
+
+        <div class="btn-group">
+          <button class="btn btn-primary" id="ws-connect">连接</button>
+          <button class="btn btn-danger" id="ws-disconnect" disabled>断开</button>
+          <button class="btn btn-success" id="ws-start-record" disabled>开始录音</button>
+          <button class="btn btn-danger" id="ws-stop-record" disabled>停止录音</button>
+          <button class="btn" id="ws-cancel" disabled>取消播放</button>
+          <button class="btn" id="ws-clear-log">清空日志</button>
+        </div>
+
+        <div class="form-group" style="margin-top: 16px;">
+          <label>通信日志</label>
+          <div class="log" id="ws-log"></div>
+        </div>
+
+        <audio id="ws-audio" class="audio-player" controls style="display:none;"></audio>
+      </div>
+    </div>
+
+    <!-- HTTP 语音对话 -->
+    <div class="tab-content" id="tab-http-voice">
+      <div class="card">
+        <h3>HTTP 一次性语音对话</h3>
+        <div class="info-box">
+          一次性完成 ASR → LLM → TTS 全流程，适合简单的一问一答场景。
+        </div>
+
+        <div class="form-group">
+          <label>API 地址</label>
+          <input type="text" id="http-voice-url" value="http://localhost:9520/api/open/chat/chat-process-voice">
+        </div>
+
+        <div class="grid">
+          <div class="form-group">
+            <label>用户ID</label>
+            <input type="text" id="http-voice-userId" value="1001">
+          </div>
+          <div class="form-group">
+            <label>角色ID</label>
+            <input type="text" id="http-voice-appId" placeholder="输入角色ID">
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label>音频输入方式</label>
+          <select id="http-voice-input-type">
+            <option value="url">音频URL</option>
+            <option value="file">上传文件</option>
+          </select>
+        </div>
+
+        <div class="form-group" id="http-voice-url-group">
+          <label>音频URL</label>
+          <input type="text" id="http-voice-audioUrl" placeholder="输入音频文件URL">
+        </div>
+
+        <div class="form-group" id="http-voice-file-group" style="display:none;">
+          <label>上传音频文件</label>
+          <input type="file" id="http-voice-audioFile" accept="audio/*">
+        </div>
+
+        <div id="http-voice-status" class="status status-info" style="display:none;"></div>
+
+        <div class="btn-group">
+          <button class="btn btn-primary" id="http-voice-submit">发送请求</button>
+          <button class="btn" id="http-voice-clear">清空结果</button>
+        </div>
+
+        <div class="form-group" style="margin-top: 16px;">
+          <label>返回结果</label>
+          <textarea id="http-voice-result" readonly></textarea>
+        </div>
+
+        <audio id="http-voice-audio" class="audio-player" controls style="display:none;"></audio>
+      </div>
+    </div>
+
+    <!-- ASR 语音识别 -->
+    <div class="tab-content" id="tab-asr">
+      <div class="card">
+        <h3>ASR 语音识别测试</h3>
+        <div class="info-box">
+          将音频转换为文字，支持多种音频格式。
+        </div>
+
+        <div class="form-group">
+          <label>API 地址</label>
+          <input type="text" id="asr-url" value="http://localhost:9520/api/open/voice/asr">
+        </div>
+
+        <div class="form-group">
+          <label>音频输入方式</label>
+          <select id="asr-input-type">
+            <option value="url">音频URL</option>
+            <option value="file">上传文件</option>
+          </select>
+        </div>
+
+        <div class="form-group" id="asr-url-group">
+          <label>音频URL</label>
+          <input type="text" id="asr-audioUrl" placeholder="输入音频文件URL">
+        </div>
+
+        <div class="form-group" id="asr-file-group" style="display:none;">
+          <label>上传音频文件</label>
+          <input type="file" id="asr-audioFile" accept="audio/*">
+        </div>
+
+        <div class="grid">
+          <div class="form-group">
+            <label>音频格式</label>
+            <select id="asr-format">
+              <option value="">自动检测</option>
+              <option value="wav">WAV</option>
+              <option value="mp3">MP3</option>
+              <option value="pcm">PCM</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>采样率</label>
+            <input type="number" id="asr-sampleRate" placeholder="如 16000">
+          </div>
+        </div>
+
+        <div id="asr-status" class="status status-info" style="display:none;"></div>
+
+        <div class="btn-group">
+          <button class="btn btn-primary" id="asr-submit">识别</button>
+          <button class="btn" id="asr-clear">清空结果</button>
+        </div>
+
+        <div class="form-group" style="margin-top: 16px;">
+          <label>识别结果</label>
+          <textarea id="asr-result" readonly></textarea>
+        </div>
+      </div>
+    </div>
+
+    <!-- TTS 语音合成 -->
+    <div class="tab-content" id="tab-tts">
+      <div class="card">
+        <h3>TTS 语音合成测试</h3>
+        <div class="info-box">
+          将文字转换为语音，支持多种音色和参数调整。
+        </div>
+
+        <div class="form-group">
+          <label>API 地址</label>
+          <input type="text" id="tts-url" value="http://localhost:9520/api/open/voice/preview">
+        </div>
+
+        <div class="form-group">
+          <label>音色ID</label>
+          <input type="text" id="tts-voiceId" placeholder="输入音色ID，如 cosyvoice-v2-xxx">
+        </div>
+
+        <div class="form-group">
+          <label>要合成的文本</label>
+          <textarea id="tts-text" placeholder="输入要合成的文本内容">你好，欢迎使用语音合成功能。</textarea>
+        </div>
+
+        <div class="grid">
+          <div class="form-group">
+            <label>输出格式</label>
+            <select id="tts-format">
+              <option value="mp3" selected>MP3</option>
+              <option value="wav">WAV</option>
+              <option value="pcm">PCM</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>采样率</label>
+            <input type="number" id="tts-sampleRate" placeholder="如 22050">
+          </div>
+        </div>
+
+        <div class="grid">
+          <div class="form-group">
+            <label>语速</label>
+            <input type="number" id="tts-rate" step="0.1" placeholder="1.0" value="1.0">
+          </div>
+          <div class="form-group">
+            <label>音调</label>
+            <input type="number" id="tts-pitch" step="0.1" placeholder="1.0" value="1.0">
+          </div>
+          <div class="form-group">
+            <label>音量</label>
+            <input type="number" id="tts-volume" placeholder="50" value="50">
+          </div>
+        </div>
+
+        <div id="tts-status" class="status status-info" style="display:none;"></div>
+
+        <div class="btn-group">
+          <button class="btn btn-primary" id="tts-submit">合成</button>
+          <button class="btn" id="tts-clear">清空结果</button>
+        </div>
+
+        <div class="form-group" style="margin-top: 16px;">
+          <label>返回结果</label>
+          <textarea id="tts-result" readonly></textarea>
+        </div>
+
+        <audio id="tts-audio" class="audio-player" controls style="display:none;"></audio>
+      </div>
+    </div>
+
+    <!-- 音色管理 -->
+    <div class="tab-content" id="tab-voices">
+      <div class="card">
+        <h3>音色列表</h3>
+        <div class="info-box">
+          查看和管理可用的音色，点击音色可快速填充到TTS测试中。
+        </div>
+
+        <div class="form-group">
+          <label>API 地址</label>
+          <input type="text" id="voices-url" value="http://localhost:9520/api/open/voice/list">
+        </div>
+
+        <div class="grid">
+          <div class="form-group">
+            <label>前缀过滤</label>
+            <input type="text" id="voices-prefix" placeholder="如 cosyvoice-v2">
+          </div>
+          <div class="form-group">
+            <label>每页数量</label>
+            <input type="number" id="voices-pageSize" value="20">
+          </div>
+        </div>
+
+        <div class="btn-group">
+          <button class="btn btn-primary" id="voices-load">加载音色</button>
+          <button class="btn" id="voices-clear">清空列表</button>
+        </div>
+
+        <div id="voices-status" class="status status-info" style="display:none;"></div>
+
+        <div id="voices-list" class="grid" style="margin-top: 16px;"></div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // Tab 切换
+    document.querySelectorAll('.tab').forEach(tab => {
+      tab.addEventListener('click', () => {
+        const target = tab.dataset.tab;
+        document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+        document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+        tab.classList.add('active');
+        document.getElementById(`tab-${target}`).classList.add('active');
+      });
+    });
+
+    // ==================== WebSocket 实时通话 ====================
+    let ws = null;
+
+    const wsLog = document.getElementById('ws-log');
+    const wsStatus = document.getElementById('ws-status');
+
+    function addLog(type, message) {
+      const time = new Date().toLocaleTimeString();
+      const entry = document.createElement('div');
+      entry.className = 'log-entry';
+      entry.innerHTML = `<span class="log-time">${time}</span><span class="log-type log-type-${type}">${type.toUpperCase()}</span>${message}`;
+      wsLog.appendChild(entry);
+      wsLog.scrollTop = wsLog.scrollHeight;
+    }
+
+    function showStatus(element, type, message) {
+      element.style.display = 'block';
+      element.className = `status status-${type}`;
+      element.textContent = message;
+    }
+
+    document.getElementById('ws-connect').addEventListener('click', () => {
+      const url = document.getElementById('ws-url').value;
+
+      try {
+        ws = new WebSocket(url);
+
+        ws.onopen = () => {
+          addLog('recv', 'WebSocket连接已建立');
+          showStatus(wsStatus, 'success', '已连接');
+
+          document.getElementById('ws-connect').disabled = true;
+          document.getElementById('ws-disconnect').disabled = false;
+          document.getElementById('ws-start-record').disabled = false;
+
+          // 发送 start_call
+          const startCall = {
+            type: 'start_call',
+            sampleRate: parseInt(document.getElementById('ws-sampleRate').value),
+            format: document.getElementById('ws-format').value,
+            userId: document.getElementById('ws-userId').value,
+            appId: document.getElementById('ws-appId').value,
+            voice_id: document.getElementById('ws-voiceId').value || '', // 添加音色ID
+            enableEmotion: document.getElementById('ws-enableEmotion').checked,
+            enableAffection: document.getElementById('ws-enableAffection').checked
+          };
+
+          ws.send(JSON.stringify(startCall));
+          addLog('send', `发送: ${JSON.stringify(startCall, null, 2)}`);
+        };
+
+        ws.onmessage = (event) => {
+          if (typeof event.data === 'string') {
+            const msg = JSON.parse(event.data);
+            addLog('recv', `收到消息: ${JSON.stringify(msg, null, 2)}`);
+
+            // 处理不同类型的消息
+            if (msg.type === 'call_started') {
+              showStatus(wsStatus, 'success', '通话已启动，可以开始录音');
+            } else if (msg.type === 'asr.final') {
+              showStatus(wsStatus, 'info', `识别完成: ${msg.text}`);
+            } else if (msg.type === 'llm.final') {
+              showStatus(wsStatus, 'info', `AI回复: ${msg.text}`);
+            } else if (msg.type === 'emotion.detected') {
+              showStatus(wsStatus, 'warning', `检测到情绪: ${msg.emotion}`);
+            } else if (msg.type === 'error') {
+              showStatus(wsStatus, 'error', `错误 [${msg.stage}]: ${msg.message}`);
+            }
+          } else {
+            // 二进制数据（音频）
+            addLog('recv', `收到音频数据: ${event.data.byteLength} 字节`);
+            playAudio(event.data);
+          }
+        };
+
+        ws.onerror = (error) => {
+          addLog('error', `WebSocket错误: ${error}`);
+          showStatus(wsStatus, 'error', 'WebSocket连接错误');
+        };
+
+        ws.onclose = () => {
+          addLog('recv', 'WebSocket连接已关闭');
+          showStatus(wsStatus, 'info', '已断开');
+          resetButtons();
+        };
+
+      } catch (error) {
+        addLog('error', `连接失败: ${error.message}`);
+        showStatus(wsStatus, 'error', '连接失败');
+      }
+    });
+
+    document.getElementById('ws-disconnect').addEventListener('click', () => {
+      if (ws && ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({ type: 'end_call' }));
+        addLog('send', '发送: end_call');
+        ws.close();
+      }
+    });
+
+    // 音频处理变量
+    let audioContext = null;
+    let mediaStreamSource = null;
+    let scriptProcessor = null;
+    let recordingStream = null;
+
+    // 降采样函数（从浏览器原始采样率降到目标采样率）
+    function downsampleBuffer(buffer, inputSampleRate, outputSampleRate) {
+      if (outputSampleRate === inputSampleRate) return buffer;
+      const ratio = inputSampleRate / outputSampleRate;
+      const newLength = Math.floor(buffer.length / ratio);
+      const result = new Float32Array(newLength);
+      let offsetResult = 0;
+      let offsetBuffer = 0;
+      while (offsetResult < result.length) {
+        result[offsetResult++] = buffer[Math.floor(offsetBuffer)];
+        offsetBuffer += ratio;
+      }
+      return result;
+    }
+
+    // Float32 转 Int16 PCM
+    function floatTo16BitPCM(float32Array) {
+      const length = float32Array.length;
+      const result = new Int16Array(length);
+      for (let i = 0; i < length; i++) {
+        const s = Math.max(-1, Math.min(1, float32Array[i]));
+        result[i] = s < 0 ? s * 0x8000 : s * 0x7FFF;
+      }
+      return result;
+    }
+
+    document.getElementById('ws-start-record').addEventListener('click', async () => {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({
+          audio: {
+            echoCancellation: true,
+            noiseSuppression: true,
+            autoGainControl: true
+          }
+        });
+
+        recordingStream = stream;
+
+        // 创建音频上下文
+        audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        const targetSampleRate = parseInt(document.getElementById('ws-sampleRate').value);
+
+        addLog('send', `开始录音，浏览器采样率: ${audioContext.sampleRate}Hz, 目标采样率: ${targetSampleRate}Hz`);
+
+        // 创建音频源
+        mediaStreamSource = audioContext.createMediaStreamSource(stream);
+
+        // 创建音频处理器 (bufferSize, inputChannels, outputChannels)
+        const bufferSize = 8192; // 使用较大的buffer减少处理次数
+        scriptProcessor = audioContext.createScriptProcessor(bufferSize, 1, 1);
+
+        let audioChunksSent = 0;
+
+        scriptProcessor.onaudioprocess = (audioProcessingEvent) => {
+          if (!ws || ws.readyState !== WebSocket.OPEN) return;
+
+          // 获取输入音频数据（Float32Array）
+          const inputBuffer = audioProcessingEvent.inputBuffer;
+          const inputData = inputBuffer.getChannelData(0); // 获取单声道
+
+          // 降采样到目标采样率
+          const downsampled = downsampleBuffer(inputData, audioContext.sampleRate, targetSampleRate);
+
+          // 转换为 Int16 PCM
+          const pcm16 = floatTo16BitPCM(downsampled);
+
+          // 计算音频能量（用于检测是否有声音）
+          let sumSquare = 0;
+          for (let i = 0; i < pcm16.length; i++) {
+            const value = pcm16[i];
+            sumSquare += value * value;
+          }
+          const rms = Math.sqrt(sumSquare / pcm16.length);
+
+          // 只发送有声音的数据（RMS > 3）
+          if (rms >= 3) {
+            // 发送 PCM 数据
+            ws.send(pcm16.buffer);
+            audioChunksSent++;
+
+            // 每50块记录一次日志
+            if (audioChunksSent % 50 === 0) {
+              addLog('send', `已发送 ${audioChunksSent} 块音频 (RMS: ${Math.round(rms)})`);
+            }
+          }
+        };
+
+        // 连接音频节点
+        mediaStreamSource.connect(scriptProcessor);
+        scriptProcessor.connect(audioContext.destination);
+
+        document.getElementById('ws-start-record').disabled = true;
+        document.getElementById('ws-stop-record').disabled = false;
+        document.getElementById('ws-cancel').disabled = false;
+
+        showStatus(wsStatus, 'warning', '⏺ 正在录音... 请说话');
+
+      } catch (error) {
+        addLog('error', `录音失败: ${error.message}`);
+        showStatus(wsStatus, 'error', '无法访问麦克风');
+      }
+    });
+
+    document.getElementById('ws-stop-record').addEventListener('click', () => {
+      // 停止音频处理
+      if (scriptProcessor) {
+        scriptProcessor.disconnect();
+        scriptProcessor = null;
+      }
+      if (mediaStreamSource) {
+        mediaStreamSource.disconnect();
+        mediaStreamSource = null;
+      }
+      if (audioContext) {
+        audioContext.close();
+        audioContext = null;
+      }
+      if (recordingStream) {
+        recordingStream.getTracks().forEach(track => track.stop());
+        recordingStream = null;
+      }
+
+      // 发送 stop 信号
+      if (ws && ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({ type: 'stop' }));
+        addLog('send', '发送: stop');
+      }
+
+      document.getElementById('ws-start-record').disabled = false;
+      document.getElementById('ws-stop-record').disabled = true;
+
+      showStatus(wsStatus, 'info', '处理中，等待识别结果...');
+    });
+
+    document.getElementById('ws-cancel').addEventListener('click', () => {
+      if (ws && ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({ type: 'cancel' }));
+        addLog('send', '发送: cancel');
+      }
+    });
+
+    document.getElementById('ws-clear-log').addEventListener('click', () => {
+      wsLog.innerHTML = '';
+    });
+
+    function resetButtons() {
+      document.getElementById('ws-connect').disabled = false;
+      document.getElementById('ws-disconnect').disabled = true;
+      document.getElementById('ws-start-record').disabled = true;
+      document.getElementById('ws-stop-record').disabled = true;
+      document.getElementById('ws-cancel').disabled = true;
+    }
+
+    function playAudio(audioData) {
+      const blob = new Blob([audioData], { type: 'audio/mp3' });
+      const url = URL.createObjectURL(blob);
+      const audio = document.getElementById('ws-audio');
+      audio.src = url;
+      audio.style.display = 'block';
+      audio.play();
+    }
+
+    // ==================== HTTP 语音对话 ====================
+    document.getElementById('http-voice-input-type').addEventListener('change', (e) => {
+      const type = e.target.value;
+      document.getElementById('http-voice-url-group').style.display = type === 'url' ? 'block' : 'none';
+      document.getElementById('http-voice-file-group').style.display = type === 'file' ? 'block' : 'none';
+    });
+
+    document.getElementById('http-voice-submit').addEventListener('click', async () => {
+      const url = document.getElementById('http-voice-url').value;
+      const userId = document.getElementById('http-voice-userId').value;
+      const appId = document.getElementById('http-voice-appId').value;
+      const inputType = document.getElementById('http-voice-input-type').value;
+      const statusEl = document.getElementById('http-voice-status');
+      const resultEl = document.getElementById('http-voice-result');
+
+      let audioData;
+
+      if (inputType === 'url') {
+        audioData = document.getElementById('http-voice-audioUrl').value;
+        if (!audioData) {
+          showStatus(statusEl, 'error', '请输入音频URL');
+          return;
+        }
+      } else {
+        const file = document.getElementById('http-voice-audioFile').files[0];
+        if (!file) {
+          showStatus(statusEl, 'error', '请选择音频文件');
+          return;
+        }
+        audioData = await fileToBase64(file);
+      }
+
+      const body = {
+        userId,
+        appId,
+        [inputType === 'url' ? 'audioUrl' : 'audioBase64']: audioData
+      };
+
+      showStatus(statusEl, 'info', '正在处理...');
+
+      try {
+        const response = await fetch(url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body)
+        });
+
+        const result = await response.json();
+        resultEl.value = JSON.stringify(result, null, 2);
+
+        if (result.success && result.data.ttsAudioUrl) {
+          const audio = document.getElementById('http-voice-audio');
+          audio.src = result.data.ttsAudioUrl;
+          audio.style.display = 'block';
+          showStatus(statusEl, 'success', '处理成功');
+        } else {
+          showStatus(statusEl, 'warning', '请求完成，但可能有问题');
+        }
+      } catch (error) {
+        showStatus(statusEl, 'error', `请求失败: ${error.message}`);
+        resultEl.value = `错误: ${error.message}`;
+      }
+    });
+
+    document.getElementById('http-voice-clear').addEventListener('click', () => {
+      document.getElementById('http-voice-result').value = '';
+      document.getElementById('http-voice-audio').style.display = 'none';
+    });
+
+    // ==================== ASR 语音识别 ====================
+    document.getElementById('asr-input-type').addEventListener('change', (e) => {
+      const type = e.target.value;
+      document.getElementById('asr-url-group').style.display = type === 'url' ? 'block' : 'none';
+      document.getElementById('asr-file-group').style.display = type === 'file' ? 'block' : 'none';
+    });
+
+    document.getElementById('asr-submit').addEventListener('click', async () => {
+      const url = document.getElementById('asr-url').value;
+      const inputType = document.getElementById('asr-input-type').value;
+      const format = document.getElementById('asr-format').value;
+      const sampleRate = document.getElementById('asr-sampleRate').value;
+      const statusEl = document.getElementById('asr-status');
+      const resultEl = document.getElementById('asr-result');
+
+      let audioData;
+
+      if (inputType === 'url') {
+        audioData = document.getElementById('asr-audioUrl').value;
+        if (!audioData) {
+          showStatus(statusEl, 'error', '请输入音频URL');
+          return;
+        }
+      } else {
+        const file = document.getElementById('asr-audioFile').files[0];
+        if (!file) {
+          showStatus(statusEl, 'error', '请选择音频文件');
+          return;
+        }
+        audioData = await fileToBase64(file);
+      }
+
+      const body = {
+        audioBase64: audioData
+      };
+
+      if (format) body.format = format;
+      if (sampleRate) body.sample_rate = parseInt(sampleRate);
+
+      showStatus(statusEl, 'info', '正在识别...');
+
+      try {
+        const response = await fetch(url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body)
+        });
+
+        const result = await response.json();
+        resultEl.value = JSON.stringify(result, null, 2);
+        showStatus(statusEl, 'success', '识别完成');
+      } catch (error) {
+        showStatus(statusEl, 'error', `请求失败: ${error.message}`);
+        resultEl.value = `错误: ${error.message}`;
+      }
+    });
+
+    document.getElementById('asr-clear').addEventListener('click', () => {
+      document.getElementById('asr-result').value = '';
+    });
+
+    // ==================== TTS 语音合成 ====================
+    document.getElementById('tts-submit').addEventListener('click', async () => {
+      const url = document.getElementById('tts-url').value;
+      const voiceId = document.getElementById('tts-voiceId').value;
+      const text = document.getElementById('tts-text').value;
+      const format = document.getElementById('tts-format').value;
+      const sampleRate = document.getElementById('tts-sampleRate').value;
+      const rate = document.getElementById('tts-rate').value;
+      const pitch = document.getElementById('tts-pitch').value;
+      const volume = document.getElementById('tts-volume').value;
+      const statusEl = document.getElementById('tts-status');
+      const resultEl = document.getElementById('tts-result');
+
+      if (!voiceId || !text) {
+        showStatus(statusEl, 'error', '请填写音色ID和文本');
+        return;
+      }
+
+      const body = {
+        voice_id: voiceId,
+        text: text,
+        format: format
+      };
+
+      if (sampleRate) body.sample_rate = parseInt(sampleRate);
+      if (rate) body.rate = parseFloat(rate);
+      if (pitch) body.pitch = parseFloat(pitch);
+      if (volume) body.volume = parseInt(volume);
+
+      showStatus(statusEl, 'info', '正在合成...');
+
+      try {
+        const response = await fetch(url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body)
+        });
+
+        const result = await response.json();
+        resultEl.value = JSON.stringify(result, null, 2);
+
+        if (result.success && result.data && result.data.audio_url) {
+          const audio = document.getElementById('tts-audio');
+          audio.src = result.data.audio_url;
+          audio.style.display = 'block';
+          showStatus(statusEl, 'success', '合成成功');
+        } else {
+          showStatus(statusEl, 'warning', '请求完成，但可能有问题');
+        }
+      } catch (error) {
+        showStatus(statusEl, 'error', `请求失败: ${error.message}`);
+        resultEl.value = `错误: ${error.message}`;
+      }
+    });
+
+    document.getElementById('tts-clear').addEventListener('click', () => {
+      document.getElementById('tts-result').value = '';
+      document.getElementById('tts-audio').style.display = 'none';
+    });
+
+    // ==================== 音色管理 ====================
+    document.getElementById('voices-load').addEventListener('click', async () => {
+      const url = document.getElementById('voices-url').value;
+      const prefix = document.getElementById('voices-prefix').value;
+      const pageSize = document.getElementById('voices-pageSize').value;
+      const statusEl = document.getElementById('voices-status');
+      const listEl = document.getElementById('voices-list');
+
+      const params = new URLSearchParams();
+      if (prefix) params.append('prefix', prefix);
+      if (pageSize) params.append('page_size', pageSize);
+
+      showStatus(statusEl, 'info', '正在加载...');
+
+      try {
+        const response = await fetch(`${url}?${params}`);
+        const result = await response.json();
+
+        if (result.success && result.data && result.data.rows) {
+          listEl.innerHTML = '';
+          result.data.rows.forEach(voice => {
+            const item = document.createElement('div');
+            item.className = 'voice-item';
+            item.innerHTML = `
+              <div class="voice-name">${voice.name || '未命名'}</div>
+              <div class="voice-id">${voice.voiceId}</div>
+            `;
+            item.addEventListener('click', () => {
+              document.getElementById('tts-voiceId').value = voice.voiceId;
+              document.querySelectorAll('.voice-item').forEach(i => i.classList.remove('selected'));
+              item.classList.add('selected');
+
+              // 切换到TTS标签
+              document.querySelector('[data-tab="tts"]').click();
+            });
+            listEl.appendChild(item);
+          });
+
+          showStatus(statusEl, 'success', `加载成功，共 ${result.data.count} 个音色`);
+        } else {
+          showStatus(statusEl, 'warning', '没有找到音色');
+        }
+      } catch (error) {
+        showStatus(statusEl, 'error', `请求失败: ${error.message}`);
+      }
+    });
+
+    document.getElementById('voices-clear').addEventListener('click', () => {
+      document.getElementById('voices-list').innerHTML = '';
+    });
+
+    // ==================== 工具函数 ====================
+    function fileToBase64(file) {
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result);
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+      });
+    }
+  </script>
+</body>
+</html>

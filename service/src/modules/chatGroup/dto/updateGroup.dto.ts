@@ -10,14 +10,11 @@ export class UpdateGroupDto {
   @IsOptional()
   title: string;
 
-  @ApiProperty({ example: 10, description: '对话组是否置顶', required: false })
+  @ApiProperty({ example: '这是一个技术交流群', description: '群聊描述信息', required: false })
   @IsOptional()
-  isSticky: boolean;
+  description: string;
 
-  @ApiProperty({
-    example: '',
-    description: '对话模型配置项序列化的字符串',
-    required: false,
-  })
-  config: string;
+  @ApiProperty({ example: '张三', description: '群主在群内的昵称', required: false })
+  @IsOptional()
+  ownerNickname: string;
 }

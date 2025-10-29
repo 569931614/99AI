@@ -294,34 +294,39 @@ async function bootstrap() {
         }
       };
 
-      // 辅助函数：查询应用的情绪-音色映射（带缓存）
-      const getAppEmotionVoices = async (appId: number) => {
+      // 辅助函数：查询应用的默认音色（从 app_voice 表，带缓存）
+      const getAppDefaultVoice = async (appId: number): Promise<string | null> => {
         // 检查缓存
-        if (session.cache?.emotionVoices && session.cache?.appInfo?.id === appId) {
-          Logger.debug(`[VoiceCall] 使用缓存的情绪音色映射: appId=${appId}`, 'VoiceCall');
-          return session.cache.emotionVoices;
+        if (session.cache?.defaultVoiceId !== undefined && session.cache?.appInfo?.id === appId) {
+          Logger.debug(
+            `[VoiceCall] 使用缓存的默认音色: appId=${appId}, voiceId=${session.cache.defaultVoiceId}`,
+            'VoiceCall',
+          );
+          return session.cache.defaultVoiceId;
         }
 
         try {
-          // AppService 中的属性名是 appEmotionRepo
-          const emotionVoices = await (appService as any).appEmotionRepo.find({
-            where: { appId: Number(appId), status: 1 },
+          // 查询 app_voice 表获取默认音色
+          const appVoice = await (appService as any).appVoiceRepo.findOne({
+            where: { appId: Number(appId), isDefault: 1 },
           });
 
-          // 缓存结果
-          session.cache!.emotionVoices = emotionVoices || [];
+          const voiceId = appVoice?.voiceId || null;
+
+          // 缓存结果（包括 null）
+          session.cache!.defaultVoiceId = voiceId;
           Logger.debug(
-            `[VoiceCall] 已缓存情绪音色映射: appId=${appId}, count=${emotionVoices?.length || 0}`,
+            `[VoiceCall] 已缓存默认音色: appId=${appId}, voiceId=${voiceId || 'null'}`,
             'VoiceCall',
           );
 
-          return emotionVoices || [];
+          return voiceId;
         } catch (error: any) {
           Logger.warn(
-            `[VoiceCall] 查询情绪音色映射失败: appId=${appId}, error=${error?.message}`,
+            `[VoiceCall] 查询默认音色失败: appId=${appId}, error=${error?.message}`,
             'VoiceCall',
           );
-          return [];
+          return null;
         }
       };
 
@@ -398,8 +403,8 @@ async function bootstrap() {
         cache?: {
           appInfo?: any;
           affectionData?: any;
-          emotionVoices?: any[];
           rolePromptWithAffection?: string;
+          defaultVoiceId?: string | null; // 默认音色缓存
         };
       } = { llmAbort: null, ttsCanceled: false, ttsActive: false, cache: {} };
 
@@ -612,88 +617,6 @@ async function bootstrap() {
         }
       };
 
-      // 情绪识别辅助函数：从文本中提取心理描述
-      const extractPsychologicalDesc = (text: string): string | null => {
-        const match = text.match(/（([^）]+)）/);
-        return match ? match[1] : null;
-      };
-
-      // 情绪识别辅助函数：移除括号内容，得到实际要朗读的文本
-      const removeBracketedContent = (text: string): string => {
-        return text
-          .replace(/（[^）]*）/g, '')
-          .replace(/\([^)]*\)/g, '')
-          .trim();
-      };
-
-      // 情绪识别辅助函数：基于关键词的简单情绪检测
-      const detectEmotionFromText = (text: string): string | null => {
-        const s = text.toLowerCase();
-        const patterns: Record<string, string[]> = {
-          happy: ['开心', '高兴', '快乐', '哈哈', '嘻嘻', '太好了', '真棒', '！！', '!!'],
-          sad: ['难过', '伤心', '哭', '呜呜', '悲伤', '失落', '…'],
-          angry: ['生气', '愤怒', '可恶', '讨厌', '气死', '烦'],
-          excited: ['激动', '兴奋', '哇', '天哪', '!!!', '！！！'],
-          calm: ['平静', '冷静', '好的', '嗯', '知道了'],
-          shy: ['害羞', '不好意思', '///'],
-        };
-
-        for (const [emotion, keywords] of Object.entries(patterns)) {
-          if (keywords.some(k => s.includes(k))) return emotion;
-        }
-        return null;
-      };
-
-      // 从应用的情绪配置中选择音色
-      const selectVoiceByEmotion = async (
-        appId: number | null,
-        detectedEmotion: string | null,
-        defaultVoiceId: string | null = null, // 角色的默认音色
-      ): Promise<{ voiceId: string | null; emotion: string | null }> => {
-        if (!appId) return { voiceId: defaultVoiceId || cfg.voice_id || null, emotion: null };
-
-        try {
-          // 获取该应用的情绪-音色映射（使用辅助函数）
-          const emotionVoices = await getAppEmotionVoices(appId);
-
-          // 如果检测到情绪，先尝试精确匹配
-          if (detectedEmotion) {
-            const rec = emotionVoices.find((v: any) => v.emotion === detectedEmotion);
-            if (rec?.voiceId) {
-              Logger.debug(
-                `[情绪识别] 检测到情绪: ${detectedEmotion}, 使用音色: ${rec.voiceId}`,
-                'VoiceCall',
-              );
-              sendJson({ type: 'emotion.detected', emotion: detectedEmotion });
-              return { voiceId: rec.voiceId, emotion: detectedEmotion };
-            }
-          }
-
-          // 如果没有匹配到情绪音色，使用角色的默认音色
-          if (defaultVoiceId) {
-            Logger.debug(
-              `[情绪识别] 未匹配到情绪音色，使用角色默认音色: ${defaultVoiceId}`,
-              'VoiceCall',
-            );
-            sendJson({ type: 'emotion.detected', emotion: '默认' });
-            return { voiceId: defaultVoiceId, emotion: '默认' };
-          }
-
-          // 最后的兜底：使用第一个音色配置或原始音色
-          const defaultRec = emotionVoices[0];
-          if (defaultRec?.voiceId) {
-            Logger.debug(`[情绪识别] 使用应用第一个音色配置: ${defaultRec.voiceId}`, 'VoiceCall');
-            return { voiceId: defaultRec.voiceId, emotion: defaultRec.emotion };
-          }
-        } catch (error: any) {
-          Logger.warn(`[情绪识别] 查询情绪音色失败: ${error?.message}, 使用默认音色`, 'VoiceCall');
-        }
-
-        // 最终兜底
-        sendJson({ type: 'emotion.detected', emotion: '默认' });
-        return { voiceId: defaultVoiceId || cfg.voice_id || null, emotion: '默认' };
-      };
-
       // 流式LLM处理 - 先收集完整回复，再根据情绪选择音色进行TTS
       const processLLMStream = async (text: string) => {
         if (session.ttsCanceled) return;
@@ -821,37 +744,44 @@ async function bootstrap() {
               'VoiceCall',
             );
 
-            // 1. 提取心理描述（如果有括号）
-            const psychologicalDesc = extractPsychologicalDesc(llmBuffer);
-            if (psychologicalDesc) {
-              Logger.debug(`[情绪识别] 提取到心理描述: ${psychologicalDesc}`, 'VoiceCall');
-            }
+            // 使用 ChatService 进行情绪识别并获取音色
+            const emotionResult = await chatService.detectEmotionForVoiceCall(
+              llmBuffer,
+              session.chatConfig?.appId || null,
+            );
 
-            // 2. 从心理描述或完整文本中检测情绪
-            let detectedEmotion = psychologicalDesc
-              ? detectEmotionFromText(psychologicalDesc)
-              : null;
-            if (!detectedEmotion) {
-              detectedEmotion = detectEmotionFromText(llmBuffer);
-            }
+            let selectedVoiceId: string | null = null;
+            let selectedEmotion: string | null = null;
 
-            Logger.debug(`[情绪识别] 检测到的情绪: ${detectedEmotion || '无'}`, 'VoiceCall');
-
-            // 3. 根据情绪选择音色（传递角色的默认音色）
-            const { voiceId: selectedVoiceId, emotion: selectedEmotion } =
-              await selectVoiceByEmotion(
-                session.chatConfig?.appId || null,
-                detectedEmotion,
-                appInfo?.voiceId || null, // 传递角色的默认音色
+            if (emotionResult) {
+              selectedVoiceId = emotionResult.voiceId;
+              selectedEmotion = emotionResult.emotion;
+              Logger.debug(
+                `[情绪识别] ✓ 识别成功: emotion=${selectedEmotion}, voiceId=${selectedVoiceId}, method=${emotionResult.method}`,
+                'VoiceCall',
               );
+              sendJson({ type: 'emotion.detected', emotion: selectedEmotion });
+            } else {
+              // 没有识别到情绪，使用默认音色
+              selectedVoiceId = await getAppDefaultVoice(session.chatConfig?.appId);
+              if (!selectedVoiceId) {
+                selectedVoiceId = cfg.voice_id || null;
+              }
+              selectedEmotion = '默认';
+              Logger.debug(
+                `[情绪识别] 未识别到情绪，使用默认音色: ${selectedVoiceId}`,
+                'VoiceCall',
+              );
+              sendJson({ type: 'emotion.detected', emotion: '默认' });
+            }
 
             Logger.debug(
-              `[情绪识别] 选择的音色: voiceId=${selectedVoiceId}, emotion=${selectedEmotion}`,
+              `[情绪识别] 最终选择: voiceId=${selectedVoiceId}, emotion=${selectedEmotion}`,
               'VoiceCall',
             );
 
-            // 4. 移除括号内容，得到实际要朗读的文本
-            const textToSpeak = removeBracketedContent(llmBuffer);
+            // 5. 移除括号内容，得到实际要朗读的文本
+            const textToSpeak = chatService.removeBracketedContent(llmBuffer);
 
             Logger.debug(
               `[TTS] 准备播报: textToSpeak="${textToSpeak?.substring(0, 100)}...", 长度=${
@@ -860,7 +790,7 @@ async function bootstrap() {
               'VoiceCall',
             );
 
-            // 5. 使用选择的音色进行TTS
+            // 6. 使用选择的音色进行TTS
             if (selectedVoiceId && textToSpeak) {
               Logger.debug(
                 `[TTS] 开始播报: 音色=${selectedVoiceId}, 情绪=${
@@ -1180,7 +1110,7 @@ async function bootstrap() {
               );
 
               Logger.debug(
-                `[VoiceCall] stop模式-角色预设已构建: appId=${session.chatConfig?.appId}, name=${appInfo?.name}, preset长度=${rolePrompt?.length}`,
+                `[VoiceCall] stop模式-角色预设已构建: appId=${session.chatConfig?.appId}, name=${appInfo?.name}, voiceId=${appInfo?.voiceId}, preset长度=${rolePrompt?.length}`,
                 'VoiceCall',
               );
 
@@ -1259,43 +1189,44 @@ async function bootstrap() {
                 'VoiceCall',
               );
 
-              // 1. 提取心理描述（如果有括号）
-              const psychologicalDesc = extractPsychologicalDesc(llmFull);
-              if (psychologicalDesc) {
-                Logger.debug(
-                  `[VoiceCall] stop模式-提取到心理描述: ${psychologicalDesc}`,
-                  'VoiceCall',
-                );
-              }
-
-              // 2. 从心理描述或完整文本中检测情绪
-              let detectedEmotion = psychologicalDesc
-                ? detectEmotionFromText(psychologicalDesc)
-                : null;
-              if (!detectedEmotion) {
-                detectedEmotion = detectEmotionFromText(llmFull);
-              }
-
-              Logger.debug(
-                `[VoiceCall] stop模式-检测到的情绪: ${detectedEmotion || '无'}`,
-                'VoiceCall',
+              // 使用 ChatService 进行情绪识别并获取音色
+              const emotionResult = await chatService.detectEmotionForVoiceCall(
+                llmFull,
+                session.chatConfig?.appId || null,
               );
 
-              // 3. 根据情绪选择音色（传递角色的默认音色）
-              const { voiceId: selectedVoiceId, emotion: selectedEmotion } =
-                await selectVoiceByEmotion(
-                  session.chatConfig?.appId || null,
-                  detectedEmotion,
-                  appInfo?.voiceId || cfg.voice_id || null,
+              let selectedVoiceId: string | null = null;
+              let selectedEmotion: string | null = null;
+
+              if (emotionResult) {
+                selectedVoiceId = emotionResult.voiceId;
+                selectedEmotion = emotionResult.emotion;
+                Logger.debug(
+                  `[VoiceCall] stop模式-✓ 识别成功: emotion=${selectedEmotion}, voiceId=${selectedVoiceId}, method=${emotionResult.method}`,
+                  'VoiceCall',
                 );
+                sendJson({ type: 'emotion.detected', emotion: selectedEmotion });
+              } else {
+                // 没有识别到情绪，使用默认音色
+                selectedVoiceId = await getAppDefaultVoice(session.chatConfig?.appId);
+                if (!selectedVoiceId) {
+                  selectedVoiceId = cfg.voice_id || null;
+                }
+                selectedEmotion = '默认';
+                Logger.debug(
+                  `[VoiceCall] stop模式-未识别到情绪，使用默认音色: ${selectedVoiceId}`,
+                  'VoiceCall',
+                );
+                sendJson({ type: 'emotion.detected', emotion: '默认' });
+              }
 
               Logger.debug(
-                `[VoiceCall] stop模式-选择的音色: voiceId=${selectedVoiceId}, emotion=${selectedEmotion}`,
+                `[VoiceCall] stop模式-最终选择: voiceId=${selectedVoiceId}, emotion=${selectedEmotion}`,
                 'VoiceCall',
               );
 
               // 4. 移除括号内容，得到实际要朗读的文本
-              const textToSpeak = removeBracketedContent(llmFull);
+              const textToSpeak = chatService.removeBracketedContent(llmFull);
 
               if (!textToSpeak || textToSpeak.trim().length === 0) {
                 Logger.warn('[VoiceCall] stop模式-移除括号后文本为空，跳过TTS', 'VoiceCall');

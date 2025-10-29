@@ -183,7 +183,7 @@ export class ChatService {
    * 移除文本中的括号及其内容
    * 用于TTS时只朗读实际对话内容
    */
-  private removeBracketedContent(text?: string | null): string {
+  removeBracketedContent(text?: string | null): string {
     if (!text) return '';
     let result = text;
 
@@ -553,6 +553,193 @@ ${numberedOptions}
       );
       return null;
     }
+  }
+
+  /**
+   * 公开方法：为语音通话识别情绪并选择音色
+   * @param text 完整文本（包括括号）
+   * @param appId 应用ID
+   * @returns { emotion, voiceId } 或 null
+   */
+  async detectEmotionForVoiceCall(
+    text: string,
+    appId: number | null,
+  ): Promise<{ emotion: string; voiceId: string; method: string } | null> {
+    try {
+      // 1. 提取心理描述
+      const psychologicalDesc = this.extractPsychologicalDescription(text);
+      if (psychologicalDesc) {
+        Logger.debug(`[VoiceCall情绪识别] 提取到心理描述: ${psychologicalDesc}`, 'ChatService');
+      }
+
+      // 2. 获取应用的情绪选项和映射（使用原始情绪名称，不标准化）
+      const options = await this.getAppEmotionOptionsRaw(appId);
+      const pairs = await this.getAppEmotionPairsRaw(appId);
+
+      Logger.debug(
+        `[VoiceCall情绪识别] 应用情绪选项: ${options.join(', ') || '无'}`,
+        'ChatService',
+      );
+
+      if (options.length === 0) {
+        Logger.warn(`[VoiceCall情绪识别] 应用未配置情绪，使用默认`, 'ChatService');
+        return null;
+      }
+
+      // 3. 使用AI从选项中选择情绪（不标准化）
+      const chosen = await this.chooseEmotionFromOptionsRaw(
+        psychologicalDesc,
+        text,
+        options,
+        null,
+      );
+
+      if (!chosen) {
+        // 回退到默认情绪
+        const fallback = await this.getAppDefaultEmotionRaw(appId, options);
+        Logger.debug(`[VoiceCall情绪识别] 使用默认情绪: ${fallback}`, 'ChatService');
+        const mappedVoice = pairs.find(p => p.emotion === fallback)?.voiceId;
+        if (mappedVoice) {
+          return { emotion: fallback, voiceId: mappedVoice, method: 'default' };
+        }
+        return null;
+      }
+
+      // 4. 从映射中获取音色
+      const mappedVoice = pairs.find(p => p.emotion === chosen.emotion)?.voiceId;
+      if (!mappedVoice) {
+        Logger.warn(
+          `[VoiceCall情绪识别] 情绪"${chosen.emotion}"未配置音色`,
+          'ChatService',
+        );
+        return null;
+      }
+
+      Logger.debug(
+        `[VoiceCall情绪识别] ✓ 识别成功: emotion=${chosen.emotion}, voiceId=${mappedVoice}, method=${chosen.method}`,
+        'ChatService',
+      );
+
+      return {
+        emotion: chosen.emotion,
+        voiceId: mappedVoice,
+        method: chosen.method,
+      };
+    } catch (error: any) {
+      Logger.error(
+        `[VoiceCall情绪识别] 识别失败: ${error?.message}`,
+        error?.stack || '',
+        'ChatService',
+      );
+      return null;
+    }
+  }
+
+  // 获取应用情绪选项（原始版本，不标准化）- 用于语音通话
+  private async getAppEmotionOptionsRaw(appId: number | null): Promise<string[]> {
+    if (!appId) return [];
+    try {
+      const rows = await this.appEmotionVoiceRepo.find({
+        where: { appId: Number(appId), status: 1 },
+      });
+      const list = rows
+        .filter(r => !!r.voiceId && !!r.emotion)
+        .map(r => r.emotion.trim())
+        .filter(e => !!e);
+      return Array.from(new Set(list));
+    } catch {
+      return [];
+    }
+  }
+
+  // 获取应用情绪-音色对（原始版本，不标准化）- 用于语音通话
+  private async getAppEmotionPairsRaw(
+    appId: number | null,
+  ): Promise<Array<{ emotion: string; voiceId: string }>> {
+    const pairs: Array<{ emotion: string; voiceId: string }> = [];
+    if (!appId) return pairs;
+    try {
+      const rows = await this.appEmotionVoiceRepo.find({
+        where: { appId: Number(appId), status: 1 },
+      });
+      for (const r of rows) {
+        if (!r.voiceId || !r.emotion) continue;
+        const emo = r.emotion.trim();
+        if (!emo) continue;
+        // 若同一情绪重复，以第一条为准
+        if (pairs.find(p => p.emotion === emo)) continue;
+        pairs.push({ emotion: emo, voiceId: r.voiceId });
+      }
+    } catch {}
+    return pairs;
+  }
+
+  // 获取应用默认情绪（原始版本，不标准化）- 用于语音通话
+  private async getAppDefaultEmotionRaw(
+    appId: number | null,
+    options: string[],
+  ): Promise<string> {
+    if (appId) {
+      try {
+        const def = await this.appVoiceRepo.findOne({
+          where: { appId: Number(appId), isDefault: 1 },
+        });
+        const defVoice = def?.voiceId || '';
+        if (defVoice) {
+          const rec = await this.appEmotionVoiceRepo.findOne({
+            where: { appId: Number(appId), voiceId: defVoice, status: 1 },
+          });
+          const emo = rec?.emotion?.trim() || '';
+          if (emo && options.includes(emo)) return emo;
+        }
+      } catch {}
+    }
+    return options[0] || '默认';
+  }
+
+  // 从选项中选择最匹配情绪（原始版本，不标准化）- 用于语音通话
+  private async chooseEmotionFromOptionsRaw(
+    psychologicalDesc: string | null,
+    fullText: string,
+    options: string[],
+    initial?: string | null,
+  ): Promise<{ emotion: string; method: string } | null> {
+    if (!options || options.length === 0) {
+      Logger.warn(`[情绪选择Raw] 候选情绪列表为空`, 'ChatService');
+      return null;
+    }
+
+    Logger.debug(
+      `[情绪选择Raw] 开始选择情绪 - 候选数: ${options.length}, 指定情绪: ${initial || '无'}`,
+      'ChatService',
+    );
+
+    // 1. 如果有指定情绪，优先使用
+    const initialEmotion = String(initial || '').trim();
+    if (initialEmotion && options.includes(initialEmotion)) {
+      Logger.debug(`[情绪选择Raw] ✓ 使用指定情绪: ${initialEmotion}`, 'ChatService');
+      return { emotion: initialEmotion, method: 'initial' };
+    }
+
+    // 2. 使用AI识别
+    try {
+      Logger.debug(`[情绪选择Raw] 调用AI识别...`, 'ChatService');
+      const aiEmotion = await this.detectEmotionByAI(fullText, options, psychologicalDesc);
+
+      if (aiEmotion && options.includes(aiEmotion)) {
+        Logger.debug(`[情绪选择Raw] ✓ AI识别成功: ${aiEmotion}`, 'ChatService');
+        return { emotion: aiEmotion, method: 'ai' };
+      } else if (aiEmotion) {
+        Logger.warn(
+          `[情绪选择Raw] AI返回的情绪"${aiEmotion}"不在候选列表中`,
+          'ChatService',
+        );
+      }
+    } catch (error: any) {
+      Logger.error(`[情绪选择Raw] AI识别异常: ${error?.message}`, 'ChatService');
+    }
+
+    return null;
   }
 
   /**
@@ -1109,8 +1296,10 @@ ${numberedOptions}
 
     // 自动对话模式：跳过用户消息保存
     const isAutoChat = options?.skipPromptInHistory === true && (!prompt || prompt.trim() === '');
+    // 跳过保存到数据库模式：不保存但会添加到上下文
+    const skipSave = options?.skipSaveToDatabase === true;
 
-    if (isGroupChat && groupId && !isAutoChat) {
+    if (isGroupChat && groupId && !isAutoChat && !skipSave) {
       // 关键修复：只在第一个成员（isFirstMember=true）时才保存/查询用户消息
       if (isFirstMember) {
         // 查询最近10秒内是否有相同的用户消息
@@ -1206,8 +1395,8 @@ ${numberedOptions}
           }
         }
       }
-    } else if (!isGroupChat && !isAutoChat) {
-      // 普通模式，正常保存（自动对话模式不保存）
+    } else if (!isGroupChat && !isAutoChat && !skipSave) {
+      // 普通模式，正常保存（自动对话模式和跳过保存模式不保存）
       userSaveLog = await this.chatLogService.saveChatLog({
         appId: appId,
         curIp,
@@ -1228,6 +1417,10 @@ ${numberedOptions}
     } else if (isAutoChat) {
       // 自动对话模式：不保存用户消息
       Logger.debug(`[自动对话] 跳过用户消息保存，skipPromptInHistory=true`, 'ChatService');
+      userLogId = null;
+    } else if (skipSave) {
+      // 跳过保存模式：不保存用户消息到数据库，但会添加到上下文
+      Logger.debug(`[跳过保存] skipSaveToDatabase=true，不保存用户消息到数据库`, 'ChatService');
       userLogId = null;
     }
 

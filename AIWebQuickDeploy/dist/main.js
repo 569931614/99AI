@@ -12728,7 +12728,7 @@ let ChatGroupService = class ChatGroupService {
     }
     async create(body, req) {
         const { id } = req.user;
-        const { modelConfig: bodyModelConfig, params, title, description, ownerNickname } = body;
+        const { modelConfig: bodyModelConfig, params, title, description, ownerNickname, appId } = body;
         let modelConfig = bodyModelConfig || (await this.modelsService.getBaseConfig());
         const modelDetail = await this.modelsService.getModelDetailByName(modelConfig.modelInfo.model);
         if (modelDetail) {
@@ -12751,6 +12751,7 @@ let ChatGroupService = class ChatGroupService {
             params,
             description,
             ownerNickname,
+            appId: appId || 0,
         };
         const newGroup = await this.chatGroupEntity.save({
             ...groupParams,
@@ -12782,7 +12783,7 @@ let ChatGroupService = class ChatGroupService {
         }
     }
     async update(body, req) {
-        const { title, isSticky, groupId, config, fileUrl } = body;
+        const { title, groupId, description, ownerNickname } = body;
         const { id } = req.user;
         const g = await this.chatGroupEntity.findOne({
             where: { id: groupId, userId: id },
@@ -12803,9 +12804,8 @@ let ChatGroupService = class ChatGroupService {
         }
         const data = {};
         title && (data['title'] = title);
-        typeof isSticky !== 'undefined' && (data['isSticky'] = isSticky);
-        config && (data['config'] = config);
-        typeof fileUrl !== 'undefined' && (data['fileUrl'] = fileUrl);
+        typeof description !== 'undefined' && (data['description'] = description);
+        typeof ownerNickname !== 'undefined' && (data['ownerNickname'] = ownerNickname);
         const u = await this.chatGroupEntity.update({ id: groupId }, data);
         if (u.affected) {
             return true;
@@ -19745,6 +19745,7 @@ class CreateGroupDto {
     title;
     description;
     ownerNickname;
+    appId;
     modelConfig;
     params;
 }
@@ -19772,6 +19773,15 @@ __decorate([
     (0, class_validator_1.IsOptional)(),
     __metadata("design:type", String)
 ], CreateGroupDto.prototype, "ownerNickname", void 0);
+__decorate([
+    (0, swagger_1.ApiProperty)({
+        example: 0,
+        description: '应用ID（角色ID）',
+        required: false,
+    }),
+    (0, class_validator_1.IsOptional)(),
+    __metadata("design:type", Number)
+], CreateGroupDto.prototype, "appId", void 0);
 __decorate([
     (0, swagger_1.ApiProperty)({
         example: '',
@@ -19838,8 +19848,8 @@ const class_validator_1 = __webpack_require__(106);
 class UpdateGroupDto {
     groupId;
     title;
-    isSticky;
-    config;
+    description;
+    ownerNickname;
 }
 exports.UpdateGroupDto = UpdateGroupDto;
 __decorate([
@@ -19853,18 +19863,15 @@ __decorate([
     __metadata("design:type", String)
 ], UpdateGroupDto.prototype, "title", void 0);
 __decorate([
-    (0, swagger_1.ApiProperty)({ example: 10, description: '对话组是否置顶', required: false }),
+    (0, swagger_1.ApiProperty)({ example: '这是一个技术交流群', description: '群聊描述信息', required: false }),
     (0, class_validator_1.IsOptional)(),
-    __metadata("design:type", Boolean)
-], UpdateGroupDto.prototype, "isSticky", void 0);
-__decorate([
-    (0, swagger_1.ApiProperty)({
-        example: '',
-        description: '对话模型配置项序列化的字符串',
-        required: false,
-    }),
     __metadata("design:type", String)
-], UpdateGroupDto.prototype, "config", void 0);
+], UpdateGroupDto.prototype, "description", void 0);
+__decorate([
+    (0, swagger_1.ApiProperty)({ example: '张三', description: '群主在群内的昵称', required: false }),
+    (0, class_validator_1.IsOptional)(),
+    __metadata("design:type", String)
+], UpdateGroupDto.prototype, "ownerNickname", void 0);
 
 
 /***/ }),
@@ -19988,7 +19995,7 @@ let OpenChatGroupController = class OpenChatGroupController {
     }
     async update(body, _req, res) {
         try {
-            const { userId, groupId, title, isSticky, config, fileUrl } = body || {};
+            const { userId, groupId, title, description, ownerNickname } = body || {};
             if (!userId)
                 throw new common_1.HttpException('userId 必填', common_1.HttpStatus.BAD_REQUEST);
             if (!groupId)
@@ -20001,7 +20008,7 @@ let OpenChatGroupController = class OpenChatGroupController {
                 socket: _req.socket,
                 ip: _req.ip,
             };
-            const result = await this.chatGroupService.update({ groupId, title, isSticky, config, fileUrl }, fakeReq);
+            const result = await this.chatGroupService.update({ groupId, title, description, ownerNickname }, fakeReq);
             return res.status(200).json({ success: true, data: result });
         }
         catch (e) {
@@ -20308,9 +20315,8 @@ __decorate([
                 userId: { type: 'number', description: '外部用户ID（任意数字即可，用于区分不同用户会话）' },
                 groupId: { type: 'number', description: '对话分组ID' },
                 title: { type: 'string', description: '对话组标题（可选）' },
-                isSticky: { type: 'boolean', description: '是否置顶（可选）' },
-                config: { type: 'string', description: '配置JSON字符串（可选）' },
-                fileUrl: { type: 'string', description: '文件链接（可选）' },
+                description: { type: 'string', description: '群聊描述信息（可选）' },
+                ownerNickname: { type: 'string', description: '群主在群内的昵称（可选）' },
             },
             required: ['userId', 'groupId'],
         },
@@ -20323,12 +20329,13 @@ __decorate([
                     title: '新标题',
                 },
             },
-            updateSticky: {
-                summary: '置顶对话组',
+            updateGroupInfo: {
+                summary: '更新群组信息',
                 value: {
                     userId: 1001,
                     groupId: 123,
-                    isSticky: true,
+                    description: '这是一个技术交流群',
+                    ownerNickname: '张三',
                 },
             },
         },

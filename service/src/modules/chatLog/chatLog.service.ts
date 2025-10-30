@@ -349,6 +349,7 @@ export class ChatLogService {
     const result = list
       .map(item => {
         const {
+          id,
           role,
           content,
           answer,
@@ -364,8 +365,10 @@ export class ChatLogService {
           progress,
           appId,
           createdAt,
+          isOpeningRemark,
         } = item;
         const record = {
+          id: id, // 添加 id 字段
           role: role,
           content: content || (role === 'assistant' ? answer : prompt),
           imageUrl: imageUrl || fileInfo || '',
@@ -378,6 +381,7 @@ export class ChatLogService {
           progress,
           appId: appId, // 添加 appId 字段，用于群聊模式识别角色
           createdAt: createdAt, // 添加 createdAt 字段，用于消息排序
+          isOpeningRemark: isOpeningRemark, // 添加 isOpeningRemark 字段，用于识别开场白
         };
         // Logger.debug('处理记录:', JSON.stringify(record, null, 2));
         return record;

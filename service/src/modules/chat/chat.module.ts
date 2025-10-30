@@ -97,6 +97,6 @@ import { OpenChatController } from './open-chat.controller';
     NetSearchService,
     AppService,
   ],
-  exports: [ChatService],
+  exports: [ChatService, OpenAIChatService],
 })
 export class ChatModule {}

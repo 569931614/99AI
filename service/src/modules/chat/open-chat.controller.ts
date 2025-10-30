@@ -50,8 +50,7 @@ export class OpenChatController {
             },
             skipSaveToDatabase: {
               type: 'boolean',
-              description:
-                '是否跳过保存到数据库（true时prompt会加入上下文但不保存到chatLog表）',
+              description: '是否跳过保存到数据库（true时prompt会加入上下文但不保存到chatLog表）',
             },
           },
         },

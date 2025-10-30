@@ -709,7 +709,84 @@ export class OpenAIChatService {
       enableKnowledgeBase?: boolean;
       knowledgeBaseIds?: string;
       dialogueExamples?: string;
-      openingRemark?: string;
+    },
+  ): Promise<{
+    text: string;
+    usage?: { userTokens?: number; inputTokens?: number; outputTokens?: number };
+  }> {
+    // 实现重试逻辑：如果返回内容为空，最多重试3次
+    const maxRetries = 3;
+    let lastError: Error | null = null;
+
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        if (attempt > 1) {
+          Logger.warn(
+            `星尘API第${attempt}次尝试（共${maxRetries}次）`,
+            'OpenAIChatService',
+          );
+        }
+
+        const result = await this.chatFreeInternal(
+          prompt,
+          systemMessage,
+          messagesHistory,
+          imageUrl,
+          options,
+          appConfig,
+        );
+
+        // 如果成功返回非空内容，直接返回
+        return result;
+      } catch (error) {
+        lastError = error;
+        const errorMessage = error?.message || String(error);
+
+        // 只对"返回内容为空"的错误进行重试
+        if (errorMessage.includes('返回内容为空')) {
+          if (attempt < maxRetries) {
+            Logger.warn(
+              `星尘API返回内容为空，将进行第${attempt + 1}次重试`,
+              'OpenAIChatService',
+            );
+            // 等待一小段时间后重试（避免过快重试）
+            await new Promise(resolve => setTimeout(resolve, 1000 * attempt));
+            continue;
+          } else {
+            Logger.error(
+              `星尘API重试${maxRetries}次后仍返回空内容，放弃重试`,
+              'OpenAIChatService',
+            );
+          }
+        }
+
+        // 其他类型的错误直接抛出，不重试
+        throw error;
+      }
+    }
+
+    // 如果所有重试都失败，抛出最后一个错误
+    throw lastError || new Error('星尘API请求失败');
+  }
+
+  /**
+   * chatFree的内部实现，不包含重试逻辑
+   */
+  private async chatFreeInternal(
+    prompt: string,
+    systemMessage?: string,
+    messagesHistory?: any[],
+    imageUrl?: any,
+    options?: { onProgress?: (textChunk: string) => void; abortSignal?: AbortSignal },
+    appConfig?: {
+      botName?: string;
+      userId?: number | string;
+      appId?: number | string;
+      enableRealTime?: boolean;
+      enableLongTermMemory?: boolean;
+      enableKnowledgeBase?: boolean;
+      knowledgeBaseIds?: string;
+      dialogueExamples?: string;
     },
   ): Promise<{
     text: string;
@@ -1027,6 +1104,15 @@ export class OpenAIChatService {
             } catch {}
           }
         }
+        // 检查返回内容是否为空
+        if (!full || full.trim() === '') {
+          Logger.warn(
+            `星尘API返回内容为空 - usage: ${JSON.stringify(usage)}, 将抛出错误以触发重试`,
+            'OpenAIChatService',
+          );
+          throw new Error('星尘API返回内容为空');
+        }
+
         // 返回聚合文本和usage
         return {
           text: full,
@@ -1063,6 +1149,15 @@ export class OpenAIChatService {
           const raw = await response.text();
           if (raw) text = raw;
         } catch {}
+      }
+
+      // 检查返回内容是否为空
+      if (!text || text.trim() === '') {
+        Logger.warn(
+          `星尘API返回内容为空 - usage: ${JSON.stringify(usage)}, 将抛出错误以触发重试`,
+          'OpenAIChatService',
+        );
+        throw new Error('星尘API返回内容为空');
       }
 
       return {

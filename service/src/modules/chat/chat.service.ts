@@ -1,6 +1,5 @@
 import {
   convertUrlToBase64,
-  correctApiBaseUrl,
   formatUrl,
   getClientIp,
   getTokenCount,
@@ -9,7 +8,6 @@ import {
 import { HttpException, HttpStatus, Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Request, Response } from 'express';
-import { OpenAI } from 'openai';
 import { In, Repository } from 'typeorm';
 import { AffectionService } from '../affection/affection.service';
 import { OpenAIChatService } from '../aiTool/chat/chat.service';
@@ -19,19 +17,19 @@ import { AppEmotionVoiceEntity } from '../app/appEmotionVoice.entity';
 import { AppVoiceEntity } from '../app/appVoice.entity';
 import { RoleEmotionEntity } from '../app/roleEmotion.entity';
 import { AutoReplyService } from '../autoReply/autoReply.service';
-import { UserAppSettingsService } from '../userAppSettings/userAppSettings.service';
 import { BadWordsService } from '../badWords/badWords.service';
 import { ChatGroupService } from '../chatGroup/chatGroup.service';
 import { ChatLogService } from '../chatLog/chatLog.service';
+import { ConversationSummaryService } from '../conversationSummary/conversationSummary.service';
 import { GlobalConfigService } from '../globalConfig/globalConfig.service';
 import { ModelsService } from '../models/models.service';
 import { PluginEntity } from '../plugin/plugin.entity';
 import { UploadService } from '../upload/upload.service';
 import { UserEntity } from '../user/user.entity';
 import { UserService } from '../user/user.service';
+import { UserAppSettingsService } from '../userAppSettings/userAppSettings.service';
 import { UserBalanceService } from '../userBalance/userBalance.service';
 import { VoiceService } from '../voice/voice.service';
-import { ConversationSummaryService } from '../conversationSummary/conversationSummary.service';
 
 @Injectable()
 export class ChatService {
@@ -65,88 +63,10 @@ export class ChatService {
     private readonly roleEmotionRepo: Repository<RoleEmotionEntity>,
   ) {}
 
-  // 情绪标准化：将中英文/同义词映射为统一标签
-  private normalizeEmotionLabel(raw?: string | null): string | null {
-    if (!raw) return null;
-    const s = String(raw).toLowerCase().trim();
-    if (!s) return null;
-    const table: Record<string, string[]> = {
-      happy: [
-        'happy',
-        'joy',
-        'cheer',
-        'delight',
-        'excited',
-        '积极',
-        '开心',
-        '高兴',
-        '喜悦',
-        '愉快',
-        '欢快',
-        '喜欢',
-        '太棒',
-        '棒极了',
-        '兴奋',
-        '激动',
-      ],
-      sad: ['sad', 'depress', 'blue', 'down', '伤心', '难过', '悲伤', '低落', '沮丧', '忧郁', '哭'],
-      angry: ['angry', 'mad', 'furious', 'rage', '生气', '愤怒', '恼火', '气愤', '火大', '气死'],
-      calm: ['calm', 'neutral', 'plain', '平静', '冷静', '沉着', '镇定', '中性', '自然', '平稳'],
-      gentle: ['gentle', 'soft', '温柔', '柔和', '亲切', '体贴', '暖', '治愈'],
-      serious: ['serious', 'formal', 'authority', '严肃', '正式', '权威', '庄重', '成熟', '稳重'],
-      cute: ['cute', 'lovely', '萌', '可爱', '萝莉', '甜美', 'sweet'],
-      energetic: ['energetic', 'lively', 'vivid', '元气', '活力', '朝气', '热情', '激情'],
-      narrative: [
-        'narrative',
-        'announcer',
-        'commentator',
-        '旁白',
-        '解说',
-        '播音',
-        '主持',
-        '讲述',
-        '讲解',
-      ],
-      friendly: ['friendly', 'kind', '友好', '亲和'],
-      cold: ['cold', 'cool', '冷淡', '冷酷', '疏离'],
-    };
-    // 优先直接命中键
-    if (table[s]) return s;
-    // 包含匹配
-    for (const [label, arr] of Object.entries(table)) {
-      if (arr.some(k => s.includes(k))) return label;
-    }
-    return null;
-  }
-
-  // 基于文本的轻量情绪推断（关键词/标点启发式）
-  private detectEmotionFromText(text?: string | null): string | null {
-    if (!text) return null;
-    const s = String(text).toLowerCase();
-    const hit = (arr: string[]) => arr.some(k => s.includes(k));
-    const exclamations = (s.match(/[!！]{1,}/g) || []).length;
-    const questionMarks = (s.match(/[?？]{1,}/g) || []).length;
-    const hasShout = /大喊|大叫|怒吼|吼道|喊道/.test(s);
-    if (
-      hit(['太棒', '喜欢', 'great', 'awesome', '真好', '开心', '高兴', 'excited', '兴奋']) ||
-      (exclamations >= 2 && !hit(['伤心', '难过', '愤怒', '生气', '沮丧']))
-    )
-      return 'happy';
-    if (hit(['伤心', '难过', '悲伤', '哭', '失望', '遗憾', '沮丧'])) return 'sad';
-    if (hit(['生气', '愤怒', '太过分', '气死', '恼火', '怒']) || hasShout) return 'angry';
-    if (hit(['严肃', '郑重', '正式', '注意', '请注意'])) return 'serious';
-    if (hit(['温柔', '轻声', '放松', '别担心', '安慰', '暖'])) return 'gentle';
-    if (hit(['旁白', '解说', '播音', '主持', '讲述', '讲解'])) return 'narrative';
-    if (hit(['元气', '活力', '激情', '热情'])) return 'energetic';
-    if (hit(['可爱', '萌', '甜美'])) return 'cute';
-    if (hit(['冷静', '平静', '理性', '中性'])) return 'calm';
-    if (questionMarks >= 2 && !exclamations) return 'calm';
-    return null;
-  }
-
   /**
    * 从文本中提取括号内的心理描述
-   * 支持多种括号：()、（）、[]、【】、{}、「」、『』
+   * 支持多种括号：()、（）、[]、【】、{}
+   * 注：不包括「」和『』，因为它们主要用作引号
    */
   private extractPsychologicalDescription(text?: string | null): string | null {
     if (!text) return null;
@@ -157,8 +77,6 @@ export class ChatService {
       /\[([^\]]+)\]/g, // 英文方括号
       /【([^】]+)】/g, // 中文方括号
       /\{([^}]+)\}/g, // 英文花括号
-      /「([^」]+)」/g, // 日文引号
-      /『([^』]+)』/g, // 日文双引号
     ];
 
     const matches: string[] = [];
@@ -167,7 +85,7 @@ export class ChatService {
       if (found) {
         // 提取括号内的内容（去除括号本身）
         found.forEach(match => {
-          const content = match.replace(/^[(\（\[【\{「『]/, '').replace(/[)\）\]】\}」』]$/, '');
+          const content = match.replace(/^[(\（\[【\{]/, '').replace(/[)\）\]】\}]$/, '');
           if (content.trim()) {
             matches.push(content.trim());
           }
@@ -182,6 +100,7 @@ export class ChatService {
   /**
    * 移除文本中的括号及其内容
    * 用于TTS时只朗读实际对话内容
+   * 注：不移除「」和『』，因为它们主要用作引号，移除后会破坏对话内容
    */
   removeBracketedContent(text?: string | null): string {
     if (!text) return '';
@@ -194,13 +113,14 @@ export class ChatService {
       /\[[^\]]*\]/g, // 英文方括号
       /【[^】]*】/g, // 中文方括号
       /\{[^}]*\}/g, // 英文花括号
-      /「[^」]*」/g, // 日文引号
-      /『[^』]*』/g, // 日文双引号
     ];
 
     for (const pattern of bracketPatterns) {
       result = result.replace(pattern, '');
     }
+
+    // 移除日文引号「」和『』本身，但保留其内容
+    result = result.replace(/[「」『』]/g, '');
 
     // 清理多余的空格
     result = result.replace(/\s+/g, ' ').trim();
@@ -208,34 +128,14 @@ export class ChatService {
     return result;
   }
 
-  // 读取应用级 情绪→音色 映射（仅限 App 级；不再使用全局映射作为选择依据）
-  private async resolveEmotionVoiceId(
-    appId: number | null,
-    emotion?: string | null,
-  ): Promise<string | null> {
-    const label = this.normalizeEmotionLabel(emotion || '');
-    if (!label) return null;
-
-    // App 级映射（app_emotion_voices）
-    try {
-      if (appId) {
-        const rec = await this.appEmotionVoiceRepo.findOne({
-          where: { appId: Number(appId), emotion: label, status: 1 },
-        });
-        if (rec?.voiceId) return rec.voiceId;
-      }
-    } catch {}
-    return null;
-  }
-
-  // 将情绪映射为 TTS 合成参数（在已保存参数基础上作轻量偏移）
+  // 将情绪映射为 TTS 合成参数（基于标准情绪名称）
   private mapEmotionToTtsParams(emotion?: string | null): {
     rate?: number;
     pitch?: number;
     volume?: number;
   } {
-    const label = this.normalizeEmotionLabel(emotion || '');
-    if (!label) return {};
+    if (!emotion) return {};
+    const label = String(emotion).toLowerCase().trim();
     const table: Record<string, { rate?: number; pitch?: number; volume?: number }> = {
       happy: { rate: 1.1, pitch: 1.05, volume: 55 },
       energetic: { rate: 1.15, pitch: 1.05, volume: 58 },
@@ -252,70 +152,7 @@ export class ChatService {
     return table[label] || {};
   }
 
-  // 统一情绪白名单：优先 App 级（app_emotion_voices.status=1），否则全局（role_emotions.status=1），最终退回内置集合
-  private async getAllowedEmotions(appId: number | null): Promise<string[]> {
-    const uniq = (arr: string[]) => Array.from(new Set(arr));
-    const canonical = [
-      'happy',
-      'sad',
-      'angry',
-      'calm',
-      'gentle',
-      'serious',
-      'cute',
-      'energetic',
-      'narrative',
-      'friendly',
-      'cold',
-    ];
-    try {
-      if (appId) {
-        const rows = await this.appEmotionVoiceRepo.find({
-          where: { appId: Number(appId), status: 1 },
-        });
-        const list = rows
-          .map(r => this.normalizeEmotionLabel(r.emotion))
-          .filter((e): e is string => !!e);
-        if (list.length) return uniq(list);
-      }
-    } catch {}
-
-    try {
-      const rows = await this.roleEmotionRepo.find({ where: { status: 1 } });
-      const list = rows
-        .map(r => this.normalizeEmotionLabel(r.emotion))
-        .filter((e): e is string => !!e);
-      if (list.length) return uniq(list);
-    } catch {}
-
-    return canonical;
-  }
-
-  // 默认情绪：优先 app 级配置，再全局配置；若无配置则 calm 或白名单首项
-  private async getDefaultEmotion(appId: number | null, allowed: string[]): Promise<string> {
-    const tryRead = async (key: string): Promise<string | null> => {
-      try {
-        const raw: any = await this.globalConfigService.getConfigs([key]);
-        const val = typeof raw === 'string' ? raw : raw?.[key] || raw?.defaultEmotion;
-        const normalized = this.normalizeEmotionLabel(val || '');
-        return normalized && allowed.includes(normalized) ? normalized : null;
-      } catch {
-        return null;
-      }
-    };
-
-    if (appId) {
-      const v = await tryRead(`defaultEmotion:app:${appId}`);
-      if (v) return v;
-    }
-    const g = await tryRead('defaultEmotion:global');
-    if (g) return g;
-
-    if (allowed.includes('calm')) return 'calm';
-    return allowed[0] || 'calm';
-  }
-
-  // 应用情绪选项：仅取“本应用已绑定音色且启用”的情绪列表
+  // 应用情绪选项：仅取"本应用已绑定音色且启用"的情绪列表（直接使用数据库中的标准情绪名称）
   private async getAppEmotionOptions(appId: number | null): Promise<string[]> {
     if (!appId) return [];
     try {
@@ -323,16 +160,16 @@ export class ChatService {
         where: { appId: Number(appId), status: 1 },
       });
       const list = rows
-        .filter(r => !!r.voiceId)
-        .map(r => this.normalizeEmotionLabel(r.emotion))
-        .filter((e): e is string => !!e);
+        .filter(r => !!r.voiceId && !!r.emotion)
+        .map(r => r.emotion.toLowerCase().trim())
+        .filter(e => !!e);
       return Array.from(new Set(list));
     } catch {
       return [];
     }
   }
 
-  // 应用情绪-音色对（仅启用且有voiceId）
+  // 应用情绪-音色对（仅启用且有voiceId，直接使用数据库中的标准情绪名称）
   private async getAppEmotionPairs(
     appId: number | null,
   ): Promise<Array<{ emotion: string; voiceId: string }>> {
@@ -343,8 +180,8 @@ export class ChatService {
         where: { appId: Number(appId), status: 1 },
       });
       for (const r of rows) {
-        if (!r.voiceId) continue;
-        const emo = this.normalizeEmotionLabel(r.emotion);
+        if (!r.voiceId || !r.emotion) continue;
+        const emo = r.emotion.toLowerCase().trim();
         if (!emo) continue;
         // 若同一情绪重复，以第一条为准
         if (pairs.find(p => p.emotion === emo)) continue;
@@ -354,7 +191,7 @@ export class ChatService {
     return pairs;
   }
 
-  // 应用默认情绪：优先“应用默认音色”所对应的情绪；否则读取 app 默认情绪配置；再回退 calm/首项
+  // 应用默认情绪：优先"应用默认音色"所对应的情绪；否则读取 app 默认情绪配置；再回退 calm/首项
   private async getAppDefaultEmotion(appId: number | null, options: string[]): Promise<string> {
     if (appId) {
       try {
@@ -366,7 +203,7 @@ export class ChatService {
           const rec = await this.appEmotionVoiceRepo.findOne({
             where: { appId: Number(appId), voiceId: defVoice, status: 1 },
           });
-          const emo = this.normalizeEmotionLabel(rec?.emotion || '');
+          const emo = rec?.emotion?.toLowerCase().trim() || '';
           if (emo && options.includes(emo)) return emo;
         }
       } catch {}
@@ -377,44 +214,12 @@ export class ChatService {
       const key = `defaultEmotion:app:${appId}`;
       const raw: any = await this.globalConfigService.getConfigs([key]);
       const val = typeof raw === 'string' ? raw : raw?.[key] || raw?.defaultEmotion;
-      const emo = this.normalizeEmotionLabel(val || '');
+      const emo = String(val || '').toLowerCase().trim();
       if (emo && options.includes(emo)) return emo;
     } catch {}
 
     if (options.includes('calm')) return 'calm';
     return options[0] || 'calm';
-  }
-
-  // 关键词表（用于从备选项中打分选择）
-  private getEmotionKeywords(): Record<string, string[]> {
-    return {
-      happy: [
-        '哈哈',
-        '开心',
-        '高兴',
-        '喜悦',
-        '愉快',
-        '兴奋',
-        '太棒',
-        '真好',
-        '开怀',
-        '欢快',
-        '爽朗',
-        '欢笑',
-        '!',
-        '！',
-      ],
-      energetic: ['元气', '活力', '热情', '激情', '振奋', '昂扬', '斗志', '精神抖擞', '!', '！'],
-      cute: ['可爱', '萌', '甜美', '软糯'],
-      angry: ['生气', '愤怒', '恼火', '气愤', '怒', '怒吼', '大喊', '大叫', '气死', '太过分'],
-      sad: ['伤心', '难过', '悲伤', '沮丧', '遗憾', '哭', '心酸', '落寞'],
-      gentle: ['温柔', '轻声', '安慰', '别担心', '放松', '柔和', '暖'],
-      serious: ['严肃', '郑重', '认真', '庄重', '正式', '注意'],
-      narrative: ['旁白', '解说', '播音', '主持', '讲述', '讲解'],
-      calm: ['冷静', '平静', '理性', '镇定', '中性', '自然'],
-      friendly: ['友好', '亲和', '亲切', '和蔼'],
-      cold: ['冷淡', '冷酷', '疏离', '冷漠'],
-    };
   }
 
   // 从选项中选择最匹配情绪：若 initial 在选项中则直接用，否则按关键词打分选择最高分
@@ -587,12 +392,7 @@ ${numberedOptions}
       }
 
       // 3. 使用AI从选项中选择情绪（不标准化）
-      const chosen = await this.chooseEmotionFromOptionsRaw(
-        psychologicalDesc,
-        text,
-        options,
-        null,
-      );
+      const chosen = await this.chooseEmotionFromOptionsRaw(psychologicalDesc, text, options);
 
       if (!chosen) {
         // 回退到默认情绪
@@ -608,10 +408,7 @@ ${numberedOptions}
       // 4. 从映射中获取音色
       const mappedVoice = pairs.find(p => p.emotion === chosen.emotion)?.voiceId;
       if (!mappedVoice) {
-        Logger.warn(
-          `[VoiceCall情绪识别] 情绪"${chosen.emotion}"未配置音色`,
-          'ChatService',
-        );
+        Logger.warn(`[VoiceCall情绪识别] 情绪"${chosen.emotion}"未配置音色`, 'ChatService');
         return null;
       }
 
@@ -675,10 +472,7 @@ ${numberedOptions}
   }
 
   // 获取应用默认情绪（原始版本，不标准化）- 用于语音通话
-  private async getAppDefaultEmotionRaw(
-    appId: number | null,
-    options: string[],
-  ): Promise<string> {
+  private async getAppDefaultEmotionRaw(appId: number | null, options: string[]): Promise<string> {
     if (appId) {
       try {
         const def = await this.appVoiceRepo.findOne({
@@ -697,43 +491,28 @@ ${numberedOptions}
     return options[0] || '默认';
   }
 
-  // 从选项中选择最匹配情绪（原始版本，不标准化）- 用于语音通话
+  // 使用AI从选项中选择情绪（原始版本，不标准化）- 用于语音通话
   private async chooseEmotionFromOptionsRaw(
     psychologicalDesc: string | null,
     fullText: string,
     options: string[],
-    initial?: string | null,
   ): Promise<{ emotion: string; method: string } | null> {
     if (!options || options.length === 0) {
       Logger.warn(`[情绪选择Raw] 候选情绪列表为空`, 'ChatService');
       return null;
     }
 
-    Logger.debug(
-      `[情绪选择Raw] 开始选择情绪 - 候选数: ${options.length}, 指定情绪: ${initial || '无'}`,
-      'ChatService',
-    );
+    Logger.debug(`[情绪选择Raw] 开始AI识别 - 候选数: ${options.length}`, 'ChatService');
 
-    // 1. 如果有指定情绪，优先使用
-    const initialEmotion = String(initial || '').trim();
-    if (initialEmotion && options.includes(initialEmotion)) {
-      Logger.debug(`[情绪选择Raw] ✓ 使用指定情绪: ${initialEmotion}`, 'ChatService');
-      return { emotion: initialEmotion, method: 'initial' };
-    }
-
-    // 2. 使用AI识别
+    // 使用AI识别
     try {
-      Logger.debug(`[情绪选择Raw] 调用AI识别...`, 'ChatService');
       const aiEmotion = await this.detectEmotionByAI(fullText, options, psychologicalDesc);
 
       if (aiEmotion && options.includes(aiEmotion)) {
         Logger.debug(`[情绪选择Raw] ✓ AI识别成功: ${aiEmotion}`, 'ChatService');
         return { emotion: aiEmotion, method: 'ai' };
       } else if (aiEmotion) {
-        Logger.warn(
-          `[情绪选择Raw] AI返回的情绪"${aiEmotion}"不在候选列表中`,
-          'ChatService',
-        );
+        Logger.warn(`[情绪选择Raw] AI返回的情绪"${aiEmotion}"不在候选列表中`, 'ChatService');
       }
     } catch (error: any) {
       Logger.error(`[情绪选择Raw] AI识别异常: ${error?.message}`, 'ChatService');
@@ -743,50 +522,22 @@ ${numberedOptions}
   }
 
   /**
-   * 从候选情绪列表中选择最合适的情绪
+   * 使用AI从候选情绪列表中选择最合适的情绪
    */
   private async chooseEmotionFromOptions(
     psychologicalDesc: string | null,
     fullText: string,
     options: string[],
-    initial?: string | null,
   ): Promise<{ emotion: string; method: string } | null> {
     if (!options || options.length === 0) {
       Logger.warn(`[情绪选择] 候选情绪列表为空`, 'ChatService');
       return null;
     }
 
-    Logger.debug(
-      `[情绪选择] 开始选择情绪 - 候选数: ${options.length}, 指定情绪: ${initial || '无'}`,
-      'ChatService',
-    );
+    Logger.debug(`[情绪选择] 开始AI识别 - 候选数: ${options.length}`, 'ChatService');
 
-    // 1. 如果有指定情绪，优先使用
-    const initialEmotion = String(initial || '').trim();
-    if (initialEmotion) {
-      // 精确匹配
-      if (options.includes(initialEmotion)) {
-        Logger.debug(`[情绪选择] ✓ 使用指定情绪(精确匹配): ${initialEmotion}`, 'ChatService');
-        return { emotion: initialEmotion, method: 'initial' };
-      }
-      // 模糊匹配
-      const matchedOption = options.find(opt => opt.includes(initialEmotion));
-      if (matchedOption) {
-        Logger.debug(
-          `[情绪选择] ✓ 使用指定情绪(模糊匹配): ${matchedOption} (指定: ${initialEmotion})`,
-          'ChatService',
-        );
-        return { emotion: matchedOption, method: 'initial' };
-      }
-      Logger.debug(
-        `[情绪选择] 指定情绪"${initialEmotion}"不在候选列表中，将使用AI识别`,
-        'ChatService',
-      );
-    }
-
-    // 2. 使用AI识别
+    // 使用AI识别
     try {
-      Logger.debug(`[情绪选择] 调用AI识别...`, 'ChatService');
       const aiEmotion = await this.detectEmotionByAI(fullText, options, psychologicalDesc);
 
       if (aiEmotion && options.includes(aiEmotion)) {
@@ -1496,6 +1247,7 @@ ${numberedOptions}
               totalTokens: 0,
               status: 3, // 已完成
               modelAvatar: usingPlugin?.pluginImg || useModelAvatar || modelAvatar || '',
+              isOpeningRemark: true, // 标记为开场白
             });
             Logger.debug(
               `[开场白] 已插入角色开场白到会话记录，groupId=${groupId}, appId=${appId}`,
@@ -1606,6 +1358,7 @@ ${numberedOptions}
         isImageUpload,
         prompt: prompt, // 传入当前用户提问
         userId: req?.user?.id, // 传入当前用户ID
+        excludeLogId: userLogId, // 排除当前刚保存的用户消息
       },
       this.chatLogService,
     );
@@ -1720,7 +1473,6 @@ ${numberedOptions}
                 enableKnowledgeBase: appInfo.enableKnowledgeBase,
                 knowledgeBaseIds: appInfo.knowledgeBaseIds,
                 dialogueExamples: appInfo.dialogueExamples,
-                openingRemark: appInfo.openingRemark,
               }
             : undefined;
 
@@ -1976,21 +1728,9 @@ ${numberedOptions}
       // '新对话' can be replaced with 'New chat' if needed
       let chatTitle: string;
       if (modelType === 1) {
-        try {
-          const titleResult = await this.openAIChatService.chatFree(
-            `根据用户提问{${prompt}}，给这个对话取一个名字，不超过10个字，只需要返回标题，不需要其他任何内容。`,
-            undefined,
-            undefined,
-          );
-          chatTitle = titleResult.text || '';
-          if (chatTitle.length > 15) {
-            chatTitle = chatTitle.slice(0, 15);
-          }
-          Logger.debug(`已生成对话标题: ${chatTitle}`);
-        } catch (error) {
-          Logger.debug(`标题生成失败，使用提问片段作为标题`);
-          chatTitle = prompt.slice(0, 10);
-        }
+        // 直接使用提问片段作为标题
+        chatTitle = prompt.slice(0, 10);
+        Logger.debug(`使用提问片段作为标题: ${chatTitle}`);
       } else {
         chatTitle = '创意 AI';
       }
@@ -2023,6 +1763,7 @@ ${numberedOptions}
       prompt = '', // 当前用户提问
       imageUrl = '', // 当前图片URL
       userId, // 当前用户ID
+      excludeLogId, // 要排除的消息ID（当前刚保存的用户消息）
     } = options;
 
     // 判断是否为真正的群聊模式
@@ -2119,6 +1860,24 @@ ${numberedOptions}
         // 先分类所有消息
         for (const record of history) {
           try {
+            // 跳过当前刚保存的用户消息（避免重复）
+            if (excludeLogId && record.id === excludeLogId) {
+              Logger.debug(
+                `[群聊历史] 跳过当前用户消息，id=${record.id}`,
+                'ChatService',
+              );
+              continue;
+            }
+
+            // 跳过开场白消息
+            if (record.isOpeningRemark === true || (record as any).isOpeningRemark === 1) {
+              Logger.debug(
+                `[群聊历史] 跳过开场白消息，id=${record.id}, appId=${record.appId}`,
+                'ChatService',
+              );
+              continue;
+            }
+
             let content;
 
             // 单独处理图片和文件，允许同时存在
@@ -2629,32 +2388,7 @@ ${numberedOptions}
       }
       Logger.debug(`[TTSService] 使用的appId: ${appId}`, 'TTSService');
 
-      // 从完整文本（包括括号内容）识别情绪，用于选择音色
-      let detectedEmotion: string | null = null;
-
-      // 优先级1: 使用入参 emotion
-      if (emotion) {
-        detectedEmotion = emotion;
-        Logger.debug(`使用入参情绪: ${detectedEmotion}`, 'TTSService');
-      }
-
-      // 优先级2: 从心理描述优先推断
-      if (!detectedEmotion && psychologicalDesc) {
-        detectedEmotion = this.detectEmotionFromText(psychologicalDesc);
-      }
-
-      // 优先级3: 从完整文本（包括括号内容）推断情绪
-      if (!detectedEmotion) {
-        detectedEmotion = this.detectEmotionFromText(prompt);
-        if (detectedEmotion) {
-          Logger.debug(
-            `从完整文本推断情绪: ${detectedEmotion} (文本: ${prompt.substring(0, 50)}...)`,
-            'TTSService',
-          );
-        }
-      }
-
-      // 基础选项：仅限“应用绑定了音色的情绪 + 应用默认情绪”；并取出情绪-音色对
+      // 基础选项：仅限"应用绑定了音色的情绪 + 应用默认情绪"；并取出情绪-音色对
       const options = await this.getAppEmotionOptions(appId);
       const pairs = await this.getAppEmotionPairs(appId);
       try {
@@ -2669,45 +2403,41 @@ ${numberedOptions}
           'TTSService',
         );
       } catch {}
-      // 从选项中择优选择情绪：优先用检测值命中，否则使用AI识别；若无命中则回退默认
-      let normalizedEmotion = this.normalizeEmotionLabel(detectedEmotion || '');
-      let chosen = await this.chooseEmotionFromOptions(
-        psychologicalDesc,
-        prompt,
-        options,
-        normalizedEmotion,
-      );
+
+      // 使用AI从选项中选择情绪
+      let chosen = await this.chooseEmotionFromOptions(psychologicalDesc, prompt, options);
       if (!chosen) {
         const fallback = await this.getAppDefaultEmotion(appId, options);
         chosen = { emotion: fallback, method: 'default' };
-        Logger.debug(`未从内容中命中候选情绪，使用应用默认情绪: ${fallback}`, 'TTSService');
+        Logger.debug(`AI未识别到合适情绪，使用应用默认情绪: ${fallback}`, 'TTSService');
       }
-      normalizedEmotion = chosen.emotion;
+
+      const finalEmotion = chosen.emotion;
       try {
         Logger.debug(
-          `最终情绪: ${normalizedEmotion}，识别方法: ${chosen.method || 'unknown'}`,
+          `最终情绪: ${finalEmotion}，识别方法: ${chosen.method || 'unknown'}`,
           'TTSService',
         );
       } catch {}
 
-      if (normalizedEmotion) {
+      if (finalEmotion) {
         // 直接从 app_emotion_voices 的对中找 voiceId
-        const mappedVoice = pairs.find(p => p.emotion === normalizedEmotion)?.voiceId || null;
+        const mappedVoice = pairs.find(p => p.emotion === finalEmotion)?.voiceId || null;
         if (mappedVoice) {
           Logger.debug(
-            `命中情绪映射: emotion=${normalizedEmotion}, voice=${mappedVoice} (appId=${
+            `命中情绪映射: emotion=${finalEmotion}, voice=${mappedVoice} (appId=${
               appId ?? 'global'
             })`,
             'TTSService',
           );
-          const ttsParams = this.mapEmotionToTtsParams(normalizedEmotion);
+          const ttsParams = this.mapEmotionToTtsParams(finalEmotion);
           try {
             Logger.debug(`情绪合成参数: ${JSON.stringify(ttsParams)}`, 'TTSService');
           } catch {}
           return await doTtsWithVoice(mappedVoice, ttsParams);
         }
         Logger.debug(
-          `未找到情绪映射: emotion=${normalizedEmotion}, appId=${
+          `未找到情绪映射: emotion=${finalEmotion}, appId=${
             appId ?? 'null'
           }，尝试应用默认音色`,
           'TTSService',
@@ -2724,7 +2454,7 @@ ${numberedOptions}
               `检测到应用(${appId})绑定默认音色: ${voiceId}，使用角色音色进行TTS`,
               'TTSService',
             );
-            const ttsParams = this.mapEmotionToTtsParams(normalizedEmotion);
+            const ttsParams = this.mapEmotionToTtsParams(finalEmotion);
             try {
               Logger.debug(`默认音色合成参数: ${JSON.stringify(ttsParams)}`, 'TTSService');
             } catch {}

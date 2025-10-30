@@ -1216,4 +1216,30 @@ export class AppService {
       throw new HttpException('切换公开状态失败', HttpStatus.BAD_REQUEST);
     }
   }
+
+  /**
+   * 获取应用的默认音色ID
+   * @param appId 应用ID
+   * @returns 默认音色ID或null
+   */
+  async getDefaultVoiceId(appId: number | null): Promise<string | null> {
+    if (!appId) return null;
+
+    try {
+      const voiceMapping = await this.appVoiceRepo.findOne({
+        where: { appId: Number(appId), isDefault: 1 },
+      });
+
+      if (voiceMapping?.voiceId) {
+        Logger.log(
+          `[AppService] 获取到应用默认音色: appId=${appId}, voiceId=${voiceMapping.voiceId}`,
+        );
+        return voiceMapping.voiceId;
+      }
+      return null;
+    } catch (error: any) {
+      Logger.warn(`[AppService] 获取默认音色失败: appId=${appId}, error=${error?.message}`);
+      return null;
+    }
+  }
 }

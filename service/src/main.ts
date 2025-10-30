@@ -236,16 +236,9 @@ async function bootstrap() {
   // Realtime Voice Call WS server (push-to-talk): /api/realtime/voice-call
   try {
     const voiceService = app.get(VoiceService);
-    const openAIChatService = app.get(OpenAIChatService);
-    // 获取 ChatService 用于情绪识别
-    const { ChatService } = await import('./modules/chat/chat.service');
-    const chatService = app.get(ChatService);
-    // 获取 AppService 用于查询应用信息（角色预设等）
-    const { AppService } = await import('./modules/app/app.service');
-    const appService = app.get(AppService);
-    // 获取 AffectionService 用于查询好感度
-    const { AffectionService } = await import('./modules/affection/affection.service');
-    const affectionService = app.get(AffectionService);
+    // 获取 VoiceCallService 用于处理语音对话业务逻辑
+    const { VoiceCallService } = await import('./modules/voiceCall/voiceCall.service');
+    const voiceCallService = app.get(VoiceCallService);
 
     // Dynamically import ws to avoid build issues
     const WSMod: any = await import('ws');
@@ -261,133 +254,6 @@ async function bootstrap() {
     wss.on('connection', (socket: any, req: any) => {
       Logger.debug('WS client connected', 'VoiceCall');
 
-      // 辅助函数：查询应用信息（带缓存）
-      const getAppInfo = async (appId: number) => {
-        // 检查缓存
-        if (session.cache?.appInfo?.id === appId) {
-          Logger.debug(`[VoiceCall] 使用缓存的应用信息: appId=${appId}`, 'VoiceCall');
-          return session.cache.appInfo;
-        }
-
-        try {
-          // AppService 中的 repository 是私有的，需要通过 as any 访问
-          const appInfo = await (appService as any).appEntity.findOne({
-            where: { id: appId },
-          });
-
-          // 缓存结果
-          if (appInfo) {
-            session.cache!.appInfo = appInfo;
-            Logger.debug(
-              `[VoiceCall] 已缓存应用信息: appId=${appId}, name=${appInfo.name}`,
-              'VoiceCall',
-            );
-          }
-
-          return appInfo;
-        } catch (error: any) {
-          Logger.warn(
-            `[VoiceCall] 查询应用信息失败: appId=${appId}, error=${error?.message}`,
-            'VoiceCall',
-          );
-          return null;
-        }
-      };
-
-      // 辅助函数：查询应用的默认音色（从 app_voice 表，带缓存）
-      const getAppDefaultVoice = async (appId: number): Promise<string | null> => {
-        // 检查缓存
-        if (session.cache?.defaultVoiceId !== undefined && session.cache?.appInfo?.id === appId) {
-          Logger.debug(
-            `[VoiceCall] 使用缓存的默认音色: appId=${appId}, voiceId=${session.cache.defaultVoiceId}`,
-            'VoiceCall',
-          );
-          return session.cache.defaultVoiceId;
-        }
-
-        try {
-          // 查询 app_voice 表获取默认音色
-          const appVoice = await (appService as any).appVoiceRepo.findOne({
-            where: { appId: Number(appId), isDefault: 1 },
-          });
-
-          const voiceId = appVoice?.voiceId || null;
-
-          // 缓存结果（包括 null）
-          session.cache!.defaultVoiceId = voiceId;
-          Logger.debug(
-            `[VoiceCall] 已缓存默认音色: appId=${appId}, voiceId=${voiceId || 'null'}`,
-            'VoiceCall',
-          );
-
-          return voiceId;
-        } catch (error: any) {
-          Logger.warn(
-            `[VoiceCall] 查询默认音色失败: appId=${appId}, error=${error?.message}`,
-            'VoiceCall',
-          );
-          return null;
-        }
-      };
-
-      // 辅助函数：构建完整的角色预设（包含好感度行为规范，带缓存）
-      const buildRolePrompt = async (
-        appInfo: any,
-        userId: string | number | undefined,
-        basePrompt: string,
-      ): Promise<string> => {
-        // 检查缓存：如果 appId 和 userId 都匹配，使用缓存的角色预设
-        const cacheKey = `${appInfo?.id}_${userId}`;
-        if (
-          session.cache?.rolePromptWithAffection &&
-          session.cache?.appInfo?.id === appInfo?.id &&
-          session.cache?.affectionData?.userId === userId
-        ) {
-          Logger.debug(
-            `[VoiceCall] 使用缓存的角色预设（含好感度）: appId=${appInfo?.id}, userId=${userId}`,
-            'VoiceCall',
-          );
-          return session.cache.rolePromptWithAffection;
-        }
-
-        let finalPrompt = appInfo?.preset || basePrompt || '';
-
-        // 如果有 userId 和 appId，获取好感度并添加行为规范
-        if (userId && appInfo?.id) {
-          try {
-            const affectionData = await affectionService.getUserAffection(userId, appInfo.id);
-
-            // 缓存好感度数据
-            session.cache!.affectionData = { ...affectionData, userId };
-
-            if (affectionData?.stage?.behaviors) {
-              const behaviors = affectionData.stage.behaviors.trim();
-              if (behaviors) {
-                finalPrompt = `${finalPrompt}\n\n## 当前好感度等级: ${affectionData.stage.name}\n${behaviors}`;
-                Logger.debug(
-                  `[VoiceCall] 添加好感度行为规范: 等级=${affectionData.stage.name}, score=${affectionData.score}`,
-                  'VoiceCall',
-                );
-              }
-            }
-          } catch (error: any) {
-            Logger.warn(
-              `[VoiceCall] 获取好感度失败: userId=${userId}, appId=${appInfo.id}, error=${error?.message}`,
-              'VoiceCall',
-            );
-          }
-        }
-
-        // 缓存构建好的角色预设
-        session.cache!.rolePromptWithAffection = finalPrompt;
-        Logger.debug(
-          `[VoiceCall] 已缓存角色预设（含好感度）: appId=${appInfo?.id}, userId=${userId}, 长度=${finalPrompt.length}`,
-          'VoiceCall',
-        );
-
-        return finalPrompt;
-      };
-
       let audioChunks: Buffer[] = [];
       let cfg = {
         sampleRate: 8000,
@@ -399,13 +265,7 @@ async function bootstrap() {
         ttsCanceled?: boolean;
         ttsActive?: boolean;
         chatConfig?: any;
-        // 缓存数据，减少数据库查询
-        cache?: {
-          appInfo?: any;
-          affectionData?: any;
-          rolePromptWithAffection?: string;
-          defaultVoiceId?: string | null; // 默认音色缓存
-        };
+        cache?: any;
       } = { llmAbort: null, ttsCanceled: false, ttsActive: false, cache: {} };
 
       // 诊断指标
@@ -628,74 +488,17 @@ async function bootstrap() {
         // 先收集完整的LLM回复
         llmBuffer = ''; // 重置缓冲区
         try {
-          // 获取应用信息（用于获取角色预设）
           Logger.debug(
-            `[VoiceCall] 开始获取角色配置: session.chatConfig=${JSON.stringify({
-              userId: session.chatConfig?.userId,
-              appId: session.chatConfig?.appId,
-              prompt: session.chatConfig?.prompt?.substring(0, 30),
-            })}`,
+            `[VoiceCall] 开始LLM处理: userId=${session.chatConfig?.userId}, appId=${session.chatConfig?.appId}`,
             'VoiceCall',
           );
 
-          let rolePrompt = '';
-          let appInfo: any = null;
-
-          if (session.chatConfig?.appId) {
-            // 使用辅助函数查询应用信息
-            appInfo = await getAppInfo(session.chatConfig.appId);
-          }
-
-          // 构建角色预设（包含好感度行为规范）
-          rolePrompt = await buildRolePrompt(
-            appInfo,
+          // 调用 VoiceCallService 处理 LLM 请求
+          const xingchenResult = await voiceCallService.processVoiceLLM(
+            text,
+            session.chatConfig?.appId || null,
             session.chatConfig?.userId,
             session.chatConfig?.prompt || '',
-          );
-
-          Logger.debug(
-            `[VoiceCall] 角色预设已构建: appId=${session.chatConfig?.appId}, name=${appInfo?.name}, preset长度=${rolePrompt?.length}`,
-            'VoiceCall',
-          );
-
-          // 确保角色预设不为空（星尘API要求 botProfile.content 不能为空）
-          if (!rolePrompt || rolePrompt.trim() === '') {
-            rolePrompt = '你是一个友好、乐于助人的AI助手。请用简洁、自然的方式回答用户的问题。';
-            Logger.debug(`[VoiceCall] 使用默认角色预设`, 'VoiceCall');
-          }
-
-          // 构建星尘API扩展配置
-          const appConfigForXingchen = session.chatConfig?.appId
-            ? {
-                botName: appInfo?.name || session.chatConfig?.modelName || 'AI助手',
-                userId: session.chatConfig?.userId,
-                appId: session.chatConfig?.appId,
-                enableRealTime: appInfo?.enableRealTime ?? session.chatConfig?.enableRealTime,
-                enableLongTermMemory:
-                  appInfo?.enableLongTermMemory ?? session.chatConfig?.enableLongTermMemory,
-                enableKnowledgeBase:
-                  appInfo?.enableKnowledgeBase ?? session.chatConfig?.enableKnowledgeBase,
-                knowledgeBaseIds: appInfo?.knowledgeBaseIds ?? session.chatConfig?.knowledgeBaseIds,
-                dialogueExamples: appInfo?.dialogueExamples ?? session.chatConfig?.dialogueExamples,
-                openingRemark: appInfo?.openingRemark ?? session.chatConfig?.openingRemark,
-              }
-            : undefined;
-
-          Logger.debug(
-            `[VoiceCall] 星尘API配置: userId=${session.chatConfig?.userId}, appId=${
-              session.chatConfig?.appId
-            }, botName=${appConfigForXingchen?.botName}, prompt=${rolePrompt?.substring(0, 50)}...`,
-            'VoiceCall',
-          );
-
-          // 调用星尘API（chatFree）
-          Logger.debug(`[VoiceCall] 开始调用星尘API: 用户输入="${text}"`, 'VoiceCall');
-
-          const xingchenResult = await openAIChatService.chatFree(
-            text,
-            rolePrompt,
-            [], // messagesHistory - 可以考虑维护会话历史
-            undefined, // imageUrl
             {
               onProgress: (delta: string) => {
                 if (delta) {
@@ -705,15 +508,19 @@ async function bootstrap() {
                 }
               },
               abortSignal: abortController.signal,
+              enableRealTime: session.chatConfig?.enableRealTime,
+              enableLongTermMemory: session.chatConfig?.enableLongTermMemory,
+              enableKnowledgeBase: session.chatConfig?.enableKnowledgeBase,
+              knowledgeBaseIds: session.chatConfig?.knowledgeBaseIds,
+              dialogueExamples: session.chatConfig?.dialogueExamples,
+              openingRemark: session.chatConfig?.openingRemark,
             },
-            appConfigForXingchen,
           );
 
           const xingchenText = xingchenResult.text || '';
-          // 语音通话不记录token使用数据
 
           Logger.debug(
-            `[VoiceCall] 星尘API调用完成: xingchenText="${xingchenText?.substring(
+            `[VoiceCall] LLM调用完成: xingchenText="${xingchenText?.substring(
               0,
               100,
             )}...", llmBuffer="${llmBuffer?.substring(0, 100)}..."`,
@@ -744,8 +551,8 @@ async function bootstrap() {
               'VoiceCall',
             );
 
-            // 使用 ChatService 进行情绪识别并获取音色
-            const emotionResult = await chatService.detectEmotionForVoiceCall(
+            // 使用 VoiceCallService 进行情绪识别并获取音色
+            const emotionResult = await voiceCallService.detectEmotionAndVoice(
               llmBuffer,
               session.chatConfig?.appId || null,
             );
@@ -763,7 +570,7 @@ async function bootstrap() {
               sendJson({ type: 'emotion.detected', emotion: selectedEmotion });
             } else {
               // 没有识别到情绪，使用默认音色
-              selectedVoiceId = await getAppDefaultVoice(session.chatConfig?.appId);
+              selectedVoiceId = await voiceCallService.getDefaultVoiceId(session.chatConfig?.appId);
               if (!selectedVoiceId) {
                 selectedVoiceId = cfg.voice_id || null;
               }
@@ -781,7 +588,7 @@ async function bootstrap() {
             );
 
             // 5. 移除括号内容，得到实际要朗读的文本
-            const textToSpeak = chatService.removeBracketedContent(llmBuffer);
+            const textToSpeak = voiceCallService.removeBracketedContent(llmBuffer);
 
             Logger.debug(
               `[TTS] 准备播报: textToSpeak="${textToSpeak?.substring(0, 100)}...", 长度=${
@@ -1086,70 +893,23 @@ async function bootstrap() {
             }
             if (!asrText) return;
 
-            // 2) LLM chat (streaming text) - 使用星尘API，应用角色配置
+            // 2) LLM chat (streaming text) - 使用 VoiceCallService
             sendJson({ type: 'llm.start' });
             const abortController = new AbortController();
             session.llmAbort = abortController;
             let llmFull = '';
-            // 定义在 try 外，以便在 TTS 阶段使用
-            let appInfo: any = null;
             try {
-              // 获取角色预设（与持续通话模式逻辑一致）
-              let rolePrompt = '';
+              Logger.debug(
+                `[VoiceCall] stop模式-开始LLM处理: userId=${session.chatConfig?.userId}, appId=${session.chatConfig?.appId}`,
+                'VoiceCall',
+              );
 
-              if (session.chatConfig?.appId) {
-                // 使用辅助函数查询应用信息
-                appInfo = await getAppInfo(session.chatConfig.appId);
-              }
-
-              // 构建角色预设（包含好感度行为规范）
-              rolePrompt = await buildRolePrompt(
-                appInfo,
+              // 调用 VoiceCallService 处理 LLM 请求
+              const xingchenResult = await voiceCallService.processVoiceLLM(
+                asrText,
+                session.chatConfig?.appId || null,
                 session.chatConfig?.userId,
                 session.chatConfig?.prompt || '',
-              );
-
-              Logger.debug(
-                `[VoiceCall] stop模式-角色预设已构建: appId=${session.chatConfig?.appId}, name=${appInfo?.name}, voiceId=${appInfo?.voiceId}, preset长度=${rolePrompt?.length}`,
-                'VoiceCall',
-              );
-
-              // 确保角色预设不为空
-              if (!rolePrompt || rolePrompt.trim() === '') {
-                rolePrompt = '你是一个友好、乐于助人的AI助手。请用简洁、自然的方式回答用户的问题。';
-                Logger.debug(`[VoiceCall] stop模式-使用默认角色预设`, 'VoiceCall');
-              }
-
-              // 构建星尘API扩展配置
-              const appConfigForXingchen = session.chatConfig?.appId
-                ? {
-                    botName: appInfo?.name || session.chatConfig?.modelName || 'AI助手',
-                    userId: session.chatConfig?.userId,
-                    appId: session.chatConfig?.appId,
-                    enableRealTime: appInfo?.enableRealTime ?? session.chatConfig?.enableRealTime,
-                    enableLongTermMemory:
-                      appInfo?.enableLongTermMemory ?? session.chatConfig?.enableLongTermMemory,
-                    enableKnowledgeBase:
-                      appInfo?.enableKnowledgeBase ?? session.chatConfig?.enableKnowledgeBase,
-                    knowledgeBaseIds:
-                      appInfo?.knowledgeBaseIds ?? session.chatConfig?.knowledgeBaseIds,
-                    dialogueExamples:
-                      appInfo?.dialogueExamples ?? session.chatConfig?.dialogueExamples,
-                    openingRemark: appInfo?.openingRemark ?? session.chatConfig?.openingRemark,
-                  }
-                : undefined;
-
-              Logger.debug(
-                `[VoiceCall] stop模式-星尘API配置: userId=${session.chatConfig?.userId}, appId=${session.chatConfig?.appId}, botName=${appConfigForXingchen?.botName}`,
-                'VoiceCall',
-              );
-
-              // 调用星尘API（chatFree）
-              const xingchenResult = await openAIChatService.chatFree(
-                asrText,
-                rolePrompt, // 使用角色预设
-                [], // messagesHistory
-                undefined, // imageUrl
                 {
                   onProgress: (delta: string) => {
                     if (delta) {
@@ -1158,12 +918,16 @@ async function bootstrap() {
                     }
                   },
                   abortSignal: abortController.signal,
+                  enableRealTime: session.chatConfig?.enableRealTime,
+                  enableLongTermMemory: session.chatConfig?.enableLongTermMemory,
+                  enableKnowledgeBase: session.chatConfig?.enableKnowledgeBase,
+                  knowledgeBaseIds: session.chatConfig?.knowledgeBaseIds,
+                  dialogueExamples: session.chatConfig?.dialogueExamples,
+                  openingRemark: session.chatConfig?.openingRemark,
                 },
-                appConfigForXingchen, // 传递星尘API配置
               );
 
               const xingchenText = xingchenResult.text || '';
-              // 语音通话不记录token使用数据
 
               // 如果没有流式输出，使用完整结果
               if (!llmFull && xingchenText) {
@@ -1189,8 +953,8 @@ async function bootstrap() {
                 'VoiceCall',
               );
 
-              // 使用 ChatService 进行情绪识别并获取音色
-              const emotionResult = await chatService.detectEmotionForVoiceCall(
+              // 使用 VoiceCallService 进行情绪识别并获取音色
+              const emotionResult = await voiceCallService.detectEmotionAndVoice(
                 llmFull,
                 session.chatConfig?.appId || null,
               );
@@ -1208,7 +972,9 @@ async function bootstrap() {
                 sendJson({ type: 'emotion.detected', emotion: selectedEmotion });
               } else {
                 // 没有识别到情绪，使用默认音色
-                selectedVoiceId = await getAppDefaultVoice(session.chatConfig?.appId);
+                selectedVoiceId = await voiceCallService.getDefaultVoiceId(
+                  session.chatConfig?.appId,
+                );
                 if (!selectedVoiceId) {
                   selectedVoiceId = cfg.voice_id || null;
                 }
@@ -1226,7 +992,7 @@ async function bootstrap() {
               );
 
               // 4. 移除括号内容，得到实际要朗读的文本
-              const textToSpeak = chatService.removeBracketedContent(llmFull);
+              const textToSpeak = voiceCallService.removeBracketedContent(llmFull);
 
               if (!textToSpeak || textToSpeak.trim().length === 0) {
                 Logger.warn('[VoiceCall] stop模式-移除括号后文本为空，跳过TTS', 'VoiceCall');

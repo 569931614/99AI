@@ -122,4 +122,7 @@ export class ChatLogEntity extends BaseEntity {
 
   @Column({ comment: '文件向量搜索结果', nullable: true, type: 'mediumtext' })
   fileVectorResult: string;
+
+  @Column({ comment: '是否为开场白', nullable: true, default: false })
+  isOpeningRemark: boolean;
 }

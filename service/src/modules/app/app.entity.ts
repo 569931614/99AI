@@ -3,7 +3,7 @@ import { Column, Entity } from 'typeorm';
 
 @Entity({ name: 'app' })
 export class AppEntity extends BaseEntity {
-  @Column({ unique: true, comment: 'App应用名称' })
+  @Column({ comment: 'App应用名称' })
   name: string;
 
   @Column({ comment: 'App分类Id列表，多个分类Id以逗号分隔', type: 'text' })

@@ -23,6 +23,15 @@ const routes: RouteRecordRaw = {
         icon: 'mdi:playlist-music',
       },
     },
+    {
+      path: 'test',
+      name: 'VoiceTest',
+      component: () => import('@/views/voice/test.vue'),
+      meta: {
+        title: '音色测试',
+        icon: 'mdi:test-tube',
+      },
+    },
   ],
 };
 

@@ -25,8 +25,6 @@ describe('ChatService - TTS Optimization', () => {
                 /\[([^\]]+)\]/g,
                 /【([^】]+)】/g,
                 /\{([^}]+)\}/g,
-                /「([^」]+)」/g,
-                /『([^』]+)』/g,
               ];
 
               const matches: string[] = [];
@@ -34,9 +32,7 @@ describe('ChatService - TTS Optimization', () => {
                 const found = text.match(pattern);
                 if (found) {
                   found.forEach(match => {
-                    const content = match
-                      .replace(/^[(\（\[【\{「『]/, '')
-                      .replace(/[)\）\]】\}」』]$/, '');
+                    const content = match.replace(/^[(\（\[【\{]/, '').replace(/[)\）\]】\}]$/, '');
                     if (content.trim()) {
                       matches.push(content.trim());
                     }
@@ -57,13 +53,14 @@ describe('ChatService - TTS Optimization', () => {
                 /\[[^\]]*\]/g,
                 /【[^】]*】/g,
                 /\{[^}]*\}/g,
-                /「[^」]*」/g,
-                /『[^』]*』/g,
               ];
 
               for (const pattern of bracketPatterns) {
                 result = result.replace(pattern, '');
               }
+
+              // 移除日文引号「」和『』本身，但保留其内容
+              result = result.replace(/[「」『』]/g, '');
 
               result = result.replace(/\s+/g, ' ').trim();
 
@@ -119,10 +116,10 @@ describe('ChatService - TTS Optimization', () => {
       expect(result).toBeNull();
     });
 
-    it('应该提取日文引号内的内容', () => {
+    it('日文引号不应被视为心理描述括号', () => {
       const text = '本当に？「驚き」すごいね！';
       const result = service.extractPsychologicalDescription(text);
-      expect(result).toBe('驚き');
+      expect(result).toBeNull();
     });
   });
 
@@ -180,16 +177,16 @@ describe('ChatService - TTS Optimization', () => {
       expect(result).toBe('');
     });
 
-    it('应该移除日文引号及其内容', () => {
+    it('应该移除日文引号本身但保留其内容', () => {
       const text = '本当に？「驚き」すごいね！';
       const result = service.removeBracketedContent(text);
-      expect(result).toBe('本当に？すごいね！');
+      expect(result).toBe('本当に？驚きすごいね！');
     });
 
     it('应该处理混合括号类型', () => {
       const text = '你好（开心）【点头】{微笑}「挥手」真高兴见到你！';
       const result = service.removeBracketedContent(text);
-      expect(result).toBe('你好真高兴见到你！');
+      expect(result).toBe('你好挥手真高兴见到你！');
     });
   });
 

@@ -103,7 +103,7 @@ export class ChatGroupService {
     if (!g) {
       throw new HttpException('请先选择一个对话或者新加一个对话再操作！', HttpStatus.BAD_REQUEST);
     }
-    const { appId } = g;
+    const { appId, config } = g;
     if (appId && !title) {
       try {
         const parseData = JSON.parse(config);

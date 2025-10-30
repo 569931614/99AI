@@ -77,7 +77,7 @@
             </el-tag>
           </template>
         </el-table-column>
-        <el-table-column label="操作" width="520">
+        <el-table-column label="操作" width="600">
           <template #default="scope">
             <el-button size="small" @click="onQuery(scope.row)">查询训练状态</el-button>
             <el-button
@@ -87,17 +87,19 @@
               :disabled="scope.row.status !== 'SUCCEEDED'"
               >试听</el-button
             >
-            <el-button size="small" type="warning" class="ml-2" @click="openDebug(scope.row)"
-              >调试参数</el-button
+            <el-button
+              size="small"
+              type="warning"
+              @click="goToTestPage(scope.row)"
+              :disabled="scope.row.status !== 'SUCCEEDED'"
             >
-            >
+              参数调节
+            </el-button>
             <el-button size="small" type="success" class="ml-2" @click="openSetParams(scope.row)"
               >设置参数</el-button
             >
-            >
             <el-button size="small" class="ml-2" @click="openSetName(scope.row)"
               >设置名称</el-button
-            >
             >
             <el-popconfirm title="确认删除该音色？" @confirm="onRemove(scope.row)">
               <template #reference>
@@ -343,7 +345,9 @@
   import voiceApi from '@/api/modules/voice';
   import { ElMessage } from 'element-plus';
   import { computed, onMounted, onUnmounted, reactive, ref } from 'vue';
+  import { useRouter } from 'vue-router';
 
+  const router = useRouter();
   const loading = ref(false);
   const enrolling = ref(false);
   const syncing = ref(false);
@@ -579,6 +583,17 @@
     previewDialog.model = deriveModelFromVoiceId(row.voice_id);
 
     previewDialog.url = undefined;
+  }
+
+  // 跳转到测试页面的参数调节步骤
+  function goToTestPage(row: any) {
+    router.push({
+      path: '/voice/test',
+      query: {
+        voiceId: row.voice_id || row.id,
+        step: '2', // 直接进入第3步（参数调节）
+      },
+    });
   }
 
   const debugDialog = reactive<{

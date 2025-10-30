@@ -969,7 +969,12 @@ export class VoiceService {
 
             // 兼容多种返回结构，尽可能提取文本
             // 重要：只处理最终结果（is_final=true 或有 end_time），避免中间结果重复累加
-            const pushSentence = (text: string, b?: number, e?: number | null, isFinal?: boolean) => {
+            const pushSentence = (
+              text: string,
+              b?: number,
+              e?: number | null,
+              isFinal?: boolean,
+            ) => {
               if (!text) return;
 
               // 只累加最终结果到 finalText，避免重复
@@ -1284,6 +1289,7 @@ export class VoiceService {
     volume?: number;
     rate?: number;
     pitch?: number;
+    instruction?: string;
   }): Promise<{ url: string; duration: number }> {
     const { voice_id, text } = body;
     if (!voice_id || !text)
@@ -1333,6 +1339,21 @@ export class VoiceService {
 
     const uploadOnFinish = new Promise<{ url: string; duration: number }>((resolve, reject) => {
       ws.on('open', () => {
+        const parameters: any = {
+          text_type: 'PlainText',
+          voice: voice_id,
+          format,
+          sample_rate,
+          volume,
+          rate,
+          pitch,
+        };
+
+        // 如果传入了instruction参数，添加到parameters中
+        if (body.instruction) {
+          parameters.instruction = body.instruction;
+        }
+
         const runTask = {
           header: { action: 'run-task', task_id: taskId, streaming: 'duplex' },
           payload: {
@@ -1340,15 +1361,7 @@ export class VoiceService {
             task: 'tts',
             function: 'SpeechSynthesizer',
             model: modelToUse,
-            parameters: {
-              text_type: 'PlainText',
-              voice: voice_id,
-              format,
-              sample_rate,
-              volume,
-              rate,
-              pitch,
-            },
+            parameters,
             input: {},
           },
         };
@@ -1445,6 +1458,7 @@ export class VoiceService {
       volume?: number;
       rate?: number;
       pitch?: number;
+      instruction?: string;
     },
     opts?: {
       onStart?: (info: { format: 'mp3' | 'wav' | 'pcm'; sample_rate: number }) => void;
@@ -1500,6 +1514,22 @@ export class VoiceService {
         try {
           opts?.onStart?.({ format, sample_rate });
         } catch {}
+
+        const parameters: any = {
+          text_type: 'PlainText',
+          voice: voice_id,
+          format,
+          sample_rate,
+          volume,
+          rate,
+          pitch,
+        };
+
+        // 如果传入了instruction参数，添加到parameters中
+        if (body.instruction) {
+          parameters.instruction = body.instruction;
+        }
+
         const runTask = {
           header: { action: 'run-task', task_id: taskId, streaming: 'duplex' },
           payload: {
@@ -1507,15 +1537,7 @@ export class VoiceService {
             task: 'tts',
             function: 'SpeechSynthesizer',
             model: modelToUse,
-            parameters: {
-              text_type: 'PlainText',
-              voice: voice_id,
-              format,
-              sample_rate,
-              volume,
-              rate,
-              pitch,
-            },
+            parameters,
             input: {},
           },
         };
@@ -1591,6 +1613,7 @@ export class VoiceService {
     volume?: number;
     rate?: number;
     pitch?: number;
+    instruction?: string;
     onStart?: (info: { format: 'mp3' | 'wav' | 'pcm'; sample_rate: number }) => void;
     onData?: (chunk: Buffer) => void;
     onEnd?: () => void;
@@ -1605,6 +1628,7 @@ export class VoiceService {
     const volume = Number(params.volume ?? saved.volume ?? 50);
     const rate = Number(params.rate ?? saved.rate ?? 1);
     const pitch = Number(params.pitch ?? saved.pitch ?? 1);
+    const instruction = params.instruction || '';
 
     // 依据 voice_id 推断默认模型
     const lowerId = (voice_id || '').toLowerCase();
@@ -1641,6 +1665,7 @@ export class VoiceService {
       volume,
       rate,
       pitch,
+      instruction,
       onStart,
       onData,
       onEnd,
@@ -1674,6 +1699,7 @@ class TTSStreamSession {
     volume: number;
     rate: number;
     pitch: number;
+    instruction?: string;
     onStart?: (info: { format: 'mp3' | 'wav' | 'pcm'; sample_rate: number }) => void;
     onData?: (chunk: Buffer) => void;
     onEnd?: () => void;
@@ -1698,6 +1724,7 @@ class TTSStreamSession {
       volume,
       rate,
       pitch,
+      instruction,
       onStart,
       onData,
       onError,
@@ -1713,6 +1740,22 @@ class TTSStreamSession {
     return new Promise<void>((resolve, reject) => {
       this.ws.on('open', () => {
         Logger.debug(`TTS会话已连接: taskId=${this.taskId}`, 'TTSStreamSession');
+
+        const parameters: any = {
+          text_type: 'PlainText',
+          voice: voice_id,
+          format,
+          sample_rate,
+          volume,
+          rate,
+          pitch,
+        };
+
+        // 如果传入了instruction参数，添加到parameters中
+        if (instruction) {
+          parameters.instruction = instruction;
+        }
+
         const runTask = {
           header: { action: 'run-task', task_id: this.taskId, streaming: 'duplex' },
           payload: {
@@ -1720,15 +1763,7 @@ class TTSStreamSession {
             task: 'tts',
             function: 'SpeechSynthesizer',
             model,
-            parameters: {
-              text_type: 'PlainText',
-              voice: voice_id,
-              format,
-              sample_rate,
-              volume,
-              rate,
-              pitch,
-            },
+            parameters,
             input: {},
           },
         };

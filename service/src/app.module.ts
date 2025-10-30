@@ -36,6 +36,7 @@ import { UserModule } from './modules/user/user.module';
 import { UserBalanceModule } from './modules/userBalance/userBalance.module';
 import { VerificationModule } from './modules/verification/verification.module';
 import { VoiceModule } from './modules/voice/voice.module';
+import { VoiceCallModule } from './modules/voiceCall/voiceCall.module';
 
 // global.fetch = fetch; // Disable isomorphic-fetch polyfill
 
@@ -129,6 +130,7 @@ import { VoiceModule } from './modules/voice/voice.module';
     SigninModule,
     ModelsModule,
     VoiceModule,
+    VoiceCallModule,
     AffectionModule,
     TestModule,
 

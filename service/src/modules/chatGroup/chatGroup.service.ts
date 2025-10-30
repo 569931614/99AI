@@ -421,26 +421,69 @@ export class ChatGroupService {
   async updateTask(
     body: {
       groupId: number;
-      userId: number;
-      taskId: string;
-      title?: string;
-      detail?: string;
-      status?: string;
+      members: Array<{
+        appId: number;
+        taskDetail?: string;
+        order?: number;
+        role?: string;
+      }>;
     },
     req: Request,
   ) {
-    const { groupId, userId, taskId, title, detail, status } = body;
+    const { groupId, members: updateMembers } = body;
     const g = await this.ensureGroupOwned(groupId, req);
-    const members = this.parseMembers(g.members);
-    const m = members.find(x => Number(x.userId) === Number(userId));
-    if (!m) throw new HttpException('成员不存在', HttpStatus.BAD_REQUEST);
-    const t = (m.tasks || []).find((tt: any) => tt.taskId === taskId);
-    if (!t) throw new HttpException('任务不存在', HttpStatus.BAD_REQUEST);
-    if (typeof title !== 'undefined') t.title = title;
-    if (typeof detail !== 'undefined') t.detail = detail;
-    if (typeof status !== 'undefined') t.status = status;
-    await this.chatGroupEntity.update({ id: groupId }, { members: this.stringifyMembers(members) });
-    return true;
+    const existingMembers = this.parseMembers(g.members);
+
+    const results = [];
+
+    // 批量更新成员任务
+    for (const updateMember of updateMembers) {
+      const { appId, taskDetail, order, role } = updateMember;
+      const m = existingMembers.find(x => Number(x.appId) === Number(appId));
+      if (!m) {
+        results.push({ appId, success: false, message: '成员不存在' });
+        continue;
+      }
+
+      // 更新成员信息（如果传了 order 或 role）
+      if (typeof order !== 'undefined') m.order = order;
+      if (typeof role !== 'undefined') m.role = role;
+
+      // 更新或创建任务
+      if (typeof taskDetail !== 'undefined') {
+        m.tasks = Array.isArray(m.tasks) ? m.tasks : [];
+        if (m.tasks.length === 0) {
+          // 没有任务，创建新任务
+          const newTaskId = `${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+          const newTask = {
+            taskId: newTaskId,
+            title: taskDetail,
+            detail: '',
+            status: 'todo',
+            createdAt: new Date().toISOString(),
+          };
+          m.tasks.push(newTask);
+          results.push({ appId, success: true, action: 'created', task: newTask });
+        } else {
+          // 更新第一个任务
+          const t = m.tasks[0];
+          t.title = taskDetail;
+          results.push({ appId, success: true, action: 'updated', task: t });
+        }
+      } else {
+        results.push({ appId, success: true, action: 'no_task_update' });
+      }
+    }
+
+    // 按 order 排序
+    existingMembers.sort(
+      (a, b) =>
+        Number(a.order || 999999) - Number(b.order || 999999) ||
+        Number(a.userId) - Number(b.userId),
+    );
+
+    await this.chatGroupEntity.update({ id: groupId }, { members: this.stringifyMembers(existingMembers) });
+    return results;
   }
 
   async updateMember(

@@ -1326,12 +1326,12 @@ ${numberedOptions}
       }
     }
 
-    // 对话总结：获取历史总结并添加到system message
+    // 对话总结：获取历史总结并添加到system message（角色预设之后）
     if (groupId) {
       try {
         const historySummary = await this.conversationSummaryService.getSummary(groupId);
         if (historySummary) {
-          setSystemMessage = `【对话历史总结】\n${historySummary}\n\n${setSystemMessage}`;
+          setSystemMessage = `${setSystemMessage}\n\n【对话历史总结】\n${historySummary}`;
           Logger.debug(
             `[对话总结] 已添加历史总结到system message，长度=${historySummary.length}字`,
             'ChatService',

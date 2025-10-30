@@ -105,35 +105,14 @@ export class ConversationSummaryService {
       // 构建对话文本
       const conversationText = messages.map(m => `${m.role}: ${m.content}`).join('\n');
 
-      const systemPrompt = previousSummary
-        ? `你是一个专业的对话总结助手。请基于之前的总结和新的对话内容，生成一个更新的总结。
+      // 构建消息：分离指令和数据
+      const systemMessage = previousSummary
+        ? '你是专业的对话总结助手。基于之前的总结和新对话，生成更新后的总结。要求：保留重要信息、整合新内容、简洁连贯、300字以内、直接返回总结内容。'
+        : '你是专业的对话总结助手。总结对话的主要内容和关键信息。要求：简洁准确、突出重点、300字以内、直接返回总结内容。';
 
-之前的总结：
-${previousSummary}
-
-新的对话内容：
-${conversationText}
-
-要求：
-1. 保留之前总结中的重要信息
-2. 整合新对话的关键内容
-3. 总结应简洁、连贯，突出重点
-4. 字数控制在300字以内
-5. 只返回总结内容，不要任何前缀或解释
-
-请生成更新后的总结：`
-        : `你是一个专业的对话总结助手。请对以下对话内容进行总结。
-
-对话内容：
-${conversationText}
-
-要求：
-1. 总结对话的主要内容和关键信息
-2. 保持简洁、准确，突出重点
-3. 字数控制在300字以内
-4. 只返回总结内容，不要任何前缀或解释
-
-请生成总结：`;
+      const userMessage = previousSummary
+        ? `之前的总结：\n${previousSummary}\n\n新的对话：\n${conversationText}\n\n请生成更新后的总结：`
+        : `对话内容：\n${conversationText}\n\n请生成总结：`;
 
       const axios = require('axios');
       const response = await axios.post(
@@ -144,11 +123,11 @@ ${conversationText}
             messages: [
               {
                 role: 'system',
-                content: '你是一个专业的对话总结助手',
+                content: systemMessage,
               },
               {
                 role: 'user',
-                content: systemPrompt,
+                content: userMessage,
               },
             ],
           },

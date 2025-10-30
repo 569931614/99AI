@@ -632,41 +632,82 @@ export class OpenChatGroupController {
   }
 
   @Post('task/update')
-  @ApiOperation({ summary: '【开放】更新成员任务（无鉴权，需显式传 userId）' })
+  @ApiOperation({ summary: '【开放】批量更新群员任务（无鉴权，需显式传 userId）' })
   @ApiBody({
     schema: {
       type: 'object',
       properties: {
         userId: { type: 'number', description: '外部用户ID（任意数字即可，用于区分不同用户会话）' },
         groupId: { type: 'number', description: '对话分组ID' },
-        memberId: { type: 'number', description: '成员ID' },
-        taskId: { type: 'string', description: '任务ID' },
-        title: { type: 'string', description: '任务标题（可选）' },
-        detail: { type: 'string', description: '任务详情（可选）' },
-        status: { type: 'string', description: '任务状态（可选）' },
+        members: {
+          type: 'array',
+          description: '成员列表（数组），一次可更新多个成员的任务',
+          items: {
+            type: 'object',
+            properties: {
+              appId: { type: 'number', description: '角色应用ID（必填，用于定位成员）' },
+              taskDetail: {
+                type: 'string',
+                description: '任务描述（可选，如：完成需求分析文档）。不传则不更新任务',
+              },
+              order: { type: 'number', description: '发言顺序（可选，数字越小越靠前）' },
+              role: { type: 'string', description: '成员角色（可选，如 member, leader 等）' },
+            },
+            required: ['appId'],
+          },
+        },
       },
-      required: ['userId', 'groupId', 'memberId', 'taskId'],
+      required: ['userId', 'groupId', 'members'],
     },
     examples: {
       basic: {
-        summary: '更新任务状态',
+        summary: '批量更新成员任务',
         value: {
           userId: 1001,
           groupId: 123,
-          memberId: 456,
-          taskId: '1234567890_abc123',
-          status: 'done',
+          members: [
+            {
+              appId: 456,
+              taskDetail: '完成需求分析文档（已更新）',
+            },
+            {
+              appId: 457,
+              taskDetail: '设计系统架构（已更新）',
+            },
+          ],
+        },
+      },
+      withOrderAndRole: {
+        summary: '更新任务并调整顺序和角色',
+        value: {
+          userId: 1001,
+          groupId: 123,
+          members: [
+            {
+              appId: 456,
+              order: 1,
+              role: 'leader',
+              taskDetail: '完成需求分析文档',
+            },
+            {
+              appId: 457,
+              order: 2,
+              role: 'member',
+              taskDetail: '设计系统架构',
+            },
+          ],
         },
       },
     },
   })
   async updateTask(@Body() body: any, @Req() _req: Request, @Res() res: Response) {
     try {
-      const { userId, groupId, memberId, taskId, title, detail, status } = body || {};
+      const { userId, groupId, members } = body || {};
       if (!userId) throw new HttpException('userId 必填', HttpStatus.BAD_REQUEST);
       if (!groupId) throw new HttpException('groupId 必填', HttpStatus.BAD_REQUEST);
-      if (!memberId) throw new HttpException('memberId 必填', HttpStatus.BAD_REQUEST);
-      if (!taskId) throw new HttpException('taskId 必填', HttpStatus.BAD_REQUEST);
+      if (!members || !Array.isArray(members) || members.length === 0) {
+        throw new HttpException('members 必填且不能为空数组', HttpStatus.BAD_REQUEST);
+      }
 
       // 构造伪造的 req 对象，使用 visitor 角色跳过用户验证
       const fakeReq: any = {
@@ -678,10 +719,7 @@ export class OpenChatGroupController {
         ip: _req.ip,
       };
 
-      const result = await this.chatGroupService.updateTask(
-        { groupId, userId: memberId, taskId, title, detail, status },
-        fakeReq,
-      );
+      const result = await this.chatGroupService.updateTask({ groupId, members }, fakeReq);
       return res.status(200).json({ success: true, data: result });
     } catch (e: any) {
       const status = e instanceof HttpException ? e.getStatus() : HttpStatus.INTERNAL_SERVER_ERROR;

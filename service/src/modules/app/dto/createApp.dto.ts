@@ -83,6 +83,14 @@ export class CreateAppDto {
   role: string;
 
   @ApiProperty({
+    example: 1,
+    description: '创建该角色的用户ID',
+    required: false,
+  })
+  @IsOptional()
+  userId: number;
+
+  @ApiProperty({
     example: 0,
     description: '是否使用flowith模型',
     required: false,

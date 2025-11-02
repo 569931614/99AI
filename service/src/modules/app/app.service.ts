@@ -2,6 +2,7 @@ import { HttpException, HttpStatus, Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Request } from 'express';
 import { DataSource, In, IsNull, Like, MoreThan, Not, Repository } from 'typeorm';
+import { ChatGroupEntity } from '../chatGroup/chatGroup.entity';
 import { GlobalConfigService } from '../globalConfig/globalConfig.service';
 import { UserBalanceService } from '../userBalance/userBalance.service';
 import { AppEntity } from './app.entity';
@@ -36,6 +37,8 @@ export class AppService {
     private readonly appEmotionRepo: Repository<AppEmotionVoiceEntity>,
     @InjectRepository(RoleEmotionEntity)
     private readonly emotionRepo: Repository<RoleEmotionEntity>,
+    @InjectRepository(ChatGroupEntity)
+    private readonly chatGroupEntity: Repository<ChatGroupEntity>,
     private readonly userBalanceService: UserBalanceService,
     private readonly globalConfigService: GlobalConfigService,
     private readonly dataSource: DataSource,
@@ -126,6 +129,7 @@ export class AppService {
       prompt: appData.prompt,
 
       voiceId,
+      userId: appData.userId,
     };
   }
 
@@ -190,13 +194,41 @@ export class AppService {
   }
 
   async appList(req: Request, query: QuerAppDto, orderKey = 'id') {
-    const { page = 1, size = 10, name, status, catId, role } = query;
+    const { page = 1, size = 10, name, status, catId, role, userId, excludeIds } = query;
     const pageNum = Math.max(1, Number(page) || 1);
     const sizeNum = Math.max(1, Number(size) || 10);
     const where: any = {};
     if (typeof name === 'string' && name.length > 0) where.name = Like(`%${name}%`);
+
+    let addedAppIds: number[] = [];
+    let excludeAppIds: number[] = [];
+    let filteredByCategory: number[] = null;
+
+    // 如果传入了 excludeIds，解析为数组
+    if (excludeIds && typeof excludeIds === 'string') {
+      excludeAppIds = excludeIds
+        .split(',')
+        .map(id => Number(id.trim()))
+        .filter(id => !isNaN(id) && id > 0);
+    }
+
+    // 如果传入了 userId，查询该用户已添加的角色ID列表
+    if (userId) {
+      const userGroups = await this.chatGroupEntity.find({
+        where: {
+          userId: Number(userId),
+          isDelete: false,
+          isGroupChat: false, // 只查询单聊会话组
+        },
+        select: ['appId'],
+      });
+      addedAppIds = userGroups.map(g => g.appId).filter(id => id != null && id > 0);
+    }
+
+    // 合并需要排除的ID列表
+    const allExcludeIds = [...new Set([...addedAppIds, ...excludeAppIds])];
+
     // 如果指定了分类ID，则查找包含该分类ID的App
-    let filteredByCategory = null;
     if (catId) {
       const apps = await this.appEntity.find();
       filteredByCategory = apps
@@ -209,7 +241,22 @@ export class AppService {
       if (filteredByCategory.length === 0) {
         return { rows: [], count: 0 };
       }
+    }
+
+    // 合并过滤条件：需要在分类中且不在排除列表中
+    if (filteredByCategory !== null && allExcludeIds.length > 0) {
+      // 从分类中排除需要排除的角色
+      const finalIds = filteredByCategory.filter(id => !allExcludeIds.includes(id));
+      if (finalIds.length === 0) {
+        return { rows: [], count: 0 };
+      }
+      where.id = In(finalIds);
+    } else if (filteredByCategory !== null) {
+      // 只有分类过滤
       where.id = In(filteredByCategory);
+    } else if (allExcludeIds.length > 0) {
+      // 排除指定的角色
+      where.id = Not(In(allExcludeIds));
     }
 
     if (role) where.role = role;
@@ -488,7 +535,10 @@ export class AppService {
 
   async createApp(body: CreateAppDto) {
     const { name, catId } = body;
-    body.role = 'system';
+    // 只在没有提供 role 时才设置默认值，保留用户传递的 role
+    if (!body.role) {
+      body.role = 'system';
+    }
 
     // 检查应用名称是否已存在 - 已移除限制，允许重复应用名
     // const a = await this.appEntity.findOne({ where: { name } });

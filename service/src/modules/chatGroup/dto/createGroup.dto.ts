@@ -23,6 +23,22 @@ export class CreateGroupDto {
   ownerNickname?: string;
 
   @ApiProperty({
+    example: '你好，欢迎来到我们的群聊！',
+    description: '开场白（会作为第一条消息保存到chatLog）',
+    required: false,
+  })
+  @IsOptional()
+  openingRemark?: string;
+
+  @ApiProperty({
+    example: 'https://example.com/background.jpg',
+    description: '群聊背景图片URL',
+    required: false,
+  })
+  @IsOptional()
+  backgroundImage?: string;
+
+  @ApiProperty({
     example: 0,
     description: '应用ID（角色ID）',
     required: false,

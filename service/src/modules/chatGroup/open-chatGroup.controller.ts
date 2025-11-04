@@ -15,9 +15,13 @@ export class OpenChatGroupController {
       type: 'object',
       properties: {
         userId: { type: 'number', description: '外部用户ID（任意数字即可，用于区分不同用户会话）' },
+        userAvatarUrl: { type: 'string', description: '用户头像URL（可选，用于生成群聊拼图头像）' },
+        appId: { type: 'number', description: '应用ID（角色ID，可选）' },
         title: { type: 'string', description: '群聊名称（可选，不传则默认为"新对话"）' },
         description: { type: 'string', description: '群聊描述信息（可选）' },
         ownerNickname: { type: 'string', description: '群主在群内的昵称（可选）' },
+        openingRemark: { type: 'string', description: '开场白（可选，会作为第一条消息保存）' },
+        backgroundImage: { type: 'string', description: '群聊背景图片URL（可选）' },
         modelConfig: {
           type: 'object',
           description: '对话模型配置项（可选，不传则使用默认配置）',
@@ -46,12 +50,33 @@ export class OpenChatGroupController {
   })
   async create(@Body() body: any, @Req() _req: Request, @Res() res: Response) {
     try {
-      const { userId, modelConfig, params, title, description, ownerNickname } = body || {};
+      const {
+        userId,
+        userAvatarUrl,
+        appId,
+        modelConfig,
+        params,
+        title,
+        description,
+        ownerNickname,
+        openingRemark,
+        backgroundImage,
+      } = body || {};
+
+      // 添加日志：检查接收到的参数
+      console.log('=== open-chatGroup.controller.create 接收参数 ===');
+      console.log('完整body:', JSON.stringify(body));
+      console.log('userId:', userId);
+      console.log('userAvatarUrl:', userAvatarUrl);
+      console.log('appId:', appId);
+      console.log('openingRemark:', openingRemark);
+
       if (!userId) throw new HttpException('userId 必填', HttpStatus.BAD_REQUEST);
 
       // 构造伪造的 req 对象，使用 visitor 角色跳过用户验证
       const fakeReq: any = {
         user: { id: userId, role: 'visitor' },
+        userAvatarUrl, // 传递用户头像URL
         header: (name: string) => _req.header(name),
         headers: _req.headers,
         connection: _req.connection,
@@ -59,12 +84,38 @@ export class OpenChatGroupController {
         ip: _req.ip,
       };
 
+      console.log('=== 调用 chatGroupService.create ===');
+      console.log('传递参数:', {
+        title,
+        description,
+        ownerNickname,
+        appId,
+        openingRemark,
+        userAvatarUrl,
+      });
+
       const result = await this.chatGroupService.create(
-        { modelConfig, params, title, description, ownerNickname },
+        {
+          modelConfig,
+          params,
+          title,
+          description,
+          ownerNickname,
+          appId,
+          openingRemark,
+          backgroundImage,
+        },
         fakeReq,
       );
+
+      console.log('=== chatGroupService.create 完成 ===');
+      console.log('返回结果:', JSON.stringify(result));
+
       return res.status(200).json({ success: true, data: result });
     } catch (e: any) {
+      console.error('=== open-chatGroup.controller.create 错误 ===');
+      console.error('错误信息:', e.message);
+      console.error('错误堆栈:', e.stack);
       const status = e instanceof HttpException ? e.getStatus() : HttpStatus.INTERNAL_SERVER_ERROR;
       const message = e?.message || '创建对话组失败';
       return res.status(status).json({ success: false, message });
@@ -110,6 +161,52 @@ export class OpenChatGroupController {
     } catch (e: any) {
       const status = e instanceof HttpException ? e.getStatus() : HttpStatus.INTERNAL_SERVER_ERROR;
       const message = e?.message || '查询对话组失败';
+      return res.status(status).json({ success: false, message });
+    }
+  }
+
+  @Post('detail')
+  @ApiOperation({ summary: '【开放】查询对话组详情（无鉴权，需显式传 userId 和 groupId）' })
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        userId: { type: 'number', description: '外部用户ID' },
+        groupId: { type: 'number', description: '对话分组ID' },
+      },
+      required: ['userId', 'groupId'],
+    },
+    examples: {
+      basic: {
+        summary: '查询对话组详情',
+        value: {
+          userId: 1001,
+          groupId: 123,
+        },
+      },
+    },
+  })
+  async getDetail(@Body() body: any, @Req() _req: Request, @Res() res: Response) {
+    try {
+      const { userId, groupId } = body || {};
+      if (!userId) throw new HttpException('userId 必填', HttpStatus.BAD_REQUEST);
+      if (!groupId) throw new HttpException('groupId 必填', HttpStatus.BAD_REQUEST);
+
+      // 构造伪造的 req 对象，使用 visitor 角色跳过用户验证
+      const fakeReq: any = {
+        user: { id: userId, role: 'visitor' },
+        header: (name: string) => _req.header(name),
+        headers: _req.headers,
+        connection: _req.connection,
+        socket: _req.socket,
+        ip: _req.ip,
+      };
+
+      const result = await this.chatGroupService.getDetail(groupId, fakeReq);
+      return res.status(200).json({ success: true, data: result });
+    } catch (e: any) {
+      const status = e instanceof HttpException ? e.getStatus() : HttpStatus.INTERNAL_SERVER_ERROR;
+      const message = e?.message || '查询对话组详情失败';
       return res.status(status).json({ success: false, message });
     }
   }
@@ -210,10 +307,42 @@ export class OpenChatGroupController {
       type: 'object',
       properties: {
         userId: { type: 'number', description: '外部用户ID（任意数字即可，用于区分不同用户会话）' },
+        userAvatarUrl: { type: 'string', description: '用户头像URL（可选，用于生成群聊拼图头像）' },
         groupId: { type: 'number', description: '对话分组ID' },
         title: { type: 'string', description: '对话组标题（可选）' },
         description: { type: 'string', description: '群聊描述信息（可选）' },
         ownerNickname: { type: 'string', description: '群主在群内的昵称（可选）' },
+        backgroundImage: { type: 'string', description: '群聊背景图片URL（可选）' },
+        members: {
+          type: 'array',
+          description: '成员列表（可选，传入则完整替换现有成员列表）',
+          items: {
+            type: 'object',
+            properties: {
+              userId: { type: 'number', description: '成员ID' },
+              name: { type: 'string', description: '成员昵称' },
+              role: { type: 'string', description: '成员角色' },
+              order: { type: 'number', description: '发言顺序' },
+              appId: { type: 'number', description: '关联的应用ID' },
+              appName: { type: 'string', description: '应用名称' },
+              openingRemark: { type: 'string', description: '开场白' },
+              tasks: {
+                type: 'array',
+                description: '任务列表',
+                items: {
+                  type: 'object',
+                  properties: {
+                    taskId: { type: 'string', description: '任务ID' },
+                    title: { type: 'string', description: '任务标题' },
+                    detail: { type: 'string', description: '任务详情' },
+                    status: { type: 'string', description: '任务状态' },
+                    createdAt: { type: 'string', description: '创建时间' },
+                  },
+                },
+              },
+            },
+          },
+        },
       },
       required: ['userId', 'groupId'],
     },
@@ -235,17 +364,64 @@ export class OpenChatGroupController {
           ownerNickname: '张三',
         },
       },
+      updateWithMembers: {
+        summary: '更新群组及成员信息',
+        value: {
+          userId: 1001,
+          groupId: 123,
+          title: '新标题',
+          description: '这是一个技术交流群',
+          ownerNickname: '张三',
+          members: [
+            {
+              userId: 10116,
+              name: '辣条',
+              role: 'member',
+              order: 0,
+              appId: 10116,
+              appName: '辣条',
+              openingRemark: '你好，有什么可以帮助你的',
+              tasks: [
+                {
+                  taskId: '1761822997341_3x0x95',
+                  title: '讨论中午吃什么',
+                  detail: '',
+                  status: 'todo',
+                  createdAt: '2025-10-30T11:16:37.341Z',
+                },
+              ],
+            },
+          ],
+        },
+      },
     },
   })
   async update(@Body() body: any, @Req() _req: Request, @Res() res: Response) {
     try {
-      const { userId, groupId, title, description, ownerNickname } = body || {};
+      const {
+        userId,
+        userAvatarUrl,
+        groupId,
+        title,
+        description,
+        ownerNickname,
+        characterRelationships,
+        openingRemark,
+        proactivelySend,
+        describingMental,
+        realTime,
+        myName,
+        myProfile,
+        members,
+        backgroundImage,
+      } = body || {};
       if (!userId) throw new HttpException('userId 必填', HttpStatus.BAD_REQUEST);
       if (!groupId) throw new HttpException('groupId 必填', HttpStatus.BAD_REQUEST);
 
       // 构造伪造的 req 对象，使用 visitor 角色跳过用户验证
       const fakeReq: any = {
         user: { id: userId, role: 'visitor' },
+        userAvatarUrl, // 传递用户头像URL
         header: (name: string) => _req.header(name),
         headers: _req.headers,
         connection: _req.connection,
@@ -254,7 +430,21 @@ export class OpenChatGroupController {
       };
 
       const result = await this.chatGroupService.update(
-        { groupId, title, description, ownerNickname },
+        {
+          groupId,
+          title,
+          description,
+          ownerNickname,
+          characterRelationships,
+          openingRemark,
+          proactivelySend,
+          describingMental,
+          realTime,
+          myName,
+          myProfile,
+          members,
+          backgroundImage,
+        },
         fakeReq,
       );
       return res.status(200).json({ success: true, data: result });
@@ -273,6 +463,7 @@ export class OpenChatGroupController {
       type: 'object',
       properties: {
         userId: { type: 'number', description: '外部用户ID（任意数字即可，用于区分不同用户会话）' },
+        userAvatarUrl: { type: 'string', description: '用户头像URL（可选，用于生成群聊拼图头像）' },
         groupId: { type: 'number', description: '对话分组ID' },
         members: {
           type: 'array',
@@ -376,7 +567,7 @@ export class OpenChatGroupController {
   })
   async addMembers(@Body() body: any, @Req() _req: Request, @Res() res: Response) {
     try {
-      const { userId, groupId, members } = body || {};
+      const { userId, userAvatarUrl, groupId, members } = body || {};
       if (!userId) throw new HttpException('userId 必填', HttpStatus.BAD_REQUEST);
       if (!groupId) throw new HttpException('groupId 必填', HttpStatus.BAD_REQUEST);
       if (!members || !Array.isArray(members) || members.length === 0) {
@@ -386,6 +577,7 @@ export class OpenChatGroupController {
       // 构造伪造的 req 对象，使用 visitor 角色跳过用户验证
       const fakeReq: any = {
         user: { id: userId, role: 'visitor' },
+        userAvatarUrl, // 传递用户头像URL
         header: (name: string) => _req.header(name),
         headers: _req.headers,
         connection: _req.connection,
@@ -515,6 +707,20 @@ export class OpenChatGroupController {
         appId: { type: 'number', description: '关联的应用ID（可选）' },
         appName: { type: 'string', description: '应用名称（可选）' },
         openingRemark: { type: 'string', description: '成员开场白（可选）' },
+        tasks: {
+          type: 'array',
+          description: '任务列表（可选，传入则完整替换该成员的所有任务）',
+          items: {
+            type: 'object',
+            properties: {
+              taskId: { type: 'string', description: '任务ID' },
+              title: { type: 'string', description: '任务标题' },
+              detail: { type: 'string', description: '任务详情' },
+              status: { type: 'string', description: '任务状态（todo/doing/done）' },
+              createdAt: { type: 'string', description: '创建时间（ISO格式）' },
+            },
+          },
+        },
       },
       required: ['userId', 'groupId', 'memberId'],
     },
@@ -539,11 +745,30 @@ export class OpenChatGroupController {
           openingRemark: '大家好，我是产品经理，负责需求分析。',
         },
       },
+      updateWithTasks: {
+        summary: '更新成员信息及任务',
+        value: {
+          userId: 1001,
+          groupId: 123,
+          memberId: 456,
+          name: '辣条',
+          openingRemark: '你好，有什么可以帮助你的',
+          tasks: [
+            {
+              taskId: '1761822997341_3x0x95',
+              title: '讨论中午吃什么',
+              detail: '需要考虑大家的口味偏好',
+              status: 'todo',
+              createdAt: '2025-10-30T11:16:37.341Z',
+            },
+          ],
+        },
+      },
     },
   })
   async updateMember(@Body() body: any, @Req() _req: Request, @Res() res: Response) {
     try {
-      const { userId, groupId, memberId, name, role, order, appId, appName, openingRemark } =
+      const { userId, groupId, memberId, name, role, order, appId, appName, openingRemark, tasks } =
         body || {};
       if (!userId) throw new HttpException('userId 必填', HttpStatus.BAD_REQUEST);
       if (!groupId) throw new HttpException('groupId 必填', HttpStatus.BAD_REQUEST);
@@ -560,7 +785,7 @@ export class OpenChatGroupController {
       };
 
       const result = await this.chatGroupService.updateMember(
-        { groupId, userId: memberId, name, role, order, appId, appName, openingRemark },
+        { groupId, userId: memberId, name, role, order, appId, appName, openingRemark, tasks },
         fakeReq,
       );
       return res.status(200).json({ success: true, data: result });
@@ -724,6 +949,123 @@ export class OpenChatGroupController {
     } catch (e: any) {
       const status = e instanceof HttpException ? e.getStatus() : HttpStatus.INTERNAL_SERVER_ERROR;
       const message = e?.message || '更新任务失败';
+      return res.status(status).json({ success: false, message });
+    }
+  }
+
+  @Post('query-single-chats')
+  @ApiOperation({ summary: '【开放】查询单聊会话组列表（无鉴权，需显式传 userId）' })
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        userId: { type: 'number', description: '外部用户ID（任意数字即可，用于区分不同用户会话）' },
+        keyword: { type: 'string', description: '搜索关键词，用于按角色名称搜索（可选）' },
+      },
+      required: ['userId'],
+    },
+    examples: {
+      basic: {
+        summary: '查询单聊会话组列表',
+        value: {
+          userId: 1001,
+        },
+      },
+      search: {
+        summary: '搜索单聊会话组',
+        value: {
+          userId: 1001,
+          keyword: '小助手',
+        },
+      },
+    },
+  })
+  async querySingleChats(@Body() body: any, @Req() _req: Request, @Res() res: Response) {
+    try {
+      console.log('[querySingleChats] ===== 收到请求 =====');
+      console.log('[querySingleChats] body:', JSON.stringify(body));
+
+      const { userId, keyword } = body || {};
+      if (!userId) {
+        console.log('[querySingleChats] userId为空，抛出异常');
+        throw new HttpException('userId 必填', HttpStatus.BAD_REQUEST);
+      }
+
+      console.log('[querySingleChats] userId验证通过:', userId, 'keyword:', keyword);
+
+      // 构造伪造的 req 对象，使用 visitor 角色跳过用户验证
+      const fakeReq: any = {
+        user: { id: userId, role: 'visitor' },
+        header: (name: string) => _req.header(name),
+        headers: _req.headers,
+        connection: _req.connection,
+        socket: _req.socket,
+        ip: _req.ip,
+      };
+
+      console.log('[querySingleChats] 开始调用 chatGroupService.querySingleChats...');
+      const result = await this.chatGroupService.querySingleChats(fakeReq, keyword);
+      console.log('[querySingleChats] 查询成功，返回数据条数:', result?.length || 0);
+      console.log('[querySingleChats] ===== 请求完成 =====');
+
+      return res.status(200).json({ success: true, data: result });
+    } catch (e: any) {
+      console.error('[querySingleChats] ===== 发生错误 =====');
+      console.error('[querySingleChats] 错误消息:', e.message);
+      console.error('[querySingleChats] 错误堆栈:', e.stack);
+      const status = e instanceof HttpException ? e.getStatus() : HttpStatus.INTERNAL_SERVER_ERROR;
+      const message = e?.message || '查询单聊会话组失败';
+      return res.status(status).json({ success: false, message });
+    }
+  }
+
+  @Post('query-group-chats')
+  @ApiOperation({ summary: '【开放】查询群聊会话组列表（无鉴权，需显式传 userId）' })
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        userId: { type: 'number', description: '外部用户ID（任意数字即可，用于区分不同用户会话）' },
+        keyword: { type: 'string', description: '搜索关键词，用于按群组名称搜索（可选）' },
+      },
+      required: ['userId'],
+    },
+    examples: {
+      basic: {
+        summary: '查询群聊会话组列表',
+        value: {
+          userId: 1001,
+        },
+      },
+      search: {
+        summary: '搜索群聊会话组',
+        value: {
+          userId: 1001,
+          keyword: '工作群',
+        },
+      },
+    },
+  })
+  async queryGroupChats(@Body() body: any, @Req() _req: Request, @Res() res: Response) {
+    try {
+      const { userId, keyword } = body || {};
+      if (!userId) throw new HttpException('userId 必填', HttpStatus.BAD_REQUEST);
+
+      // 构造伪造的 req 对象，使用 visitor 角色跳过用户验证
+      const fakeReq: any = {
+        user: { id: userId, role: 'visitor' },
+        header: (name: string) => _req.header(name),
+        headers: _req.headers,
+        connection: _req.connection,
+        socket: _req.socket,
+        ip: _req.ip,
+      };
+
+      const result = await this.chatGroupService.queryGroupChats(fakeReq, keyword);
+      return res.status(200).json({ success: true, data: result });
+    } catch (e: any) {
+      const status = e instanceof HttpException ? e.getStatus() : HttpStatus.INTERNAL_SERVER_ERROR;
+      const message = e?.message || '查询群聊会话组失败';
       return res.status(status).json({ success: false, message });
     }
   }

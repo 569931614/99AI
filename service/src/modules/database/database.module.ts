@@ -30,6 +30,7 @@ import { AccountLogEntity } from '../userBalance/accountLog.entity';
 import { BalanceEntity } from '../userBalance/balance.entity';
 import { FingerprintLogEntity } from '../userBalance/fingerprint.entity';
 import { UserBalanceEntity } from '../userBalance/userBalance.entity';
+import { UserAppSettingsEntity } from '../userAppSettings/userAppSettings.entity';
 import { VerificationEntity } from '../verification/verification.entity';
 import { VoiceEntity } from '../voice/voice.entity';
 
@@ -76,6 +77,7 @@ import { VoiceEntity } from '../voice/voice.entity';
             AffectionRuleEntity,
             UserAppAffectionEntity,
             ConversationSummaryEntity,
+            UserAppSettingsEntity,
           ],
           synchronize: false,
           logging: false,

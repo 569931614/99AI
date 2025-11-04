@@ -1,7 +1,9 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
+import { ChatGroupEntity } from '../chatGroup/chatGroup.entity';
 import { UserBalanceService } from '../userBalance/userBalance.service';
 import { UserAppSettingsEntity } from '../userAppSettings/userAppSettings.entity';
+import { OpenUserAppSettingsController } from '../userAppSettings/open-userAppSettings.controller';
 import { UserAppSettingsService } from '../userAppSettings/userAppSettings.service';
 import { AppController } from './app.controller';
 import { AppEntity } from './app.entity';
@@ -23,9 +25,10 @@ import { UserAppsEntity } from './userApps.entity';
       RoleEmotionEntity,
       AppEmotionVoiceEntity,
       UserAppSettingsEntity,
+      ChatGroupEntity,
     ]),
   ],
-  controllers: [AppController, OpenAppController],
+  controllers: [AppController, OpenAppController, OpenUserAppSettingsController],
   providers: [AppService, UserBalanceService, UserAppSettingsService],
   exports: [UserAppSettingsService],
 })

@@ -1,4 +1,4 @@
-import { Controller, Get, Query } from '@nestjs/common';
+import { Body, Controller, Get, Post, Query } from '@nestjs/common';
 import { ApiOperation, ApiQuery, ApiTags } from '@nestjs/swagger';
 import { Request } from 'express';
 import { ChatLogService } from './chatLog.service';
@@ -9,18 +9,37 @@ export class OpenChatLogController {
   constructor(private readonly chatLogService: ChatLogService) {}
 
   @Get('chatList')
-  @ApiOperation({ summary: '【开放】查询我的问答记录（无鉴权，需显式 userId）' })
+  @ApiOperation({ summary: '【开放】查询我的问答记录(无鉴权,需显式 userId)' })
   @ApiQuery({
     name: 'userId',
     type: Number,
     required: true,
-    description: '用户ID（系统内有效用户）',
+    description: '用户ID(系统内有效用户)',
   })
-  @ApiQuery({ name: 'groupId', type: Number, required: false, description: '会话分组ID（可选）' })
-  chatList(@Query('userId') userId: number, @Query('groupId') groupId?: number) {
+  @ApiQuery({ name: 'groupId', type: Number, required: false, description: '会话分组ID(可选)' })
+  @ApiQuery({ name: 'page', type: Number, required: false, description: '页码，默认 1' })
+  @ApiQuery({ name: 'pageSize', type: Number, required: false, description: '每页数量，默认 20' })
+  chatList(
+    @Query('userId') userId: number,
+    @Query('groupId') groupId?: number,
+    @Query('page') page?: number,
+    @Query('pageSize') pageSize?: number,
+  ) {
     if (!userId) throw new Error('userId 必填');
-    const fakeReq: any = { user: { id: Number(userId) } } as Request;
-    return this.chatLogService.chatList(fakeReq, { groupId } as any);
+    const fakeReq: any = {
+      user: {
+        id: Number(userId),
+        username: '',
+        email: '',
+        client: '',
+        role: 'user',
+      },
+    } as Request;
+    return this.chatLogService.chatList(fakeReq, {
+      groupId,
+      page: page ? Number(page) : 1,
+      pageSize: pageSize ? Number(pageSize) : 20,
+    } as any);
   }
 
   @Get('querySingleChat')
@@ -35,12 +54,20 @@ export class OpenChatLogController {
   querySingleChat(@Query('userId') userId: number, @Query('chatId') chatId: number) {
     if (!userId) throw new Error('userId 必填');
     if (!chatId) throw new Error('chatId 必填');
-    const fakeReq: any = { user: { id: Number(userId) } } as Request;
+    const fakeReq: any = {
+      user: {
+        id: Number(userId),
+        username: '',
+        email: '',
+        client: '',
+        role: 'user',
+      },
+    } as Request;
     return this.chatLogService.querySingleChat(fakeReq, { chatId } as any);
   }
 
   @Get('byAppId')
-  @ApiOperation({ summary: '【开放】查询某个应用的问答记录（无鉴权，需显式 userId）' })
+  @ApiOperation({ summary: '【开放】查询某个应用的问答记录（无鉴权,需显式 userId）' })
   @ApiQuery({
     name: 'userId',
     type: Number,
@@ -58,11 +85,42 @@ export class OpenChatLogController {
   ) {
     if (!userId) throw new Error('userId 必填');
     if (!appId) throw new Error('appId 必填');
-    const fakeReq: any = { user: { id: Number(userId) } } as Request;
+    const fakeReq: any = {
+      user: {
+        id: Number(userId),
+        username: '',
+        email: '',
+        client: '',
+        role: 'user',
+      },
+    } as Request;
     return this.chatLogService.byAppId(fakeReq, {
       appId: Number(appId),
       page: page && Number(page),
       size: size && Number(size),
     } as any);
+  }
+
+  @Post('del')
+  @ApiOperation({ summary: '【开放】删除我的问答记录（无鉴权，需显式 userId）' })
+  @ApiQuery({
+    name: 'userId',
+    type: Number,
+    required: true,
+    description: '用户ID（系统内有效用户）',
+  })
+  del(@Query('userId') userId: number, @Body() body: { id: number }) {
+    if (!userId) throw new Error('userId 必填');
+    if (!body.id) throw new Error('消息 id 必填');
+    const fakeReq: any = {
+      user: {
+        id: Number(userId),
+        username: '',
+        email: '',
+        client: '',
+        role: 'user',
+      },
+    } as Request;
+    return this.chatLogService.deleteChatLog(fakeReq, body as any);
   }
 }

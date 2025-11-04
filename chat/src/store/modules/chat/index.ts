@@ -213,6 +213,7 @@ export const useChatStore = defineStore('chat-store', {
       title?: string
       isSticky?: boolean
       fileUrl?: string
+      userId?: number
     }) {
       await fetchUpdateGroupAPI(params)
       await this.queryMyGroup()

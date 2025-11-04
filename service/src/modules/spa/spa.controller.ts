@@ -30,6 +30,7 @@ export class SpaController {
     // 跳过API请求和静态资源目录请求
     const bypassPrefixes = [
       '/api',
+      '/open',
       '/file',
       this.adminPath,
       '/open-docs',

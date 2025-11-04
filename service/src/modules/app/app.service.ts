@@ -113,10 +113,29 @@ export class AppService {
       voiceId = v?.voiceId || null;
     } catch (_) {}
 
+    // 关联情绪音色（如果存在）
+    let emotionVoices: any[] = [];
+    try {
+      const emotions = await this.appEmotionRepo.find({ where: { appId: Number(id) } });
+      // 查询全局情绪表获取情绪ID
+      const globalEmotions = await this.emotionRepo.find();
+      const emotionMap = new Map(globalEmotions.map(e => [e.emotion, e.id]));
+
+      emotionVoices = emotions
+        .filter(e => e.voiceId) // 只返回有音色的情绪
+        .map(e => ({
+          emotionId: emotionMap.get(e.emotion),
+          emotion: e.emotion,
+          voiceId: e.voiceId,
+        }));
+    } catch (_) {}
+
     return {
+      id: appData.id,
       demoData: appData.demoData ? appData.demoData.split('\n') : [],
       coverImg: appData.coverImg,
       des: appData.des,
+      preset: appData.preset,
       name: appData.name,
       isGPTs: appData.isGPTs,
       isFlowith: appData.isFlowith,
@@ -128,8 +147,13 @@ export class AppService {
       backgroundImg: appData.backgroundImg,
       prompt: appData.prompt,
 
+      openingRemark: appData.openingRemark,
       voiceId,
+      emotionVoices,
       userId: appData.userId,
+      gender: appData.gender,
+      enableRealTime: appData.enableRealTime,
+      enableLongTermMemory: appData.enableLongTermMemory,
     };
   }
 
@@ -197,8 +221,20 @@ export class AppService {
     const { page = 1, size = 10, name, status, catId, role, userId, excludeIds } = query;
     const pageNum = Math.max(1, Number(page) || 1);
     const sizeNum = Math.max(1, Number(size) || 10);
-    const where: any = {};
-    if (typeof name === 'string' && name.length > 0) where.name = Like(`%${name}%`);
+
+    // 构建基础查询条件数组（支持OR查询）
+    let baseWhere: any[] = [];
+
+    // 如果传入了 userId，限制只查询系统角色或该用户创建的角色
+    if (userId) {
+      baseWhere = [
+        { userId: IsNull() },  // 系统角色
+        { userId: Number(userId) }  // 用户自己创建的角色
+      ];
+    } else {
+      // 如果没有传入 userId，使用空对象（查询所有）
+      baseWhere = [{}];
+    }
 
     let addedAppIds: number[] = [];
     let excludeAppIds: number[] = [];
@@ -212,7 +248,7 @@ export class AppService {
         .filter(id => !isNaN(id) && id > 0);
     }
 
-    // 如果传入了 userId，查询该用户已添加的角色ID列表
+    // 如果传入了 userId，查询该用户已添加的角色ID列表（用于排除）
     if (userId) {
       const userGroups = await this.chatGroupEntity.find({
         where: {
@@ -243,26 +279,42 @@ export class AppService {
       }
     }
 
-    // 合并过滤条件：需要在分类中且不在排除列表中
-    if (filteredByCategory !== null && allExcludeIds.length > 0) {
-      // 从分类中排除需要排除的角色
-      const finalIds = filteredByCategory.filter(id => !allExcludeIds.includes(id));
-      if (finalIds.length === 0) {
-        return { rows: [], count: 0 };
-      }
-      where.id = In(finalIds);
-    } else if (filteredByCategory !== null) {
-      // 只有分类过滤
-      where.id = In(filteredByCategory);
-    } else if (allExcludeIds.length > 0) {
-      // 排除指定的角色
-      where.id = Not(In(allExcludeIds));
-    }
+    // 为每个基础条件添加额外的过滤条件
+    baseWhere = baseWhere.map(condition => {
+      const newCondition = { ...condition };
 
-    if (role) where.role = role;
-    if ([0, 1, '0', '1', '4', 4].includes(status as any)) where.status = Number(status);
+      // 添加名称过滤
+      if (typeof name === 'string' && name.length > 0) {
+        newCondition.name = Like(`%${name}%`);
+      }
+
+      // 添加角色类型过滤
+      if (role) {
+        newCondition.role = role;
+      }
+
+      // 添加状态过滤
+      if ([0, 1, '0', '1', '4', 4].includes(status as any)) {
+        newCondition.status = Number(status);
+      }
+
+      // 处理ID过滤（分类、排除等）
+      if (filteredByCategory !== null && allExcludeIds.length > 0) {
+        const finalIds = filteredByCategory.filter(id => !allExcludeIds.includes(id));
+        if (finalIds.length > 0) {
+          newCondition.id = In(finalIds);
+        }
+      } else if (filteredByCategory !== null) {
+        newCondition.id = In(filteredByCategory);
+      } else if (allExcludeIds.length > 0) {
+        newCondition.id = Not(In(allExcludeIds));
+      }
+
+      return newCondition;
+    });
+
     const [rows, count] = await this.appEntity.findAndCount({
-      where,
+      where: baseWhere,
       order: { [orderKey]: 'DESC' },
       skip: (pageNum - 1) * sizeNum,
       take: sizeNum,
@@ -1134,14 +1186,23 @@ export class AppService {
     const userId = req.user.id;
     const { page = 1, size = 10, name, status } = query;
 
-    const where: any = { userId };
+    // 构建查询条件：userId为空或等于当前用户ID
+    const baseWhere: any[] = [
+      { userId: IsNull() },
+      { userId }
+    ];
 
+    // 添加额外的过滤条件
     if (name) {
-      where.name = Like(`%${name}%`);
+      baseWhere.forEach(condition => {
+        condition.name = Like(`%${name}%`);
+      });
     }
 
     if (status !== undefined && status !== null) {
-      where.status = status;
+      baseWhere.forEach(condition => {
+        condition.status = status;
+      });
     }
 
     try {
@@ -1149,7 +1210,7 @@ export class AppService {
       const sizeNum = Math.max(1, Math.min(100, Number(size) || 10));
 
       const [rows, count] = await this.appEntity.findAndCount({
-        where,
+        where: baseWhere,
         order: { id: 'DESC' },
         skip: (pageNum - 1) * sizeNum,
         take: sizeNum,

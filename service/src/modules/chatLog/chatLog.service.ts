@@ -48,6 +48,21 @@ export class ChatLogService {
     return await this.chatLogEntity.findOne({ where: { id } });
   }
 
+  /* 获取群组中特定角色的开场白记录 */
+  async getOpeningRemark(groupId: number, appId: number): Promise<any> {
+    return await this.chatLogEntity.findOne({
+      where: {
+        groupId: groupId,
+        appId: appId,
+        isOpeningRemark: true,
+        isDelete: false,
+      },
+      order: {
+        id: 'ASC', // 获取最早的一条开场白记录
+      },
+    });
+  }
+
   /* 查询群组中最近的用户消息（用于群聊模式避免重复保存） */
   async findRecentUserLogInGroup(
     groupId: number,
@@ -239,17 +254,42 @@ export class ChatLogService {
   /* 查询当前对话的列表 */
   async chatList(req: Request, params: ChatListDto) {
     const { id } = req.user;
-    const { groupId } = params;
+    const { groupId, page, pageSize = 20 } = params;
     const where = { userId: id, isDelete: false };
     groupId && Object.assign(where, { groupId });
+
+    // 检查是否为分页请求
+    const isPaginated = page !== undefined && page !== null;
+
     if (groupId) {
       const count = await this.chatGroupEntity.count({
-        where: { isDelete: false },
+        where: { id: groupId, isDelete: false },
       });
-      if (count === 0) return [];
+      if (count === 0) {
+        return isPaginated ? { rows: [], hasMore: false } : [];
+      }
     }
-    const list = await this.chatLogEntity.find({ where });
-    return list
+
+    let list;
+    let total;
+
+    if (isPaginated) {
+      // 分页模式：获取总数并分页查询
+      total = await this.chatLogEntity.count({ where });
+      list = await this.chatLogEntity.find({
+        where,
+        order: { createdAt: 'DESC' },
+        take: pageSize,
+        skip: (page - 1) * pageSize,
+      });
+    } else {
+      // 非分页模式：查询所有数据（保持向后兼容）
+      list = await this.chatLogEntity.find({
+        where,
+      });
+    }
+
+    const rows = list
       .map(item => {
         const {
           prompt,
@@ -285,10 +325,19 @@ export class ChatLogService {
           completionTokens,
           totalTokens,
         } = item;
+
+        // 获取原始内容
+        let rawContent = content || (role === 'assistant' ? answer : prompt);
+
+        // 过滤掉 [图片内容:...] 这样的标记
+        if (rawContent && typeof rawContent === 'string') {
+          rawContent = rawContent.replace(/\[图片内容:[\s\S]*?\]/g, '').trim();
+        }
+
         return {
           chatId: id,
           dateTime: formatDate(createdAt),
-          content: content || (role === 'assistant' ? answer : prompt),
+          content: rawContent,
           reasoningText: reasoning_content,
           tool_calls: tool_calls,
           modelType: type,
@@ -322,6 +371,14 @@ export class ChatLogService {
         // 过滤掉 content 为空的记录
         return item.content && item.content.trim() !== '';
       });
+
+    // 如果是分页请求，返回包含 hasMore 的对象；否则返回数组（向后兼容）
+    if (isPaginated) {
+      const hasMore = page * pageSize < total;
+      return { rows, hasMore };
+    } else {
+      return rows;
+    }
   }
 
   /* 查询历史对话的列表 */

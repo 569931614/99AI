@@ -56,4 +56,72 @@ export class UserAppSettingsService {
       throw error;
     }
   }
+
+  /**
+   * 获取用户角色配置
+   * @param userId 用户ID
+   * @param appId 角色ID
+   * @returns 用户角色配置
+   */
+  async getUserAppSettings(userId: number, appId: number): Promise<UserAppSettingsEntity | null> {
+    if (!userId || !appId) return null;
+
+    try {
+      const setting = await this.userAppSettingsEntity.findOne({
+        where: { userId, appId },
+      });
+      return setting;
+    } catch (error) {
+      this.logger.error(`获取用户角色配置失败: userId=${userId}, appId=${appId}`, error.stack);
+      return null;
+    }
+  }
+
+  /**
+   * 更新用户角色配置
+   * @param userId 用户ID
+   * @param appId 角色ID
+   * @param settings 要更新的设置
+   */
+  async updateUserAppSettings(
+    userId: number,
+    appId: number,
+    settings: Partial<{
+      characterRelationships: number;
+      openingRemarks: string;
+      proactivelySend: number;
+      enablePsychologicalDesc: boolean;
+      realTime: number;
+      myName: string;
+      myProfile: string;
+    }>,
+  ): Promise<UserAppSettingsEntity> {
+    try {
+      this.logger.debug(`更新用户角色配置: userId=${userId}, appId=${appId}`);
+
+      let setting = await this.userAppSettingsEntity.findOne({
+        where: { userId, appId },
+      });
+
+      if (setting) {
+        // 更新已有记录
+        Object.assign(setting, settings);
+        await this.userAppSettingsEntity.save(setting);
+      } else {
+        // 创建新记录
+        setting = this.userAppSettingsEntity.create({
+          userId,
+          appId,
+          ...settings,
+        });
+        await this.userAppSettingsEntity.save(setting);
+      }
+
+      this.logger.debug('更新成功');
+      return setting;
+    } catch (error) {
+      this.logger.error(`更新用户角色配置失败: userId=${userId}, appId=${appId}`, error.stack);
+      throw error;
+    }
+  }
 }

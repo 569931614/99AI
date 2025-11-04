@@ -41,6 +41,7 @@ export class ChatGroupService {
       ownerNickname,
       appId,
       openingRemark,
+      backgroundImage,
     } = body; // 从请求体中提取参数
 
     // 添加日志：检查openingRemark是否被接收
@@ -85,6 +86,7 @@ export class ChatGroupService {
       ownerNickname,
       appId: appId || 0, // 保存应用ID（角色ID）
       openingRemark: openingRemark || '', // 保存开场白
+      backgroundImage: backgroundImage || null, // 保存背景图片URL
     };
     // const params = { title: 'New chat', userId: id };
 
@@ -143,9 +145,12 @@ export class ChatGroupService {
     if (newGroup.isGroupChat && newGroup.members) {
       const members = this.parseMembers(newGroup.members);
       if (members && members.length > 0) {
-        // 获取用户头像
-        const user = await this.userEntity.findOne({ where: { id } });
-        const userAvatar = user?.avatar || null;
+        // 优先使用传递的 userAvatarUrl，否则从数据库获取用户头像
+        let userAvatar = (req as any).userAvatarUrl || null;
+        if (!userAvatar) {
+          const user = await this.userEntity.findOne({ where: { id } });
+          userAvatar = user?.avatar || null;
+        }
         await this.generateGroupAvatar(newGroup.id, members, userAvatar);
         // 重新查询群组以获取生成的头像URL
         const updatedGroup = await this.chatGroupEntity.findOne({ where: { id: newGroup.id } });
@@ -463,6 +468,7 @@ export class ChatGroupService {
       myName,
       myProfile,
       members,
+      backgroundImage,
     } = body;
     const { id } = req.user;
     const g = await this.chatGroupEntity.findOne({
@@ -494,6 +500,7 @@ export class ChatGroupService {
     typeof realTime !== 'undefined' && (data['realTime'] = realTime);
     typeof myName !== 'undefined' && (data['myName'] = myName);
     typeof myProfile !== 'undefined' && (data['myProfile'] = myProfile);
+    typeof backgroundImage !== 'undefined' && (data['backgroundImage'] = backgroundImage);
 
     // 处理 members 参数 - 如果传入则完整替换
     if (members && Array.isArray(members)) {
@@ -504,11 +511,110 @@ export class ChatGroupService {
 
     const u = await this.chatGroupEntity.update({ id: groupId }, data);
     if (u.affected) {
-      // 如果更新了成员列表，重新生成群组头像
+      // 如果更新了成员列表，处理开场白
       if (members && Array.isArray(members)) {
-        // 获取用户头像
-        const user = await this.userEntity.findOne({ where: { id } });
-        const userAvatar = user?.avatar || null;
+        // 获取旧的成员列表
+        const existingMembers = this.parseMembers(g.members);
+        const existingMemberMap = new Map(existingMembers.map(m => [m.appId, m]));
+
+        // 获取所有成员的 appId，批量查询角色信息
+        const allAppIds = members.filter(m => m.appId).map(m => m.appId);
+        const appInfos = await this.appEntity.find({ where: { id: In(allAppIds) } });
+        const appInfoMap = new Map(appInfos.map(app => [app.id, app]));
+
+        // 处理每个成员的开场白
+        for (const member of members) {
+          const existingMember = existingMemberMap.get(member.appId);
+          const appInfo = appInfoMap.get(member.appId);
+
+          // 获取角色名称和头像
+          const roleName = appInfo?.name || '角色';
+          const roleAvatar = appInfo?.coverImg || '';
+
+          if (!existingMember) {
+            // 新增的成员：添加开场白到 chatLog
+            if (member.openingRemark && member.openingRemark.trim()) {
+              console.log(`✅ 为新成员 ${member.appId} (${roleName}) 添加开场白到 chatLog`);
+              const openingChatLog = {
+                userId: id,
+                groupId: groupId,
+                appId: member.appId,
+                type: 1, // 文本类型
+                role: 'assistant', // 角色发送
+                prompt: '', // 用户输入为空
+                answer: member.openingRemark, // AI回复为开场白
+                content: member.openingRemark,
+                status: 2, // 已完成
+                model: null,
+                modelName: roleName, // 使用角色名称
+                modelAvatar: roleAvatar, // 使用角色头像
+                isDelete: false,
+                isOpeningRemark: true, // 标记为开场白
+              };
+              await this.chatLogEntity.save(openingChatLog);
+            }
+          } else {
+            // 已存在的成员：检查开场白是否有变化
+            const oldOpeningRemark = existingMember.openingRemark || '';
+            const newOpeningRemark = member.openingRemark || '';
+
+            if (oldOpeningRemark !== newOpeningRemark && newOpeningRemark.trim()) {
+              // 开场白有变化，更新 chatLog 中的开场白
+              console.log(`✅ 更新成员 ${member.appId} (${roleName}) 的开场白`);
+
+              // 查找该成员的开场白记录
+              const existingOpeningLog = await this.chatLogEntity.findOne({
+                where: {
+                  groupId: groupId,
+                  appId: member.appId,
+                  isOpeningRemark: true,
+                  isDelete: false,
+                },
+                order: { createdAt: 'ASC' }, // 获取最早的开场白记录
+              });
+
+              if (existingOpeningLog) {
+                // 更新现有的开场白记录
+                await this.chatLogEntity.update(
+                  { id: existingOpeningLog.id },
+                  {
+                    answer: newOpeningRemark,
+                    content: newOpeningRemark,
+                    modelName: roleName, // 更新角色名称
+                    modelAvatar: roleAvatar, // 更新角色头像
+                  },
+                );
+              } else {
+                // 如果没有找到开场白记录，创建一个新的
+                const openingChatLog = {
+                  userId: id,
+                  groupId: groupId,
+                  appId: member.appId,
+                  type: 1,
+                  role: 'assistant',
+                  prompt: '',
+                  answer: newOpeningRemark,
+                  content: newOpeningRemark,
+                  status: 2,
+                  model: null,
+                  modelName: roleName, // 使用角色名称
+                  modelAvatar: roleAvatar, // 使用角色头像
+                  isDelete: false,
+                  isOpeningRemark: true,
+                };
+                await this.chatLogEntity.save(openingChatLog);
+              }
+            }
+          }
+        }
+
+        // 重新生成群组头像
+        // 优先使用传递的 userAvatarUrl，否则从数据库获取用户头像
+        let userAvatar = (req as any).userAvatarUrl || null;
+        if (!userAvatar) {
+          const user = await this.userEntity.findOne({ where: { id } });
+          userAvatar = user?.avatar || null;
+        }
         await this.generateGroupAvatar(groupId, members, userAvatar);
       }
 
@@ -720,11 +826,20 @@ export class ChatGroupService {
 
     // 按照 order 排序，将开场白保存到 chatLog
     if (newMembersWithOpeningRemark.length > 0) {
+      // 获取所有新增成员的角色信息
+      const appIds = newMembersWithOpeningRemark.map(m => m.appId);
+      const appInfos = await this.appEntity.find({ where: { id: In(appIds) } });
+      const appInfoMap = new Map(appInfos.map(app => [app.id, app]));
+
       // 按 order 排序
       newMembersWithOpeningRemark.sort((a, b) => a.order - b.order);
 
       // 为每个成员创建开场白记录
       for (const member of newMembersWithOpeningRemark) {
+        const appInfo = appInfoMap.get(member.appId);
+        const roleName = appInfo?.name || `角色_${member.appId}`;
+        const roleAvatar = appInfo?.coverImg || '';
+
         // 根据 isOpeningRemark 判断该成员是否已经有开场白记录
         const existingOpeningRemark = await this.chatLogEntity.findOne({
           where: {
@@ -740,8 +855,10 @@ export class ChatGroupService {
           // 如果已存在开场白，更新内容
           existingOpeningRemark.answer = member.openingRemark;
           existingOpeningRemark.content = member.openingRemark;
+          existingOpeningRemark.modelName = roleName;
+          existingOpeningRemark.modelAvatar = roleAvatar;
           await this.chatLogEntity.save(existingOpeningRemark);
-          console.log(`✅ 更新成员 ${member.appId} 的开场白`);
+          console.log(`✅ 更新成员 ${member.appId} (${roleName}) 的开场白`);
         } else {
           // 如果不存在，创建新的开场白记录
           const openingChatLog = {
@@ -755,12 +872,13 @@ export class ChatGroupService {
             content: member.openingRemark,
             status: 2, // 已完成
             model: null,
-            modelName: null,
+            modelName: roleName, // 使用角色名称
+            modelAvatar: roleAvatar, // 使用角色头像
             isDelete: false,
             isOpeningRemark: true, // 标记为开场白
           };
           await this.chatLogEntity.save(openingChatLog);
-          console.log(`✅ 创建成员 ${member.appId} 的开场白`);
+          console.log(`✅ 创建成员 ${member.appId} (${roleName}) 的开场白`);
         }
         // 添加小延迟确保时间戳不同
         await new Promise(resolve => setTimeout(resolve, 10));
@@ -768,9 +886,12 @@ export class ChatGroupService {
     }
 
     // 生成群组拼图头像
-    // 获取用户头像
-    const user = await this.userEntity.findOne({ where: { id: userId } });
-    const userAvatar = user?.avatar || null;
+    // 优先使用传递的 userAvatarUrl，否则从数据库获取用户头像
+    let userAvatar = (req as any).userAvatarUrl || null;
+    if (!userAvatar) {
+      const user = await this.userEntity.findOne({ where: { id: userId } });
+      userAvatar = user?.avatar || null;
+    }
     await this.generateGroupAvatar(groupId, existingMembers, userAvatar);
 
     return { success: true, count: newMembers.length };
@@ -820,10 +941,13 @@ export class ChatGroupService {
     );
 
     // 重新生成群组拼图头像
-    // 获取用户头像
+    // 优先使用传递的 userAvatarUrl，否则从数据库获取用户头像
     const currentUserId = (req as any).user.id;
-    const user = await this.userEntity.findOne({ where: { id: currentUserId } });
-    const userAvatar = user?.avatar || null;
+    let userAvatar = (req as any).userAvatarUrl || null;
+    if (!userAvatar) {
+      const user = await this.userEntity.findOne({ where: { id: currentUserId } });
+      userAvatar = user?.avatar || null;
+    }
     await this.generateGroupAvatar(groupId, members, userAvatar);
 
     return true;
@@ -1098,22 +1222,28 @@ export class ChatGroupService {
         return null;
       }
 
-      // 检查成员列表是否变化（缓存优化）
-      const existingGroup = await this.chatGroupEntity.findOne({ where: { id: groupId } });
-      if (existingGroup && existingGroup.groupAvatar) {
-        const currentMemberIds = members
-          .map(m => m.appId)
-          .sort()
-          .join(',');
-        const existingMembers = this.parseMembers(existingGroup.members);
-        const existingMemberIds = existingMembers
-          .map(m => m.appId)
-          .sort()
-          .join(',');
+      // 检查是否需要重新生成头像
+      // 如果提供了用户头像，总是重新生成以确保包含用户头像
+      if (userAvatarUrl) {
+        Logger.log(`群组 ${groupId} 包含用户头像，重新生成群组头像`, 'ChatGroupService');
+      } else {
+        // 如果没有用户头像，检查成员列表是否变化（缓存优化）
+        const existingGroup = await this.chatGroupEntity.findOne({ where: { id: groupId } });
+        if (existingGroup && existingGroup.groupAvatar) {
+          // 获取当前成员信息，包括顺序
+          const currentMembers = members.map((m, idx) => `${m.appId}_${m.order || idx}`).join(',');
 
-        if (currentMemberIds === existingMemberIds) {
-          Logger.log(`群组 ${groupId} 成员未变化，跳过头像生成`, 'ChatGroupService');
-          return existingGroup.groupAvatar;
+          // 获取已存在的成员信息
+          const existingMembers = this.parseMembers(existingGroup.members);
+          const existingMembersStr = existingMembers
+            .map((m, idx) => `${m.appId}_${m.order || idx}`)
+            .join(',');
+
+          // 如果成员信息相同，跳过生成
+          if (currentMembers === existingMembersStr) {
+            Logger.log(`群组 ${groupId} 成员未变化，跳过头像生成`, 'ChatGroupService');
+            return existingGroup.groupAvatar;
+          }
         }
       }
 
@@ -1138,7 +1268,9 @@ export class ChatGroupService {
       }
 
       Logger.log(
-        `开始为群组 ${groupId} 生成拼图头像，成员数：${avatarUrls.length}${userAvatarUrl ? '，包含用户头像' : ''}`,
+        `开始为群组 ${groupId} 生成拼图头像，成员数：${avatarUrls.length}${
+          userAvatarUrl ? '，包含用户头像' : ''
+        }`,
         'ChatGroupService',
       );
 

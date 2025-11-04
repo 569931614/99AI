@@ -8,6 +8,10 @@ export class VoiceEntity extends BaseEntity {
   voiceId: string;
 
   @Index()
+  @Column({ comment: '用户ID（自定义音色时记录创建者，NULL表示系统音色）', nullable: true })
+  userId?: number;
+
+  @Index()
   @Column({ comment: '前缀（如 cosyvoice-v2 等）', nullable: true })
   prefix?: string;
 

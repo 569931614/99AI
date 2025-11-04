@@ -296,6 +296,150 @@ export class OpenChatController {
     }
   }
 
+  @Post('chat-process-sync')
+  @ApiOperation({ summary: '【开放】聊天对话非流式版本（返回完整响应）' })
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        userId: { type: 'number', description: '外部用户ID' },
+        prompt: { type: 'string', description: '用户提问内容' },
+        options: {
+          type: 'object',
+          description: '对话附加选项（可选）',
+          properties: {
+            parentMessageId: { type: 'string', description: '上一条消息ID' },
+            groupId: { type: 'number', description: '会话组ID' },
+          },
+        },
+        audioUrl: { type: 'string', description: '音频URL（可选）' },
+        imageUrl: { type: 'string', description: '图片URL（可选）' },
+        fileUrl: { type: 'string', description: '文件URL（可选）' },
+        appId: { type: 'number', description: '角色ID（可选）' },
+        model: { type: 'string', description: '模型标识（可选）' },
+      },
+      required: ['userId', 'prompt'],
+    },
+  })
+  async chatProcessSync(@Body() body: any, @Req() _req: Request) {
+    try {
+      const { userId } = body || {};
+      if (!userId) throw new HttpException('userId 必填', HttpStatus.BAD_REQUEST);
+
+      // 如果传入了音频链接，则优先进行ASR识别
+      if (body?.audioUrl) {
+        const url = body.audioUrl;
+        const resp = await axios.get(url, { responseType: 'arraybuffer' });
+        const buf: Buffer = Buffer.from(resp.data);
+        const lower = url.toLowerCase();
+        const mime = lower.endsWith('.mp3')
+          ? 'audio/mpeg'
+          : lower.endsWith('.aac')
+          ? 'audio/aac'
+          : lower.endsWith('.amr')
+          ? 'audio/amr'
+          : lower.endsWith('.ogg') || lower.endsWith('.opus')
+          ? 'audio/ogg'
+          : 'audio/wav';
+        const audioBase64 = `data:${mime};base64,${buf.toString('base64')}`;
+        const asr = await this.voiceService.asr({ audioBase64 } as any);
+        const text = (asr?.text || '').trim();
+        if (text) body.prompt = text;
+      }
+
+      if (!body?.prompt || body.prompt.trim() === '') {
+        const hasImage = !!(body as any)?.imageUrl;
+        if (!hasImage) {
+          throw new HttpException('提问信息不能为空！', HttpStatus.BAD_REQUEST);
+        }
+      }
+
+      // 用于收集流式响应的完整内容
+      let fullResponse = '';
+      let chatId: number | null = null;
+      let emotion: string | null = null;
+      let psychologicalDesc: string | null = null;
+      let audioUrl: string | null = null;
+
+      // 事件处理器存储
+      const eventHandlers: Record<string, Function[]> = {};
+
+      // 构造一个模拟的 Response 对象来拦截流式输出
+      const mockRes: any = {
+        write: (data: any) => {
+          const str = typeof data === 'string' ? data : JSON.stringify(data);
+          // 去掉开头的换行符
+          const cleanStr = str.replace(/^\n+/, '');
+          const lines = cleanStr.split('\n').filter(l => l.trim());
+          for (const line of lines) {
+            try {
+              const parsed = JSON.parse(line);
+              // 累加文本内容
+              if (parsed.full_content !== undefined) {
+                fullResponse = parsed.full_content;
+              }
+              if (parsed.text) fullResponse += parsed.text;
+              // 记录其他字段
+              if (parsed.chatId !== undefined) chatId = parsed.chatId;
+              if (parsed.emotion) emotion = parsed.emotion;
+              if (parsed.psychologicalDesc) psychologicalDesc = parsed.psychologicalDesc;
+              if (parsed.audioUrl) audioUrl = parsed.audioUrl;
+            } catch (e) {
+              // 如果不是JSON，可能是纯文本
+              if (line && !line.startsWith('{')) {
+                fullResponse += line;
+              }
+            }
+          }
+        },
+        end: () => {},
+        status: () => mockRes,
+        json: () => mockRes,
+        setHeader: () => mockRes,
+        on: (event: string, handler: Function) => {
+          if (!eventHandlers[event]) {
+            eventHandlers[event] = [];
+          }
+          eventHandlers[event].push(handler);
+        },
+        emit: (event: string, ...args: any[]) => {
+          if (eventHandlers[event]) {
+            eventHandlers[event].forEach(handler => handler(...args));
+          }
+        },
+      };
+
+      // 构造伪造的 req 对象
+      const fakeReq: any = {
+        user: { id: userId, role: 'visitor' },
+        header: (name: string) => _req.header(name),
+        headers: _req.headers,
+        connection: _req.connection,
+        socket: _req.socket,
+        ip: _req.ip,
+      };
+
+      // 调用流式接口，内部会写入到 mockRes
+      await this.chatService.chatProcess(body as any, fakeReq, mockRes);
+
+      // 返回完整结果
+      return {
+        success: true,
+        data: {
+          text: fullResponse,
+          chatId,
+          emotion,
+          psychologicalDesc,
+          audioUrl,
+        },
+      };
+    } catch (e: any) {
+      const status = e instanceof HttpException ? e.getStatus() : HttpStatus.INTERNAL_SERVER_ERROR;
+      const message = e?.message || '对话处理失败';
+      throw new HttpException(message, status);
+    }
+  }
+
   @Get('affection/status')
   @ApiOperation({
     summary: '【开放】获取某用户在某app的好感度与阶段（无鉴权，需显式传 userId, appId）',

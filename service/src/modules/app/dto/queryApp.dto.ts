@@ -37,4 +37,16 @@ export class QuerAppDto {
   })
   @IsOptional()
   keyword: string;
+
+  @ApiProperty({ example: 1, description: '用户ID（传入时过滤掉已添加的角色）', required: false })
+  @IsOptional()
+  userId: number;
+
+  @ApiProperty({
+    example: '1,2,3',
+    description: '需要排除的App ID列表（逗号分隔）',
+    required: false,
+  })
+  @IsOptional()
+  excludeIds: string;
 }

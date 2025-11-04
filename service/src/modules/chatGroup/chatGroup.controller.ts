@@ -100,10 +100,30 @@ export class ChatGroupController {
   }
 
   @Post('task/update')
-  @ApiOperation({ summary: '更新成员任务' })
+  @ApiOperation({ summary: '批量更新成员任务' })
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
   updateTask(
+    @Body()
+    body: {
+      groupId: number;
+      members: Array<{
+        appId: number;
+        taskDetail?: string;
+        order?: number;
+        role?: string;
+      }>;
+    },
+    @Req() req: Request,
+  ) {
+    return this.chatGroupService.updateTask(body, req);
+  }
+
+  @Post('task/updateSingle')
+  @ApiOperation({ summary: '更新单个任务' })
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  updateSingleTask(
     @Body()
     body: {
       groupId: number;
@@ -115,7 +135,7 @@ export class ChatGroupController {
     },
     @Req() req: Request,
   ) {
-    return this.chatGroupService.updateTask(body, req);
+    return this.chatGroupService.updateSingleTask(body, req);
   }
 
   @Post('members/update')

@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Post, Query } from '@nestjs/common';
+import { Body, Controller, Get, Param, Post, Query, Req } from '@nestjs/common';
 import { ApiBody, ApiOperation, ApiParam, ApiQuery, ApiTags } from '@nestjs/swagger';
 import { VoiceService } from './voice.service';
 
@@ -17,13 +17,27 @@ export class OpenVoiceController {
     description: '按前缀过滤，例如 cosyvoice-v2',
   })
   @ApiQuery({
+    name: 'userId',
+    type: Number,
+    required: false,
+    description: '按用户ID过滤（查询用户自己的音色，NULL表示查询系统音色）',
+  })
+  @ApiQuery({
     name: 'page_index',
     type: Number,
     required: false,
     description: '页码（从1开始），默认 1',
   })
   @ApiQuery({ name: 'page_size', type: Number, required: false, description: '每页数量，默认 10' })
-  async list(@Query() query: { prefix?: string; page_index?: number; page_size?: number }) {
+  async list(
+    @Query()
+    query: {
+      prefix?: string;
+      userId?: number;
+      page_index?: number;
+      page_size?: number;
+    },
+  ) {
     // 先尝试同步一次PENDING状态，保证列表尽可能新
     try {
       await this.voiceService.syncPendingVoicesStatus();
@@ -32,6 +46,7 @@ export class OpenVoiceController {
     const pageSize = Math.max(1, Number(query?.page_size ?? 10));
     const dbQuery = {
       prefix: query?.prefix,
+      userId: query?.userId,
       page_index: pageIndexOneBased - 1, // 转为0基
       page_size: pageSize,
     } as any;
@@ -63,7 +78,8 @@ export class OpenVoiceController {
   @Post('enroll')
   @ApiOperation({
     summary: '【开放】声音复刻：创建音色（无鉴权）',
-    description: '说明：enablePreprocess 已废弃，后端始终忽略并直接使用原始音频URL。',
+    description:
+      '说明：prefix 可选，不传则后端自动生成；enablePreprocess 已废弃，后端始终忽略并直接使用原始音频URL。',
   })
   @ApiBody({
     schema: {
@@ -71,7 +87,7 @@ export class OpenVoiceController {
       properties: {
         prefix: {
           type: 'string',
-          description: '目标模型前缀（最多10个字符），如 test01、qya3 等',
+          description: '目标模型前缀（可选，不传则自动生成，最多10个字符），如 test01、qya3 等',
           maxLength: 10,
         },
         url: {
@@ -81,39 +97,47 @@ export class OpenVoiceController {
         },
         targetModel: { type: 'string', description: '具体目标模型（可选，默认 cosyvoice-v2）' },
         name: { type: 'string', description: '音色名称（可选）' },
+        userId: { type: 'number', description: '用户ID（可选，用于区分用户自定义音色）' },
         enablePreprocess: {
           type: 'boolean',
           description: '已废弃：后端忽略此参数，始终直接使用原始音频URL',
         },
       },
-      required: ['prefix', 'url'],
+      required: ['url'],
     },
     examples: {
       demo: {
         value: {
-          prefix: 'test01',
           url: 'https://example.com/sample.wav',
-          targetModel: 'cosyvoice-v2',
           name: '示例音色',
-          enablePreprocess: true,
+          userId: 123,
+          targetModel: 'cosyvoice-v2',
         },
       },
-      withoutPreprocess: {
-        value: { prefix: 'test02', url: 'https://example.com/sample.wav', enablePreprocess: false },
+      withPrefix: {
+        value: {
+          prefix: 'test01',
+          url: 'https://example.com/sample.wav',
+          name: '自定义前缀音色',
+        },
       },
     },
   })
   enroll(
+    @Req() req: Request,
     @Body()
     body: {
-      prefix: string;
+      prefix?: string;
       url: string;
       targetModel?: string;
       name?: string;
+      userId?: number;
       enablePreprocess?: boolean;
     },
   ) {
-    return this.voiceService.enroll(body);
+    // 如果前端没有传userId，尝试从req.user中获取
+    const userId = body.userId || (req as any).user?.id;
+    return this.voiceService.enroll({ ...body, userId });
   }
 
   @Post('update')

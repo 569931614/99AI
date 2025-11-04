@@ -1,13 +1,13 @@
 import { Global, Module } from '@nestjs/common';
 import { RedisCacheModule } from '../redisCache/redisCache.module';
-import { UploadController } from './upload.controller';
+import { OpenUploadController, UploadController } from './upload.controller';
 import { UploadService } from './upload.service';
 
 @Global()
 @Module({
   imports: [RedisCacheModule],
   providers: [UploadService],
-  controllers: [UploadController],
+  controllers: [UploadController, OpenUploadController],
   exports: [UploadService],
 })
 export class UploadModule {}

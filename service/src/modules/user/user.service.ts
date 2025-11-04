@@ -227,6 +227,7 @@ export class UserService {
       // 处理游客ID
       const processedId = (userId * 123 + 100000000).toString(36).toUpperCase().slice(-6);
       visitorInfo.id = processedId;
+      visitorInfo.originalId = userId; // 游客也保留原始ID（指纹ID对应的数字）
 
       // 获取游客余额
       let userBalance;
@@ -281,8 +282,9 @@ export class UserService {
     // 对id进行处理
     const processedId = (userId * 123 + 100000000).toString(36).toUpperCase().slice(-6);
 
-    // 将处理后的id放入userInfo对象中
+    // 将处理后的id放入userInfo对象中，同时保留原始ID
     userInfo.id = processedId;
+    userInfo.originalId = userId; // 保留原始数字ID，用于需要真实userId的接口
 
     return { userInfo, userBalance: { ...userBalance } };
   }

@@ -29,6 +29,7 @@ export function fetchUpdateGroupAPI<T>(data?: {
   isSticky?: boolean
   config?: string
   fileUrl?: string
+  userId?: number
 }): Promise<T> {
   return post<T>({
     url: '/group/update',
@@ -61,6 +62,7 @@ export function fetchGroupAddMemberAPI<T>(data: {
   order?: number
   appId?: number
   appName?: string
+  openingRemark?: string
 }): Promise<T> {
   return post<T>({ url: '/group/members/add', data })
 }
@@ -105,6 +107,7 @@ export function fetchGroupUpdateMemberAPI<T>(data: {
   order?: number
   appId?: number
   appName?: string
+  openingRemark?: string
 }): Promise<T> {
   return post<T>({ url: '/group/members/update', data })
 }

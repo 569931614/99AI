@@ -4,6 +4,7 @@ import { SuperAuthGuard } from '@/common/auth/superAuth.guard';
 import { Body, Controller, Get, Post, Query, Req, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { Request } from 'express';
+import { UserAppSettingsService } from '../userAppSettings/userAppSettings.service';
 import { AppService } from './app.service';
 import { CollectAppDto } from './dto/collectApp.dto';
 import { CreateAppDto } from './dto/createApp.dto';
@@ -18,7 +19,10 @@ import { UpdateCatsDto } from './dto/updateCats.dto';
 @ApiTags('app')
 @Controller('app')
 export class AppController {
-  constructor(private readonly appService: AppService) {}
+  constructor(
+    private readonly appService: AppService,
+    private readonly userAppSettingsService: UserAppSettingsService,
+  ) {}
 
   @Get('queryAppCats')
   @ApiOperation({ summary: '获取App分类列表' })
@@ -208,5 +212,35 @@ export class AppController {
   @ApiBearerAuth()
   userTogglePublic(@Body() body: { id: number }, @Req() req: Request) {
     return this.appService.userTogglePublic(body, req);
+  }
+
+  /* ========== 心理描述开关接口 ========== */
+
+  @Get('psychologicalDesc')
+  @ApiOperation({ summary: '获取用户对某角色的心理描述开关状态' })
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  async getPsychologicalDesc(@Query('appId') appId: number, @Req() req: Request) {
+    const enable = await this.userAppSettingsService.getEnablePsychologicalDesc(
+      req.user.id,
+      Number(appId),
+    );
+    return { enable };
+  }
+
+  @Post('psychologicalDesc')
+  @ApiOperation({ summary: '设置用户对某角色的心理描述开关' })
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  async setPsychologicalDesc(
+    @Body() body: { appId: number; enable: boolean },
+    @Req() req: Request,
+  ) {
+    await this.userAppSettingsService.setEnablePsychologicalDesc(
+      req.user.id,
+      body.appId,
+      body.enable,
+    );
+    return { success: true };
   }
 }

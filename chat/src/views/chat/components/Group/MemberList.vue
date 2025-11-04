@@ -8,7 +8,7 @@ import {
   fetchGroupRemoveMemberAPI,
   fetchGroupUpdateMemberAPI,
 } from '@/api/group'
-import { useChatStore, useGlobalStoreWithOut } from '@/store'
+import { useChatStore, useGlobalStoreWithOut, useAuthStore } from '@/store'
 import { message } from '@/utils/message'
 import { computed, onMounted, onUnmounted, ref, nextTick } from 'vue'
 
@@ -21,6 +21,7 @@ const ms = message()
 
 const chatStore = useChatStore()
 const useGlobalStore = useGlobalStoreWithOut()
+const authStore = useAuthStore()
 const groupList = computed(() => chatStore.groupList)
 const activeGroupId = computed(() => chatStore.active)
 const activeGroup = computed(() => groupList.value.find(g => g.uuid === activeGroupId.value))
@@ -31,9 +32,11 @@ const addUserId = ref<number | null>(null)
 const addUserName = ref('')
 const addUserRole = ref('member')
 const addUserOrder = ref<number | null>(null)
+const addOpeningRemark = ref('')
 const showInlinePicker = ref(false)
 const picking = ref(false)
 const appOptions = ref<any[]>([])
+const draggedIndex = ref<number | null>(null)
 
 // 自动对话相关状态
 const isAutoChat = ref(false)
@@ -62,6 +65,7 @@ async function saveGroupInfo() {
     await chatStore.updateGroupInfo({
       groupId: Number(activeGroupId.value),
       title: editGroupTitle.value.trim(),
+      userId: authStore.userInfo?.id,
     })
     await chatStore.queryMyGroup()
     isEditingGroupInfo.value = false
@@ -119,10 +123,12 @@ async function addMember() {
       order: addUserOrder.value == null ? undefined : Number(addUserOrder.value),
       appId: Number(addUserId.value),
       appName: addUserName.value || undefined,
+      openingRemark: addOpeningRemark.value || undefined,
     })
     addUserId.value = null
     addUserName.value = ''
     addUserOrder.value = null
+    addOpeningRemark.value = ''
     showInlinePicker.value = false
 
     await loadMembers()
@@ -163,7 +169,7 @@ async function assignTask(userId: number) {
 
 async function updateMember(
   userId: number,
-  payload: { role?: string; order?: number; name?: string }
+  payload: { role?: string; order?: number; name?: string; openingRemark?: string }
 ) {
   try {
     await fetchGroupUpdateMemberAPI({ groupId: Number(activeGroupId.value), userId, ...payload })
@@ -172,6 +178,37 @@ async function updateMember(
   } catch (error: any) {
     ms.error(error?.message || '更新失败')
   }
+}
+
+// 拖拽相关函数
+function handleDragStart(index: number) {
+  draggedIndex.value = index
+}
+
+function handleDragOver(e: DragEvent) {
+  e.preventDefault()
+}
+
+async function handleDrop(e: DragEvent, targetIndex: number) {
+  e.preventDefault()
+  if (draggedIndex.value === null || draggedIndex.value === targetIndex) return
+
+  const newMembers = [...members.value]
+  const [draggedMember] = newMembers.splice(draggedIndex.value, 1)
+  newMembers.splice(targetIndex, 0, draggedMember)
+
+  // 更新所有成员的order
+  for (let i = 0; i < newMembers.length; i++) {
+    const member = newMembers[i]
+    await updateMember(member.userId, { order: i })
+  }
+
+  draggedIndex.value = null
+  await loadMembers()
+}
+
+function handleDragEnd() {
+  draggedIndex.value = null
 }
 
 onMounted(() => {
@@ -480,6 +517,16 @@ function stopAutoChat() {
           </button>
         </div>
 
+        <!-- 开场白输入框 -->
+        <div class="w-full">
+          <textarea
+            v-model="addOpeningRemark"
+            class="input input-sm w-full min-h-[60px] resize-y"
+            placeholder="输入开场白（可选）"
+            rows="2"
+          />
+        </div>
+
         <div
           v-if="showInlinePicker"
           class="mt-2 rounded border border-gray-300 dark:border-gray-600 p-3 max-h-60 overflow-auto bg-white dark:bg-gray-900"
@@ -510,7 +557,10 @@ function stopAutoChat() {
 
     <!-- 成员列表 -->
     <div class="rounded-lg border border-gray-200 dark:border-gray-700 p-4">
-      <div class="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">群聊成员列表</div>
+      <div class="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
+        群聊成员列表
+        <span class="text-xs text-gray-500 ml-2">（可拖拽调整顺序）</span>
+      </div>
       <div v-if="loading" class="text-sm text-gray-500 text-center py-4">加载中...</div>
       <div v-else-if="!members.length" class="text-sm text-gray-500 text-center py-4">
         暂无成员，请添加应用作为群聊角色
@@ -519,11 +569,18 @@ function stopAutoChat() {
         <li
           v-for="(m, index) in members"
           :key="m.userId"
-          class="rounded-lg border border-gray-200 dark:border-gray-700 p-3 bg-white dark:bg-gray-900"
+          draggable="true"
+          @dragstart="handleDragStart(index)"
+          @dragover="handleDragOver"
+          @drop="handleDrop($event, index)"
+          @dragend="handleDragEnd"
+          class="rounded-lg border border-gray-200 dark:border-gray-700 p-3 bg-white dark:bg-gray-900 cursor-move hover:border-blue-400 transition-colors"
+          :class="{ 'opacity-50': draggedIndex === index }"
         >
           <div class="flex items-start justify-between gap-3">
             <div class="flex-1 min-w-0">
               <div class="flex items-center gap-2 mb-1">
+                <span class="text-lg cursor-grab">⋮⋮</span>
                 <span class="text-sm font-medium">{{
                   m.name || m.appName || '成员' + m.userId
                 }}</span>
@@ -571,6 +628,23 @@ function stopAutoChat() {
               "
             />
             <button class="btn btn-xs" @click="assignTask(m.userId)">分配任务</button>
+          </div>
+
+          <!-- 开场白编辑区域 -->
+          <div class="mt-2 pt-2 border-t border-gray-200 dark:border-gray-700">
+            <div class="text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">开场白</div>
+            <textarea
+              :value="m.openingRemark || ''"
+              @blur="
+                e =>
+                  updateMember(m.userId, {
+                    openingRemark: (e.target as HTMLTextAreaElement).value,
+                  })
+              "
+              class="input input-xs w-full min-h-[60px] resize-y"
+              placeholder="输入该成员的开场白（可选）"
+              rows="2"
+            />
           </div>
 
           <!-- 任务列表 -->

@@ -188,12 +188,11 @@ async function loadPsychologicalDesc() {
   try {
     psychologicalDescLoading.value = true
     const appId = Number(activeAppId.value || 0)
-    const userId = (authStore as any)?.userInfo?.id
-    if (!authStore.isLogin || !userId || !appId) {
+    if (!authStore.isLogin || !appId) {
       psychologicalDescEnabled.value = false
       return
     }
-    const res: any = await fetchGetPsychologicalDescAPI<{ enable: boolean }>({ userId, appId })
+    const res: any = await fetchGetPsychologicalDescAPI<{ enable: boolean }>({ appId })
     if (res?.enable !== undefined) {
       psychologicalDescEnabled.value = res.enable
     } else {
@@ -209,12 +208,11 @@ async function loadPsychologicalDesc() {
 async function togglePsychologicalDesc() {
   try {
     const appId = Number(activeAppId.value || 0)
-    const userId = (authStore as any)?.userInfo?.id
-    if (!userId || !appId) return
+    if (!appId) return
 
     psychologicalDescLoading.value = true
     const newValue = !psychologicalDescEnabled.value
-    await fetchSetPsychologicalDescAPI({ userId, appId, enable: newValue })
+    await fetchSetPsychologicalDescAPI({ appId, enable: newValue })
     psychologicalDescEnabled.value = newValue
   } catch (error) {
     console.error('设置心理描述开关失败:', error)
@@ -287,6 +285,7 @@ async function switchModel(option: any) {
   const params = {
     groupId: chatGroupId.value,
     config: JSON.stringify(config),
+    userId: authStore.userInfo?.id,
   }
 
   await fetchUpdateGroupAPI(params)

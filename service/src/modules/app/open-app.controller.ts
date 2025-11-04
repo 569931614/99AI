@@ -1,4 +1,14 @@
-import { Body, Controller, Delete, Get, Param, Post, Query } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  HttpException,
+  HttpStatus,
+  Param,
+  Post,
+  Query,
+} from '@nestjs/common';
 import { ApiBody, ApiOperation, ApiParam, ApiQuery, ApiTags } from '@nestjs/swagger';
 import { UserAppSettingsService } from '../userAppSettings/userAppSettings.service';
 import { AppService } from './app.service';
@@ -25,6 +35,18 @@ export class OpenAppController {
   })
   @ApiQuery({ name: 'catId', type: Number, required: false, description: '按分类ID过滤' })
   @ApiQuery({ name: 'role', type: String, required: false, description: '按角色标识过滤（可选）' })
+  @ApiQuery({
+    name: 'userId',
+    type: Number,
+    required: false,
+    description: '用户ID（传入时过滤掉已添加的角色）',
+  })
+  @ApiQuery({
+    name: 'excludeIds',
+    type: String,
+    required: false,
+    description: '排除的角色ID列表，逗号分隔（例如：1,2,3）',
+  })
   async list(
     @Query()
     query: {
@@ -34,6 +56,8 @@ export class OpenAppController {
       status?: number;
       catId?: number;
       role?: string;
+      userId?: number;
+      excludeIds?: string;
     },
   ) {
     const res: any = await this.appService.appList(undefined as any, query as any);
@@ -42,14 +66,99 @@ export class OpenAppController {
       const { preset, ...rest } = r || {};
       return rest;
     });
-    return { rows: safeRows, count: res?.count ?? safeRows.length };
+
+    // 计算是否还有更多数据
+    const page = Number(query.page) || 1;
+    const size = Number(query.size) || 10;
+    const total = res?.count ?? 0;
+    const hasMore = page * size < total;
+
+    return {
+      rows: safeRows,
+      count: total,
+      hasMore: hasMore, // 新增：是否还有更多数据
+    };
   }
 
   @Get('detail/:id')
   @ApiOperation({ summary: '【开放】获取角色详情（无鉴权）' })
   @ApiParam({ name: 'id', type: Number, description: '角色(App) ID' })
   async detail(@Param('id') id: string) {
-    return this.appService.queryOneCat({ id: Number(id) } as any);
+    const appId = Number(id);
+    if (isNaN(appId)) {
+      throw new HttpException('无效的角色ID', HttpStatus.BAD_REQUEST);
+    }
+    try {
+      return await this.appService.queryOneCat({ id: appId } as any);
+    } catch (error) {
+      // 如果角色不存在，返回更友好的错误信息
+      throw new HttpException(
+        error.message || '获取角色详情失败',
+        error.status || HttpStatus.INTERNAL_SERVER_ERROR,
+      );
+    }
+  }
+
+  @Get('my-list')
+  @ApiOperation({ summary: '【开放】获取用户自己创建的角色列表（无鉴权）' })
+  @ApiQuery({ name: 'userId', type: Number, required: true, description: '用户ID' })
+  @ApiQuery({ name: 'page', type: Number, required: false, description: '页码，默认 1' })
+  @ApiQuery({ name: 'size', type: Number, required: false, description: '每页数量，默认 10' })
+  @ApiQuery({ name: 'name', type: String, required: false, description: '按名称模糊搜索' })
+  @ApiQuery({
+    name: 'status',
+    type: Number,
+    required: false,
+    description: '状态过滤：1 启用，0 禁用',
+  })
+  async myList(
+    @Query()
+    query: {
+      userId: number;
+      page?: number;
+      size?: number;
+      name?: string;
+      status?: number;
+    },
+  ) {
+    const { userId, page = 1, size = 10, name, status } = query;
+
+    if (!userId) {
+      throw new HttpException('userId 必填', HttpStatus.BAD_REQUEST);
+    }
+
+    try {
+      const pageNum = Math.max(1, Number(page) || 1);
+      const sizeNum = Math.max(1, Math.min(100, Number(size) || 10));
+
+      // 通过 appList 方法获取用户创建的角色列表
+      const result = await this.appService.appList(
+        undefined as any,
+        {
+          page: pageNum,
+          size: sizeNum,
+          name,
+          status,
+          userId: Number(userId),
+        } as any,
+      );
+
+      return {
+        success: true,
+        data: {
+          rows: result?.rows || [],
+          count: result?.count || 0,
+          page: pageNum,
+          size: sizeNum,
+          hasMore: pageNum * sizeNum < (result?.count || 0),
+        },
+      };
+    } catch (error) {
+      throw new HttpException(
+        error.message || '获取用户角色列表失败',
+        error.status || HttpStatus.INTERNAL_SERVER_ERROR,
+      );
+    }
   }
 
   @Get('cats')

@@ -62,4 +62,28 @@ export class ChatGroupEntity extends BaseEntity {
 
   @Column({ comment: '群主在群内的昵称', nullable: true })
   ownerNickname: string;
+
+  @Column({ comment: '人物关系：0-其他，1-恋人，2-朋友', type: 'tinyint', default: 0 })
+  characterRelationships: number;
+
+  @Column({ comment: '是否主动发消息：0-否，1-是', type: 'tinyint', default: 0 })
+  proactivelySend: number;
+
+  @Column({ comment: '是否启用心理描述：0-否，1-是', type: 'tinyint', default: 0 })
+  describingMental: number;
+
+  @Column({ comment: '是否开启真实时间：0-否，1-是', type: 'tinyint', default: 0 })
+  realTime: number;
+
+  @Column({ comment: '对我的称呼', type: 'varchar', length: 100, nullable: true })
+  myName: string;
+
+  @Column({ comment: '我的简介', type: 'text', nullable: true })
+  myProfile: string;
+
+  @Column({ comment: '群组头像URL', nullable: true })
+  groupAvatar: string;
+
+  @Column({ comment: '群聊背景图片URL', nullable: true })
+  backgroundImage: string;
 }

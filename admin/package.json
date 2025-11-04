@@ -71,6 +71,7 @@
     "bumpp": "^10.1.0",
     "element-plus": "^2.9.10",
     "esno": "^4.8.0",
+    "fast-glob": "^3.3.3",
     "fs-extra": "^11.3.0",
     "http-server": "^14.1.1",
     "inquirer": "^12.6.1",

@@ -1338,7 +1338,7 @@ meta:
                 </el-form-item>
               </el-col>
               <el-col :span="12">
-                <el-form-item v-if="false" label="角色描述" prop="des">
+                <el-form-item label="角色描述" prop="des">
                   <el-input
                     v-model="formPackage.des"
                     type="textarea"

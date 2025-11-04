@@ -709,6 +709,7 @@ export class OpenAIChatService {
       enableKnowledgeBase?: boolean;
       knowledgeBaseIds?: string;
       dialogueExamples?: string;
+      openingRemark?: string; // 添加开场白参数
     },
   ): Promise<{
     text: string;
@@ -721,10 +722,7 @@ export class OpenAIChatService {
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
       try {
         if (attempt > 1) {
-          Logger.warn(
-            `星尘API第${attempt}次尝试（共${maxRetries}次）`,
-            'OpenAIChatService',
-          );
+          Logger.warn(`星尘API第${attempt}次尝试（共${maxRetries}次）`, 'OpenAIChatService');
         }
 
         const result = await this.chatFreeInternal(
@@ -745,18 +743,12 @@ export class OpenAIChatService {
         // 只对"返回内容为空"的错误进行重试
         if (errorMessage.includes('返回内容为空')) {
           if (attempt < maxRetries) {
-            Logger.warn(
-              `星尘API返回内容为空，将进行第${attempt + 1}次重试`,
-              'OpenAIChatService',
-            );
+            Logger.warn(`星尘API返回内容为空，将进行第${attempt + 1}次重试`, 'OpenAIChatService');
             // 等待一小段时间后重试（避免过快重试）
             await new Promise(resolve => setTimeout(resolve, 1000 * attempt));
             continue;
           } else {
-            Logger.error(
-              `星尘API重试${maxRetries}次后仍返回空内容，放弃重试`,
-              'OpenAIChatService',
-            );
+            Logger.error(`星尘API重试${maxRetries}次后仍返回空内容，放弃重试`, 'OpenAIChatService');
           }
         }
 
@@ -787,6 +779,7 @@ export class OpenAIChatService {
       enableKnowledgeBase?: boolean;
       knowledgeBaseIds?: string;
       dialogueExamples?: string;
+      openingRemark?: string; // 添加开场白参数
     },
   ): Promise<{
     text: string;
@@ -802,7 +795,7 @@ export class OpenAIChatService {
           if (!botContent && typeof msg.content === 'string') {
             botContent = msg.content;
           }
-          // 始终不把 system 消息放入 messages（根据星尘文档，角色预设仅放 botProfile）
+          // 始终不把 system 消息放入 messages（根据星尘文档,角色预设仅放 botProfile）
           continue;
         }
         messages.push(msg);
@@ -819,6 +812,16 @@ export class OpenAIChatService {
         const pre = typeof cfg === 'string' ? cfg : cfg?.systemPreMessage;
         if (pre) botContent = pre;
       } catch (_) {}
+    }
+
+    // 如果角色有开场白，添加到角色预设中
+    if (appConfig?.openingRemark && appConfig.openingRemark.trim()) {
+      const openingRemarkPrompt = `\n\n【角色开场白】:\n"${appConfig.openingRemark}"`;
+      botContent = (botContent || '') + openingRemarkPrompt;
+      Logger.debug(
+        `已将开场白添加到角色预设中: ${appConfig.openingRemark.substring(0, 50)}...`,
+        'OpenAIChatService',
+      );
     }
 
     // 确保 botContent 不为空（星尘API要求 botProfile.content 不能为空）

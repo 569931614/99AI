@@ -4,7 +4,7 @@ import axios from 'axios';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import { ILike, Repository } from 'typeorm';
+import { ILike, IsNull, Repository } from 'typeorm';
 import { AppEntity } from '../app/app.entity';
 import { AppEmotionVoiceEntity } from '../app/appEmotionVoice.entity';
 import { AppVoiceEntity } from '../app/appVoice.entity';
@@ -52,6 +52,7 @@ export class VoiceService {
 
   private async upsertVoice(partial: {
     voiceId: string;
+    userId?: number | null;
     prefix?: string | null;
     model?: string | null;
     status?: string | null;
@@ -76,15 +77,17 @@ export class VoiceService {
         ? {
             ...existing,
             ...partial,
+            // 关键修复：如果 partial 没有明确传递 userId，保留原有记录的 userId
+            userId: partial.userId !== undefined ? partial.userId : existing.userId,
             updatedAt: now,
           }
         : ({
             ...partial,
-            // 为新记录设置默认参数
-            rate: partial.rate ?? 1.0,
+            // 为新记录设置优化后的默认参数
+            rate: partial.rate ?? 0.98, // 语速稍慢，发音更清晰
             pitch: partial.pitch ?? 1.0,
-            volume: partial.volume ?? 50,
-            sampleRate: partial.sampleRate ?? 22050,
+            volume: partial.volume ?? 52, // 音量稍大，更清晰
+            sampleRate: partial.sampleRate ?? 24000, // 采样率提高，音质更好
             format: partial.format ?? 'mp3',
             createdAt: now,
             updatedAt: now,
@@ -109,6 +112,7 @@ export class VoiceService {
 
   async listFromDB(query: {
     prefix?: string;
+    userId?: number;
     page_index?: number;
     page_size?: number;
   }): Promise<{ rows: any[]; count: number }> {
@@ -117,10 +121,20 @@ export class VoiceService {
     const where: any = {};
     if (query?.prefix) where.prefix = ILike(`${query.prefix}%`);
 
+    // 处理 userId 查询条件
+    if (query?.userId !== undefined) {
+      // 如果明确传了 userId，则查询该用户的音色
+      where.userId = query.userId;
+    } else {
+      // 如果没有传 userId，则只查询官方音色（userId 为 null）
+      // 注意：TypeORM 查询 null 需要使用 IsNull()
+      where.userId = IsNull();
+    }
+
     // 检查数据库是否为空
     let count = await this.voiceRepo.count({ where });
-    if (count === 0) {
-      // 数据库为空时，直接同步全部数据
+    if (count === 0 && !query?.userId) {
+      // 数据库为空且不是查询用户音色时，直接同步全部官方数据
       try {
         await this.syncAllVoicesFromUpstream(undefined);
         count = await this.voiceRepo.count({ where });
@@ -139,10 +153,13 @@ export class VoiceService {
     });
     const mapped = rows.map(r => ({
       voice_id: r.voiceId,
+      user_id: r.userId,
       status: r.status,
       name: r.name,
       prefix: r.prefix,
       model: r.model,
+      rate: r.rate,
+      pitch: r.pitch,
     }));
     return { rows: mapped, count };
   }
@@ -471,26 +488,52 @@ export class VoiceService {
   }
 
   async enroll(body: {
-    prefix: string;
+    prefix?: string;
     url: string;
     targetModel?: string;
     name?: string;
+    userId?: number;
     enablePreprocess?: boolean;
   }) {
     try {
       Logger.log(`[enroll] 收到请求: ${JSON.stringify(body)}`, 'VoiceService');
 
-      const { prefix, url } = body;
+      const { url } = body;
       const targetModel = body.targetModel || (await this.getDefaultModel());
+
+      // 如果没有提供 prefix，自动生成一个随机的 prefix
+      let prefix = body.prefix;
+      if (!prefix) {
+        // 生成格式：video{userId}，例如 video16、video123
+        const userId = body.userId || 0;
+        prefix = `video${userId}`;
+        Logger.log(`[enroll] 自动生成 prefix: ${prefix}`, 'VoiceService');
+      }
 
       Logger.log(
         `[enroll] 参数验证: prefix=${prefix}, url=${url}, targetModel=${targetModel}`,
         'VoiceService',
       );
 
-      if (!prefix || !url) {
-        Logger.error(`[enroll] 参数验证失败: prefix=${prefix}, url=${url}`, 'VoiceService');
-        throw new HttpException('prefix 与 url 为必填', HttpStatus.BAD_REQUEST);
+      if (!url) {
+        Logger.error(`[enroll] 参数验证失败: url=${url}`, 'VoiceService');
+        throw new HttpException('url 为必填', HttpStatus.BAD_REQUEST);
+      }
+
+      // 验证 prefix 格式：只允许英文字母、数字和下划线
+      const prefixRegex = /^[a-zA-Z0-9_]+$/;
+      if (!prefixRegex.test(prefix)) {
+        Logger.error(`[enroll] prefix 格式错误: ${prefix}`, 'VoiceService');
+        throw new HttpException(
+          'prefix 只能包含英文字母、数字和下划线 (只允许 a-z, A-Z, 0-9, _)',
+          HttpStatus.BAD_REQUEST,
+        );
+      }
+
+      // 验证 prefix 长度：最多10个字符
+      if (prefix.length > 10) {
+        Logger.error(`[enroll] prefix 长度超限: ${prefix}`, 'VoiceService');
+        throw new HttpException('prefix 最多10个字符', HttpStatus.BAD_REQUEST);
       }
 
       const apiKey = await this.getApiKey();
@@ -525,6 +568,7 @@ export class VoiceService {
           // 入库：便于分页与管理
           await this.upsertVoice({
             voiceId: String(voiceId),
+            userId: body?.userId || null,
             prefix: String(prefix),
             model: String(targetModel),
             status: 'PENDING',
@@ -1295,12 +1339,12 @@ export class VoiceService {
     if (!voice_id || !text)
       throw new HttpException('voice_id 与 text 必填', HttpStatus.BAD_REQUEST);
 
-    // 读取该音色的默认参数，缺省时应用
+    // 读取该音色的默认参数，缺省时应用优化后的默认值
     const saved = (await this.getVoiceParams(voice_id)) || {};
     const format = (body.format || saved.format || 'mp3') as 'mp3' | 'wav' | 'pcm';
-    const sample_rate = Number(body.sample_rate ?? saved.sample_rate ?? 22050);
-    const volume = Number(body.volume ?? saved.volume ?? 50);
-    const rate = Number(body.rate ?? saved.rate ?? 1);
+    const sample_rate = Number(body.sample_rate ?? saved.sample_rate ?? 24000); // 采样率提高
+    const volume = Number(body.volume ?? saved.volume ?? 52); // 音量稍大
+    const rate = Number(body.rate ?? saved.rate ?? 0.98); // 语速稍慢，发音更清晰
     const pitch = Number(body.pitch ?? saved.pitch ?? 1);
 
     // 强制使用与复刻相同的模型：从 voice_id 推断模型；若无法推断，再退回到前端传参或默认模型
@@ -1472,9 +1516,9 @@ export class VoiceService {
 
     const saved = (await this.getVoiceParams(voice_id)) || {};
     const format = (body.format || saved.format || 'mp3') as 'mp3' | 'wav' | 'pcm';
-    const sample_rate = Number(body.sample_rate ?? saved.sample_rate ?? 22050);
-    const volume = Number(body.volume ?? saved.volume ?? 50);
-    const rate = Number(body.rate ?? saved.rate ?? 1);
+    const sample_rate = Number(body.sample_rate ?? saved.sample_rate ?? 24000); // 采样率提高
+    const volume = Number(body.volume ?? saved.volume ?? 52); // 音量稍大
+    const rate = Number(body.rate ?? saved.rate ?? 0.98); // 语速稍慢，发音更清晰
     const pitch = Number(body.pitch ?? saved.pitch ?? 1);
 
     // 依据 voice_id 推断默认模型
@@ -1624,9 +1668,9 @@ export class VoiceService {
 
     const saved = (await this.getVoiceParams(voice_id)) || {};
     const format = (params.format || saved.format || 'mp3') as 'mp3' | 'wav' | 'pcm';
-    const sample_rate = Number(params.sample_rate ?? saved.sample_rate ?? 22050);
-    const volume = Number(params.volume ?? saved.volume ?? 50);
-    const rate = Number(params.rate ?? saved.rate ?? 1);
+    const sample_rate = Number(params.sample_rate ?? saved.sample_rate ?? 24000); // 采样率提高
+    const volume = Number(params.volume ?? saved.volume ?? 52); // 音量稍大
+    const rate = Number(params.rate ?? saved.rate ?? 0.98); // 语速稍慢，发音更清晰
     const pitch = Number(params.pitch ?? saved.pitch ?? 1);
     const instruction = params.instruction || '';
 

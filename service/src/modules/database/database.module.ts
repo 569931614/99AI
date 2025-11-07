@@ -33,6 +33,7 @@ import { UserBalanceEntity } from '../userBalance/userBalance.entity';
 import { UserAppSettingsEntity } from '../userAppSettings/userAppSettings.entity';
 import { VerificationEntity } from '../verification/verification.entity';
 import { VoiceEntity } from '../voice/voice.entity';
+import { VoiceCategoryEntity } from '../voice/voiceCategory.entity';
 
 @Module({
   imports: [
@@ -74,6 +75,7 @@ import { VoiceEntity } from '../voice/voice.entity';
             RoleEmotionEntity,
             AppEmotionVoiceEntity,
             VoiceEntity,
+            VoiceCategoryEntity,
             AffectionRuleEntity,
             UserAppAffectionEntity,
             ConversationSummaryEntity,

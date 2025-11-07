@@ -81,4 +81,7 @@ export class UserEntity extends BaseEntity {
 
   @Column({ comment: '身份证号', nullable: true })
   idCard: string;
+
+  @Column({ length: 500, nullable: true, comment: '用户简介' })
+  bio: string;
 }

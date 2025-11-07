@@ -1,13 +1,25 @@
 import { Body, Controller, Get, Param, Post, Query, Req } from '@nestjs/common';
 import { ApiBody, ApiOperation, ApiParam, ApiQuery, ApiTags } from '@nestjs/swagger';
 import { VoiceService } from './voice.service';
+import { VoiceCategoryService } from './voiceCategory.service';
 
 @ApiTags('open-voice')
 @Controller('open/voice')
 export class OpenVoiceController {
-  constructor(private readonly voiceService: VoiceService) {}
+  constructor(
+    private readonly voiceService: VoiceService,
+    private readonly voiceCategoryService: VoiceCategoryService,
+  ) {}
 
   // 查询（读）
+  @Get('categories')
+  @ApiOperation({ summary: '【开放】获取音色分类列表（无鉴权）' })
+  async getCategories() {
+    const categories = await this.voiceCategoryService.list();
+    // 只返回启用的分类
+    return categories.filter(cat => cat.isEnabled);
+  }
+
   @Get('list')
   @ApiOperation({ summary: '【开放】查询音色列表（无鉴权，先同步PENDING状态后再返回）' })
   @ApiQuery({
@@ -23,6 +35,18 @@ export class OpenVoiceController {
     description: '按用户ID过滤（查询用户自己的音色，NULL表示查询系统音色）',
   })
   @ApiQuery({
+    name: 'category',
+    type: String,
+    required: false,
+    description: '按分类名称过滤',
+  })
+  @ApiQuery({
+    name: 'keyword',
+    type: String,
+    required: false,
+    description: '按关键词搜索音色名称',
+  })
+  @ApiQuery({
     name: 'page_index',
     type: Number,
     required: false,
@@ -34,6 +58,8 @@ export class OpenVoiceController {
     query: {
       prefix?: string;
       userId?: number;
+      category?: string;
+      keyword?: string;
       page_index?: number;
       page_size?: number;
     },
@@ -47,6 +73,8 @@ export class OpenVoiceController {
     const dbQuery = {
       prefix: query?.prefix,
       userId: query?.userId,
+      category: query?.category,
+      keyword: query?.keyword,
       page_index: pageIndexOneBased - 1, // 转为0基
       page_size: pageSize,
     } as any;

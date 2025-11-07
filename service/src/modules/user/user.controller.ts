@@ -6,6 +6,7 @@ import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { Request } from 'express';
 import { QueryAllUserDto } from './dto/queryAllUser.dto';
 import { ResetUserPassDto } from './dto/resetUserPass.dto';
+import { SyncProfileDto } from './dto/syncProfile.dto';
 import { UpdateUserDto } from './dto/updateUser.dto';
 import { UpdateUserStatusDto } from './dto/updateUserStatus.dto';
 import { UserRechargeDto } from './dto/userRecharge.dto';
@@ -62,5 +63,14 @@ export class UserController {
   @ApiBearerAuth()
   async resetUserPass(@Body() body: ResetUserPassDto) {
     return await this.userService.resetUserPass(body);
+  }
+
+  @Post('syncProfile')
+  @ApiOperation({ summary: '同步用户资料（来自cat_AI）' })
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  async syncProfile(@Body() body: SyncProfileDto, @Req() req: Request) {
+    const userId = req.user.id;
+    return await this.userService.syncProfile(userId, body.username, body.bio);
   }
 }

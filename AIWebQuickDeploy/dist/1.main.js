@@ -3,7 +3,7 @@ exports.id = 1;
 exports.ids = [1];
 exports.modules = {
 
-/***/ 4318:
+/***/ 4321:
 /***/ ((__unused_webpack_module, __webpack_exports__, __webpack_require__) => {
 
 __webpack_require__.r(__webpack_exports__);
@@ -19,7 +19,7 @@ var Endpoint;
 
 /***/ }),
 
-/***/ 4319:
+/***/ 4322:
 /***/ ((__unused_webpack_module, __webpack_exports__, __webpack_require__) => {
 
 __webpack_require__.r(__webpack_exports__);
@@ -39,7 +39,7 @@ const ENDPOINT_CONFIG_OPTIONS = {
 
 /***/ }),
 
-/***/ 4320:
+/***/ 4323:
 /***/ ((__unused_webpack_module, __webpack_exports__, __webpack_require__) => {
 
 __webpack_require__.r(__webpack_exports__);
@@ -55,7 +55,7 @@ var EndpointMode;
 
 /***/ }),
 
-/***/ 4321:
+/***/ 4324:
 /***/ ((__unused_webpack_module, __webpack_exports__, __webpack_require__) => {
 
 __webpack_require__.r(__webpack_exports__);
@@ -64,7 +64,7 @@ __webpack_require__.r(__webpack_exports__);
 /* harmony export */   ENDPOINT_MODE_CONFIG_OPTIONS: () => (/* binding */ ENDPOINT_MODE_CONFIG_OPTIONS),
 /* harmony export */   ENV_ENDPOINT_MODE_NAME: () => (/* binding */ ENV_ENDPOINT_MODE_NAME)
 /* harmony export */ });
-/* harmony import */ var _EndpointMode__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(4320);
+/* harmony import */ var _EndpointMode__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(4323);
 
 const ENV_ENDPOINT_MODE_NAME = "AWS_EC2_METADATA_SERVICE_ENDPOINT_MODE";
 const CONFIG_ENDPOINT_MODE_NAME = "ec2_metadata_service_endpoint_mode";
@@ -77,14 +77,14 @@ const ENDPOINT_MODE_CONFIG_OPTIONS = {
 
 /***/ }),
 
-/***/ 4316:
+/***/ 4319:
 /***/ ((__unused_webpack_module, __webpack_exports__, __webpack_require__) => {
 
 __webpack_require__.r(__webpack_exports__);
 /* harmony export */ __webpack_require__.d(__webpack_exports__, {
 /* harmony export */   InstanceMetadataV1FallbackError: () => (/* binding */ InstanceMetadataV1FallbackError)
 /* harmony export */ });
-/* harmony import */ var _smithy_property_provider__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(3029);
+/* harmony import */ var _smithy_property_provider__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(3032);
 
 class InstanceMetadataV1FallbackError extends _smithy_property_provider__WEBPACK_IMPORTED_MODULE_0__.CredentialsProviderError {
     tryNextLink;
@@ -99,7 +99,7 @@ class InstanceMetadataV1FallbackError extends _smithy_property_provider__WEBPACK
 
 /***/ }),
 
-/***/ 4310:
+/***/ 4313:
 /***/ ((__unused_webpack_module, __webpack_exports__, __webpack_require__) => {
 
 __webpack_require__.r(__webpack_exports__);
@@ -109,13 +109,13 @@ __webpack_require__.r(__webpack_exports__);
 /* harmony export */   ENV_CMDS_RELATIVE_URI: () => (/* binding */ ENV_CMDS_RELATIVE_URI),
 /* harmony export */   fromContainerMetadata: () => (/* binding */ fromContainerMetadata)
 /* harmony export */ });
-/* harmony import */ var _smithy_property_provider__WEBPACK_IMPORTED_MODULE_4__ = __webpack_require__(3029);
+/* harmony import */ var _smithy_property_provider__WEBPACK_IMPORTED_MODULE_4__ = __webpack_require__(3032);
 /* harmony import */ var url__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(700);
 /* harmony import */ var url__WEBPACK_IMPORTED_MODULE_0___default = /*#__PURE__*/__webpack_require__.n(url__WEBPACK_IMPORTED_MODULE_0__);
-/* harmony import */ var _remoteProvider_httpRequest__WEBPACK_IMPORTED_MODULE_5__ = __webpack_require__(4311);
-/* harmony import */ var _remoteProvider_ImdsCredentials__WEBPACK_IMPORTED_MODULE_3__ = __webpack_require__(4312);
-/* harmony import */ var _remoteProvider_RemoteProviderInit__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(4313);
-/* harmony import */ var _remoteProvider_retry__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(4314);
+/* harmony import */ var _remoteProvider_httpRequest__WEBPACK_IMPORTED_MODULE_5__ = __webpack_require__(4314);
+/* harmony import */ var _remoteProvider_ImdsCredentials__WEBPACK_IMPORTED_MODULE_3__ = __webpack_require__(4315);
+/* harmony import */ var _remoteProvider_RemoteProviderInit__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(4316);
+/* harmony import */ var _remoteProvider_retry__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(4317);
 
 
 
@@ -197,22 +197,22 @@ const getCmdsUri = async ({ logger }) => {
 
 /***/ }),
 
-/***/ 4315:
+/***/ 4318:
 /***/ ((__unused_webpack_module, __webpack_exports__, __webpack_require__) => {
 
 __webpack_require__.r(__webpack_exports__);
 /* harmony export */ __webpack_require__.d(__webpack_exports__, {
 /* harmony export */   fromInstanceMetadata: () => (/* binding */ fromInstanceMetadata)
 /* harmony export */ });
-/* harmony import */ var _smithy_node_config_provider__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(3026);
-/* harmony import */ var _smithy_property_provider__WEBPACK_IMPORTED_MODULE_3__ = __webpack_require__(3029);
-/* harmony import */ var _error_InstanceMetadataV1FallbackError__WEBPACK_IMPORTED_MODULE_4__ = __webpack_require__(4316);
-/* harmony import */ var _remoteProvider_httpRequest__WEBPACK_IMPORTED_MODULE_7__ = __webpack_require__(4311);
-/* harmony import */ var _remoteProvider_ImdsCredentials__WEBPACK_IMPORTED_MODULE_8__ = __webpack_require__(4312);
-/* harmony import */ var _remoteProvider_RemoteProviderInit__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(4313);
-/* harmony import */ var _remoteProvider_retry__WEBPACK_IMPORTED_MODULE_5__ = __webpack_require__(4314);
-/* harmony import */ var _utils_getInstanceMetadataEndpoint__WEBPACK_IMPORTED_MODULE_6__ = __webpack_require__(4317);
-/* harmony import */ var _utils_staticStabilityProvider__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(4322);
+/* harmony import */ var _smithy_node_config_provider__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(3029);
+/* harmony import */ var _smithy_property_provider__WEBPACK_IMPORTED_MODULE_3__ = __webpack_require__(3032);
+/* harmony import */ var _error_InstanceMetadataV1FallbackError__WEBPACK_IMPORTED_MODULE_4__ = __webpack_require__(4319);
+/* harmony import */ var _remoteProvider_httpRequest__WEBPACK_IMPORTED_MODULE_7__ = __webpack_require__(4314);
+/* harmony import */ var _remoteProvider_ImdsCredentials__WEBPACK_IMPORTED_MODULE_8__ = __webpack_require__(4315);
+/* harmony import */ var _remoteProvider_RemoteProviderInit__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(4316);
+/* harmony import */ var _remoteProvider_retry__WEBPACK_IMPORTED_MODULE_5__ = __webpack_require__(4317);
+/* harmony import */ var _utils_getInstanceMetadataEndpoint__WEBPACK_IMPORTED_MODULE_6__ = __webpack_require__(4320);
+/* harmony import */ var _utils_staticStabilityProvider__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(4325);
 
 
 
@@ -351,7 +351,7 @@ const getCredentialsFromProfile = async (profile, options, init) => {
 
 /***/ }),
 
-/***/ 4309:
+/***/ 4312:
 /***/ ((__unused_webpack_module, __webpack_exports__, __webpack_require__) => {
 
 __webpack_require__.r(__webpack_exports__);
@@ -368,12 +368,12 @@ __webpack_require__.r(__webpack_exports__);
 /* harmony export */   httpRequest: () => (/* reexport safe */ _remoteProvider_httpRequest__WEBPACK_IMPORTED_MODULE_3__.httpRequest),
 /* harmony export */   providerConfigFromInit: () => (/* reexport safe */ _remoteProvider_RemoteProviderInit__WEBPACK_IMPORTED_MODULE_2__.providerConfigFromInit)
 /* harmony export */ });
-/* harmony import */ var _fromContainerMetadata__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(4310);
-/* harmony import */ var _fromInstanceMetadata__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(4315);
-/* harmony import */ var _remoteProvider_RemoteProviderInit__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(4313);
-/* harmony import */ var _remoteProvider_httpRequest__WEBPACK_IMPORTED_MODULE_3__ = __webpack_require__(4311);
-/* harmony import */ var _utils_getInstanceMetadataEndpoint__WEBPACK_IMPORTED_MODULE_4__ = __webpack_require__(4317);
-/* harmony import */ var _config_Endpoint__WEBPACK_IMPORTED_MODULE_5__ = __webpack_require__(4318);
+/* harmony import */ var _fromContainerMetadata__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(4313);
+/* harmony import */ var _fromInstanceMetadata__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(4318);
+/* harmony import */ var _remoteProvider_RemoteProviderInit__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(4316);
+/* harmony import */ var _remoteProvider_httpRequest__WEBPACK_IMPORTED_MODULE_3__ = __webpack_require__(4314);
+/* harmony import */ var _utils_getInstanceMetadataEndpoint__WEBPACK_IMPORTED_MODULE_4__ = __webpack_require__(4320);
+/* harmony import */ var _config_Endpoint__WEBPACK_IMPORTED_MODULE_5__ = __webpack_require__(4321);
 
 
 
@@ -385,7 +385,7 @@ __webpack_require__.r(__webpack_exports__);
 
 /***/ }),
 
-/***/ 4312:
+/***/ 4315:
 /***/ ((__unused_webpack_module, __webpack_exports__, __webpack_require__) => {
 
 __webpack_require__.r(__webpack_exports__);
@@ -410,7 +410,7 @@ const fromImdsCredentials = (creds) => ({
 
 /***/ }),
 
-/***/ 4313:
+/***/ 4316:
 /***/ ((__unused_webpack_module, __webpack_exports__, __webpack_require__) => {
 
 __webpack_require__.r(__webpack_exports__);
@@ -426,14 +426,14 @@ const providerConfigFromInit = ({ maxRetries = DEFAULT_MAX_RETRIES, timeout = DE
 
 /***/ }),
 
-/***/ 4311:
+/***/ 4314:
 /***/ ((__unused_webpack_module, __webpack_exports__, __webpack_require__) => {
 
 __webpack_require__.r(__webpack_exports__);
 /* harmony export */ __webpack_require__.d(__webpack_exports__, {
 /* harmony export */   httpRequest: () => (/* binding */ httpRequest)
 /* harmony export */ });
-/* harmony import */ var _smithy_property_provider__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(3030);
+/* harmony import */ var _smithy_property_provider__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(3033);
 /* harmony import */ var buffer__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(719);
 /* harmony import */ var buffer__WEBPACK_IMPORTED_MODULE_0___default = /*#__PURE__*/__webpack_require__.n(buffer__WEBPACK_IMPORTED_MODULE_0__);
 /* harmony import */ var http__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(2175);
@@ -478,7 +478,7 @@ function httpRequest(options) {
 
 /***/ }),
 
-/***/ 4314:
+/***/ 4317:
 /***/ ((__unused_webpack_module, __webpack_exports__, __webpack_require__) => {
 
 __webpack_require__.r(__webpack_exports__);
@@ -496,7 +496,7 @@ const retry = (toRetry, maxRetries) => {
 
 /***/ }),
 
-/***/ 4323:
+/***/ 4326:
 /***/ ((__unused_webpack_module, __webpack_exports__, __webpack_require__) => {
 
 __webpack_require__.r(__webpack_exports__);
@@ -524,19 +524,19 @@ const getExtendedInstanceMetadataCredentials = (credentials, logger) => {
 
 /***/ }),
 
-/***/ 4317:
+/***/ 4320:
 /***/ ((__unused_webpack_module, __webpack_exports__, __webpack_require__) => {
 
 __webpack_require__.r(__webpack_exports__);
 /* harmony export */ __webpack_require__.d(__webpack_exports__, {
 /* harmony export */   getInstanceMetadataEndpoint: () => (/* binding */ getInstanceMetadataEndpoint)
 /* harmony export */ });
-/* harmony import */ var _smithy_node_config_provider__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(3026);
-/* harmony import */ var _smithy_url_parser__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(2971);
-/* harmony import */ var _config_Endpoint__WEBPACK_IMPORTED_MODULE_5__ = __webpack_require__(4318);
-/* harmony import */ var _config_EndpointConfigOptions__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(4319);
-/* harmony import */ var _config_EndpointMode__WEBPACK_IMPORTED_MODULE_4__ = __webpack_require__(4320);
-/* harmony import */ var _config_EndpointModeConfigOptions__WEBPACK_IMPORTED_MODULE_3__ = __webpack_require__(4321);
+/* harmony import */ var _smithy_node_config_provider__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(3029);
+/* harmony import */ var _smithy_url_parser__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(2974);
+/* harmony import */ var _config_Endpoint__WEBPACK_IMPORTED_MODULE_5__ = __webpack_require__(4321);
+/* harmony import */ var _config_EndpointConfigOptions__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(4322);
+/* harmony import */ var _config_EndpointMode__WEBPACK_IMPORTED_MODULE_4__ = __webpack_require__(4323);
+/* harmony import */ var _config_EndpointModeConfigOptions__WEBPACK_IMPORTED_MODULE_3__ = __webpack_require__(4324);
 
 
 
@@ -560,14 +560,14 @@ const getFromEndpointModeConfig = async () => {
 
 /***/ }),
 
-/***/ 4322:
+/***/ 4325:
 /***/ ((__unused_webpack_module, __webpack_exports__, __webpack_require__) => {
 
 __webpack_require__.r(__webpack_exports__);
 /* harmony export */ __webpack_require__.d(__webpack_exports__, {
 /* harmony export */   staticStabilityProvider: () => (/* binding */ staticStabilityProvider)
 /* harmony export */ });
-/* harmony import */ var _getExtendedInstanceMetadataCredentials__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(4323);
+/* harmony import */ var _getExtendedInstanceMetadataCredentials__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(4326);
 
 const staticStabilityProvider = (provider, options = {}) => {
     const logger = options?.logger || console;

@@ -3,19 +3,19 @@ exports.id = 6;
 exports.ids = [6];
 exports.modules = {
 
-/***/ 4358:
+/***/ 4361:
 /***/ ((__unused_webpack_module, __webpack_exports__, __webpack_require__) => {
 
 __webpack_require__.r(__webpack_exports__);
 /* harmony export */ __webpack_require__.d(__webpack_exports__, {
 /* harmony export */   fromTokenFile: () => (/* binding */ fromTokenFile)
 /* harmony export */ });
-/* harmony import */ var _aws_sdk_core_client__WEBPACK_IMPORTED_MODULE_4__ = __webpack_require__(3066);
-/* harmony import */ var _smithy_property_provider__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(3029);
-/* harmony import */ var _smithy_shared_ini_file_loader__WEBPACK_IMPORTED_MODULE_3__ = __webpack_require__(4356);
+/* harmony import */ var _aws_sdk_core_client__WEBPACK_IMPORTED_MODULE_4__ = __webpack_require__(3069);
+/* harmony import */ var _smithy_property_provider__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(3032);
+/* harmony import */ var _smithy_shared_ini_file_loader__WEBPACK_IMPORTED_MODULE_3__ = __webpack_require__(4359);
 /* harmony import */ var fs__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(673);
 /* harmony import */ var fs__WEBPACK_IMPORTED_MODULE_0___default = /*#__PURE__*/__webpack_require__.n(fs__WEBPACK_IMPORTED_MODULE_0__);
-/* harmony import */ var _fromWebToken__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(4359);
+/* harmony import */ var _fromWebToken__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(4362);
 
 
 
@@ -50,7 +50,7 @@ const fromTokenFile = (init = {}) => async () => {
 
 /***/ }),
 
-/***/ 4359:
+/***/ 4362:
 /***/ ((__unused_webpack_module, __webpack_exports__, __webpack_require__) => {
 
 __webpack_require__.r(__webpack_exports__);
@@ -62,7 +62,7 @@ const fromWebToken = (init) => async (awsIdentityProperties) => {
     const { roleArn, roleSessionName, webIdentityToken, providerId, policyArns, policy, durationSeconds } = init;
     let { roleAssumerWithWebIdentity } = init;
     if (!roleAssumerWithWebIdentity) {
-        const { getDefaultRoleAssumerWithWebIdentity } = await __webpack_require__.e(/* import() */ 11).then(__webpack_require__.bind(__webpack_require__, 4401));
+        const { getDefaultRoleAssumerWithWebIdentity } = await __webpack_require__.e(/* import() */ 11).then(__webpack_require__.bind(__webpack_require__, 4404));
         roleAssumerWithWebIdentity = getDefaultRoleAssumerWithWebIdentity({
             ...init.clientConfig,
             credentialProviderLogger: init.logger,
@@ -86,7 +86,7 @@ const fromWebToken = (init) => async (awsIdentityProperties) => {
 
 /***/ }),
 
-/***/ 4357:
+/***/ 4360:
 /***/ ((__unused_webpack_module, __webpack_exports__, __webpack_require__) => {
 
 __webpack_require__.r(__webpack_exports__);
@@ -94,23 +94,23 @@ __webpack_require__.r(__webpack_exports__);
 /* harmony export */   fromTokenFile: () => (/* reexport safe */ _fromTokenFile__WEBPACK_IMPORTED_MODULE_0__.fromTokenFile),
 /* harmony export */   fromWebToken: () => (/* reexport safe */ _fromWebToken__WEBPACK_IMPORTED_MODULE_1__.fromWebToken)
 /* harmony export */ });
-/* harmony import */ var _fromTokenFile__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(4358);
-/* harmony import */ var _fromWebToken__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(4359);
+/* harmony import */ var _fromTokenFile__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(4361);
+/* harmony import */ var _fromWebToken__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(4362);
 
 
 
 
 /***/ }),
 
-/***/ 4356:
+/***/ 4359:
 /***/ ((__unused_webpack_module, __webpack_exports__, __webpack_require__) => {
 
 __webpack_require__.r(__webpack_exports__);
 /* harmony export */ __webpack_require__.d(__webpack_exports__, {
 /* harmony export */   externalDataInterceptor: () => (/* binding */ externalDataInterceptor)
 /* harmony export */ });
-/* harmony import */ var _getSSOTokenFromFile__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(4341);
-/* harmony import */ var _slurpFile__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(3025);
+/* harmony import */ var _getSSOTokenFromFile__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(4344);
+/* harmony import */ var _slurpFile__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(3028);
 
 
 const externalDataInterceptor = {
@@ -131,7 +131,7 @@ const externalDataInterceptor = {
 
 /***/ }),
 
-/***/ 4336:
+/***/ 4339:
 /***/ ((__unused_webpack_module, __webpack_exports__, __webpack_require__) => {
 
 __webpack_require__.r(__webpack_exports__);
@@ -142,7 +142,7 @@ __webpack_require__.r(__webpack_exports__);
 /* harmony import */ var crypto__WEBPACK_IMPORTED_MODULE_0___default = /*#__PURE__*/__webpack_require__.n(crypto__WEBPACK_IMPORTED_MODULE_0__);
 /* harmony import */ var path__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(674);
 /* harmony import */ var path__WEBPACK_IMPORTED_MODULE_1___default = /*#__PURE__*/__webpack_require__.n(path__WEBPACK_IMPORTED_MODULE_1__);
-/* harmony import */ var _getHomeDir__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(3022);
+/* harmony import */ var _getHomeDir__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(3025);
 
 
 
@@ -155,7 +155,7 @@ const getSSOTokenFilepath = (id) => {
 
 /***/ }),
 
-/***/ 4341:
+/***/ 4344:
 /***/ ((__unused_webpack_module, __webpack_exports__, __webpack_require__) => {
 
 __webpack_require__.r(__webpack_exports__);
@@ -165,7 +165,7 @@ __webpack_require__.r(__webpack_exports__);
 /* harmony export */ });
 /* harmony import */ var fs__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(673);
 /* harmony import */ var fs__WEBPACK_IMPORTED_MODULE_0___default = /*#__PURE__*/__webpack_require__.n(fs__WEBPACK_IMPORTED_MODULE_0__);
-/* harmony import */ var _getSSOTokenFilepath__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(4336);
+/* harmony import */ var _getSSOTokenFilepath__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(4339);
 
 
 const { readFile } = fs__WEBPACK_IMPORTED_MODULE_0__.promises;

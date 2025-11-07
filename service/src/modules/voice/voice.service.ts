@@ -115,6 +115,9 @@ export class VoiceService {
     userId?: number;
     page_index?: number;
     page_size?: number;
+    categoryId?: number;
+    category?: string;
+    keyword?: string;
   }): Promise<{ rows: any[]; count: number }> {
     const pageIndex = Math.max(0, Number(query?.page_index ?? 0));
     const pageSize = Math.max(1, Number(query?.page_size ?? 10));
@@ -129,6 +132,54 @@ export class VoiceService {
       // 如果没有传 userId，则只查询官方音色（userId 为 null）
       // 注意：TypeORM 查询 null 需要使用 IsNull()
       where.userId = IsNull();
+    }
+
+    // 处理分类查询条件（支持分类ID或分类名称）
+    let categoryFilter = null;
+    if (query?.categoryId !== undefined) {
+      if (query.categoryId === null || query.categoryId === 0) {
+        // 查询未分类的音色
+        where.categoryId = IsNull();
+      } else {
+        // 查询指定分类的音色
+        where.categoryId = query.categoryId;
+      }
+    } else if (query?.category) {
+      // 如果传入分类名称，需要先查询分类ID
+      categoryFilter = query.category;
+    }
+
+    // 处理关键词搜索
+    if (query?.keyword) {
+      where.name = ILike(`%${query.keyword}%`);
+    }
+
+    // 如果有分类名称过滤，需要使用 QueryBuilder
+    if (categoryFilter) {
+      const queryBuilder = this.voiceRepo
+        .createQueryBuilder('voice')
+        .leftJoinAndSelect('voice.category', 'category')
+        .where(where)
+        .andWhere('category.name = :categoryName', { categoryName: categoryFilter })
+        .orderBy('voice.id', 'DESC')
+        .skip(pageIndex * pageSize)
+        .take(pageSize);
+
+      const [rows, count] = await queryBuilder.getManyAndCount();
+      const mapped = rows.map(r => ({
+        voice_id: r.voiceId,
+        user_id: r.userId,
+        status: r.status,
+        name: r.name,
+        prefix: r.prefix,
+        model: r.model,
+        rate: r.rate,
+        pitch: r.pitch,
+        categoryId: r.categoryId,
+        category: r.category?.name,
+        categoryName: r.category?.name,
+      }));
+      return { rows: mapped, count };
     }
 
     // 检查数据库是否为空
@@ -150,6 +201,7 @@ export class VoiceService {
       order: { id: 'DESC' },
       skip: pageIndex * pageSize,
       take: pageSize,
+      relations: ['category'], // 关联查询分类信息
     });
     const mapped = rows.map(r => ({
       voice_id: r.voiceId,
@@ -160,6 +212,9 @@ export class VoiceService {
       model: r.model,
       rate: r.rate,
       pitch: r.pitch,
+      categoryId: r.categoryId,
+      category: r.category?.name, // 添加分类名称
+      categoryName: r.category?.name, // 添加分类名称（别名）
     }));
     return { rows: mapped, count };
   }
@@ -1220,6 +1275,28 @@ export class VoiceService {
     } catch (error) {
       console.error(`设置音色元信息失败: ${voice_id}`, error.message);
       throw new HttpException(`设置音色元信息失败: ${error.message}`, HttpStatus.BAD_REQUEST);
+    }
+  }
+
+  async setVoiceCategory(body: { voice_id: string; categoryId: number | null }) {
+    const { voice_id, categoryId } = body;
+    if (!voice_id) throw new HttpException('voice_id 必填', HttpStatus.BAD_REQUEST);
+
+    try {
+      const voice = await this.voiceRepo.findOne({ where: { voiceId: voice_id } });
+      if (!voice) {
+        throw new HttpException(`音色不存在: ${voice_id}`, HttpStatus.NOT_FOUND);
+      }
+
+      await this.voiceRepo.update(
+        { voiceId: voice_id },
+        { categoryId: categoryId || null, updatedAt: new Date() },
+      );
+
+      return { success: true };
+    } catch (error) {
+      console.error(`设置音色分类失败: ${voice_id}`, error.message);
+      throw new HttpException(`设置音色分类失败: ${error.message}`, HttpStatus.BAD_REQUEST);
     }
   }
 

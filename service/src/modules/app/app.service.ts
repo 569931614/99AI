@@ -218,22 +218,36 @@ export class AppService {
   }
 
   async appList(req: Request, query: QuerAppDto, orderKey = 'id') {
-    const { page = 1, size = 10, name, status, catId, role, userId, excludeIds } = query;
+    const { page = 1, size = 10, name, status, catId, role, userId, excludeIds, onlyOwn } = query;
     const pageNum = Math.max(1, Number(page) || 1);
     const sizeNum = Math.max(1, Number(size) || 10);
+
+    // 正确解析 excludeAdded 参数（处理字符串 "false"）
+    let excludeAdded: any = query.excludeAdded;
+    if (excludeAdded === undefined || excludeAdded === null) {
+      excludeAdded = true; // 默认值
+    } else if (typeof excludeAdded === 'string') {
+      excludeAdded = excludeAdded.toLowerCase() !== 'false'; // 字符串 "false" 转为 false，其他转为 true
+    } else {
+      excludeAdded = Boolean(excludeAdded); // 其他类型转为布尔值
+    }
 
     // 构建基础查询条件数组（支持OR查询）
     let baseWhere: any[] = [];
 
-    // 如果传入了 userId，限制只查询系统角色或该用户创建的角色
-    if (userId) {
+    // 如果传入了 onlyOwn=true，则只返回该 userId 创建的角色
+    if (onlyOwn && userId) {
+      baseWhere = [{ userId: Number(userId) }];
+    }
+    // 如果传入了 userId 但 onlyOwn 不为 true，限制只查询系统角色或该用户创建的角色
+    else if (userId) {
       baseWhere = [
-        { userId: IsNull() },  // 系统角色
-        { userId: Number(userId) }  // 用户自己创建的角色
+        { userId: IsNull() }, // 系统角色
+        { userId: Number(userId) }, // 用户自己创建的角色
       ];
     } else {
-      // 如果没有传入 userId，使用空对象（查询所有）
-      baseWhere = [{}];
+      // 如果没有传入 userId，只返回官方角色（系统角色）
+      baseWhere = [{ userId: IsNull() }];
     }
 
     let addedAppIds: number[] = [];
@@ -248,8 +262,9 @@ export class AppService {
         .filter(id => !isNaN(id) && id > 0);
     }
 
-    // 如果传入了 userId，查询该用户已添加的角色ID列表（用于排除）
-    if (userId) {
+    // 如果传入了 userId 且 excludeAdded=true，查询该用户已添加的角色ID列表（用于排除）
+    // 但如果 onlyOwn=true，则不过滤聊天列表中的角色，因为用户想看到所有自己创建的角色
+    if (userId && !onlyOwn && excludeAdded !== false) {
       const userGroups = await this.chatGroupEntity.find({
         where: {
           userId: Number(userId),
@@ -269,7 +284,7 @@ export class AppService {
       const apps = await this.appEntity.find();
       filteredByCategory = apps
         .filter(app => {
-          const appCatIds = app.catId.split(',');
+          const appCatIds = app.catId ? app.catId.split(',') : [];
           return appCatIds.includes(String(catId));
         })
         .map(app => app.id);
@@ -1187,10 +1202,7 @@ export class AppService {
     const { page = 1, size = 10, name, status } = query;
 
     // 构建查询条件：userId为空或等于当前用户ID
-    const baseWhere: any[] = [
-      { userId: IsNull() },
-      { userId }
-    ];
+    const baseWhere: any[] = [{ userId: IsNull() }, { userId }];
 
     // 添加额外的过滤条件
     if (name) {

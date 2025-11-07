@@ -2,6 +2,7 @@ import { Body, Controller, HttpException, HttpStatus, Post, Req, Res } from '@ne
 import { ApiBody, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { Request, Response } from 'express';
 import { ChatGroupService } from './chatGroup.service';
+import { MaobingAuthUtil } from '@/common/utils/maobing-auth.util';
 
 @ApiTags('open-chatGroup')
 @Controller('open/group')
@@ -22,6 +23,9 @@ export class OpenChatGroupController {
         ownerNickname: { type: 'string', description: '群主在群内的昵称（可选）' },
         openingRemark: { type: 'string', description: '开场白（可选，会作为第一条消息保存）' },
         backgroundImage: { type: 'string', description: '群聊背景图片URL（可选）' },
+        proactivelySend: { type: 'number', description: '是否主动发消息（0否 1是，可选）' },
+        describingMental: { type: 'number', description: '是否开启心理动作描述（0否 1是，可选）' },
+        realTime: { type: 'number', description: '是否开启真实时间（0否 1是，可选）' },
         modelConfig: {
           type: 'object',
           description: '对话模型配置项（可选，不传则使用默认配置）',
@@ -61,6 +65,9 @@ export class OpenChatGroupController {
         ownerNickname,
         openingRemark,
         backgroundImage,
+        proactivelySend,
+        describingMental,
+        realTime,
       } = body || {};
 
       // 添加日志：检查接收到的参数
@@ -70,6 +77,9 @@ export class OpenChatGroupController {
       console.log('userAvatarUrl:', userAvatarUrl);
       console.log('appId:', appId);
       console.log('openingRemark:', openingRemark);
+      console.log('proactivelySend:', proactivelySend);
+      console.log('describingMental:', describingMental);
+      console.log('realTime:', realTime);
 
       if (!userId) throw new HttpException('userId 必填', HttpStatus.BAD_REQUEST);
 
@@ -92,6 +102,9 @@ export class OpenChatGroupController {
         appId,
         openingRemark,
         userAvatarUrl,
+        proactivelySend,
+        describingMental,
+        realTime,
       });
 
       const result = await this.chatGroupService.create(
@@ -104,6 +117,9 @@ export class OpenChatGroupController {
           appId,
           openingRemark,
           backgroundImage,
+          proactivelySend,
+          describingMental,
+          realTime,
         },
         fakeReq,
       );
@@ -212,19 +228,30 @@ export class OpenChatGroupController {
   }
 
   @Post('del')
-  @ApiOperation({ summary: '【开放】删除对话组（无鉴权，需显式传 userId）' })
+  @ApiOperation({ summary: '【开放】删除对话组（可选token鉴权）' })
   @ApiBody({
     schema: {
       type: 'object',
       properties: {
-        userId: { type: 'number', description: '外部用户ID（任意数字即可，用于区分不同用户会话）' },
+        token: {
+          type: 'string',
+          description: 'Maobing平台用户token（可选，传入则会验证并获取userId）',
+        },
+        userId: { type: 'number', description: '用户ID（可选，优先使用token验证获取的userId）' },
         groupId: { type: 'number', description: '对话分组ID' },
       },
-      required: ['userId', 'groupId'],
+      required: ['groupId'],
     },
     examples: {
-      basic: {
-        summary: '删除对话组',
+      withToken: {
+        summary: '使用token删除（推荐）',
+        value: {
+          token: 'your_maobing_token_here',
+          groupId: 123,
+        },
+      },
+      withUserId: {
+        summary: '使用userId删除（兼容旧版）',
         value: {
           userId: 1001,
           groupId: 123,
@@ -234,9 +261,27 @@ export class OpenChatGroupController {
   })
   async del(@Body() body: any, @Req() _req: Request, @Res() res: Response) {
     try {
-      const { userId, groupId } = body || {};
-      if (!userId) throw new HttpException('userId 必填', HttpStatus.BAD_REQUEST);
-      if (!groupId) throw new HttpException('groupId 必填', HttpStatus.BAD_REQUEST);
+      const { token, userId: originalUserId, groupId, maobingBaseUrl } = body || {};
+
+      // 如果传了token，则验证并获取userId
+      let userId = originalUserId;
+      if (token) {
+        const validatedUserId = await MaobingAuthUtil.validateTokenAndGetUserId(
+          token,
+          maobingBaseUrl,
+        );
+        if (!validatedUserId) {
+          throw new HttpException('token 无效或已过期', HttpStatus.UNAUTHORIZED);
+        }
+        userId = validatedUserId;
+      }
+
+      if (!userId) {
+        throw new HttpException('必须提供 token 或 userId', HttpStatus.BAD_REQUEST);
+      }
+      if (!groupId) {
+        throw new HttpException('groupId 必填', HttpStatus.BAD_REQUEST);
+      }
 
       // 构造伪造的 req 对象，使用 visitor 角色跳过用户验证
       const fakeReq: any = {
@@ -954,25 +999,29 @@ export class OpenChatGroupController {
   }
 
   @Post('query-single-chats')
-  @ApiOperation({ summary: '【开放】查询单聊会话组列表（无鉴权，需显式传 userId）' })
+  @ApiOperation({ summary: '【开放】查询单聊会话组列表（可选token鉴权）' })
   @ApiBody({
     schema: {
       type: 'object',
       properties: {
-        userId: { type: 'number', description: '外部用户ID（任意数字即可，用于区分不同用户会话）' },
+        token: {
+          type: 'string',
+          description: 'Maobing平台用户token（可选，传入则会验证并获取userId）',
+        },
+        userId: { type: 'number', description: '用户ID（可选，优先使用token验证获取的userId）' },
         keyword: { type: 'string', description: '搜索关键词，用于按角色名称搜索（可选）' },
       },
-      required: ['userId'],
     },
     examples: {
-      basic: {
-        summary: '查询单聊会话组列表',
+      withToken: {
+        summary: '使用token查询（推荐）',
         value: {
-          userId: 1001,
+          token: 'your_maobing_token_here',
+          keyword: '小助手',
         },
       },
-      search: {
-        summary: '搜索单聊会话组',
+      withUserId: {
+        summary: '使用userId查询（兼容旧版）',
         value: {
           userId: 1001,
           keyword: '小助手',
@@ -985,10 +1034,25 @@ export class OpenChatGroupController {
       console.log('[querySingleChats] ===== 收到请求 =====');
       console.log('[querySingleChats] body:', JSON.stringify(body));
 
-      const { userId, keyword } = body || {};
+      const { token, userId: originalUserId, keyword, maobingBaseUrl } = body || {};
+
+      // 如果传了token，则验证并获取userId
+      let userId = originalUserId;
+      if (token) {
+        const validatedUserId = await MaobingAuthUtil.validateTokenAndGetUserId(
+          token,
+          maobingBaseUrl,
+        );
+        if (!validatedUserId) {
+          throw new HttpException('token 无效或已过期', HttpStatus.UNAUTHORIZED);
+        }
+        // 使用验证后的userId，覆盖body中的userId
+        userId = validatedUserId;
+      }
+
       if (!userId) {
-        console.log('[querySingleChats] userId为空，抛出异常');
-        throw new HttpException('userId 必填', HttpStatus.BAD_REQUEST);
+        console.log('[querySingleChats] userId和token都为空，抛出异常');
+        throw new HttpException('必须提供 token 或 userId', HttpStatus.BAD_REQUEST);
       }
 
       console.log('[querySingleChats] userId验证通过:', userId, 'keyword:', keyword);
@@ -1020,25 +1084,29 @@ export class OpenChatGroupController {
   }
 
   @Post('query-group-chats')
-  @ApiOperation({ summary: '【开放】查询群聊会话组列表（无鉴权，需显式传 userId）' })
+  @ApiOperation({ summary: '【开放】查询群聊会话组列表（可选token鉴权）' })
   @ApiBody({
     schema: {
       type: 'object',
       properties: {
-        userId: { type: 'number', description: '外部用户ID（任意数字即可，用于区分不同用户会话）' },
+        token: {
+          type: 'string',
+          description: 'Maobing平台用户token（可选，传入则会验证并获取userId）',
+        },
+        userId: { type: 'number', description: '用户ID（可选，优先使用token验证获取的userId）' },
         keyword: { type: 'string', description: '搜索关键词，用于按群组名称搜索（可选）' },
       },
-      required: ['userId'],
     },
     examples: {
-      basic: {
-        summary: '查询群聊会话组列表',
+      withToken: {
+        summary: '使用token查询（推荐）',
         value: {
-          userId: 1001,
+          token: 'your_maobing_token_here',
+          keyword: '工作群',
         },
       },
-      search: {
-        summary: '搜索群聊会话组',
+      withUserId: {
+        summary: '使用userId查询（兼容旧版）',
         value: {
           userId: 1001,
           keyword: '工作群',
@@ -1048,8 +1116,31 @@ export class OpenChatGroupController {
   })
   async queryGroupChats(@Body() body: any, @Req() _req: Request, @Res() res: Response) {
     try {
-      const { userId, keyword } = body || {};
-      if (!userId) throw new HttpException('userId 必填', HttpStatus.BAD_REQUEST);
+      console.log('[queryGroupChats] ===== 收到请求 =====');
+      console.log('[queryGroupChats] body:', JSON.stringify(body));
+
+      const { token, userId: originalUserId, keyword, maobingBaseUrl } = body || {};
+
+      // 如果传了token，则验证并获取userId
+      let userId = originalUserId;
+      if (token) {
+        const validatedUserId = await MaobingAuthUtil.validateTokenAndGetUserId(
+          token,
+          maobingBaseUrl,
+        );
+        if (!validatedUserId) {
+          throw new HttpException('token 无效或已过期', HttpStatus.UNAUTHORIZED);
+        }
+        // 使用验证后的userId，覆盖body中的userId
+        userId = validatedUserId;
+      }
+
+      if (!userId) {
+        console.log('[queryGroupChats] userId和token都为空，抛出异常');
+        throw new HttpException('必须提供 token 或 userId', HttpStatus.BAD_REQUEST);
+      }
+
+      console.log('[queryGroupChats] userId验证通过:', userId, 'keyword:', keyword);
 
       // 构造伪造的 req 对象，使用 visitor 角色跳过用户验证
       const fakeReq: any = {

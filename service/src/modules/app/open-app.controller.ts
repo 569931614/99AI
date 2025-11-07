@@ -10,6 +10,7 @@ import {
   Query,
 } from '@nestjs/common';
 import { ApiBody, ApiOperation, ApiParam, ApiQuery, ApiTags } from '@nestjs/swagger';
+import { MaobingAuthUtil } from '../../common/utils/maobing-auth.util';
 import { UserAppSettingsService } from '../userAppSettings/userAppSettings.service';
 import { AppService } from './app.service';
 
@@ -36,16 +37,28 @@ export class OpenAppController {
   @ApiQuery({ name: 'catId', type: Number, required: false, description: '按分类ID过滤' })
   @ApiQuery({ name: 'role', type: String, required: false, description: '按角色标识过滤（可选）' })
   @ApiQuery({
-    name: 'userId',
-    type: Number,
+    name: 'token',
+    type: String,
     required: false,
-    description: '用户ID（传入时过滤掉已添加的角色）',
+    description: 'Maobing平台用户token（可选，传入则会验证并获取userId）',
   })
   @ApiQuery({
     name: 'excludeIds',
     type: String,
     required: false,
     description: '排除的角色ID列表，逗号分隔（例如：1,2,3）',
+  })
+  @ApiQuery({
+    name: 'excludeAdded',
+    type: Boolean,
+    required: false,
+    description: '是否排除已添加的单聊角色（默认true，传false则不排除）',
+  })
+  @ApiQuery({
+    name: 'maobingBaseUrl',
+    type: String,
+    required: false,
+    description: 'Maobing平台基础URL（可选，用于token验证）',
   })
   async list(
     @Query()
@@ -56,11 +69,25 @@ export class OpenAppController {
       status?: number;
       catId?: number;
       role?: string;
-      userId?: number;
+      token?: string;
       excludeIds?: string;
+      excludeAdded?: boolean;
+      maobingBaseUrl?: string;
     },
   ) {
-    const res: any = await this.appService.appList(undefined as any, query as any);
+    // 如果传了token，则验证并获取userId
+    let userId: number | undefined;
+    if (query.token) {
+      userId = await MaobingAuthUtil.validateTokenAndGetUserId(query.token, query.maobingBaseUrl);
+    }
+
+    const res: any = await this.appService.appList(
+      undefined as any,
+      {
+        ...query,
+        userId,
+      } as any,
+    );
     const rows = Array.isArray(res?.rows) ? res.rows : [];
     const safeRows = rows.map((r: any) => {
       const { preset, ...rest } = r || {};

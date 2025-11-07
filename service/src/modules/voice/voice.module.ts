@@ -9,15 +9,24 @@ import { OpenVoiceController } from './open-voice.controller';
 import { VoiceController } from './voice.controller';
 import { VoiceEntity } from './voice.entity';
 import { VoiceService } from './voice.service';
+import { VoiceCategoryController } from './voiceCategory.controller';
+import { VoiceCategoryEntity } from './voiceCategory.entity';
+import { VoiceCategoryService } from './voiceCategory.service';
 
 @Module({
   imports: [
     GlobalConfigModule,
     UploadModule,
-    TypeOrmModule.forFeature([VoiceEntity, AppVoiceEntity, AppEmotionVoiceEntity, AppEntity]),
+    TypeOrmModule.forFeature([
+      VoiceEntity,
+      VoiceCategoryEntity,
+      AppVoiceEntity,
+      AppEmotionVoiceEntity,
+      AppEntity,
+    ]),
   ],
-  controllers: [VoiceController, OpenVoiceController],
-  providers: [VoiceService],
-  exports: [VoiceService],
+  controllers: [VoiceController, VoiceCategoryController, OpenVoiceController],
+  providers: [VoiceService, VoiceCategoryService],
+  exports: [VoiceService, VoiceCategoryService],
 })
 export class VoiceModule {}

@@ -52,12 +52,37 @@
 
     <el-card shadow="never">
       <template #header>
-        <span>声音列表</span>
+        <div class="flex items-center justify-between">
+          <span>声音列表</span>
+          <div class="flex gap-2 items-center">
+            <span class="text-xs text-gray-500">分类数量: {{ categories.length }}</span>
+            <el-button type="primary" @click="openCategoryManage" size="small">
+              分类管理
+            </el-button>
+          </div>
+        </div>
       </template>
       <el-table :data="voices" v-loading="loading" size="small" style="width: 100%">
         <el-table-column label="名称" width="160">
           <template #default="scope">
             <span>{{ scope.row.name || '-' }}</span>
+          </template>
+        </el-table-column>
+        <el-table-column label="分类" width="160">
+          <template #default="scope">
+            <el-select
+              v-model="scope.row.categoryId"
+              placeholder="选择分类"
+              size="small"
+              clearable
+              @change="onCategoryChange(scope.row)"
+              style="width: 140px"
+            >
+              <el-option label="未分类" :value="0" />
+              <template v-for="cat in categories" :key="cat?.id">
+                <el-option v-if="cat && cat.id" :label="cat.name" :value="cat.id" />
+              </template>
+            </el-select>
           </template>
         </el-table-column>
         <el-table-column prop="voice_id" label="Voice ID" min-width="260" />
@@ -112,6 +137,18 @@
 
       <div class="mt-3 flex items-center gap-2">
         <el-input v-model="listQuery.prefix" placeholder="按前缀过滤" style="width: 200px" />
+        <el-select
+          v-model="listQuery.categoryId"
+          placeholder="按分类过滤"
+          clearable
+          style="width: 160px"
+        >
+          <el-option label="全部" value="" />
+          <el-option label="未分类" :value="0" />
+          <template v-for="cat in categories" :key="cat?.id">
+            <el-option v-if="cat && cat.id" :label="cat.name" :value="cat.id" />
+          </template>
+        </el-select>
         <el-button @click="onSearch">查询</el-button>
         <div class="flex-1" />
         <el-pagination
@@ -337,12 +374,75 @@
         </div>
       </template>
     </el-dialog>
+
+    <!-- 分类管理对话框 -->
+    <el-dialog v-model="categoryManageDialog.visible" title="分类管理" width="800px">
+      <div class="mb-3">
+        <el-button type="primary" @click="openAddCategory">添加分类</el-button>
+      </div>
+      <el-table :data="categories" v-loading="categoryManageDialog.loading" size="small">
+        <el-table-column prop="name" label="分类名称" width="150" />
+        <el-table-column prop="description" label="描述" min-width="200" />
+        <el-table-column prop="sort" label="排序" width="100" />
+        <el-table-column label="状态" width="100">
+          <template #default="scope">
+            <el-tag :type="scope.row.isEnabled ? 'success' : 'info'" size="small">
+              {{ scope.row.isEnabled ? '启用' : '禁用' }}
+            </el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column label="操作" width="180">
+          <template #default="scope">
+            <el-button size="small" @click="openEditCategory(scope.row)">编辑</el-button>
+            <el-popconfirm title="确认删除该分类？" @confirm="onRemoveCategory(scope.row)">
+              <template #reference>
+                <el-button size="small" type="danger">删除</el-button>
+              </template>
+            </el-popconfirm>
+          </template>
+        </el-table-column>
+      </el-table>
+    </el-dialog>
+
+    <!-- 添加/编辑分类对话框 -->
+    <el-dialog
+      v-model="categoryEditDialog.visible"
+      :title="categoryEditDialog.isEdit ? '编辑分类' : '添加分类'"
+      width="500px"
+    >
+      <el-form label-width="80px">
+        <el-form-item label="分类名称">
+          <el-input v-model="categoryEditDialog.name" placeholder="如：男声、女声、童声等" />
+        </el-form-item>
+        <el-form-item label="描述">
+          <el-input
+            v-model="categoryEditDialog.description"
+            type="textarea"
+            :rows="3"
+            placeholder="分类描述（可选）"
+          />
+        </el-form-item>
+        <el-form-item label="排序">
+          <el-input-number v-model="categoryEditDialog.sort" :min="0" />
+        </el-form-item>
+        <el-form-item label="状态">
+          <el-switch v-model="categoryEditDialog.isEnabled" />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="categoryEditDialog.visible = false">取消</el-button>
+        <el-button type="primary" :loading="categoryEditDialog.saving" @click="onSaveCategory"
+          >保存</el-button
+        >
+      </template>
+    </el-dialog>
   </div>
 </template>
 
 <script setup lang="ts">
   import uploadApi from '@/api/modules/upload';
   import voiceApi from '@/api/modules/voice';
+  import voiceCategoryApi from '@/api/modules/voiceCategory';
   import { ElMessage } from 'element-plus';
   import { computed, onMounted, onUnmounted, reactive, ref } from 'vue';
   import { useRouter } from 'vue-router';
@@ -353,7 +453,13 @@
   const syncing = ref(false);
 
   const voices = ref<any[]>([]);
-  const listQuery = reactive<{ prefix?: string; page_index?: number; page_size?: number }>({
+  const categories = ref<any[]>([]);
+  const listQuery = reactive<{
+    prefix?: string;
+    page_index?: number;
+    page_size?: number;
+    categoryId?: number;
+  }>({
     page_index: 0,
     page_size: 10,
   });
@@ -394,6 +500,7 @@
         prefix: listQuery.prefix,
         page_index: listQuery.page_index,
         page_size: listQuery.page_size,
+        categoryId: listQuery.categoryId,
       });
       // 统一兼容返回结构（兼容 data.output.voice_list / voices），并做字段映射
       const body: any = res || {};
@@ -908,8 +1015,151 @@
 
   onMounted(() => {
     fetchList();
+    fetchCategories();
     startAutoRefresh();
   });
+
+  // 获取分类列表
+  async function fetchCategories() {
+    try {
+      console.log('正在获取分类列表...');
+      const res = await voiceCategoryApi.list();
+      console.log('分类列表响应:', res);
+
+      // 兼容多种返回格式
+      let categoryList = [];
+      if (Array.isArray(res?.data?.data)) {
+        categoryList = res.data.data;
+      } else if (Array.isArray(res?.data)) {
+        categoryList = res.data;
+      } else if (Array.isArray(res)) {
+        categoryList = res;
+      }
+
+      categories.value = categoryList;
+      console.log('分类列表已更新:', categories.value);
+      console.log('分类数量:', categories.value.length);
+    } catch (e: any) {
+      console.error('获取分类列表失败:', e);
+      console.error('错误详情:', e?.response?.data || e?.message);
+      categories.value = [];
+      // 如果是404或500错误，提示用户可能需要运行数据库迁移
+      if (e?.response?.status === 404 || e?.response?.status === 500) {
+        ElMessage.warning('分类功能暂不可用，请联系管理员检查数据库配置');
+      }
+    }
+  }
+
+  // 直接在列表中修改分类
+  async function onCategoryChange(row: any) {
+    try {
+      await voiceApi.setCategory({
+        voice_id: row.voice_id || row.id,
+        categoryId: row.categoryId,
+      });
+      ElMessage.success('已更新分类');
+    } catch (e: any) {
+      ElMessage.error(e?.message || '更新失败');
+      // 如果失败，恢复原来的值
+      await fetchList();
+    }
+  }
+
+  // 分类管理对话框 state
+  const categoryManageDialog = reactive<{
+    visible: boolean;
+    loading: boolean;
+  }>({
+    visible: false,
+    loading: false,
+  });
+
+  function openCategoryManage() {
+    categoryManageDialog.visible = true;
+    fetchCategories();
+  }
+
+  // 添加/编辑分类对话框 state
+  const categoryEditDialog = reactive<{
+    visible: boolean;
+    isEdit: boolean;
+    id?: number;
+    name: string;
+    description: string;
+    sort: number;
+    isEnabled: boolean;
+    saving: boolean;
+  }>({
+    visible: false,
+    isEdit: false,
+    name: '',
+    description: '',
+    sort: 0,
+    isEnabled: true,
+    saving: false,
+  });
+
+  function openAddCategory() {
+    categoryEditDialog.visible = true;
+    categoryEditDialog.isEdit = false;
+    categoryEditDialog.id = undefined;
+    categoryEditDialog.name = '';
+    categoryEditDialog.description = '';
+    categoryEditDialog.sort = 0;
+    categoryEditDialog.isEnabled = true;
+  }
+
+  function openEditCategory(row: any) {
+    categoryEditDialog.visible = true;
+    categoryEditDialog.isEdit = true;
+    categoryEditDialog.id = row.id;
+    categoryEditDialog.name = row.name || '';
+    categoryEditDialog.description = row.description || '';
+    categoryEditDialog.sort = row.sort || 0;
+    categoryEditDialog.isEnabled = row.isEnabled ?? true;
+  }
+
+  async function onSaveCategory() {
+    const name = String(categoryEditDialog.name || '').trim();
+    if (!name) {
+      ElMessage.warning('请输入分类名称');
+      return;
+    }
+    categoryEditDialog.saving = true;
+    try {
+      const data = {
+        name,
+        description: categoryEditDialog.description,
+        sort: categoryEditDialog.sort,
+        isEnabled: categoryEditDialog.isEnabled,
+      };
+
+      if (categoryEditDialog.isEdit && categoryEditDialog.id) {
+        await voiceCategoryApi.update(categoryEditDialog.id, data);
+        ElMessage.success('已更新分类');
+      } else {
+        await voiceCategoryApi.create(data);
+        ElMessage.success('已添加分类');
+      }
+
+      categoryEditDialog.visible = false;
+      await fetchCategories();
+    } catch (e: any) {
+      ElMessage.error(e?.message || '保存失败');
+    } finally {
+      categoryEditDialog.saving = false;
+    }
+  }
+
+  async function onRemoveCategory(row: any) {
+    try {
+      await voiceCategoryApi.remove(row.id);
+      ElMessage.success('已删除分类');
+      await fetchCategories();
+    } catch (e: any) {
+      ElMessage.error(e?.message || '删除失败');
+    }
+  }
 
   // 手动同步PENDING状态
   async function syncPendingStatus() {

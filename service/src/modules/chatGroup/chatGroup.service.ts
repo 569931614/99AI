@@ -42,6 +42,9 @@ export class ChatGroupService {
       appId,
       openingRemark,
       backgroundImage,
+      proactivelySend,
+      describingMental,
+      realTime,
     } = body; // 从请求体中提取参数
 
     // 添加日志：检查openingRemark是否被接收
@@ -51,6 +54,9 @@ export class ChatGroupService {
     console.log('openingRemark:', openingRemark);
     console.log('openingRemark类型:', typeof openingRemark);
     console.log('openingRemark是否为空:', !openingRemark);
+    console.log('proactivelySend:', proactivelySend);
+    console.log('describingMental:', describingMental);
+    console.log('realTime:', realTime);
     console.log('完整body:', JSON.stringify(body));
 
     // 尝试使用从请求体中提供的 modelConfig，否则获取默认配置
@@ -87,6 +93,9 @@ export class ChatGroupService {
       appId: appId || 0, // 保存应用ID（角色ID）
       openingRemark: openingRemark || '', // 保存开场白
       backgroundImage: backgroundImage || null, // 保存背景图片URL
+      proactivelySend: proactivelySend ?? 0, // 是否主动发消息，默认0
+      describingMental: describingMental ?? 0, // 是否开启心理动作描述，默认0
+      realTime: realTime ?? 0, // 是否开启真实时间，默认0
     };
     // const params = { title: 'New chat', userId: id };
 

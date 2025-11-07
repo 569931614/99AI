@@ -15,6 +15,7 @@ import { UserBalanceEntity } from '../userBalance/userBalance.entity';
 import { UserBalanceService } from '../userBalance/userBalance.service';
 import { VerificationEntity } from './../verification/verification.entity';
 import { VerificationService } from './../verification/verification.service';
+import { OpenUserController } from './open-user.controller';
 import { UserController } from './user.controller';
 import { UserEntity } from './user.entity';
 import { UserService } from './user.service';
@@ -37,7 +38,7 @@ import { UserService } from './user.service';
       AppCatsEntity,
     ]),
   ],
-  controllers: [UserController],
+  controllers: [UserController, OpenUserController],
   providers: [
     UserService,
     VerificationService,

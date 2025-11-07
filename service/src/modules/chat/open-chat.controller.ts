@@ -12,6 +12,7 @@ import {
 import { ApiBody, ApiOperation, ApiQuery, ApiTags } from '@nestjs/swagger';
 import axios from 'axios';
 import { Request, Response } from 'express';
+import { MaobingAuthUtil } from '@/common/utils/maobing-auth.util';
 import { AffectionService } from '../affection/affection.service';
 import { VoiceService } from '../voice/voice.service';
 import { ChatService } from './chat.service';
@@ -26,12 +27,16 @@ export class OpenChatController {
   ) {}
 
   @Post('chat-process')
-  @ApiOperation({ summary: '【开放】聊天对话（无鉴权，需显式传 userId；支持 audioUrl 自动ASR）' })
+  @ApiOperation({ summary: '【开放】聊天对话（可选token鉴权；支持 audioUrl 自动ASR）' })
   @ApiBody({
     schema: {
       type: 'object',
       properties: {
-        userId: { type: 'number', description: '外部用户ID（任意数字即可，用于区分不同用户会话）' },
+        token: {
+          type: 'string',
+          description: 'Maobing平台用户token（可选，传入则会验证并获取userId）',
+        },
+        userId: { type: 'number', description: '用户ID（可选，优先使用token验证获取的userId）' },
         prompt: { type: 'string', description: '用户提问内容；若传 audioUrl 将自动识别为文本' },
         options: {
           type: 'object',
@@ -65,20 +70,20 @@ export class OpenChatController {
         extraParam: { type: 'object', description: '扩展参数（可选）' },
         usingPluginId: { type: 'number', description: '插件ID（可选）' },
       },
-      required: ['userId', 'prompt'],
+      required: ['prompt'],
     },
     examples: {
       basic: {
         summary: '基础对话',
         value: {
-          userId: 1001,
+          token: '2bd79433-74c1-4ccb-a44c-a5b0dfa82f19',
           prompt: '你好，请介绍一下你自己',
         },
       },
       withOptions: {
         summary: '连续对话（带上下文）',
         value: {
-          userId: 1001,
+          token: '2bd79433-74c1-4ccb-a44c-a5b0dfa82f19',
           prompt: '继续说',
           options: {
             parentMessageId: 'chatcmpl-xxxxx',
@@ -88,7 +93,7 @@ export class OpenChatController {
       withApp: {
         summary: '使用特定角色',
         value: {
-          userId: 1001,
+          token: '2bd79433-74c1-4ccb-a44c-a5b0dfa82f19',
           prompt: '你好',
           appId: 123,
         },
@@ -96,7 +101,7 @@ export class OpenChatController {
       groupChatFirst: {
         summary: '群聊模式 - 第一个成员',
         value: {
-          userId: 1001,
+          token: '2bd79433-74c1-4ccb-a44c-a5b0dfa82f19',
           prompt: '大家好，请自我介绍',
           appId: 101,
           options: {
@@ -108,7 +113,7 @@ export class OpenChatController {
       groupChatOther: {
         summary: '群聊模式 - 后续成员',
         value: {
-          userId: 1001,
+          token: '2bd79433-74c1-4ccb-a44c-a5b0dfa82f19',
           prompt: '大家好，请自我介绍',
           appId: 102,
           options: {
@@ -120,7 +125,7 @@ export class OpenChatController {
       groupChatAuto: {
         summary: '群聊自动对话 - 角色自动发言（无需用户提问）',
         value: {
-          userId: 1001,
+          token: '2bd79433-74c1-4ccb-a44c-a5b0dfa82f19',
           prompt: '',
           appId: 102,
           options: {
@@ -134,8 +139,19 @@ export class OpenChatController {
   })
   async chatProcess(@Body() body: any, @Req() _req: Request, @Res() res: Response) {
     try {
-      const { userId } = body || {};
-      if (!userId) throw new HttpException('userId 必填', HttpStatus.BAD_REQUEST);
+      const { token, userId: originalUserId } = body || {};
+
+      // 如果传了token，则验证并获取userId
+      let userId = originalUserId;
+      if (token) {
+        const validatedUserId = await MaobingAuthUtil.validateTokenAndGetUserId(token);
+        if (!validatedUserId) {
+          throw new HttpException('token 无效或已过期', HttpStatus.UNAUTHORIZED);
+        }
+        // 使用验证后的userId，覆盖body中的userId
+        userId = validatedUserId;
+        body.userId = userId;
+      }
 
       // 如果传入了音频链接，则优先进行ASR识别
       if (body?.audioUrl) {
@@ -184,21 +200,36 @@ export class OpenChatController {
   }
 
   @Post('tts-process')
-  @ApiOperation({ summary: '【开放】TTS 文字转语音（无鉴权，需显式传 userId）' })
+  @ApiOperation({ summary: '【开放】TTS 文字转语音（可选token鉴权）' })
   @ApiBody({
     schema: {
       type: 'object',
       properties: {
-        userId: { type: 'number', description: '外部用户ID（任意数字即可）' },
+        token: {
+          type: 'string',
+          description: 'Maobing平台用户token（可选，传入则会验证并获取userId）',
+        },
+        userId: { type: 'number', description: '用户ID（可选，优先使用token验证获取的userId）' },
         chatId: { type: 'number', description: '可选：继续某个会话ID' },
         prompt: { type: 'string', description: '要合成的文本' },
       },
-      required: ['userId', 'prompt'],
+      required: ['prompt'],
     },
   })
-  ttsProcess(@Body() body: any, @Req() _req: Request, @Res() res: Response) {
-    const { userId } = body || {};
-    if (!userId) throw new HttpException('userId 必填', HttpStatus.BAD_REQUEST);
+  async ttsProcess(@Body() body: any, @Req() _req: Request, @Res() res: Response) {
+    const { token, userId: originalUserId } = body || {};
+
+    // 如果传了token，则验证并获取userId
+    let userId = originalUserId;
+    if (token) {
+      const validatedUserId = await MaobingAuthUtil.validateTokenAndGetUserId(token);
+      if (!validatedUserId) {
+        throw new HttpException('token 无效或已过期', HttpStatus.UNAUTHORIZED);
+      }
+      // 使用验证后的userId
+      userId = validatedUserId;
+      body.userId = userId;
+    }
     const fakeReq: any = {
       user: { id: userId, role: 'visitor' },
       header: (name: string) => _req.header(name),
@@ -211,12 +242,16 @@ export class OpenChatController {
   }
 
   @Post('chat-process-voice')
-  @ApiOperation({ summary: '【开放】语音对话（无鉴权，需显式传 userId；audioUrl 或 audioBase64）' })
+  @ApiOperation({ summary: '【开放】语音对话（可选token鉴权；audioUrl 或 audioBase64）' })
   @ApiBody({
     schema: {
       type: 'object',
       properties: {
-        userId: { type: 'number', description: '外部用户ID（任意数字即可，用于区分不同用户会话）' },
+        token: {
+          type: 'string',
+          description: 'Maobing平台用户token（可选，传入则会验证并获取userId）',
+        },
+        userId: { type: 'number', description: '用户ID（可选，优先使用token验证获取的userId）' },
         audioUrl: { type: 'string', description: '音频URL（与 audioBase64 二选一）' },
         audioBase64: { type: 'string', description: '音频base64（与 audioUrl 二选一）' },
         model: { type: 'string', description: '使用的模型标识（可选）' },
@@ -228,13 +263,14 @@ export class OpenChatController {
         usingPluginId: { type: 'number', description: '插件ID（可选）' },
         extraParam: { type: 'object', description: '扩展参数（可选）' },
       },
-      required: ['userId'],
+      required: [],
     },
   })
   async chatProcessVoice(
     @Body()
     body: {
-      userId: number;
+      token?: string;
+      userId?: number;
       audioUrl?: string;
       audioBase64?: string;
       model?: string;
@@ -250,9 +286,21 @@ export class OpenChatController {
     @Res() res: Response,
   ) {
     try {
-      const { userId, audioUrl, audioBase64 } = body || ({} as any);
-      if (!userId) throw new HttpException('userId 必填', HttpStatus.BAD_REQUEST);
+      const { token, userId: originalUserId } = body || ({} as any);
 
+      // 如果传了token，则验证并获取userId
+      let userId = originalUserId;
+      if (token) {
+        const validatedUserId = await MaobingAuthUtil.validateTokenAndGetUserId(token);
+        if (!validatedUserId) {
+          throw new HttpException('token 无效或已过期', HttpStatus.UNAUTHORIZED);
+        }
+        // 使用验证后的userId
+        userId = validatedUserId;
+        (body as any).userId = userId;
+      }
+
+      const { audioUrl, audioBase64 } = body;
       let base64 = audioBase64;
       if (!base64 && audioUrl) {
         const url = audioUrl;
@@ -297,12 +345,16 @@ export class OpenChatController {
   }
 
   @Post('chat-process-sync')
-  @ApiOperation({ summary: '【开放】聊天对话非流式版本（返回完整响应）' })
+  @ApiOperation({ summary: '【开放】聊天对话非流式版本（可选token鉴权，返回完整响应）' })
   @ApiBody({
     schema: {
       type: 'object',
       properties: {
-        userId: { type: 'number', description: '外部用户ID' },
+        token: {
+          type: 'string',
+          description: 'Maobing平台用户token（可选，传入则会验证并获取userId）',
+        },
+        userId: { type: 'number', description: '用户ID（可选，优先使用token验证获取的userId）' },
         prompt: { type: 'string', description: '用户提问内容' },
         options: {
           type: 'object',
@@ -310,6 +362,15 @@ export class OpenChatController {
           properties: {
             parentMessageId: { type: 'string', description: '上一条消息ID' },
             groupId: { type: 'number', description: '会话组ID' },
+            isFirstMember: {
+              type: 'boolean',
+              description: '是否为第一个成员（群聊模式专用，true时保存用户消息）',
+            },
+            skipPromptInHistory: {
+              type: 'boolean',
+              description:
+                '是否跳过将prompt添加到历史（群聊顺序回复模式专用，true时基于历史对话生成回复）',
+            },
           },
         },
         audioUrl: { type: 'string', description: '音频URL（可选）' },
@@ -318,13 +379,24 @@ export class OpenChatController {
         appId: { type: 'number', description: '角色ID（可选）' },
         model: { type: 'string', description: '模型标识（可选）' },
       },
-      required: ['userId', 'prompt'],
+      required: ['prompt'],
     },
   })
   async chatProcessSync(@Body() body: any, @Req() _req: Request) {
     try {
-      const { userId } = body || {};
-      if (!userId) throw new HttpException('userId 必填', HttpStatus.BAD_REQUEST);
+      const { token, userId: originalUserId } = body || {};
+
+      // 如果传了token，则验证并获取userId
+      let userId = originalUserId;
+      if (token) {
+        const validatedUserId = await MaobingAuthUtil.validateTokenAndGetUserId(token);
+        if (!validatedUserId) {
+          throw new HttpException('token 无效或已过期', HttpStatus.UNAUTHORIZED);
+        }
+        // 使用验证后的userId
+        userId = validatedUserId;
+        body.userId = userId;
+      }
 
       // 如果传入了音频链接，则优先进行ASR识别
       if (body?.audioUrl) {
@@ -348,8 +420,11 @@ export class OpenChatController {
       }
 
       if (!body?.prompt || body.prompt.trim() === '') {
+        // 允许只发送图片（prompt为空但有imageUrl）
+        // 允许群聊顺序回复模式（skipPromptInHistory=true，角色回复上一个角色的内容）
         const hasImage = !!(body as any)?.imageUrl;
-        if (!hasImage) {
+        const isSequentialReply = body?.options?.skipPromptInHistory === true;
+        if (!hasImage && !isSequentialReply) {
           throw new HttpException('提问信息不能为空！', HttpStatus.BAD_REQUEST);
         }
       }
@@ -442,15 +517,45 @@ export class OpenChatController {
 
   @Get('affection/status')
   @ApiOperation({
-    summary: '【开放】获取某用户在某app的好感度与阶段（无鉴权，需显式传 userId, appId）',
+    summary: '【开放】获取某用户在某app的好感度与阶段（可选token鉴权）',
   })
-  @ApiQuery({ name: 'userId', type: Number, required: true })
+  @ApiQuery({
+    name: 'token',
+    type: String,
+    required: false,
+    description: 'Maobing平台用户token（可选）',
+  })
+  @ApiQuery({
+    name: 'userId',
+    type: Number,
+    required: false,
+    description: '用户ID（可选，优先使用token获取）',
+  })
   @ApiQuery({ name: 'appId', type: Number, required: true })
-  async affectionStatus(@Query('userId') userId: string, @Query('appId') appId: string) {
-    if (!userId || !appId) {
-      throw new HttpException('userId, appId 必填', HttpStatus.BAD_REQUEST);
+  async affectionStatus(
+    @Query('token') token: string,
+    @Query('userId') userId: string,
+    @Query('appId') appId: string,
+  ) {
+    if (!appId) {
+      throw new HttpException('appId 必填', HttpStatus.BAD_REQUEST);
     }
-    const data = await this.affectionService.getUserAffection(userId as any, Number(appId));
+
+    // 如果传了token，则验证并获取userId
+    let finalUserId = userId ? Number(userId) : null;
+    if (token) {
+      const validatedUserId = await MaobingAuthUtil.validateTokenAndGetUserId(token);
+      if (!validatedUserId) {
+        throw new HttpException('token 无效或已过期', HttpStatus.UNAUTHORIZED);
+      }
+      finalUserId = validatedUserId;
+    }
+
+    if (!finalUserId) {
+      throw new HttpException('请提供 token 或 userId', HttpStatus.BAD_REQUEST);
+    }
+
+    const data = await this.affectionService.getUserAffection(finalUserId as any, Number(appId));
     return { success: true, data };
   }
 }

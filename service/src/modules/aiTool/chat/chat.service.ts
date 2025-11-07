@@ -790,12 +790,18 @@ export class OpenAIChatService {
     const messages: any[] = [];
 
     if (messagesHistory && messagesHistory.length > 0) {
+      let isFirstSystemMessage = true; // 标记是否为第一条system消息
       for (const msg of messagesHistory) {
         if (msg?.role === 'system') {
-          if (!botContent && typeof msg.content === 'string') {
+          // 只有第一条system消息才用作botProfile
+          if (isFirstSystemMessage && !botContent && typeof msg.content === 'string') {
             botContent = msg.content;
+            isFirstSystemMessage = false;
+            continue; // 第一条system消息不加入messages
           }
-          // 始终不把 system 消息放入 messages（根据星尘文档,角色预设仅放 botProfile）
+          // 后续的system消息保留在messages中（作为上下文）
+          isFirstSystemMessage = false;
+          messages.push(msg);
           continue;
         }
         messages.push(msg);
@@ -922,16 +928,15 @@ export class OpenAIChatService {
         }
       }
 
-      // 4. 对话示例（Few-shot Examples）
-      // 注意：这个参数在星尘API文档中可能叫 fewShotExamples 或其他名称
-      // 需要根据实际API文档确认参数名和位置
+      // 4. 对话示例（sampleMessages）
+      // 根据星尘API文档，对话示例参数为 input.aca.sampleMessages
       if (appConfig.dialogueExamples) {
         try {
           const examples = JSON.parse(appConfig.dialogueExamples);
           if (Array.isArray(examples) && examples.length > 0) {
-            // 可能需要转换为消息格式并添加到 messages 前面，或者作为 aca 的属性
-            // 暂时添加为 fewShotExamples 属性
-            acaConfig.fewShotExamples = examples;
+            // 添加为 sampleMessages 属性（星尘API标准参数）
+            acaConfig.sampleMessages = examples;
+            Logger.debug(`已添加对话示例到星尘API请求: ${examples.length}条`, 'OpenAIChatService');
           }
         } catch (e) {
           Logger.warn(`解析对话示例失败: ${e}`, 'OpenAIChatService');

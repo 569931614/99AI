@@ -3,7 +3,7 @@ exports.id = 9;
 exports.ids = [9];
 exports.modules = {
 
-/***/ 4373:
+/***/ 4376:
 /***/ ((__unused_webpack_module, __webpack_exports__, __webpack_require__) => {
 
 __webpack_require__.r(__webpack_exports__);
@@ -11,24 +11,24 @@ __webpack_require__.r(__webpack_exports__);
 /* harmony export */   SSOClient: () => (/* binding */ SSOClient),
 /* harmony export */   __Client: () => (/* reexport safe */ _smithy_smithy_client__WEBPACK_IMPORTED_MODULE_0__.Client)
 /* harmony export */ });
-/* harmony import */ var _aws_sdk_middleware_host_header__WEBPACK_IMPORTED_MODULE_6__ = __webpack_require__(2956);
-/* harmony import */ var _aws_sdk_middleware_logger__WEBPACK_IMPORTED_MODULE_13__ = __webpack_require__(3259);
-/* harmony import */ var _aws_sdk_middleware_recursion_detection__WEBPACK_IMPORTED_MODULE_14__ = __webpack_require__(3260);
-/* harmony import */ var _aws_sdk_middleware_user_agent__WEBPACK_IMPORTED_MODULE_3__ = __webpack_require__(3231);
-/* harmony import */ var _aws_sdk_middleware_user_agent__WEBPACK_IMPORTED_MODULE_10__ = __webpack_require__(3251);
-/* harmony import */ var _smithy_config_resolver__WEBPACK_IMPORTED_MODULE_5__ = __webpack_require__(3242);
-/* harmony import */ var _smithy_core__WEBPACK_IMPORTED_MODULE_15__ = __webpack_require__(3264);
-/* harmony import */ var _smithy_core__WEBPACK_IMPORTED_MODULE_16__ = __webpack_require__(3267);
-/* harmony import */ var _smithy_core__WEBPACK_IMPORTED_MODULE_17__ = __webpack_require__(3268);
-/* harmony import */ var _smithy_middleware_content_length__WEBPACK_IMPORTED_MODULE_12__ = __webpack_require__(2957);
-/* harmony import */ var _smithy_middleware_endpoint__WEBPACK_IMPORTED_MODULE_7__ = __webpack_require__(3245);
-/* harmony import */ var _smithy_middleware_retry__WEBPACK_IMPORTED_MODULE_4__ = __webpack_require__(3202);
-/* harmony import */ var _smithy_middleware_retry__WEBPACK_IMPORTED_MODULE_11__ = __webpack_require__(3256);
-/* harmony import */ var _smithy_smithy_client__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(3240);
-/* harmony import */ var _auth_httpAuthSchemeProvider__WEBPACK_IMPORTED_MODULE_8__ = __webpack_require__(4374);
-/* harmony import */ var _endpoint_EndpointParameters__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(4367);
-/* harmony import */ var _runtimeConfig__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(4375);
-/* harmony import */ var _runtimeExtensions__WEBPACK_IMPORTED_MODULE_9__ = __webpack_require__(4381);
+/* harmony import */ var _aws_sdk_middleware_host_header__WEBPACK_IMPORTED_MODULE_6__ = __webpack_require__(2959);
+/* harmony import */ var _aws_sdk_middleware_logger__WEBPACK_IMPORTED_MODULE_13__ = __webpack_require__(3262);
+/* harmony import */ var _aws_sdk_middleware_recursion_detection__WEBPACK_IMPORTED_MODULE_14__ = __webpack_require__(3263);
+/* harmony import */ var _aws_sdk_middleware_user_agent__WEBPACK_IMPORTED_MODULE_3__ = __webpack_require__(3234);
+/* harmony import */ var _aws_sdk_middleware_user_agent__WEBPACK_IMPORTED_MODULE_10__ = __webpack_require__(3254);
+/* harmony import */ var _smithy_config_resolver__WEBPACK_IMPORTED_MODULE_5__ = __webpack_require__(3245);
+/* harmony import */ var _smithy_core__WEBPACK_IMPORTED_MODULE_15__ = __webpack_require__(3267);
+/* harmony import */ var _smithy_core__WEBPACK_IMPORTED_MODULE_16__ = __webpack_require__(3270);
+/* harmony import */ var _smithy_core__WEBPACK_IMPORTED_MODULE_17__ = __webpack_require__(3271);
+/* harmony import */ var _smithy_middleware_content_length__WEBPACK_IMPORTED_MODULE_12__ = __webpack_require__(2960);
+/* harmony import */ var _smithy_middleware_endpoint__WEBPACK_IMPORTED_MODULE_7__ = __webpack_require__(3248);
+/* harmony import */ var _smithy_middleware_retry__WEBPACK_IMPORTED_MODULE_4__ = __webpack_require__(3205);
+/* harmony import */ var _smithy_middleware_retry__WEBPACK_IMPORTED_MODULE_11__ = __webpack_require__(3259);
+/* harmony import */ var _smithy_smithy_client__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(3243);
+/* harmony import */ var _auth_httpAuthSchemeProvider__WEBPACK_IMPORTED_MODULE_8__ = __webpack_require__(4377);
+/* harmony import */ var _endpoint_EndpointParameters__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(4370);
+/* harmony import */ var _runtimeConfig__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(4378);
+/* harmony import */ var _runtimeExtensions__WEBPACK_IMPORTED_MODULE_9__ = __webpack_require__(4384);
 
 
 
@@ -81,7 +81,7 @@ class SSOClient extends _smithy_smithy_client__WEBPACK_IMPORTED_MODULE_0__.Clien
 
 /***/ }),
 
-/***/ 4382:
+/***/ 4385:
 /***/ ((__unused_webpack_module, __webpack_exports__, __webpack_require__) => {
 
 __webpack_require__.r(__webpack_exports__);
@@ -131,7 +131,7 @@ const resolveHttpAuthRuntimeConfig = (config) => {
 
 /***/ }),
 
-/***/ 4374:
+/***/ 4377:
 /***/ ((__unused_webpack_module, __webpack_exports__, __webpack_require__) => {
 
 __webpack_require__.r(__webpack_exports__);
@@ -140,9 +140,9 @@ __webpack_require__.r(__webpack_exports__);
 /* harmony export */   defaultSSOHttpAuthSchemeProvider: () => (/* binding */ defaultSSOHttpAuthSchemeProvider),
 /* harmony export */   resolveHttpAuthSchemeConfig: () => (/* binding */ resolveHttpAuthSchemeConfig)
 /* harmony export */ });
-/* harmony import */ var _aws_sdk_core__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(3065);
-/* harmony import */ var _smithy_util_middleware__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(3012);
-/* harmony import */ var _smithy_util_middleware__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(3039);
+/* harmony import */ var _aws_sdk_core__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(3068);
+/* harmony import */ var _smithy_util_middleware__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(3015);
+/* harmony import */ var _smithy_util_middleware__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(3042);
 
 
 const defaultSSOHttpAuthSchemeParametersProvider = async (config, context, input) => {
@@ -209,7 +209,7 @@ const resolveHttpAuthSchemeConfig = (config) => {
 
 /***/ }),
 
-/***/ 4366:
+/***/ 4369:
 /***/ ((__unused_webpack_module, __webpack_exports__, __webpack_require__) => {
 
 __webpack_require__.r(__webpack_exports__);
@@ -217,12 +217,12 @@ __webpack_require__.r(__webpack_exports__);
 /* harmony export */   $Command: () => (/* reexport safe */ _smithy_smithy_client__WEBPACK_IMPORTED_MODULE_0__.Command),
 /* harmony export */   GetRoleCredentialsCommand: () => (/* binding */ GetRoleCredentialsCommand)
 /* harmony export */ });
-/* harmony import */ var _smithy_middleware_endpoint__WEBPACK_IMPORTED_MODULE_3__ = __webpack_require__(3132);
-/* harmony import */ var _smithy_middleware_serde__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(3128);
-/* harmony import */ var _smithy_smithy_client__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(3116);
-/* harmony import */ var _endpoint_EndpointParameters__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(4367);
-/* harmony import */ var _models_models_0__WEBPACK_IMPORTED_MODULE_4__ = __webpack_require__(4368);
-/* harmony import */ var _protocols_Aws_restJson1__WEBPACK_IMPORTED_MODULE_5__ = __webpack_require__(4370);
+/* harmony import */ var _smithy_middleware_endpoint__WEBPACK_IMPORTED_MODULE_3__ = __webpack_require__(3135);
+/* harmony import */ var _smithy_middleware_serde__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(3131);
+/* harmony import */ var _smithy_smithy_client__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(3119);
+/* harmony import */ var _endpoint_EndpointParameters__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(4370);
+/* harmony import */ var _models_models_0__WEBPACK_IMPORTED_MODULE_4__ = __webpack_require__(4371);
+/* harmony import */ var _protocols_Aws_restJson1__WEBPACK_IMPORTED_MODULE_5__ = __webpack_require__(4373);
 
 
 
@@ -250,7 +250,7 @@ class GetRoleCredentialsCommand extends _smithy_smithy_client__WEBPACK_IMPORTED_
 
 /***/ }),
 
-/***/ 4367:
+/***/ 4370:
 /***/ ((__unused_webpack_module, __webpack_exports__, __webpack_require__) => {
 
 __webpack_require__.r(__webpack_exports__);
@@ -275,18 +275,18 @@ const commonParams = {
 
 /***/ }),
 
-/***/ 4378:
+/***/ 4381:
 /***/ ((__unused_webpack_module, __webpack_exports__, __webpack_require__) => {
 
 __webpack_require__.r(__webpack_exports__);
 /* harmony export */ __webpack_require__.d(__webpack_exports__, {
 /* harmony export */   defaultEndpointResolver: () => (/* binding */ defaultEndpointResolver)
 /* harmony export */ });
-/* harmony import */ var _aws_sdk_util_endpoints__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(2960);
-/* harmony import */ var _smithy_util_endpoints__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(3011);
-/* harmony import */ var _smithy_util_endpoints__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(2974);
-/* harmony import */ var _smithy_util_endpoints__WEBPACK_IMPORTED_MODULE_4__ = __webpack_require__(2969);
-/* harmony import */ var _ruleset__WEBPACK_IMPORTED_MODULE_3__ = __webpack_require__(4379);
+/* harmony import */ var _aws_sdk_util_endpoints__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(2963);
+/* harmony import */ var _smithy_util_endpoints__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(3014);
+/* harmony import */ var _smithy_util_endpoints__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(2977);
+/* harmony import */ var _smithy_util_endpoints__WEBPACK_IMPORTED_MODULE_4__ = __webpack_require__(2972);
+/* harmony import */ var _ruleset__WEBPACK_IMPORTED_MODULE_3__ = __webpack_require__(4382);
 
 
 
@@ -305,7 +305,7 @@ _smithy_util_endpoints__WEBPACK_IMPORTED_MODULE_4__.customEndpointFunctions.aws 
 
 /***/ }),
 
-/***/ 4379:
+/***/ 4382:
 /***/ ((__unused_webpack_module, __webpack_exports__, __webpack_require__) => {
 
 __webpack_require__.r(__webpack_exports__);
@@ -320,7 +320,7 @@ const ruleSet = _data;
 
 /***/ }),
 
-/***/ 4369:
+/***/ 4372:
 /***/ ((__unused_webpack_module, __webpack_exports__, __webpack_require__) => {
 
 __webpack_require__.r(__webpack_exports__);
@@ -328,7 +328,7 @@ __webpack_require__.r(__webpack_exports__);
 /* harmony export */   SSOServiceException: () => (/* binding */ SSOServiceException),
 /* harmony export */   __ServiceException: () => (/* reexport safe */ _smithy_smithy_client__WEBPACK_IMPORTED_MODULE_0__.ServiceException)
 /* harmony export */ });
-/* harmony import */ var _smithy_smithy_client__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(3074);
+/* harmony import */ var _smithy_smithy_client__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(3077);
 
 
 class SSOServiceException extends _smithy_smithy_client__WEBPACK_IMPORTED_MODULE_0__.ServiceException {
@@ -341,7 +341,7 @@ class SSOServiceException extends _smithy_smithy_client__WEBPACK_IMPORTED_MODULE
 
 /***/ }),
 
-/***/ 4368:
+/***/ 4371:
 /***/ ((__unused_webpack_module, __webpack_exports__, __webpack_require__) => {
 
 __webpack_require__.r(__webpack_exports__);
@@ -357,8 +357,8 @@ __webpack_require__.r(__webpack_exports__);
 /* harmony export */   TooManyRequestsException: () => (/* binding */ TooManyRequestsException),
 /* harmony export */   UnauthorizedException: () => (/* binding */ UnauthorizedException)
 /* harmony export */ });
-/* harmony import */ var _smithy_smithy_client__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(3075);
-/* harmony import */ var _SSOServiceException__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(4369);
+/* harmony import */ var _smithy_smithy_client__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(3078);
+/* harmony import */ var _SSOServiceException__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(4372);
 
 
 class InvalidRequestException extends _SSOServiceException__WEBPACK_IMPORTED_MODULE_0__.SSOServiceException {
@@ -438,7 +438,7 @@ const LogoutRequestFilterSensitiveLog = (obj) => ({
 
 /***/ }),
 
-/***/ 4370:
+/***/ 4373:
 /***/ ((__unused_webpack_module, __webpack_exports__, __webpack_require__) => {
 
 __webpack_require__.r(__webpack_exports__);
@@ -452,17 +452,17 @@ __webpack_require__.r(__webpack_exports__);
 /* harmony export */   se_ListAccountsCommand: () => (/* binding */ se_ListAccountsCommand),
 /* harmony export */   se_LogoutCommand: () => (/* binding */ se_LogoutCommand)
 /* harmony export */ });
-/* harmony import */ var _aws_sdk_core__WEBPACK_IMPORTED_MODULE_4__ = __webpack_require__(4371);
-/* harmony import */ var _smithy_core__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(3078);
-/* harmony import */ var _smithy_smithy_client__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(3081);
-/* harmony import */ var _smithy_smithy_client__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(3082);
-/* harmony import */ var _smithy_smithy_client__WEBPACK_IMPORTED_MODULE_3__ = __webpack_require__(3084);
-/* harmony import */ var _smithy_smithy_client__WEBPACK_IMPORTED_MODULE_5__ = __webpack_require__(4372);
-/* harmony import */ var _smithy_smithy_client__WEBPACK_IMPORTED_MODULE_6__ = __webpack_require__(3094);
-/* harmony import */ var _smithy_smithy_client__WEBPACK_IMPORTED_MODULE_7__ = __webpack_require__(3115);
-/* harmony import */ var _smithy_smithy_client__WEBPACK_IMPORTED_MODULE_10__ = __webpack_require__(3074);
-/* harmony import */ var _models_models_0__WEBPACK_IMPORTED_MODULE_9__ = __webpack_require__(4368);
-/* harmony import */ var _models_SSOServiceException__WEBPACK_IMPORTED_MODULE_8__ = __webpack_require__(4369);
+/* harmony import */ var _aws_sdk_core__WEBPACK_IMPORTED_MODULE_4__ = __webpack_require__(4374);
+/* harmony import */ var _smithy_core__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(3081);
+/* harmony import */ var _smithy_smithy_client__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(3084);
+/* harmony import */ var _smithy_smithy_client__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(3085);
+/* harmony import */ var _smithy_smithy_client__WEBPACK_IMPORTED_MODULE_3__ = __webpack_require__(3087);
+/* harmony import */ var _smithy_smithy_client__WEBPACK_IMPORTED_MODULE_5__ = __webpack_require__(4375);
+/* harmony import */ var _smithy_smithy_client__WEBPACK_IMPORTED_MODULE_6__ = __webpack_require__(3097);
+/* harmony import */ var _smithy_smithy_client__WEBPACK_IMPORTED_MODULE_7__ = __webpack_require__(3118);
+/* harmony import */ var _smithy_smithy_client__WEBPACK_IMPORTED_MODULE_10__ = __webpack_require__(3077);
+/* harmony import */ var _models_models_0__WEBPACK_IMPORTED_MODULE_9__ = __webpack_require__(4371);
+/* harmony import */ var _models_SSOServiceException__WEBPACK_IMPORTED_MODULE_8__ = __webpack_require__(4372);
 
 
 
@@ -677,32 +677,32 @@ const _xasbt = "x-amz-sso_bearer_token";
 
 /***/ }),
 
-/***/ 4375:
+/***/ 4378:
 /***/ ((__unused_webpack_module, __webpack_exports__, __webpack_require__) => {
 
 __webpack_require__.r(__webpack_exports__);
 /* harmony export */ __webpack_require__.d(__webpack_exports__, {
 /* harmony export */   getRuntimeConfig: () => (/* binding */ getRuntimeConfig)
 /* harmony export */ });
-/* harmony import */ var _package_json__WEBPACK_IMPORTED_MODULE_9__ = __webpack_require__(4376);
-/* harmony import */ var _aws_sdk_core__WEBPACK_IMPORTED_MODULE_4__ = __webpack_require__(3164);
-/* harmony import */ var _aws_sdk_core__WEBPACK_IMPORTED_MODULE_6__ = __webpack_require__(3165);
-/* harmony import */ var _aws_sdk_util_user_agent_node__WEBPACK_IMPORTED_MODULE_8__ = __webpack_require__(3172);
-/* harmony import */ var _aws_sdk_util_user_agent_node__WEBPACK_IMPORTED_MODULE_18__ = __webpack_require__(3230);
-/* harmony import */ var _smithy_config_resolver__WEBPACK_IMPORTED_MODULE_11__ = __webpack_require__(3162);
-/* harmony import */ var _smithy_config_resolver__WEBPACK_IMPORTED_MODULE_16__ = __webpack_require__(3228);
-/* harmony import */ var _smithy_config_resolver__WEBPACK_IMPORTED_MODULE_17__ = __webpack_require__(3229);
-/* harmony import */ var _smithy_hash_node__WEBPACK_IMPORTED_MODULE_14__ = __webpack_require__(3143);
-/* harmony import */ var _smithy_middleware_retry__WEBPACK_IMPORTED_MODULE_10__ = __webpack_require__(3202);
-/* harmony import */ var _smithy_node_config_provider__WEBPACK_IMPORTED_MODULE_5__ = __webpack_require__(3026);
-/* harmony import */ var _smithy_node_http_handler__WEBPACK_IMPORTED_MODULE_12__ = __webpack_require__(3215);
-/* harmony import */ var _smithy_node_http_handler__WEBPACK_IMPORTED_MODULE_15__ = __webpack_require__(3156);
-/* harmony import */ var _smithy_util_body_length_node__WEBPACK_IMPORTED_MODULE_7__ = __webpack_require__(3168);
-/* harmony import */ var _smithy_util_retry__WEBPACK_IMPORTED_MODULE_13__ = __webpack_require__(3203);
-/* harmony import */ var _runtimeConfig_shared__WEBPACK_IMPORTED_MODULE_3__ = __webpack_require__(4377);
-/* harmony import */ var _smithy_smithy_client__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(3163);
-/* harmony import */ var _smithy_util_defaults_mode_node__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(3159);
-/* harmony import */ var _smithy_smithy_client__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(3158);
+/* harmony import */ var _package_json__WEBPACK_IMPORTED_MODULE_9__ = __webpack_require__(4379);
+/* harmony import */ var _aws_sdk_core__WEBPACK_IMPORTED_MODULE_4__ = __webpack_require__(3167);
+/* harmony import */ var _aws_sdk_core__WEBPACK_IMPORTED_MODULE_6__ = __webpack_require__(3168);
+/* harmony import */ var _aws_sdk_util_user_agent_node__WEBPACK_IMPORTED_MODULE_8__ = __webpack_require__(3175);
+/* harmony import */ var _aws_sdk_util_user_agent_node__WEBPACK_IMPORTED_MODULE_18__ = __webpack_require__(3233);
+/* harmony import */ var _smithy_config_resolver__WEBPACK_IMPORTED_MODULE_11__ = __webpack_require__(3165);
+/* harmony import */ var _smithy_config_resolver__WEBPACK_IMPORTED_MODULE_16__ = __webpack_require__(3231);
+/* harmony import */ var _smithy_config_resolver__WEBPACK_IMPORTED_MODULE_17__ = __webpack_require__(3232);
+/* harmony import */ var _smithy_hash_node__WEBPACK_IMPORTED_MODULE_14__ = __webpack_require__(3146);
+/* harmony import */ var _smithy_middleware_retry__WEBPACK_IMPORTED_MODULE_10__ = __webpack_require__(3205);
+/* harmony import */ var _smithy_node_config_provider__WEBPACK_IMPORTED_MODULE_5__ = __webpack_require__(3029);
+/* harmony import */ var _smithy_node_http_handler__WEBPACK_IMPORTED_MODULE_12__ = __webpack_require__(3218);
+/* harmony import */ var _smithy_node_http_handler__WEBPACK_IMPORTED_MODULE_15__ = __webpack_require__(3159);
+/* harmony import */ var _smithy_util_body_length_node__WEBPACK_IMPORTED_MODULE_7__ = __webpack_require__(3171);
+/* harmony import */ var _smithy_util_retry__WEBPACK_IMPORTED_MODULE_13__ = __webpack_require__(3206);
+/* harmony import */ var _runtimeConfig_shared__WEBPACK_IMPORTED_MODULE_3__ = __webpack_require__(4380);
+/* harmony import */ var _smithy_smithy_client__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(3166);
+/* harmony import */ var _smithy_util_defaults_mode_node__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(3162);
+/* harmony import */ var _smithy_smithy_client__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(3161);
 
 
 
@@ -756,23 +756,23 @@ const getRuntimeConfig = (config) => {
 
 /***/ }),
 
-/***/ 4377:
+/***/ 4380:
 /***/ ((__unused_webpack_module, __webpack_exports__, __webpack_require__) => {
 
 __webpack_require__.r(__webpack_exports__);
 /* harmony export */ __webpack_require__.d(__webpack_exports__, {
 /* harmony export */   getRuntimeConfig: () => (/* binding */ getRuntimeConfig)
 /* harmony export */ });
-/* harmony import */ var _aws_sdk_core__WEBPACK_IMPORTED_MODULE_4__ = __webpack_require__(3146);
-/* harmony import */ var _smithy_core__WEBPACK_IMPORTED_MODULE_5__ = __webpack_require__(4380);
-/* harmony import */ var _smithy_smithy_client__WEBPACK_IMPORTED_MODULE_6__ = __webpack_require__(3152);
-/* harmony import */ var _smithy_url_parser__WEBPACK_IMPORTED_MODULE_7__ = __webpack_require__(2971);
-/* harmony import */ var _smithy_util_base64__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(3099);
-/* harmony import */ var _smithy_util_base64__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(3097);
-/* harmony import */ var _smithy_util_utf8__WEBPACK_IMPORTED_MODULE_8__ = __webpack_require__(3052);
-/* harmony import */ var _smithy_util_utf8__WEBPACK_IMPORTED_MODULE_9__ = __webpack_require__(3098);
-/* harmony import */ var _auth_httpAuthSchemeProvider__WEBPACK_IMPORTED_MODULE_3__ = __webpack_require__(4374);
-/* harmony import */ var _endpoint_endpointResolver__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(4378);
+/* harmony import */ var _aws_sdk_core__WEBPACK_IMPORTED_MODULE_4__ = __webpack_require__(3149);
+/* harmony import */ var _smithy_core__WEBPACK_IMPORTED_MODULE_5__ = __webpack_require__(4383);
+/* harmony import */ var _smithy_smithy_client__WEBPACK_IMPORTED_MODULE_6__ = __webpack_require__(3155);
+/* harmony import */ var _smithy_url_parser__WEBPACK_IMPORTED_MODULE_7__ = __webpack_require__(2974);
+/* harmony import */ var _smithy_util_base64__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(3102);
+/* harmony import */ var _smithy_util_base64__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(3100);
+/* harmony import */ var _smithy_util_utf8__WEBPACK_IMPORTED_MODULE_8__ = __webpack_require__(3055);
+/* harmony import */ var _smithy_util_utf8__WEBPACK_IMPORTED_MODULE_9__ = __webpack_require__(3101);
+/* harmony import */ var _auth_httpAuthSchemeProvider__WEBPACK_IMPORTED_MODULE_3__ = __webpack_require__(4377);
+/* harmony import */ var _endpoint_endpointResolver__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(4381);
 
 
 
@@ -813,17 +813,17 @@ const getRuntimeConfig = (config) => {
 
 /***/ }),
 
-/***/ 4381:
+/***/ 4384:
 /***/ ((__unused_webpack_module, __webpack_exports__, __webpack_require__) => {
 
 __webpack_require__.r(__webpack_exports__);
 /* harmony export */ __webpack_require__.d(__webpack_exports__, {
 /* harmony export */   resolveRuntimeExtensions: () => (/* binding */ resolveRuntimeExtensions)
 /* harmony export */ });
-/* harmony import */ var _aws_sdk_region_config_resolver__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(3234);
-/* harmony import */ var _smithy_protocol_http__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(3239);
-/* harmony import */ var _smithy_smithy_client__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(3235);
-/* harmony import */ var _auth_httpAuthExtensionConfiguration__WEBPACK_IMPORTED_MODULE_3__ = __webpack_require__(4382);
+/* harmony import */ var _aws_sdk_region_config_resolver__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(3237);
+/* harmony import */ var _smithy_protocol_http__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(3242);
+/* harmony import */ var _smithy_smithy_client__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(3238);
+/* harmony import */ var _auth_httpAuthExtensionConfiguration__WEBPACK_IMPORTED_MODULE_3__ = __webpack_require__(4385);
 
 
 
@@ -837,7 +837,7 @@ const resolveRuntimeExtensions = (runtimeConfig, extensions) => {
 
 /***/ }),
 
-/***/ 4371:
+/***/ 4374:
 /***/ ((__unused_webpack_module, __webpack_exports__, __webpack_require__) => {
 
 __webpack_require__.r(__webpack_exports__);
@@ -846,7 +846,7 @@ __webpack_require__.r(__webpack_exports__);
 /* harmony export */   parseJsonBody: () => (/* binding */ parseJsonBody),
 /* harmony export */   parseJsonErrorBody: () => (/* binding */ parseJsonErrorBody)
 /* harmony export */ });
-/* harmony import */ var _common__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(3101);
+/* harmony import */ var _common__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(3104);
 
 const parseJsonBody = (streamBody, context) => (0,_common__WEBPACK_IMPORTED_MODULE_0__.collectBodyString)(streamBody, context).then((encoded) => {
     if (encoded.length) {
@@ -905,7 +905,7 @@ const loadRestJsonErrorCode = (output, data) => {
 
 /***/ }),
 
-/***/ 4365:
+/***/ 4368:
 /***/ ((__unused_webpack_module, __webpack_exports__, __webpack_require__) => {
 
 __webpack_require__.r(__webpack_exports__);
@@ -913,15 +913,15 @@ __webpack_require__.r(__webpack_exports__);
 /* harmony export */   GetRoleCredentialsCommand: () => (/* reexport safe */ _aws_sdk_client_sso__WEBPACK_IMPORTED_MODULE_0__.GetRoleCredentialsCommand),
 /* harmony export */   SSOClient: () => (/* reexport safe */ _aws_sdk_client_sso__WEBPACK_IMPORTED_MODULE_1__.SSOClient)
 /* harmony export */ });
-/* harmony import */ var _aws_sdk_client_sso__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(4366);
-/* harmony import */ var _aws_sdk_client_sso__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(4373);
+/* harmony import */ var _aws_sdk_client_sso__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(4369);
+/* harmony import */ var _aws_sdk_client_sso__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(4376);
 
 
 
 
 /***/ }),
 
-/***/ 4380:
+/***/ 4383:
 /***/ ((__unused_webpack_module, __webpack_exports__, __webpack_require__) => {
 
 __webpack_require__.r(__webpack_exports__);
@@ -937,7 +937,7 @@ class NoAuthSigner {
 
 /***/ }),
 
-/***/ 4372:
+/***/ 4375:
 /***/ ((__unused_webpack_module, __webpack_exports__, __webpack_require__) => {
 
 __webpack_require__.r(__webpack_exports__);
@@ -967,7 +967,7 @@ const _json = (obj) => {
 
 /***/ }),
 
-/***/ 4376:
+/***/ 4379:
 /***/ ((module) => {
 
 module.exports = /*#__PURE__*/JSON.parse('{"name":"@aws-sdk/client-sso","description":"AWS SDK for JavaScript Sso Client for Node.js, Browser and React Native","version":"3.901.0","scripts":{"build":"concurrently \'yarn:build:cjs\' \'yarn:build:es\' \'yarn:build:types\'","build:cjs":"node ../../scripts/compilation/inline client-sso","build:es":"tsc -p tsconfig.es.json","build:include:deps":"lerna run --scope $npm_package_name --include-dependencies build","build:types":"tsc -p tsconfig.types.json","build:types:downlevel":"downlevel-dts dist-types dist-types/ts3.4","clean":"rimraf ./dist-* && rimraf *.tsbuildinfo","extract:docs":"api-extractor run --local","generate:client":"node ../../scripts/generate-clients/single-service --solo sso"},"main":"./dist-cjs/index.js","types":"./dist-types/index.d.ts","module":"./dist-es/index.js","sideEffects":false,"dependencies":{"@aws-crypto/sha256-browser":"5.2.0","@aws-crypto/sha256-js":"5.2.0","@aws-sdk/core":"3.901.0","@aws-sdk/middleware-host-header":"3.901.0","@aws-sdk/middleware-logger":"3.901.0","@aws-sdk/middleware-recursion-detection":"3.901.0","@aws-sdk/middleware-user-agent":"3.901.0","@aws-sdk/region-config-resolver":"3.901.0","@aws-sdk/types":"3.901.0","@aws-sdk/util-endpoints":"3.901.0","@aws-sdk/util-user-agent-browser":"3.901.0","@aws-sdk/util-user-agent-node":"3.901.0","@smithy/config-resolver":"^4.3.0","@smithy/core":"^3.14.0","@smithy/fetch-http-handler":"^5.3.0","@smithy/hash-node":"^4.2.0","@smithy/invalid-dependency":"^4.2.0","@smithy/middleware-content-length":"^4.2.0","@smithy/middleware-endpoint":"^4.3.0","@smithy/middleware-retry":"^4.4.0","@smithy/middleware-serde":"^4.2.0","@smithy/middleware-stack":"^4.2.0","@smithy/node-config-provider":"^4.3.0","@smithy/node-http-handler":"^4.3.0","@smithy/protocol-http":"^5.3.0","@smithy/smithy-client":"^4.7.0","@smithy/types":"^4.6.0","@smithy/url-parser":"^4.2.0","@smithy/util-base64":"^4.2.0","@smithy/util-body-length-browser":"^4.2.0","@smithy/util-body-length-node":"^4.2.0","@smithy/util-defaults-mode-browser":"^4.2.0","@smithy/util-defaults-mode-node":"^4.2.0","@smithy/util-endpoints":"^3.2.0","@smithy/util-middleware":"^4.2.0","@smithy/util-retry":"^4.2.0","@smithy/util-utf8":"^4.2.0","tslib":"^2.6.2"},"devDependencies":{"@tsconfig/node18":"18.2.4","@types/node":"^18.19.69","concurrently":"7.0.0","downlevel-dts":"0.10.1","rimraf":"3.0.2","typescript":"~5.8.3"},"engines":{"node":">=18.0.0"},"typesVersions":{"<4.0":{"dist-types/*":["dist-types/ts3.4/*"]}},"files":["dist-*/**"],"author":{"name":"AWS SDK for JavaScript Team","url":"https://aws.amazon.com/javascript/"},"license":"Apache-2.0","browser":{"./dist-es/runtimeConfig":"./dist-es/runtimeConfig.browser"},"react-native":{"./dist-es/runtimeConfig":"./dist-es/runtimeConfig.native"},"homepage":"https://github.com/aws/aws-sdk-js-v3/tree/main/clients/client-sso","repository":{"type":"git","url":"https://github.com/aws/aws-sdk-js-v3.git","directory":"clients/client-sso"}}');

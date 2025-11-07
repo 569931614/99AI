@@ -884,6 +884,22 @@ ${numberedOptions}
       }
     }
 
+    // 提前获取真实用户名称（用于后续替换任务信息中的"我"）
+    let realUserName = modelName || '用户';
+    if (isGroupChat && groupId && !modelName) {
+      try {
+        const user = await this.userEntity.findOne({ where: { id: req.user.id } });
+        if (user) {
+          realUserName = user.username || user.nickname || `用户${user.id}`;
+        }
+        Logger.debug(`[用户名称] 真实用户名称: ${realUserName}`, 'ChatService');
+      } catch (error) {
+        Logger.debug(`获取真实用户名称失败: ${error.message}`, 'ChatService');
+      }
+    } else if (modelName) {
+      Logger.debug(`[用户名称] 使用传入的用户名称: ${realUserName}`, 'ChatService');
+    }
+
     const {
       openaiBaseUrl,
       openaiBaseKey,
@@ -959,6 +975,75 @@ ${numberedOptions}
         appInfo.preset && (setSystemMessage = appInfo.preset);
         currentRequestModelKey = await this.modelsService.getCurrentModelKeyInfo(model);
         Logger.debug(`使用应用预设模式`, 'ChatService');
+      }
+
+      // 将当前角色的任务信息添加到预设中（支持群聊和单聊）
+      if (groupId && appId) {
+        try {
+          const groupInfo: any = await this.chatGroupService.getGroupInfoFromId(groupId);
+          const members = JSON.parse(groupInfo?.members || '[]') || [];
+
+          Logger.debug(
+            `[角色任务] 尝试获取任务信息，isGroupChat=${isGroupChat}, groupId=${groupId}, appId=${appId}, members数量=${members.length}`,
+            'ChatService',
+          );
+
+          const currentMember = members.find((m: any) => Number(m.appId) === Number(appId));
+
+          if (currentMember) {
+            Logger.debug(
+              `[角色任务] 找到当前成员，appId=${appId}, taskDetail=${
+                currentMember.taskDetail
+              }, tasks=${JSON.stringify(currentMember.tasks)}`,
+              'ChatService',
+            );
+
+            let taskTitle = '';
+            let taskStatus = 'todo';
+
+            // 支持两种格式：1. taskDetail字段 2. tasks数组
+            if (currentMember.taskDetail && currentMember.taskDetail.trim()) {
+              // 如果有taskDetail字段，直接使用
+              taskTitle = currentMember.taskDetail.trim();
+              Logger.debug(`[角色任务] 从taskDetail获取任务: ${taskTitle}`, 'ChatService');
+            } else if (Array.isArray(currentMember.tasks) && currentMember.tasks.length > 0) {
+              // 如果有tasks数组，找第一个未完成的任务
+              const pendingTask = currentMember.tasks.find(
+                (t: any) => (t?.status || 'todo') !== 'done',
+              );
+              if (pendingTask) {
+                taskTitle = pendingTask.title || '';
+                taskStatus = pendingTask.status || 'todo';
+                Logger.debug(`[角色任务] 从tasks数组获取任务: ${taskTitle}`, 'ChatService');
+              }
+            }
+
+            if (taskTitle) {
+              // 将任务标题中的"我"替换为用户名
+              if (realUserName && realUserName !== '用户' && realUserName !== '我') {
+                taskTitle = taskTitle.replace(
+                  /(?<![^\s，。！？；：、])我(?![^\s，。！？；：、])/g,
+                  realUserName,
+                );
+              }
+
+              const taskInfo = `\n\n【你的当前任务】\n任务：${taskTitle}\n状态：${taskStatus}\n请在对话中围绕这个任务进行回应。`;
+              setSystemMessage = setSystemMessage + taskInfo;
+              Logger.debug(
+                `[角色任务] 已将角色任务添加到预设中，appId=${appId}, 任务="${taskTitle}"`,
+                'ChatService',
+              );
+            } else {
+              Logger.debug(`[角色任务] 当前成员没有任务信息`, 'ChatService');
+            }
+          } else {
+            Logger.debug(`[角色任务] 未找到appId=${appId}的成员`, 'ChatService');
+          }
+        } catch (error) {
+          Logger.warn(`[角色任务] 获取角色任务失败: ${error.message}`, 'ChatService');
+        }
+      } else {
+        Logger.debug(`[角色任务] 跳过任务获取，groupId=${groupId}, appId=${appId}`, 'ChatService');
       }
     } else {
       if (usingPlugin?.parameters === 'mermaid') {
@@ -1182,21 +1267,6 @@ ${numberedOptions}
       await this.chatGroupService.updateTime(groupId);
     }
 
-    // 群聊模式：获取真实用户的名称（用于添加说话人前缀）
-    let realUserName = '用户';
-    if (isGroupChat && groupId) {
-      try {
-        // 从数据库获取用户信息
-        const user = await this.userEntity.findOne({ where: { id: req.user.id } });
-        if (user) {
-          realUserName = user.username || user.nickname || `用户${user.id}`;
-        }
-        Logger.debug(`[群聊] 真实用户名称: ${realUserName}`, 'ChatService');
-      } catch (error) {
-        Logger.debug(`获取真实用户名称失败: ${error.message}`, 'ChatService');
-      }
-    }
-
     // 图片识别处理：如果模型不支持图片（isImageUpload === 0）且有图片，先识别图片内容
     if (imageUrl && isImageUpload === 0) {
       Logger.debug('[图片识别] 模型不支持图片，开始识别...', 'ChatService');
@@ -1348,6 +1418,8 @@ ${numberedOptions}
       }
     } else if (!isGroupChat && !skipPromptInHistory && !skipSave) {
       // 普通模式，正常保存（skipPromptInHistory 和 skipSave 模式不保存）
+      // 使用从body传来的modelName，如果没有则使用'我'
+      const userDisplayName = modelName || '我';
       userSaveLog = await this.chatLogService.saveChatLog({
         appId: appId,
         curIp,
@@ -1360,11 +1432,12 @@ ${numberedOptions}
         completionTokens: 0,
         totalTokens: 0,
         model: useModel,
-        modelName: '我',
+        modelName: userDisplayName,
         role: 'user',
         groupId: groupId ? groupId : null,
       });
       userLogId = userSaveLog.id;
+      Logger.debug(`[普通模式] 保存用户消息，modelName=${userDisplayName}`, 'ChatService');
     } else if (skipPromptInHistory) {
       // skipPromptInHistory 模式：不保存用户消息
       Logger.debug(
@@ -1464,26 +1537,37 @@ ${numberedOptions}
       }
     }
 
-    const assistantSaveLog = await this.chatLogService.saveChatLog({
-      appId: appId ? appId : null,
-      action: action ? action : null,
-      curIp,
-      userId: req.user.id,
-      type: modelType ? modelType : 1,
-      progress: '0%',
-      model: useModel,
-      modelName: assistantName,
-      role: 'assistant',
-      groupId: groupId ? groupId : null,
-      status: 2,
-      modelAvatar: usingPlugin?.pluginImg || useModelAvatar || modelAvatar || '',
-      pluginParam: usingPlugin?.parameters
-        ? usingPlugin.parameters
-        : modelType === 2
-        ? useModel
-        : null,
-    });
-    const assistantLogId = assistantSaveLog.id;
+    // 如果设置了 skipSaveToDatabase，则不保存 assistant 消息到数据库
+    let assistantSaveLog;
+    let assistantLogId;
+
+    if (!skipSave) {
+      assistantSaveLog = await this.chatLogService.saveChatLog({
+        appId: appId ? appId : null,
+        action: action ? action : null,
+        curIp,
+        userId: req.user.id,
+        type: modelType ? modelType : 1,
+        progress: '0%',
+        model: useModel,
+        modelName: assistantName,
+        role: 'assistant',
+        groupId: groupId ? groupId : null,
+        status: 2,
+        modelAvatar: usingPlugin?.pluginImg || useModelAvatar || modelAvatar || '',
+        pluginParam: usingPlugin?.parameters
+          ? usingPlugin.parameters
+          : modelType === 2
+          ? useModel
+          : null,
+      });
+      assistantLogId = assistantSaveLog.id;
+      Logger.debug(`[保存] 已保存 assistant 消息到数据库，id=${assistantLogId}`, 'ChatService');
+    } else {
+      // skipSaveToDatabase 模式：不保存 assistant 消息
+      assistantLogId = null;
+      Logger.debug(`[跳过保存] skipSaveToDatabase=true，不保存 assistant 消息到数据库`, 'ChatService');
+    }
 
     if (autoReplyRes.answer && res) {
       if (autoReplyRes.isAIReplyEnabled === 0) {
@@ -1501,9 +1585,11 @@ ${numberedOptions}
 
         // 从第一个字符开始发送
         sendCharByChar(0);
-        await this.chatLogService.updateChatLog(assistantLogId, {
-          content: autoReplyRes.answer,
-        });
+        if (assistantLogId) {
+          await this.chatLogService.updateChatLog(assistantLogId, {
+            content: autoReplyRes.answer,
+          });
+        }
         return;
       } else {
         setSystemMessage = setSystemMessage + autoReplyRes.answer;
@@ -1512,10 +1598,9 @@ ${numberedOptions}
 
     // 心理描述开关逻辑
     // 优先使用会话组的 describingMental 配置，如果没有则使用用户级别配置
+    let enablePsychologicalDesc = false; // 声明在外层，用于后续响应过滤
     if (appId && setSystemMessage && this.userAppSettingsService) {
       try {
-        let enablePsychologicalDesc = false;
-
         // 1. 优先检查会话组的 describingMental 配置（99AI使用）
         if (groupId) {
           try {
@@ -1558,17 +1643,11 @@ ${numberedOptions}
           );
         }
 
-        if (enablePsychologicalDesc) {
-          const psychologicalDescPrompt =
-            '\n\n【重要】请在回复时使用（）表示角色的心理描述或内心活动，例如：（他心里想着...）、（她感到有些紧张）等。心理描述应自然融入对话中，体现角色的情感和思考。';
-          setSystemMessage = setSystemMessage + psychologicalDescPrompt;
-          Logger.debug(`[心理描述] 已添加心理描述提示词`, 'ChatService');
-        } else {
-          const psychologicalDescPrompt =
-            '【重要】回复的内容中，不添加任何使用括号的心理描述、内心活动或动作描述，也就是不能出现';
-          setSystemMessage = setSystemMessage + psychologicalDescPrompt;
-          Logger.debug(`[心理描述] 已添加禁用心理描述提示词`, 'ChatService');
-        }
+        // 心理描述开关仅控制过滤，不再在预设中添加提示词
+        Logger.debug(
+          `[心理描述] 开关状态: ${enablePsychologicalDesc ? '开启' : '关闭'}（将在响应时处理）`,
+          'ChatService',
+        );
       } catch (error) {
         Logger.warn(`获取心理描述开关失败: ${error?.message || error}`, 'ChatService');
       }
@@ -1611,71 +1690,8 @@ ${numberedOptions}
       this.chatLogService,
     );
 
-    // 群聊模式：添加说话人标识 + 角色注入
-    // 参考：https://help.aliyun.com/document_detail/2861866.html
-    try {
-      if (isGroupChat && groupId) {
-        // 获取群组成员信息（只获取一次）
-        const groupInfo: any = await this.chatGroupService.getGroupInfoFromId(groupId);
-        const members = JSON.parse(groupInfo?.members || '[]') || [];
-
-        // 注意：根据星尘API文档，群聊模式下：
-        // 1. 真实用户的消息不需要添加说话人前缀，role为user即可
-        // 2. AI角色之间的消息才需要添加说话人标识
-        // 3. 消息历史的构建已经在 buildMessageFromParentMessageId 中完成
-        // 因此这里不再需要为消息添加说话人前缀
-
-        // 步骤2：构建群聊角色系统提示
-        if (Array.isArray(members) && members.length) {
-          members.sort(
-            (a, b) =>
-              Number(a.order || 999999) - Number(b.order || 999999) ||
-              Number(a.userId) - Number(b.userId),
-          );
-          const roleLines = members.map((m: any, idx: number) => {
-            const role = m.role || 'member';
-            const name = m.name || m.appName || `用户${m.userId}`;
-            const app = m.appName ? `（应用：${m.appName}）` : '';
-            // 汇总任务（仅展示前2个）
-            const tasks = Array.isArray(m.tasks) ? m.tasks : [];
-            const taskBrief = tasks
-              .slice(0, 2)
-              .map((t: any) => `${t.title}${t.status ? `(${t.status})` : ''}`)
-              .join('；');
-            const suffix = taskBrief ? ` ｜ 任务：${taskBrief}` : '';
-            return `${idx + 1}. ${name}${app} —— 角色: ${role}${suffix}`;
-          });
-          // 计算下一位发言者：以历史 assistant 消息数量为基准取模
-          const assistantCount = (messagesHistory || []).filter(
-            (m: any) => m.role === 'assistant',
-          ).length;
-          const speakerIdx = assistantCount % members.length;
-          const nextSpeaker = members[speakerIdx];
-          const nextName =
-            nextSpeaker?.name || nextSpeaker?.appName || `用户${nextSpeaker?.userId}`;
-          // 当前说话者的首个未完成任务
-          const pending = Array.isArray(nextSpeaker?.tasks)
-            ? (nextSpeaker.tasks as any[]).find(t => (t?.status || 'todo') !== 'done')
-            : null;
-          const taskGuide = pending
-            ? `请围绕“${pending.title}”完成回应（当前任务状态：${pending.status || 'todo'}）。`
-            : '若无任务，请围绕用户提问作答。';
-          const systemRolePrompt = `\n【群聊角色与发言顺序】\n${roleLines.join(
-            '\n',
-          )}\n\n【回合规则】\n- 按顺序从当前应发言的角色开始依次发言。\n- 单次响应中，允许从当前应发言者起按顺序输出所有角色各1次发言；每位内容不限长度，前缀以[角色名]开头以便区分。\n- 绝不输出多余流程说明，不要描述轮换，仅给出发言内容。\n\n【本轮起始发言者】${
-            speakerIdx + 1
-          }. ${nextName}。${taskGuide}`;
-          // 将角色设定拼接到系统消息最前
-          if (messagesHistory.length && messagesHistory[0].role === 'system') {
-            messagesHistory[0].content = `${messagesHistory[0].content || ''}${systemRolePrompt}`;
-          } else {
-            messagesHistory.unshift({ role: 'system', content: systemRolePrompt });
-          }
-        }
-      }
-    } catch (e) {
-      // 静默失败以不影响对话
-    }
+    // 群聊模式：不再添加【群聊角色与发言顺序】到messagesHistory
+    // 角色任务信息将在下面的群组背景信息中统一处理
 
     /* 单独处理 MJ 积分的扣费 */
     let charge;
@@ -1774,17 +1790,185 @@ ${numberedOptions}
               }
             : undefined;
 
+          // 构建星尘API专用的messages（添加用户简介等上下文信息）
+          let messagesForXingchen = [...messagesHistory]; // 复制一份，不影响原始messagesHistory
+
+          // 获取用户信息（单聊和群聊都需要）
+          let userBio = '';
+          let userName = '';
+          try {
+            const user = await this.userEntity.findOne({ where: { id: req.user.id } });
+            if (user) {
+              userName = user.username || user.nickname || `用户${user.id}`;
+              userBio = user.bio || '';
+            }
+          } catch (error) {
+            Logger.warn(`[星尘API] 获取用户信息失败: ${error.message}`, 'ChatService');
+          }
+
+          // 构建用户简介文本（包含用户名字和简介）
+          let userProfileText = '';
+          if (userName && userBio) {
+            userProfileText = `用户名：${userName}\n用户简介：${userBio}`;
+          } else if (userName) {
+            userProfileText = `用户名：${userName}`;
+          } else if (userBio) {
+            userProfileText = `用户简介：${userBio}`;
+          }
+
+          if (isGroupChat && groupId) {
+            // 群聊模式：构建群组背景信息
+            try {
+              const groupInfo = await this.chatGroupService.getGroupInfoFromId(groupId);
+              const groupInfoParts: string[] = [];
+
+              if (groupInfo?.title) {
+                groupInfoParts.push(`群名：${groupInfo.title}`);
+              }
+
+              if (groupInfo?.description) {
+                groupInfoParts.push(`背景介绍：${groupInfo.description}`);
+              }
+
+              // 添加用户信息（包含用户名和简介）
+              if (userProfileText) {
+                groupInfoParts.push(`\n【用户信息】\n${userProfileText}`);
+              }
+
+              // 添加群组成员及其任务信息到群组背景信息
+              if (groupInfo?.members) {
+                try {
+                  const members = JSON.parse(groupInfo.members);
+                  if (Array.isArray(members) && members.length > 0) {
+                    // 按order排序
+                    members.sort(
+                      (a, b) =>
+                        Number(a.order || 999999) - Number(b.order || 999999) ||
+                        Number(a.userId) - Number(b.userId),
+                    );
+
+                    groupInfoParts.push('\n人物信息：');
+
+                    // 先批量获取所有需要的角色名称
+                    for (const member of members) {
+                      if (member.appId && !member.appName && !member.name) {
+                        try {
+                          const memberAppInfo = await this.appEntity.findOne({
+                            where: { id: member.appId },
+                          });
+                          if (memberAppInfo?.name) {
+                            member.appName = memberAppInfo.name;
+                            Logger.debug(
+                              `[群组背景信息] 从 appId=${member.appId} 获取角色名称: ${memberAppInfo.name}`,
+                              'ChatService',
+                            );
+                          }
+                        } catch (error) {
+                          Logger.debug(
+                            `[群组背景信息] 获取 appId=${member.appId} 的角色名称失败: ${error.message}`,
+                            'ChatService',
+                          );
+                        }
+                      }
+                    }
+
+                    members.forEach((m: any, idx: number) => {
+                      const name =
+                        m.appName || m.name || (m.userId ? `用户${m.userId}` : `成员${idx + 1}`);
+                      let memberInfo = `${idx + 1}. ${name}`;
+
+                      // 添加任务信息
+                      const tasks = Array.isArray(m.tasks) ? m.tasks : [];
+                      if (tasks.length > 0) {
+                        const taskDetails = tasks
+                          .map((t: any) => {
+                            let taskTitle = t.title || '';
+                            // 将任务标题中的"我"替换为用户名
+                            if (
+                              realUserName &&
+                              realUserName !== '用户' &&
+                              realUserName !== '我' &&
+                              taskTitle
+                            ) {
+                              taskTitle = taskTitle.replace(
+                                /(?<![^\s，。！？；：、])我(?![^\s，。！？；：、])/g,
+                                realUserName,
+                              );
+                            }
+                            return `${taskTitle}${t.status ? ` (${t.status})` : ''}`;
+                          })
+                          .join('；');
+                        memberInfo += ` - 任务：${taskDetails}`;
+                      } else if (m.taskDetail && m.taskDetail.trim()) {
+                        // 兼容旧格式的taskDetail字段
+                        let taskDetail = m.taskDetail.trim();
+                        if (realUserName && realUserName !== '用户' && realUserName !== '我') {
+                          taskDetail = taskDetail.replace(
+                            /(?<![^\s，。！？；：、])我(?![^\s，。！？；：、])/g,
+                            realUserName,
+                          );
+                        }
+                        memberInfo += ` - 任务：${taskDetail}`;
+                      }
+
+                      groupInfoParts.push(memberInfo);
+                    });
+                  }
+                } catch (error) {
+                  Logger.warn(`[群聊] 解析群组成员信息失败: ${error.message}`, 'ChatService');
+                }
+              }
+
+              // 如果有群组信息，插入到messages副本的第一位作为system消息（背景信息）
+              if (groupInfoParts.length > 0) {
+                const groupBasicInfo = `【群组背景信息】\n${groupInfoParts.join('\n')}`;
+                // 使用system角色，星尘API会将非第一条system消息保留在messages中
+                messagesForXingchen.unshift({ role: 'system', content: groupBasicInfo });
+                Logger.debug(
+                  `[群聊] 已将群组背景信息（含成员任务）添加到星尘API请求的messages第一位（system角色）`,
+                  'ChatService',
+                );
+              }
+            } catch (error) {
+              Logger.warn(`[群聊] 构建群组背景信息失败: ${error.message}`, 'ChatService');
+            }
+          } else if (!isGroupChat && groupId) {
+            // 单聊模式：只添加用户信息到messages（如果有）
+            try {
+              if (userProfileText) {
+                const userProfileInfo = `【用户信息】\n${userProfileText}`;
+                // 使用system角色，添加到messages第一位
+                messagesForXingchen.unshift({ role: 'system', content: userProfileInfo });
+                Logger.debug(
+                  `[单聊] 已将用户信息添加到星尘API请求的messages第一位（system角色）`,
+                  'ChatService',
+                );
+              } else {
+                Logger.debug(`[单聊] 用户未设置用户名和简介，跳过添加`, 'ChatService');
+              }
+            } catch (error) {
+              Logger.warn(`[单聊] 添加用户信息失败: ${error.message}`, 'ChatService');
+            }
+          }
+
           const xingchenResult = await this.openAIChatService.chatFree(
             prompt || '',
-            setSystemMessage,
-            messagesHistory,
+            setSystemMessage, // 使用原始systemMessage作为botProfile
+            messagesForXingchen, // 使用包含群组背景信息的副本
             imageUrl,
             {
               onProgress: (delta: string) => {
                 // 修改：群聊和单聊都应该发送流式数据
                 if (delta) {
                   accumulatedText += delta;
-                  const payload = { content: [{ type: 'text', text: accumulatedText }] };
+
+                  // 心理描述过滤：如果开关关闭，发送前过滤括号内容
+                  let textToSend = accumulatedText;
+                  if (!enablePsychologicalDesc && appId) {
+                    textToSend = this.removeBracketedContent(accumulatedText);
+                  }
+
+                  const payload = { content: [{ type: 'text', text: textToSend }] };
                   try {
                     res.write(`\n${JSON.stringify(payload)}`);
                   } catch {}
@@ -1885,18 +2069,35 @@ ${numberedOptions}
             }
           }
 
+          // 心理描述过滤：如果开关关闭，移除括号内的心理描述内容
+          if (!enablePsychologicalDesc && appId) {
+            const originalLength = sanitizedAnswer.length;
+            sanitizedAnswer = this.removeBracketedContent(sanitizedAnswer);
+            if (sanitizedAnswer.length < originalLength) {
+              Logger.debug(
+                `[心理描述过滤] 已移除心理描述内容，原长度=${originalLength}，过滤后长度=${sanitizedAnswer.length}`,
+                'ChatService',
+              );
+            }
+          }
+
+          // 更新response对象，使用过滤后的内容
+          response.full_content = sanitizedAnswer;
+
           // 如果检测到敏感词，替换为 ***
           // gpt回答 - 使用替换后的内容存入数据库
-          await this.chatLogService.updateChatLog(assistantLogId, {
-            // imageUrl: response?.imageUrl,
-            content: sanitizedAnswer, // 使用替换后的内容
-            reasoning_content: response.full_reasoning_content,
-            tool_calls: response.tool_calls,
-            promptTokens: promptTokens,
-            completionTokens: completionTokens,
-            totalTokens: promptTokens + completionTokens,
-            status: 3,
-          });
+          if (assistantLogId) {
+            await this.chatLogService.updateChatLog(assistantLogId, {
+              // imageUrl: response?.imageUrl,
+              content: sanitizedAnswer, // 使用替换后的内容
+              reasoning_content: response.full_reasoning_content,
+              tool_calls: response.tool_calls,
+              promptTokens: promptTokens,
+              completionTokens: completionTokens,
+              totalTokens: promptTokens + completionTokens,
+              status: 3,
+            });
+          }
 
           try {
             if (isGeneratePromptReference === '1') {
@@ -1906,9 +2107,11 @@ ${numberedOptions}
                 messagesHistory,
               );
               promptReference = promptRefResult.text || '';
-              await this.chatLogService.updateChatLog(assistantLogId, {
-                promptReference: promptReference,
-              });
+              if (assistantLogId) {
+                await this.chatLogService.updateChatLog(assistantLogId, {
+                  promptReference: promptReference,
+                });
+              }
               Logger.debug(`生成了相关问题推荐`, 'ChatService');
             }
           } catch (error) {
@@ -2003,9 +2206,11 @@ ${numberedOptions}
           // 在这里处理错误，例如打印错误消息到控制台或向用户发送错误响应
           Logger.error('处理请求出错:', error);
           // 根据你的应用需求，你可能想要在这里设置response为一个错误消息或执行其他错误处理逻辑
-          await this.chatLogService.updateChatLog(assistantLogId, {
-            status: 5,
-          });
+          if (assistantLogId) {
+            await this.chatLogService.updateChatLog(assistantLogId, {
+              status: 5,
+            });
+          }
           response = { error: '处理请求时发生错误' };
         }
       }
@@ -2260,12 +2465,6 @@ ${numberedOptions}
             Logger.debug(`处理历史记录ID=${record.id}失败: ${error.message}`, 'ChatService');
           }
         }
-
-        // 群聊消息构建 - 按照星尘文档规范
-        if (systemMessage) {
-          messages.push({ role: 'system', content: systemMessage });
-        }
-
         // 获取群聊成员信息
         let groupMembers = [];
         if (groupId) {

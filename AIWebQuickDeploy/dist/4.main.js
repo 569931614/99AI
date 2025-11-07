@@ -3,16 +3,16 @@ exports.id = 4;
 exports.ids = [4];
 exports.modules = {
 
-/***/ 4353:
+/***/ 4356:
 /***/ ((__unused_webpack_module, __webpack_exports__, __webpack_require__) => {
 
 __webpack_require__.r(__webpack_exports__);
 /* harmony export */ __webpack_require__.d(__webpack_exports__, {
 /* harmony export */   fromProcess: () => (/* binding */ fromProcess)
 /* harmony export */ });
-/* harmony import */ var _smithy_shared_ini_file_loader__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(4337);
-/* harmony import */ var _smithy_shared_ini_file_loader__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(3032);
-/* harmony import */ var _resolveProcessCredentials__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(4354);
+/* harmony import */ var _smithy_shared_ini_file_loader__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(4340);
+/* harmony import */ var _smithy_shared_ini_file_loader__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(3035);
+/* harmony import */ var _resolveProcessCredentials__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(4357);
 
 
 const fromProcess = (init = {}) => async ({ callerClientConfig } = {}) => {
@@ -26,14 +26,14 @@ const fromProcess = (init = {}) => async ({ callerClientConfig } = {}) => {
 
 /***/ }),
 
-/***/ 4355:
+/***/ 4358:
 /***/ ((__unused_webpack_module, __webpack_exports__, __webpack_require__) => {
 
 __webpack_require__.r(__webpack_exports__);
 /* harmony export */ __webpack_require__.d(__webpack_exports__, {
 /* harmony export */   getValidatedProcessCredentials: () => (/* binding */ getValidatedProcessCredentials)
 /* harmony export */ });
-/* harmony import */ var _aws_sdk_core_client__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(3066);
+/* harmony import */ var _aws_sdk_core_client__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(3069);
 
 const getValidatedProcessCredentials = (profileName, data, profiles) => {
     if (data.Version !== 1) {
@@ -68,33 +68,33 @@ const getValidatedProcessCredentials = (profileName, data, profiles) => {
 
 /***/ }),
 
-/***/ 4352:
+/***/ 4355:
 /***/ ((__unused_webpack_module, __webpack_exports__, __webpack_require__) => {
 
 __webpack_require__.r(__webpack_exports__);
 /* harmony export */ __webpack_require__.d(__webpack_exports__, {
 /* harmony export */   fromProcess: () => (/* reexport safe */ _fromProcess__WEBPACK_IMPORTED_MODULE_0__.fromProcess)
 /* harmony export */ });
-/* harmony import */ var _fromProcess__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(4353);
+/* harmony import */ var _fromProcess__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(4356);
 
 
 
 /***/ }),
 
-/***/ 4354:
+/***/ 4357:
 /***/ ((__unused_webpack_module, __webpack_exports__, __webpack_require__) => {
 
 __webpack_require__.r(__webpack_exports__);
 /* harmony export */ __webpack_require__.d(__webpack_exports__, {
 /* harmony export */   resolveProcessCredentials: () => (/* binding */ resolveProcessCredentials)
 /* harmony export */ });
-/* harmony import */ var _smithy_property_provider__WEBPACK_IMPORTED_MODULE_4__ = __webpack_require__(3029);
-/* harmony import */ var _smithy_shared_ini_file_loader__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(4356);
+/* harmony import */ var _smithy_property_provider__WEBPACK_IMPORTED_MODULE_4__ = __webpack_require__(3032);
+/* harmony import */ var _smithy_shared_ini_file_loader__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(4359);
 /* harmony import */ var child_process__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(2689);
 /* harmony import */ var child_process__WEBPACK_IMPORTED_MODULE_0___default = /*#__PURE__*/__webpack_require__.n(child_process__WEBPACK_IMPORTED_MODULE_0__);
 /* harmony import */ var util__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(72);
 /* harmony import */ var util__WEBPACK_IMPORTED_MODULE_1___default = /*#__PURE__*/__webpack_require__.n(util__WEBPACK_IMPORTED_MODULE_1__);
-/* harmony import */ var _getValidatedProcessCredentials__WEBPACK_IMPORTED_MODULE_3__ = __webpack_require__(4355);
+/* harmony import */ var _getValidatedProcessCredentials__WEBPACK_IMPORTED_MODULE_3__ = __webpack_require__(4358);
 
 
 
@@ -135,15 +135,15 @@ const resolveProcessCredentials = async (profileName, profiles, logger) => {
 
 /***/ }),
 
-/***/ 4356:
+/***/ 4359:
 /***/ ((__unused_webpack_module, __webpack_exports__, __webpack_require__) => {
 
 __webpack_require__.r(__webpack_exports__);
 /* harmony export */ __webpack_require__.d(__webpack_exports__, {
 /* harmony export */   externalDataInterceptor: () => (/* binding */ externalDataInterceptor)
 /* harmony export */ });
-/* harmony import */ var _getSSOTokenFromFile__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(4341);
-/* harmony import */ var _slurpFile__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(3025);
+/* harmony import */ var _getSSOTokenFromFile__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(4344);
+/* harmony import */ var _slurpFile__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(3028);
 
 
 const externalDataInterceptor = {
@@ -164,7 +164,7 @@ const externalDataInterceptor = {
 
 /***/ }),
 
-/***/ 4336:
+/***/ 4339:
 /***/ ((__unused_webpack_module, __webpack_exports__, __webpack_require__) => {
 
 __webpack_require__.r(__webpack_exports__);
@@ -175,7 +175,7 @@ __webpack_require__.r(__webpack_exports__);
 /* harmony import */ var crypto__WEBPACK_IMPORTED_MODULE_0___default = /*#__PURE__*/__webpack_require__.n(crypto__WEBPACK_IMPORTED_MODULE_0__);
 /* harmony import */ var path__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(674);
 /* harmony import */ var path__WEBPACK_IMPORTED_MODULE_1___default = /*#__PURE__*/__webpack_require__.n(path__WEBPACK_IMPORTED_MODULE_1__);
-/* harmony import */ var _getHomeDir__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(3022);
+/* harmony import */ var _getHomeDir__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(3025);
 
 
 
@@ -188,7 +188,7 @@ const getSSOTokenFilepath = (id) => {
 
 /***/ }),
 
-/***/ 4341:
+/***/ 4344:
 /***/ ((__unused_webpack_module, __webpack_exports__, __webpack_require__) => {
 
 __webpack_require__.r(__webpack_exports__);
@@ -198,7 +198,7 @@ __webpack_require__.r(__webpack_exports__);
 /* harmony export */ });
 /* harmony import */ var fs__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(673);
 /* harmony import */ var fs__WEBPACK_IMPORTED_MODULE_0___default = /*#__PURE__*/__webpack_require__.n(fs__WEBPACK_IMPORTED_MODULE_0__);
-/* harmony import */ var _getSSOTokenFilepath__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(4336);
+/* harmony import */ var _getSSOTokenFilepath__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(4339);
 
 
 const { readFile } = fs__WEBPACK_IMPORTED_MODULE_0__.promises;
@@ -215,7 +215,7 @@ const getSSOTokenFromFile = async (id) => {
 
 /***/ }),
 
-/***/ 4338:
+/***/ 4341:
 /***/ ((__unused_webpack_module, __webpack_exports__, __webpack_require__) => {
 
 __webpack_require__.r(__webpack_exports__);
@@ -240,15 +240,15 @@ const mergeConfigFiles = (...files) => {
 
 /***/ }),
 
-/***/ 4337:
+/***/ 4340:
 /***/ ((__unused_webpack_module, __webpack_exports__, __webpack_require__) => {
 
 __webpack_require__.r(__webpack_exports__);
 /* harmony export */ __webpack_require__.d(__webpack_exports__, {
 /* harmony export */   parseKnownFiles: () => (/* binding */ parseKnownFiles)
 /* harmony export */ });
-/* harmony import */ var _loadSharedConfigFiles__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(3018);
-/* harmony import */ var _mergeConfigFiles__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(4338);
+/* harmony import */ var _loadSharedConfigFiles__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(3021);
+/* harmony import */ var _mergeConfigFiles__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(4341);
 
 
 const parseKnownFiles = async (init) => {

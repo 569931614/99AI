@@ -1,5 +1,6 @@
 import { BaseEntity } from 'src/common/entity/baseEntity';
-import { Column, Entity, Index } from 'typeorm';
+import { Column, Entity, Index, JoinColumn, ManyToOne } from 'typeorm';
+import { VoiceCategoryEntity } from './voiceCategory.entity';
 
 @Entity({ name: 'voice' })
 export class VoiceEntity extends BaseEntity {
@@ -39,4 +40,12 @@ export class VoiceEntity extends BaseEntity {
 
   @Column({ comment: '输出格式（mp3/wav/pcm，默认mp3）', nullable: true, default: 'mp3' })
   format?: string;
+
+  @Index()
+  @Column({ comment: '分类ID（关联 voice_category 表）', nullable: true })
+  categoryId?: number;
+
+  @ManyToOne(() => VoiceCategoryEntity, { nullable: true })
+  @JoinColumn({ name: 'categoryId' })
+  category?: VoiceCategoryEntity;
 }

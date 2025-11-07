@@ -5,8 +5,14 @@ export default {
   enroll: (data: { prefix: string; url: string; targetModel?: string; name?: string }) =>
     api.post('voice/enroll', data),
   // 列出音色
-  list: (params: { prefix?: string; page_index?: number; page_size?: number } = {}) =>
-    api.get('voice/list', { params }),
+  list: (
+    params: {
+      prefix?: string;
+      page_index?: number;
+      page_size?: number;
+      categoryId?: number;
+    } = {},
+  ) => api.get('voice/list', { params }),
   // 查询指定音色详情
   detail: (voiceId: string) => api.get(`voice/detail/${encodeURIComponent(voiceId)}`),
   // 更新（训练）音色
@@ -32,6 +38,10 @@ export default {
   // 获取/设置 音色元信息（如名称）
   getMeta: (voiceId: string) => api.get(`voice/meta/${encodeURIComponent(voiceId)}`),
   setMeta: (data: { voice_id: string; meta: any }) => api.post('voice/meta', data),
+
+  // 设置音色分类
+  setCategory: (data: { voice_id: string; categoryId: number | null }) =>
+    api.post('voice/category', data),
 
   // 同步PENDING状态的音色
   syncPendingStatus: () => api.post('voice/sync-pending-status'),

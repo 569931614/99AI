@@ -718,4 +718,46 @@ export class UserService {
     await this.userEntity.update({ id: userId }, { phone, username, password: hashedPassword });
     return;
   }
+
+  /* 同步用户资料（来自cat_AI） */
+  async syncProfile(userId: number, username: string, bio?: string) {
+    let user = await this.userEntity.findOne({ where: { id: userId } });
+
+    if (!user) {
+      // 用户不存在，创建新用户
+      Logger.log(`用户不存在，自动创建新用户: userId=${userId}`, 'UserService');
+
+      // 获取默认头像
+      const userDefaultAvatar = await this.globalConfigService.getConfigs(['userDefaultAvatar']);
+
+      // 创建用户（cat_AI同步过来的用户）
+      user = await this.userEntity.save({
+        id: userId,
+        username: username,
+        nickname: username, // 昵称默认使用用户名
+        bio: bio || '',
+        email: `cat_ai_${userId}@temp.com`, // 临时邮箱
+        status: 1, // 直接设为激活状态
+        avatar: userDefaultAvatar || '',
+        role: 'viewer',
+      });
+
+      // 为新用户初始化余额
+      await this.userBalanceService.addBalanceToNewUser(userId);
+
+      Logger.log(`新用户创建成功: userId=${userId}, username=${username}`, 'UserService');
+      return { success: true, message: '用户创建并同步成功' };
+    }
+
+    // 用户已存在，更新用户名和简介
+    const updateData: any = { username };
+    if (bio !== undefined) {
+      updateData.bio = bio;
+    }
+
+    await this.userEntity.update({ id: userId }, updateData);
+
+    Logger.log(`用户资料同步成功: userId=${userId}, username=${username}`, 'UserService');
+    return { success: true, message: '用户资料同步成功' };
+  }
 }

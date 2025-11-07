@@ -59,4 +59,28 @@ export class CreateGroupDto {
     required: false,
   })
   params?: string;
+
+  @ApiProperty({
+    example: 0,
+    description: '是否主动发消息（0否 1是）',
+    required: false,
+  })
+  @IsOptional()
+  proactivelySend?: number;
+
+  @ApiProperty({
+    example: 0,
+    description: '是否开启心理动作描述（0否 1是）',
+    required: false,
+  })
+  @IsOptional()
+  describingMental?: number;
+
+  @ApiProperty({
+    example: 0,
+    description: '是否开启真实时间（0否 1是）',
+    required: false,
+  })
+  @IsOptional()
+  realTime?: number;
 }

@@ -1272,7 +1272,7 @@ meta:
                 </el-form-item>
               </el-col>
               <el-col :span="14">
-                <el-form-item v-if="false" label="App分类" prop="catId">
+                <el-form-item label="App分类" prop="catId">
                   <div class="category-selector" style="height: 100%">
                     <div class="selected-categories mb-2">
                       <el-tag

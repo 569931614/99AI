@@ -49,4 +49,20 @@ export class QuerAppDto {
   })
   @IsOptional()
   excludeIds: string;
+
+  @ApiProperty({
+    example: true,
+    description: '是否只返回该用户创建的角色（配合userId使用）',
+    required: false,
+  })
+  @IsOptional()
+  onlyOwn: boolean;
+
+  @ApiProperty({
+    example: false,
+    description: '是否排除已添加的单聊角色（默认true，传false则不排除）',
+    required: false,
+  })
+  @IsOptional()
+  excludeAdded: boolean;
 }

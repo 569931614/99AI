@@ -29,7 +29,15 @@ export class VoiceController {
   @ApiOperation({ summary: '查询音色列表' })
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
-  async list(@Query() query: { prefix?: string; page_index?: number; page_size?: number }) {
+  async list(
+    @Query()
+    query: {
+      prefix?: string;
+      page_index?: number;
+      page_size?: number;
+      categoryId?: number;
+    },
+  ) {
     // 在返回列表前先尝试同步一次PENDING状态，确保列表尽量反映最新训练状态
     try {
       await this.voiceService.syncPendingVoicesStatus();
@@ -129,6 +137,14 @@ export class VoiceController {
   @ApiBearerAuth()
   setMeta(@Body() body: { voice_id: string; meta: any }) {
     return this.voiceService.setVoiceMeta(body);
+  }
+
+  @Post('category')
+  @ApiOperation({ summary: '设置音色分类' })
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  setCategory(@Body() body: { voice_id: string; categoryId: number | null }) {
+    return this.voiceService.setVoiceCategory(body);
   }
 
   @Post('asr')

@@ -216,6 +216,8 @@ export class ChatGroupService {
           (chatGroup as any).appLogo = appInfo.coverImg;
           (chatGroup as any).appName = appInfo.name;
           (chatGroup as any).appUserId = appInfo.userId;
+          (chatGroup as any).des = appInfo.des;
+          (chatGroup as any).preset = appInfo.preset;
         }
       }
 

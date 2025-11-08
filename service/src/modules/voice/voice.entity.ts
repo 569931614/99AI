@@ -19,12 +19,26 @@ export class VoiceEntity extends BaseEntity {
   @Column({ comment: '模型（如 cosyvoice-v2 / v3 / v3-plus）', nullable: true })
   model?: string;
 
+  @Index()
+  @Column({
+    comment: '音色提供商（dashscope/gpt-sovits）',
+    default: 'dashscope',
+  })
+  provider: string;
+
   @Column({ comment: '自定义名称', nullable: true })
   name?: string;
 
   @Index()
   @Column({ comment: '状态（PENDING/SUCCEEDED/FAILED 等）', nullable: true })
   status?: string;
+
+  @Column({
+    type: 'simple-json',
+    comment: '提供商专属配置（JSON）',
+    nullable: true,
+  })
+  config?: Record<string, any> | null;
 
   @Column({ comment: '语速（0.5-2.0，默认1.0）', type: 'float', nullable: true, default: 1.0 })
   rate?: number;

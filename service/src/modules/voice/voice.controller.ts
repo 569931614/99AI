@@ -1,5 +1,16 @@
 import { JwtAuthGuard } from '@/common/auth/jwtAuth.guard';
-import { Body, Controller, Get, Param, Post, Query, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  Param,
+  Post,
+  Query,
+  UploadedFiles,
+  UseGuards,
+  UseInterceptors,
+} from '@nestjs/common';
+import { FileFieldsInterceptor } from '@nestjs/platform-express';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { VoiceService } from './voice.service';
 
@@ -23,6 +34,28 @@ export class VoiceController {
     },
   ) {
     return this.voiceService.enroll(body);
+  }
+
+  @Post('gpt-sovits/import')
+  @ApiOperation({ summary: '导入 GPT-SoVITS 模型' })
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @UseInterceptors(
+    FileFieldsInterceptor(
+      [
+        { name: 'gptModel', maxCount: 1 },
+        { name: 'sovitsModel', maxCount: 1 },
+        { name: 'promptAudio', maxCount: 1 },
+      ],
+      {
+        limits: {
+          fileSize: 600 * 1024 * 1024,
+        },
+      },
+    ),
+  )
+  importGptSovits(@UploadedFiles() files, @Body() body: Record<string, any>) {
+    return this.voiceService.importGptSovitsVoice(files, body);
   }
 
   @Get('list')
@@ -102,6 +135,8 @@ export class VoiceController {
       volume?: number;
       rate?: number;
       pitch?: number;
+      text_language?: string;
+      cut_punc?: string;
     },
   ) {
     return this.voiceService.preview(body);

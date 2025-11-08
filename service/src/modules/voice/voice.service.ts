@@ -1,9 +1,10 @@
-import { HttpException, HttpStatus, Injectable, Logger } from '@nestjs/common';
+import { HttpException, HttpStatus, Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import axios from 'axios';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
+import { Readable } from 'stream';
 import { ILike, IsNull, Repository } from 'typeorm';
 import { AppEntity } from '../app/app.entity';
 import { AppEmotionVoiceEntity } from '../app/appEmotionVoice.entity';
@@ -15,9 +16,38 @@ import { VoiceEntity } from './voice.entity';
 const COSY_CUSTOMIZATION_URL =
   'https://dashscope.aliyuncs.com/api/v1/services/audio/tts/customization';
 const COSY_WS_URL = 'wss://dashscope.aliyuncs.com/api-ws/v1/inference/';
+const DEFAULT_GPT_SOVITS_BASE_URL = process.env.GPT_SOVITS_BASE_URL || 'http://127.0.0.1:9880';
+const DEFAULT_GPT_SOVITS_TEXT_LANGUAGE = process.env.GPT_SOVITS_DEFAULT_TEXT_LANGUAGE || 'zh';
+const DEFAULT_GPT_SOVITS_STORAGE_ROOT = (() => {
+  const custom = process.env.GPT_SOVITS_STORAGE_ROOT;
+  if (custom && path.isAbsolute(custom)) return custom;
+  if (custom) return path.resolve(process.cwd(), custom);
+  return path.resolve(process.cwd(), 'storage/gpt-sovits');
+})();
+const GPT_SOVITS_MODEL_EXT = ['.ckpt', '.pth', '.pt', '.bin'];
+const GPT_SOVITS_AUDIO_EXT = ['.wav', '.mp3', '.m4a', '.flac', '.ogg'];
+const fsp = fs.promises;
+
+type VoiceProvider = 'dashscope' | 'gpt-sovits';
+
+interface VoiceGptSovitsConfig {
+  gptModelPath: string;
+  sovitsModelPath: string;
+  promptAudioPath: string;
+  promptText: string;
+  promptLanguage: string;
+  textLanguage: string;
+  cutPunc?: string;
+  topK?: number;
+  topP?: number;
+  temperature?: number;
+  speed?: number;
+  sampleSteps?: number;
+  sampleRate?: number;
+}
 
 @Injectable()
-export class VoiceService {
+export class VoiceService implements OnModuleInit {
   constructor(
     private readonly globalConfigService: GlobalConfigService,
     private readonly uploadService: UploadService,
@@ -50,50 +80,107 @@ export class VoiceService {
     };
   }
 
+  private readonly gptSovitsBaseUrl = DEFAULT_GPT_SOVITS_BASE_URL;
+  private readonly gptSovitsStorageRoot = DEFAULT_GPT_SOVITS_STORAGE_ROOT;
+  private readonly gptSovitsModelCache = new Map<
+    string,
+    { gptModelPath: string; sovitsModelPath: string; loadedAt: number }
+  >();
+
+  async onModuleInit(): Promise<void> {
+    try {
+      await this.ensureVoiceProviderColumns();
+    } catch (error) {
+      Logger.warn(
+        `[VoiceService] ensureVoiceProviderColumns failed: ${error?.message || error}`,
+        'VoiceService',
+      );
+    }
+  }
+
   private async upsertVoice(partial: {
     voiceId: string;
+
     userId?: number | null;
+
     prefix?: string | null;
+
     model?: string | null;
+
+    provider?: VoiceProvider;
+
     status?: string | null;
+
     name?: string | null;
+
     rate?: number;
+
     pitch?: number;
+
     volume?: number;
+
     sampleRate?: number;
+
     format?: string;
+
+    config?: Record<string, any> | null;
   }) {
     if (!partial.voiceId) {
       console.warn('upsertVoice: voiceId为空，跳过保存');
+
       return;
     }
 
     try {
       console.log(`upsertVoice: 查找现有记录 voiceId=${partial.voiceId}`);
+
       const existing = await this.voiceRepo.findOne({ where: { voiceId: partial.voiceId } });
+
       const now = new Date();
+
+      const provider =
+        (partial.provider as VoiceProvider) ||
+        (existing?.provider as VoiceProvider) ||
+        ('dashscope' as VoiceProvider);
+
+      const mergedConfig = partial.config !== undefined ? partial.config : existing?.config ?? null;
 
       const data = existing
         ? {
             ...existing,
+
             ...partial,
-            // 关键修复：如果 partial 没有明确传递 userId，保留原有记录的 userId
+
             userId: partial.userId !== undefined ? partial.userId : existing.userId,
+
+            provider,
+
+            config: mergedConfig,
+
             updatedAt: now,
           }
         : ({
             ...partial,
-            // 为新记录设置优化后的默认参数
-            rate: partial.rate ?? 0.98, // 语速稍慢，发音更清晰
+
+            rate: partial.rate ?? 0.98,
+
             pitch: partial.pitch ?? 1.0,
-            volume: partial.volume ?? 52, // 音量稍大，更清晰
-            sampleRate: partial.sampleRate ?? 24000, // 采样率提高，音质更好
+
+            volume: partial.volume ?? 52,
+
+            sampleRate: partial.sampleRate ?? 24000,
+
             format: partial.format ?? 'mp3',
+
+            provider,
+
+            config: mergedConfig,
+
             createdAt: now,
+
             updatedAt: now,
           } as any);
 
-      // 标准化：清洗空字符串为 null
       if (data && typeof data === 'object') {
         for (const k of ['prefix', 'model', 'status', 'name', 'format']) {
           if (data[k] === '') data[k] = null;
@@ -101,13 +188,104 @@ export class VoiceService {
       }
 
       console.log(`upsertVoice: 保存数据 voiceId=${partial.voiceId}, data=`, data);
+
       const result = await this.voiceRepo.save(this.voiceRepo.create(data));
+
       console.log(`upsertVoice: 保存成功 voiceId=${partial.voiceId}`);
+
       return result;
     } catch (error) {
       console.error(`upsertVoice: 保存失败 voiceId=${partial.voiceId}`, error.message);
+
       throw error;
     }
+  }
+
+  async importGptSovitsVoice(
+    files: {
+      gptModel?: Array<{ originalname: string; buffer: Buffer }>;
+      sovitsModel?: Array<{ originalname: string; buffer: Buffer }>;
+      promptAudio?: Array<{ originalname: string; buffer: Buffer }>;
+    },
+    body: Record<string, any>,
+  ) {
+    const gptModelFile = files?.gptModel?.[0];
+    const sovitsModelFile = files?.sovitsModel?.[0];
+    const promptAudioFile = files?.promptAudio?.[0];
+    if (!gptModelFile || !sovitsModelFile || !promptAudioFile) {
+      throw new HttpException(
+        'gptModel、sovitsModel、promptAudio 均为必传文件',
+        HttpStatus.BAD_REQUEST,
+      );
+    }
+
+    const promptText = String(body?.promptText || body?.prompt_text || '').trim();
+    if (!promptText) {
+      throw new HttpException('promptText 必填', HttpStatus.BAD_REQUEST);
+    }
+    const promptLanguage = String(body?.promptLanguage || body?.prompt_language || 'zh').trim();
+    const textLanguage = String(
+      body?.textLanguage || body?.text_language || DEFAULT_GPT_SOVITS_TEXT_LANGUAGE,
+    ).trim();
+
+    const voiceId = this.generateGptSovitsVoiceId(body?.voiceId || body?.voice_id);
+    await this.assertVoiceIdAvailable(voiceId);
+
+    const voiceDir = await this.ensureGptSovitsDir(voiceId);
+    const gptModelPath = await this.persistGptSovitsFile(
+      gptModelFile,
+      voiceDir,
+      'gpt-model',
+      GPT_SOVITS_MODEL_EXT,
+      '.ckpt',
+    );
+    const sovitsModelPath = await this.persistGptSovitsFile(
+      sovitsModelFile,
+      voiceDir,
+      'sovits-model',
+      GPT_SOVITS_MODEL_EXT,
+      '.pth',
+    );
+    const promptAudioPath = await this.persistGptSovitsFile(
+      promptAudioFile,
+      voiceDir,
+      'prompt-audio',
+      GPT_SOVITS_AUDIO_EXT,
+      '.wav',
+    );
+
+    const config: VoiceGptSovitsConfig = {
+      gptModelPath,
+      sovitsModelPath,
+      promptAudioPath,
+      promptText,
+      promptLanguage,
+      textLanguage,
+      cutPunc: (body?.cutPunc || body?.cut_punc || '').trim() || undefined,
+      topK: this.parseOptionalNumber(body?.topK ?? body?.top_k),
+      topP: this.parseOptionalNumber(body?.topP ?? body?.top_p),
+      temperature: this.parseOptionalNumber(body?.temperature),
+      speed: this.parseOptionalNumber(body?.speed),
+      sampleSteps: this.parseOptionalNumber(body?.sampleSteps ?? body?.sample_steps),
+      sampleRate: this.parseOptionalNumber(body?.sampleRate ?? body?.sample_rate),
+    };
+
+    const name = String(body?.name || '').trim() || null;
+    await this.upsertVoice({
+      voiceId,
+      name,
+      provider: 'gpt-sovits',
+      status: 'SUCCEEDED',
+      prefix: 'gptsovits',
+      model: 'gpt-sovits',
+      format: 'wav',
+      sampleRate: config.sampleRate ?? 32000,
+      config,
+    });
+    this.gptSovitsModelCache.delete(voiceId);
+
+    Logger.log(`[importGptSovitsVoice] 新增 GPT-SoVITS 音色 ${voiceId}`, 'VoiceService');
+    return { voice_id: voiceId, provider: 'gpt-sovits', status: 'SUCCEEDED' };
   }
 
   async listFromDB(query: {
@@ -173,6 +351,7 @@ export class VoiceService {
         name: r.name,
         prefix: r.prefix,
         model: r.model,
+        provider: r.provider,
         rate: r.rate,
         pitch: r.pitch,
         categoryId: r.categoryId,
@@ -210,6 +389,7 @@ export class VoiceService {
       name: r.name,
       prefix: r.prefix,
       model: r.model,
+      provider: r.provider,
       rate: r.rate,
       pitch: r.pitch,
       categoryId: r.categoryId,
@@ -673,6 +853,15 @@ export class VoiceService {
 
   async query(voiceId: string) {
     if (!voiceId) throw new HttpException('voiceId 必填', HttpStatus.BAD_REQUEST);
+    const local = await this.voiceRepo.findOne({ where: { voiceId } });
+    if (local && (local.provider as VoiceProvider) === 'gpt-sovits') {
+      return {
+        voice_id: local.voiceId,
+        status: local.status || 'SUCCEEDED',
+        provider: local.provider,
+        name: local.name,
+      };
+    }
     const apiKey = await this.getApiKey();
     const payload = {
       model: 'voice-enrollment',
@@ -745,7 +934,7 @@ export class VoiceService {
 
       // 1. 获取所有PENDING状态的音色
       const pendingVoices = await this.voiceRepo.find({
-        where: { status: 'PENDING' },
+        where: { status: 'PENDING', provider: 'dashscope' },
         order: { createdAt: 'ASC' },
       });
 
@@ -825,60 +1014,52 @@ export class VoiceService {
 
   async remove(body: { voice_id: string }) {
     const { voice_id } = body;
+
     if (!voice_id) throw new HttpException('voice_id 必填', HttpStatus.BAD_REQUEST);
 
-    try {
-      console.log(`开始删除音色: ${voice_id}`);
+    const existing = await this.voiceRepo.findOne({ where: { voiceId: voice_id } });
 
-      // 1. 调用上游API删除音色
+    if (existing && (existing.provider as VoiceProvider) === 'gpt-sovits') {
+      Logger.log(`开始删除 GPT-SoVITS 音色 ${voice_id}`, 'VoiceService');
+
+      await this.deleteVoiceAssociations(voice_id);
+
+      await this.cleanupGptSovitsAssets(voice_id);
+
+      return { success: true };
+    }
+
+    try {
+      console.log(`开始删除音色 ${voice_id}`);
+
       const apiKey = await this.getApiKey();
+
       const payload = {
         model: 'voice-enrollment',
+
         input: {
           action: 'delete_voice',
+
           voice_id,
         },
       };
+
       const res = await axios.post(COSY_CUSTOMIZATION_URL, payload, {
         headers: this.getAxiosHeaders(apiKey),
       });
 
-      // 2. 从本地数据库删除记录和相关关联
       try {
-        // 2.1 删除应用音色关联
-        const appVoiceDeleteResult = await this.appVoiceRepo.delete({ voiceId: voice_id });
-        console.log(`删除应用音色关联: affected rows = ${appVoiceDeleteResult.affected}`);
-
-        // 2.2 删除应用情绪音色关联
-        const appEmotionVoiceDeleteResult = await this.appEmotionVoiceRepo.delete({
-          voiceId: voice_id,
-        });
-        console.log(
-          `删除应用情绪音色关联: affected rows = ${appEmotionVoiceDeleteResult.affected}`,
-        );
-
-        // 2.3 清空应用表中的默认音色ID
-        const appUpdateResult = await this.appRepo.update({ voiceId: voice_id }, { voiceId: null });
-        console.log(`清空应用默认音色: affected rows = ${appUpdateResult.affected}`);
-
-        // 2.4 删除音色记录
-        const deleteResult = await this.voiceRepo.delete({ voiceId: voice_id });
-        console.log(`删除音色记录: affected rows = ${deleteResult.affected}`);
-
-        if (deleteResult.affected === 0) {
-          console.warn(`本地数据库中未找到音色记录: ${voice_id}`);
-        } else {
-          console.log(`本地数据库删除成功: ${voice_id}`);
-        }
+        await this.deleteVoiceAssociations(voice_id);
       } catch (dbError) {
         console.error(`本地数据库删除失败: ${voice_id}`, dbError.message);
-        // 不抛出错误，因为上游API删除可能已经成功
       }
 
       console.log(`音色删除完成: ${voice_id}`);
+
       return res.data;
     } catch (error) {
       console.error(`删除音色失败: ${voice_id}`, error.message);
+
       throw new HttpException(`删除音色失败: ${error.message}`, HttpStatus.BAD_REQUEST);
     }
   }
@@ -1189,56 +1370,78 @@ export class VoiceService {
   }
 
   // 读取/保存音色默认合成参数（数据库存储）
+
   async getVoiceParams(voiceId: string): Promise<any | null> {
     if (!voiceId) return null;
+
     try {
       const voice = await this.voiceRepo.findOne({ where: { voiceId } });
+
       if (!voice) return null;
 
-      return {
+      const data: any = {
         rate: voice.rate,
+
         pitch: voice.pitch,
+
         volume: voice.volume,
+
         sample_rate: voice.sampleRate,
+
         format: voice.format,
       };
+
+      if ((voice.provider as VoiceProvider) === 'gpt-sovits') {
+        const cfg = this.getGptSovitsConfig(voice);
+
+        data.text_language = cfg.textLanguage;
+
+        data.prompt_language = cfg.promptLanguage;
+
+        data.prompt_text = cfg.promptText;
+
+        data.sample_rate = cfg.sampleRate ?? voice.sampleRate ?? 32000;
+
+        data.format = 'wav';
+      }
+
+      return data;
     } catch (error) {
       console.error(`获取音色参数失败: ${voiceId}`, error.message);
+
       return null;
     }
   }
 
   async setVoiceParams(body: { voice_id: string; params: any }) {
-    const { voice_id, params } = body;
+    const { voice_id, params } = body || ({} as any);
     if (!voice_id || !params)
-      throw new HttpException('voice_id 与 params 必填', HttpStatus.BAD_REQUEST);
+      throw new HttpException('voice_id 和 params 必填', HttpStatus.BAD_REQUEST);
 
-    try {
-      console.log(`设置音色参数: ${voice_id}`, params);
+    const voice = await this.voiceRepo.findOne({ where: { voiceId: voice_id } });
+    if (!voice) throw new HttpException(`音色不存在: ${voice_id}`, HttpStatus.NOT_FOUND);
 
-      // 查找现有音色记录
-      const existing = await this.voiceRepo.findOne({ where: { voiceId: voice_id } });
+    const updateData: any = { updatedAt: new Date() };
+    if (params.rate !== undefined) updateData.rate = Number(params.rate);
+    if (params.pitch !== undefined) updateData.pitch = Number(params.pitch);
+    if (params.volume !== undefined) updateData.volume = Number(params.volume);
+    if (params.sample_rate !== undefined) updateData.sampleRate = Number(params.sample_rate);
+    if (params.format !== undefined) updateData.format = String(params.format);
 
-      if (!existing) {
-        throw new HttpException(`音色 ${voice_id} 不存在`, HttpStatus.NOT_FOUND);
-      }
-
-      // 更新音色参数
-      const updateData: any = {};
-      if (params.rate !== undefined) updateData.rate = Number(params.rate);
-      if (params.pitch !== undefined) updateData.pitch = Number(params.pitch);
-      if (params.volume !== undefined) updateData.volume = Number(params.volume);
-      if (params.sample_rate !== undefined) updateData.sampleRate = Number(params.sample_rate);
-      if (params.format !== undefined) updateData.format = String(params.format);
-
-      await this.voiceRepo.update({ voiceId: voice_id }, updateData);
-
-      console.log(`音色参数设置成功: ${voice_id}`);
-      return { success: true, message: '参数保存成功' };
-    } catch (error) {
-      console.error(`设置音色参数失败: ${voice_id}`, error.message);
-      throw new HttpException(`参数保存失败: ${error.message}`, HttpStatus.BAD_REQUEST);
+    if ((voice.provider as VoiceProvider) === 'gpt-sovits') {
+      const cfg = this.getGptSovitsConfig(voice);
+      const nextCfg: VoiceGptSovitsConfig = {
+        ...cfg,
+        textLanguage: params.text_language || params.textLanguage || cfg.textLanguage,
+        promptLanguage: params.prompt_language || params.promptLanguage || cfg.promptLanguage,
+        promptText: params.prompt_text || params.promptText || cfg.promptText,
+        sampleRate: params.sample_rate ? Number(params.sample_rate) : cfg.sampleRate,
+      };
+      updateData.config = nextCfg;
     }
+
+    await this.voiceRepo.update({ voiceId: voice_id }, updateData);
+    return { success: true };
   }
 
   // 读取音色元信息（如自定义名称），从voice表读取
@@ -1398,6 +1601,283 @@ export class VoiceService {
     return dataSize / (sampleRate * 2); // 假设单声道16位
   }
 
+  private async ensureVoiceProviderColumns() {
+    const columns = await this.voiceRepo.query(
+      "SELECT COLUMN_NAME FROM information_schema.columns WHERE table_schema = DATABASE() AND table_name = 'voice'",
+    );
+    const columnNames = new Set(
+      columns.map((c: any) => String(c?.COLUMN_NAME || c?.column_name || '').toLowerCase()),
+    );
+    const alters: string[] = [];
+    if (!columnNames.has('provider')) {
+      alters.push(
+        "ADD COLUMN `provider` varchar(64) NOT NULL DEFAULT 'dashscope' COMMENT '音色提供商（dashscope/gpt-sovits）' AFTER `model`",
+      );
+    }
+    if (!columnNames.has('config')) {
+      alters.push("ADD COLUMN `config` text NULL COMMENT '提供商配置JSON' AFTER `status`");
+    }
+    if (alters.length) {
+      await this.voiceRepo.query(`ALTER TABLE \`voice\` ${alters.join(', ')}`);
+      Logger.log('[VoiceService] 自动添加 provider/config 列成功', 'VoiceService');
+    }
+    if (!columnNames.has('provider')) {
+      columnNames.add('provider');
+    }
+    const indexRows = await this.voiceRepo.query(
+      "SHOW INDEX FROM `voice` WHERE Key_name = 'IDX_voice_provider'",
+    );
+    if (!indexRows?.length && columnNames.has('provider')) {
+      await this.voiceRepo.query('ALTER TABLE `voice` ADD INDEX `IDX_voice_provider` (`provider`)');
+      Logger.log('[VoiceService] 自动添加 IDX_voice_provider 索引成功', 'VoiceService');
+    }
+  }
+
+  private generateGptSovitsVoiceId(raw?: string): string {
+    const base = String(raw || '')
+      .trim()
+      .toLowerCase();
+    const sanitized = base.replace(/[^a-z0-9-_]/g, '');
+    if (sanitized) return sanitized;
+    return `gptsovits-${Date.now().toString(36)}-${cryptoRandomId().slice(0, 8)}`;
+  }
+
+  private async assertVoiceIdAvailable(voiceId: string) {
+    const exists = await this.voiceRepo.findOne({ where: { voiceId } });
+    if (exists) {
+      throw new HttpException(`音色 ${voiceId} 已存在`, HttpStatus.CONFLICT);
+    }
+  }
+
+  private async ensureGptSovitsDir(voiceId: string): Promise<string> {
+    await fsp.mkdir(this.gptSovitsStorageRoot, { recursive: true });
+    const dir = path.join(this.gptSovitsStorageRoot, voiceId);
+    await fsp.mkdir(dir, { recursive: true });
+    return dir;
+  }
+
+  private async persistGptSovitsFile(
+    file: { originalname?: string; buffer: Buffer },
+    dir: string,
+    baseName: string,
+    allowedExts: string[],
+    fallbackExt: string,
+  ): Promise<string> {
+    if (!file?.buffer?.length) {
+      throw new HttpException(`${baseName} 文件内容为空`, HttpStatus.BAD_REQUEST);
+    }
+    const ext = path.extname(file.originalname || '').toLowerCase();
+    if (ext && !allowedExts.includes(ext)) {
+      throw new HttpException(
+        `${baseName} 文件扩展名仅支持 ${allowedExts.join(', ')}`,
+        HttpStatus.BAD_REQUEST,
+      );
+    }
+    const safeName = `${baseName}${ext || fallbackExt}`;
+    const target = path.join(dir, safeName);
+    await fsp.writeFile(target, file.buffer);
+    return target;
+  }
+
+  private parseOptionalNumber(input: any): number | undefined {
+    if (input === undefined || input === null || input === '') return undefined;
+    const num = Number(input);
+    if (Number.isFinite(num)) return num;
+    return undefined;
+  }
+
+  private getGptSovitsConfig(voice: VoiceEntity): VoiceGptSovitsConfig {
+    const cfg = (voice.config || {}) as VoiceGptSovitsConfig;
+    if (!cfg?.gptModelPath || !cfg?.sovitsModelPath || !cfg?.promptAudioPath || !cfg?.promptText) {
+      throw new HttpException(`音色 ${voice.voiceId} 缺少 GPT-SoVITS 配置`, HttpStatus.BAD_REQUEST);
+    }
+    return {
+      ...cfg,
+      promptLanguage: cfg.promptLanguage || 'zh',
+      textLanguage: cfg.textLanguage || DEFAULT_GPT_SOVITS_TEXT_LANGUAGE,
+    };
+  }
+
+  private normalizeGptSovitsUrl(pathname = '/'): string {
+    const base = this.gptSovitsBaseUrl?.replace(/\/+$/, '') || 'http://127.0.0.1:9880';
+    const path = pathname.startsWith('/') ? pathname : `/${pathname}`;
+    return `${base}${path}`;
+  }
+
+  private async ensureGptSovitsModelLoaded(
+    voiceId: string,
+    config: VoiceGptSovitsConfig,
+  ): Promise<void> {
+    const cached = this.gptSovitsModelCache.get(voiceId);
+    if (
+      cached &&
+      cached.gptModelPath === config.gptModelPath &&
+      cached.sovitsModelPath === config.sovitsModelPath
+    ) {
+      return;
+    }
+    try {
+      await axios.post(
+        this.normalizeGptSovitsUrl('/set_model'),
+        {
+          gpt_model_path: config.gptModelPath,
+          sovits_model_path: config.sovitsModelPath,
+        },
+        { timeout: 120000 },
+      );
+      this.gptSovitsModelCache.set(voiceId, {
+        gptModelPath: config.gptModelPath,
+        sovitsModelPath: config.sovitsModelPath,
+        loadedAt: Date.now(),
+      });
+    } catch (error: any) {
+      Logger.error(
+        `[ensureGptSovitsModelLoaded] 加载模型失败: ${error?.message || error}`,
+        'VoiceService',
+      );
+      throw new HttpException(
+        error?.response?.data?.message || '加载 GPT-SoVITS 模型失败',
+        HttpStatus.BAD_GATEWAY,
+      );
+    }
+  }
+
+  private buildGptSovitsPayload(
+    config: VoiceGptSovitsConfig,
+    options: {
+      text: string;
+      textLanguage?: string;
+      cutPunc?: string;
+    },
+  ) {
+    const payload: any = {
+      refer_wav_path: config.promptAudioPath,
+      prompt_text: config.promptText,
+      prompt_language: config.promptLanguage,
+      text: options.text,
+      text_language:
+        options.textLanguage || config.textLanguage || DEFAULT_GPT_SOVITS_TEXT_LANGUAGE,
+      cut_punc: options.cutPunc || config.cutPunc || undefined,
+      top_k: config.topK,
+      top_p: config.topP,
+      temperature: config.temperature,
+      speed: config.speed,
+      sample_steps: config.sampleSteps,
+      if_sr: false,
+    };
+    Object.keys(payload).forEach(key => {
+      if (payload[key] === undefined || payload[key] === null || payload[key] === '') {
+        delete payload[key];
+      }
+    });
+    return payload;
+  }
+
+  private async requestGptSovitsAudio(options: {
+    voice: VoiceEntity;
+    text: string;
+    textLanguage?: string;
+    cutPunc?: string;
+    sampleRate?: number;
+    stream: boolean;
+    onStart?: (info: { sampleRate: number }) => void;
+    onData?: (chunk: Buffer) => void;
+    onEnd?: () => void;
+  }): Promise<{ buffer?: Buffer; sampleRate: number }> {
+    const config = this.getGptSovitsConfig(options.voice);
+    const sampleRate = Number(options.sampleRate ?? config.sampleRate ?? 32000);
+    await this.ensureGptSovitsModelLoaded(options.voice.voiceId, config);
+    const payload = this.buildGptSovitsPayload(config, {
+      text: options.text,
+      textLanguage: options.textLanguage,
+      cutPunc: options.cutPunc,
+    });
+
+    const url = this.normalizeGptSovitsUrl('/');
+    if (options.stream) {
+      const response = await axios.post(url, payload, {
+        responseType: 'stream',
+        timeout: 120000,
+        validateStatus: () => true,
+      });
+      if (response.status >= 400) {
+        throw new HttpException(
+          response.data?.message || 'GPT-SoVITS 合成失败',
+          HttpStatus.BAD_GATEWAY,
+        );
+      }
+      const stream = response.data as Readable;
+      options.onStart?.({ sampleRate });
+      await new Promise<void>((resolve, reject) => {
+        stream.on('data', chunk => {
+          try {
+            const buf = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
+            options.onData?.(buf);
+          } catch (err) {
+            Logger.warn(`[requestGptSovitsAudio] onData 回调异常: ${err}`, 'VoiceService');
+          }
+        });
+        stream.on('end', () => {
+          try {
+            options.onEnd?.();
+          } catch {}
+          resolve();
+        });
+        stream.on('error', err => {
+          reject(err);
+        });
+      }).catch(err => {
+        throw new HttpException(err?.message || 'GPT-SoVITS 流式输出失败', HttpStatus.BAD_GATEWAY);
+      });
+      return { sampleRate };
+    }
+
+    const response = await axios.post(url, payload, {
+      responseType: 'arraybuffer',
+      timeout: 120000,
+      validateStatus: () => true,
+    });
+    if (response.status >= 400) {
+      throw new HttpException(
+        response.data?.message || 'GPT-SoVITS 合成失败',
+        HttpStatus.BAD_GATEWAY,
+      );
+    }
+    const buffer = Buffer.from(response.data);
+    return { buffer, sampleRate };
+  }
+
+  private async deleteVoiceAssociations(voiceId: string) {
+    const appVoiceDeleteResult = await this.appVoiceRepo.delete({ voiceId });
+    console.log(`删除应用音色关联: affected rows = ${appVoiceDeleteResult.affected}`);
+
+    const appEmotionVoiceDeleteResult = await this.appEmotionVoiceRepo.delete({ voiceId });
+    console.log(`删除应用情绪音色关联: affected rows = ${appEmotionVoiceDeleteResult.affected}`);
+
+    const appUpdateResult = await this.appRepo.update({ voiceId }, { voiceId: null });
+    console.log(`清空应用默认音色: affected rows = ${appUpdateResult.affected}`);
+
+    const deleteResult = await this.voiceRepo.delete({ voiceId });
+    console.log(`删除音色记录: affected rows = ${deleteResult.affected}`);
+  }
+
+  private async cleanupGptSovitsAssets(voiceId: string) {
+    const dir = path.join(this.gptSovitsStorageRoot, voiceId);
+    try {
+      await fsp.rm(dir, { recursive: true, force: true });
+      Logger.log(`[cleanupGptSovitsAssets] 已清理 ${dir}`, 'VoiceService');
+    } catch (error) {
+      Logger.warn(
+        `[cleanupGptSovitsAssets] 清理目录失败 ${dir}: ${error?.message || error}`,
+        'VoiceService',
+      );
+    }
+    this.gptSovitsModelCache.delete(voiceId);
+  }
+
+  /**
+   * 合成试听音频并上传至当前配置的存储（本地/S3/OSS等），返回可访问URL和时长
+   */
   /**
    * 合成试听音频并上传至当前配置的存储（本地/S3/OSS等），返回可访问URL和时长
    */
@@ -1411,20 +1891,26 @@ export class VoiceService {
     rate?: number;
     pitch?: number;
     instruction?: string;
+    text_language?: string;
+    cut_punc?: string;
   }): Promise<{ url: string; duration: number }> {
     const { voice_id, text } = body;
     if (!voice_id || !text)
-      throw new HttpException('voice_id 与 text 必填', HttpStatus.BAD_REQUEST);
+      throw new HttpException('voice_id 和 text 必填', HttpStatus.BAD_REQUEST);
 
-    // 读取该音色的默认参数，缺省时应用优化后的默认值
+    const voiceEntity = await this.voiceRepo.findOne({ where: { voiceId: voice_id } });
+    if (!voiceEntity) throw new HttpException(`音色不存在: ${voice_id}`, HttpStatus.NOT_FOUND);
+    if ((voiceEntity.provider as VoiceProvider) === 'gpt-sovits') {
+      return this.previewWithGptSovits(voiceEntity, body);
+    }
+
     const saved = (await this.getVoiceParams(voice_id)) || {};
     const format = (body.format || saved.format || 'mp3') as 'mp3' | 'wav' | 'pcm';
-    const sample_rate = Number(body.sample_rate ?? saved.sample_rate ?? 24000); // 采样率提高
-    const volume = Number(body.volume ?? saved.volume ?? 52); // 音量稍大
-    const rate = Number(body.rate ?? saved.rate ?? 0.98); // 语速稍慢，发音更清晰
+    const sample_rate = Number(body.sample_rate ?? saved.sample_rate ?? 24000);
+    const volume = Number(body.volume ?? saved.volume ?? 52);
+    const rate = Number(body.rate ?? saved.rate ?? 0.98);
     const pitch = Number(body.pitch ?? saved.pitch ?? 1);
 
-    // 强制使用与复刻相同的模型：从 voice_id 推断模型；若无法推断，再退回到前端传参或默认模型
     const lowerId = (voice_id || '').toLowerCase();
     let modelToUse: string;
     if (lowerId.startsWith('cosyvoice-v3-plus-')) modelToUse = 'cosyvoice-v3-plus';
@@ -1434,11 +1920,10 @@ export class VoiceService {
 
     const apiKey = await this.getApiKey();
 
-    // 动态引入 ws 依赖，若未安装则给出提示
     let WS: any;
     try {
       const WSMod: any = await import('ws');
-      WS = WSMod?.default || WSMod; // 兼容不同打包/导出方式
+      WS = WSMod?.default || WSMod;
       if (!WS) throw new Error('ws module not resolved');
     } catch (e) {
       Logger.error('缺少依赖 ws，请先安装: pnpm add ws', 'VoiceService');
@@ -1455,10 +1940,9 @@ export class VoiceService {
     } as Record<string, string>;
 
     const ws = new WS(COSY_WS_URL, { headers });
-
     const audioBuffers: Uint8Array[] = [];
 
-    const uploadOnFinish = new Promise<{ url: string; duration: number }>((resolve, reject) => {
+    await new Promise<void>((resolve, reject) => {
       ws.on('open', () => {
         const parameters: any = {
           text_type: 'PlainText',
@@ -1469,30 +1953,26 @@ export class VoiceService {
           rate,
           pitch,
         };
+        if (body.instruction) parameters.instruction = body.instruction;
 
-        // 如果传入了instruction参数，添加到parameters中
-        if (body.instruction) {
-          parameters.instruction = body.instruction;
-        }
-
-        const runTask = {
-          header: { action: 'run-task', task_id: taskId, streaming: 'duplex' },
-          payload: {
-            task_group: 'audio',
-            task: 'tts',
-            function: 'SpeechSynthesizer',
-            model: modelToUse,
-            parameters,
-            input: {},
-          },
-        };
-        ws.send(JSON.stringify(runTask));
+        ws.send(
+          JSON.stringify({
+            header: { action: 'run-task', task_id: taskId, streaming: 'duplex' },
+            payload: {
+              task_group: 'audio',
+              task: 'tts',
+              function: 'SpeechSynthesizer',
+              model: modelToUse,
+              parameters,
+              input: {},
+            },
+          }),
+        );
       });
 
       ws.on('message', (data: any, isBinary: boolean) => {
-        // ws@8: (data, isBinary) signature
         if (isBinary) {
-          const chunkBuf: Buffer = Buffer.isBuffer(data) ? (data as Buffer) : Buffer.from(data);
+          const chunkBuf: Buffer = Buffer.isBuffer(data) ? data : Buffer.from(data);
           audioBuffers.push(new Uint8Array(chunkBuf));
           return;
         }
@@ -1500,16 +1980,18 @@ export class VoiceService {
           const msg = JSON.parse(data.toString());
           const event = msg?.header?.event;
           if (event === 'task-started') {
-            const continueTask = {
-              header: { action: 'continue-task', task_id: taskId, streaming: 'duplex' },
-              payload: { input: { text } },
-            };
-            ws.send(JSON.stringify(continueTask));
-            const finishTask = {
-              header: { action: 'finish-task', task_id: taskId, streaming: 'duplex' },
-              payload: { input: {} },
-            };
-            ws.send(JSON.stringify(finishTask));
+            ws.send(
+              JSON.stringify({
+                header: { action: 'continue-task', task_id: taskId, streaming: 'duplex' },
+                payload: { input: { text } },
+              }),
+            );
+            ws.send(
+              JSON.stringify({
+                header: { action: 'finish-task', task_id: taskId, streaming: 'duplex' },
+                payload: { input: {} },
+              }),
+            );
           } else if (event === 'task-finished') {
             ws.close();
           } else if (event === 'task-failed') {
@@ -1522,49 +2004,62 @@ export class VoiceService {
             );
           }
         } catch (err) {
-          // ignore parse errors
+          Logger.warn(`解析TTS消息失败: ${err}`, 'VoiceService');
         }
       });
 
-      ws.on('close', async () => {
-        try {
-          if (!audioBuffers.length) throw new Error('未收到音频数据');
-          const buffer = Buffer.concat(audioBuffers);
-          const mimetype =
-            format === 'mp3'
-              ? 'audio/mpeg'
-              : format === 'wav'
-              ? 'audio/wav'
-              : 'application/octet-stream';
-          const url = await this.uploadService.uploadFile(
-            { buffer, mimetype } as any,
-            'voicePreview',
-          );
-
-          // 计算音频时长
-          const duration = await this.getAudioDuration(buffer, format, sample_rate);
-          Logger.log(
-            `[preview] 音频生成完成 - URL: ${url}, 时长: ${Math.round(duration)}秒`,
-            'VoiceService',
-          );
-
-          resolve({ url: url as any, duration });
-        } catch (e: any) {
-          // 透传上传模块的异常状态码，避免一律 500
-          if (e instanceof HttpException) return reject(e);
-          reject(new HttpException(e?.message || '音频上传失败', HttpStatus.INTERNAL_SERVER_ERROR));
-        }
-      });
-
+      ws.on('close', () => resolve());
       ws.on('error', (err: any) => {
         reject(new HttpException(err?.message || 'WebSocket错误', HttpStatus.BAD_GATEWAY));
       });
     });
 
-    const result = await uploadOnFinish;
-    return result;
+    if (!audioBuffers.length) {
+      throw new HttpException('未收到音频数据', HttpStatus.BAD_GATEWAY);
+    }
+    const buffer = Buffer.concat(audioBuffers);
+    const mimetype =
+      format === 'mp3' ? 'audio/mpeg' : format === 'wav' ? 'audio/wav' : 'application/octet-stream';
+    const url = await this.uploadService.uploadFile({ buffer, mimetype } as any, 'voicePreview');
+    const duration = await this.getAudioDuration(buffer, format, sample_rate);
+    Logger.log(
+      `[preview] 音频生成完成 - URL: ${url}, 时长: ${Math.round(duration)}秒`,
+      'VoiceService',
+    );
+    return { url: url as any, duration };
   }
 
+  private async previewWithGptSovits(
+    voice: VoiceEntity,
+    body: { text: string; text_language?: string; cut_punc?: string; sample_rate?: number },
+  ): Promise<{ url: string; duration: number }> {
+    const config = this.getGptSovitsConfig(voice);
+    const sampleRate = Number(body.sample_rate ?? config.sampleRate ?? 32000);
+    const response = await this.requestGptSovitsAudio({
+      voice,
+      text: body.text,
+      textLanguage: body.text_language,
+      cutPunc: body.cut_punc,
+      sampleRate,
+      stream: false,
+    });
+    const buffer = response.buffer;
+    const uploadUrl = await this.uploadService.uploadFile(
+      { buffer, mimetype: 'audio/wav' } as any,
+      'voicePreview',
+    );
+    const duration = await this.getAudioDuration(buffer!, 'wav', sampleRate);
+    Logger.log(
+      `[previewWithGptSovits] 音频生成完成 - URL: ${uploadUrl}, 时长: ${Math.round(duration)}秒`,
+      'VoiceService',
+    );
+    return { url: uploadUrl as any, duration };
+  }
+
+  /**
+   * 流式语音合成（旧版，单次文本）：边合成边通过回调吐出音频片段
+   * @deprecated 推荐使用 createTTSStreamSession 实现真正的流式合成
+   */
   /**
    * 流式语音合成（旧版，单次文本）：边合成边通过回调吐出音频片段
    * @deprecated 推荐使用 createTTSStreamSession 实现真正的流式合成
@@ -1580,6 +2075,8 @@ export class VoiceService {
       rate?: number;
       pitch?: number;
       instruction?: string;
+      text_language?: string;
+      cut_punc?: string;
     },
     opts?: {
       onStart?: (info: { format: 'mp3' | 'wav' | 'pcm'; sample_rate: number }) => void;
@@ -1589,16 +2086,45 @@ export class VoiceService {
   ) {
     const { voice_id, text } = body || ({} as any);
     if (!voice_id || !text)
-      throw new HttpException('voice_id 与 text 必填', HttpStatus.BAD_REQUEST);
+      throw new HttpException('voice_id 和 text 必填', HttpStatus.BAD_REQUEST);
+
+    const voiceEntity = await this.voiceRepo.findOne({ where: { voiceId: voice_id } });
+    if (!voiceEntity) throw new HttpException(`音色不存在: ${voice_id}`, HttpStatus.NOT_FOUND);
+
+    if ((voiceEntity.provider as VoiceProvider) === 'gpt-sovits') {
+      await this.requestGptSovitsAudio({
+        voice: voiceEntity,
+        text,
+        textLanguage: body.text_language,
+        cutPunc: body.cut_punc,
+        sampleRate: body.sample_rate,
+        stream: true,
+        onStart: info => {
+          try {
+            opts?.onStart?.({ format: 'wav', sample_rate: info.sampleRate });
+          } catch {}
+        },
+        onData: chunk => {
+          try {
+            opts?.onData?.(chunk);
+          } catch {}
+        },
+        onEnd: () => {
+          try {
+            opts?.onEnd?.();
+          } catch {}
+        },
+      });
+      return { success: true };
+    }
 
     const saved = (await this.getVoiceParams(voice_id)) || {};
     const format = (body.format || saved.format || 'mp3') as 'mp3' | 'wav' | 'pcm';
-    const sample_rate = Number(body.sample_rate ?? saved.sample_rate ?? 24000); // 采样率提高
-    const volume = Number(body.volume ?? saved.volume ?? 52); // 音量稍大
-    const rate = Number(body.rate ?? saved.rate ?? 0.98); // 语速稍慢，发音更清晰
+    const sample_rate = Number(body.sample_rate ?? saved.sample_rate ?? 24000);
+    const volume = Number(body.volume ?? saved.volume ?? 52);
+    const rate = Number(body.rate ?? saved.rate ?? 0.98);
     const pitch = Number(body.pitch ?? saved.pitch ?? 1);
 
-    // 依据 voice_id 推断默认模型
     const lowerId = (voice_id || '').toLowerCase();
     let modelToUse: string;
     if (lowerId.startsWith('cosyvoice-v3-plus-')) modelToUse = 'cosyvoice-v3-plus';
@@ -1631,11 +2157,6 @@ export class VoiceService {
 
     await new Promise<void>((resolve, reject) => {
       ws.on('open', () => {
-        // 通知开始（在 task-started 后再发一次可靠参数）
-        try {
-          opts?.onStart?.({ format, sample_rate });
-        } catch {}
-
         const parameters: any = {
           text_type: 'PlainText',
           voice: voice_id,
@@ -1645,30 +2166,27 @@ export class VoiceService {
           rate,
           pitch,
         };
+        if (body.instruction) parameters.instruction = body.instruction;
 
-        // 如果传入了instruction参数，添加到parameters中
-        if (body.instruction) {
-          parameters.instruction = body.instruction;
-        }
-
-        const runTask = {
-          header: { action: 'run-task', task_id: taskId, streaming: 'duplex' },
-          payload: {
-            task_group: 'audio',
-            task: 'tts',
-            function: 'SpeechSynthesizer',
-            model: modelToUse,
-            parameters,
-            input: {},
-          },
-        };
-        ws.send(JSON.stringify(runTask));
+        ws.send(
+          JSON.stringify({
+            header: { action: 'run-task', task_id: taskId, streaming: 'duplex' },
+            payload: {
+              task_group: 'audio',
+              task: 'tts',
+              function: 'SpeechSynthesizer',
+              model: modelToUse,
+              parameters,
+              input: {},
+            },
+          }),
+        );
       });
 
       ws.on('message', (data: any, isBinary: boolean) => {
         if (isBinary) {
           try {
-            opts?.onData?.(Buffer.from(data));
+            opts?.onData?.(Buffer.isBuffer(data) ? data : Buffer.from(data));
           } catch {}
           return;
         }
@@ -1676,17 +2194,18 @@ export class VoiceService {
           const msg = JSON.parse(data.toString());
           const event = msg?.header?.event;
           if (event === 'task-started') {
-            // 发送文本并结束上行
-            const continueTask = {
-              header: { action: 'continue-task', task_id: taskId, streaming: 'duplex' },
-              payload: { input: { text } },
-            };
-            ws.send(JSON.stringify(continueTask));
-            const finishTask = {
-              header: { action: 'finish-task', task_id: taskId, streaming: 'duplex' },
-              payload: { input: {} },
-            };
-            ws.send(JSON.stringify(finishTask));
+            ws.send(
+              JSON.stringify({
+                header: { action: 'continue-task', task_id: taskId, streaming: 'duplex' },
+                payload: { input: { text } },
+              }),
+            );
+            ws.send(
+              JSON.stringify({
+                header: { action: 'finish-task', task_id: taskId, streaming: 'duplex' },
+                payload: { input: {} },
+              }),
+            );
           } else if (event === 'task-finished') {
             ws.close();
           } else if (event === 'task-failed') {
@@ -1698,8 +2217,8 @@ export class VoiceService {
               ),
             );
           }
-        } catch {
-          // ignore
+        } catch (err) {
+          Logger.warn(`解析TTS消息失败: ${err}`, 'VoiceService');
         }
       });
 
@@ -1718,14 +2237,6 @@ export class VoiceService {
     return { success: true };
   }
 
-  /**
-   * 创建真正的流式TTS会话：一次连接，多次发送文本，实时合成
-   * 使用示例：
-   * const session = await voiceService.createTTSStreamSession({...});
-   * session.sendText('第一段文本');  // 边发边合成
-   * session.sendText('第二段文本');  // 继续合成
-   * await session.finish();         // 结束会话
-   */
   async createTTSStreamSession(params: {
     voice_id: string;
     model?: string;
@@ -1742,6 +2253,15 @@ export class VoiceService {
   }): Promise<TTSStreamSession> {
     const { voice_id, onStart, onData, onEnd, onError } = params;
     if (!voice_id) throw new HttpException('voice_id 必填', HttpStatus.BAD_REQUEST);
+
+    const voiceEntity = await this.voiceRepo.findOne({ where: { voiceId: voice_id } });
+    if (!voiceEntity) throw new HttpException(`音色不存在: ${voice_id}`, HttpStatus.NOT_FOUND);
+    if ((voiceEntity.provider as VoiceProvider) === 'gpt-sovits') {
+      throw new HttpException(
+        'GPT-SoVITS 暂不支持 createTTSStreamSession',
+        HttpStatus.NOT_IMPLEMENTED,
+      );
+    }
 
     const saved = (await this.getVoiceParams(voice_id)) || {};
     const format = (params.format || saved.format || 'mp3') as 'mp3' | 'wav' | 'pcm';

@@ -4,6 +4,7 @@ export default {
   // 声音复刻：创建音色
   enroll: (data: { prefix: string; url: string; targetModel?: string; name?: string }) =>
     api.post('voice/enroll', data),
+  importGptSovits: (data: FormData) => api.post('voice/gpt-sovits/import', data),
   // 列出音色
   list: (
     params: {
@@ -29,6 +30,8 @@ export default {
     volume?: number;
     rate?: number;
     pitch?: number;
+    text_language?: string;
+    cut_punc?: string;
   }) => api.post('voice/preview', data),
 
   // 获取/设置 音色默认参数

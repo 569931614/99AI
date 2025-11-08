@@ -334,6 +334,8 @@ export class OpenVoiceController {
         volume: { type: 'number', description: '音量（可选）' },
         rate: { type: 'number', description: '语速（可选）' },
         pitch: { type: 'number', description: '音调（可选）' },
+        text_language: { type: 'string', description: '文本语言（GPT-SoVITS 可选）' },
+        cut_punc: { type: 'string', description: '文本切分符（GPT-SoVITS 可选）' },
       },
       required: ['voice_id', 'text'],
     },
@@ -354,6 +356,8 @@ export class OpenVoiceController {
       volume?: number;
       rate?: number;
       pitch?: number;
+      text_language?: string;
+      cut_punc?: string;
     },
   ) {
     return this.voiceService.preview(body);

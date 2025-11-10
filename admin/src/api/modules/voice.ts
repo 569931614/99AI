@@ -4,6 +4,9 @@ export default {
   // 声音复刻：创建音色
   enroll: (data: { prefix: string; url: string; targetModel?: string; name?: string }) =>
     api.post('voice/enroll', data),
+  // 列出服务器上的 GPT-SoVITS 模型文件
+  listGptSovitsFiles: () => api.get('voice/gpt-sovits/files'),
+  // 导入 GPT-SoVITS 模型（支持上传文件或选择服务器文件）
   importGptSovits: (data: FormData) => api.post('voice/gpt-sovits/import', data),
   // 列出音色
   list: (

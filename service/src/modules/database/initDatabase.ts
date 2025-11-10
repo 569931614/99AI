@@ -184,6 +184,73 @@ async function migrateColumnType(
 }
 
 /**
+ * 字段重命名迁移函数
+ * @param tableName 表名
+ * @param oldColumnName 旧列名
+ * @param newColumnName 新列名
+ * @param columnDefinition 列定义（包括类型和约束）
+ * @param conn 数据库连接
+ */
+async function renameColumn(
+  tableName: string,
+  oldColumnName: string,
+  newColumnName: string,
+  columnDefinition: string,
+  conn: mysql.Connection,
+): Promise<boolean> {
+  try {
+    // 检查表是否存在
+    const [tables] = (await conn.execute(
+      `SHOW TABLES LIKE '${tableName}'`,
+    )) as mysql.RowDataPacket[][];
+
+    if (tables.length === 0) {
+      Logger.log(`表 ${tableName} 不存在，跳过字段重命名`, 'Database');
+      return false;
+    }
+
+    // 检查旧字段是否存在
+    const [oldColumns] = (await conn.execute(
+      `SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS
+       WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ? AND COLUMN_NAME = ?`,
+      [process.env.DB_DATABASE, tableName, oldColumnName],
+    )) as mysql.RowDataPacket[][];
+
+    // 检查新字段是否已存在
+    const [newColumns] = (await conn.execute(
+      `SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS
+       WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ? AND COLUMN_NAME = ?`,
+      [process.env.DB_DATABASE, tableName, newColumnName],
+    )) as mysql.RowDataPacket[][];
+
+    if (newColumns.length > 0) {
+      Logger.log(`表 ${tableName} 中已存在 ${newColumnName} 列，跳过重命名`, 'Database');
+      return false;
+    }
+
+    if (oldColumns.length === 0) {
+      Logger.log(`表 ${tableName} 中不存在 ${oldColumnName} 列，跳过重命名`, 'Database');
+      return false;
+    }
+
+    // 执行重命名
+    Logger.log(
+      `开始将 ${tableName} 表中的 ${oldColumnName} 列重命名为 ${newColumnName}`,
+      'Database',
+    );
+    await conn.execute(
+      `ALTER TABLE ${tableName} CHANGE \`${oldColumnName}\` \`${newColumnName}\` ${columnDefinition}`,
+    );
+    Logger.log(`${tableName} 表中的列已成功从 ${oldColumnName} 重命名为 ${newColumnName}`, 'Database');
+
+    return true;
+  } catch (error) {
+    Logger.error(`重命名 ${tableName}.${oldColumnName} 列时出错:`, error, 'Database');
+    return false;
+  }
+}
+
+/**
  * 执行所有数据库迁移
  */
 async function runAllMigrations() {
@@ -236,6 +303,19 @@ async function runAllMigrations() {
       } catch (error) {
         Logger.log(`迁移chatlog表${column}列时跳过: ${error.message}`, 'Database');
       }
+    }
+
+    // 4. chatGroup表字段重命名：characterRelationships -> memberRelationships
+    try {
+      await renameColumn(
+        'chat_group',
+        'characterRelationships',
+        'memberRelationships',
+        'LONGTEXT COMMENT "人物关系配置(JSON)" NULL',
+        conn,
+      );
+    } catch (error) {
+      Logger.log(`重命名chat_group表characterRelationships列时跳过: ${error.message}`, 'Database');
     }
   } finally {
     await conn.end();

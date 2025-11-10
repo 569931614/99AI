@@ -25,6 +25,7 @@ import { OrderEntity } from '../order/order.entity';
 import { PluginEntity } from '../plugin/plugin.entity';
 import { Share } from '../share/share.entity';
 import { SigninEntity } from '../signin/signIn.entity';
+import { StickerEntity } from '../sticker/sticker.entity';
 import { UserEntity } from '../user/user.entity';
 import { AccountLogEntity } from '../userBalance/accountLog.entity';
 import { BalanceEntity } from '../userBalance/balance.entity';
@@ -80,6 +81,7 @@ import { VoiceCategoryEntity } from '../voice/voiceCategory.entity';
             UserAppAffectionEntity,
             ConversationSummaryEntity,
             UserAppSettingsEntity,
+            StickerEntity,
           ],
           synchronize: false,
           logging: false,

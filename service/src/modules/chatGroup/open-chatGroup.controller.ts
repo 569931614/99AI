@@ -1160,4 +1160,131 @@ export class OpenChatGroupController {
       return res.status(status).json({ success: false, message });
     }
   }
+
+  // ==== 人物关系管理 ====
+  @Post('relationships/update')
+  @ApiOperation({ summary: '【开放】更新群组人物关系配置（无鉴权，需显式传 userId）' })
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        userId: { type: 'number', description: '外部用户ID' },
+        groupId: { type: 'number', description: '对话分组ID' },
+        relationships: {
+          type: 'array',
+          description: '人物关系配置数组',
+          items: {
+            type: 'object',
+            properties: {
+              memberA: { type: 'number', description: '成员A的appId' },
+              memberB: { type: 'number', description: '成员B的appId' },
+              type: { type: 'string', description: '关系类型（如：朋友、同事、恋人、家人等）' },
+              description: { type: 'string', description: '关系描述（可选）' },
+            },
+            required: ['memberA', 'memberB', 'type'],
+          },
+        },
+      },
+      required: ['userId', 'groupId', 'relationships'],
+    },
+    examples: {
+      basic: {
+        summary: '设置人物关系',
+        value: {
+          userId: 1001,
+          groupId: 123,
+          relationships: [
+            {
+              memberA: 456,
+              memberB: 457,
+              type: '朋友',
+              description: '多年好友',
+            },
+            {
+              memberA: 456,
+              memberB: 458,
+              type: '同事',
+              description: '同公司同事',
+            },
+          ],
+        },
+      },
+    },
+  })
+  async updateRelationships(@Body() body: any, @Req() _req: Request, @Res() res: Response) {
+    try {
+      const { userId, groupId, relationships } = body || {};
+      if (!userId) throw new HttpException('userId 必填', HttpStatus.BAD_REQUEST);
+      if (!groupId) throw new HttpException('groupId 必填', HttpStatus.BAD_REQUEST);
+      if (!relationships || !Array.isArray(relationships)) {
+        throw new HttpException('relationships 必填且必须是数组', HttpStatus.BAD_REQUEST);
+      }
+
+      // 构造伪造的 req 对象
+      const fakeReq: any = {
+        user: { id: userId, role: 'visitor' },
+        header: (name: string) => _req.header(name),
+        headers: _req.headers,
+        connection: _req.connection,
+        socket: _req.socket,
+        ip: _req.ip,
+      };
+
+      const result = await this.chatGroupService.updateRelationships(
+        { groupId, relationships },
+        fakeReq,
+      );
+      return res.status(200).json({ success: true, data: result });
+    } catch (e: any) {
+      const status = e instanceof HttpException ? e.getStatus() : HttpStatus.INTERNAL_SERVER_ERROR;
+      const message = e?.message || '更新人物关系失败';
+      return res.status(status).json({ success: false, message });
+    }
+  }
+
+  @Post('relationships/get')
+  @ApiOperation({ summary: '【开放】获取群组人物关系配置（无鉴权，需显式传 userId）' })
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        userId: { type: 'number', description: '外部用户ID' },
+        groupId: { type: 'number', description: '对话分组ID' },
+      },
+      required: ['userId', 'groupId'],
+    },
+    examples: {
+      basic: {
+        summary: '获取人物关系',
+        value: {
+          userId: 1001,
+          groupId: 123,
+        },
+      },
+    },
+  })
+  async getRelationships(@Body() body: any, @Req() _req: Request, @Res() res: Response) {
+    try {
+      const { userId, groupId } = body || {};
+      if (!userId) throw new HttpException('userId 必填', HttpStatus.BAD_REQUEST);
+      if (!groupId) throw new HttpException('groupId 必填', HttpStatus.BAD_REQUEST);
+
+      // 构造伪造的 req 对象
+      const fakeReq: any = {
+        user: { id: userId, role: 'visitor' },
+        header: (name: string) => _req.header(name),
+        headers: _req.headers,
+        connection: _req.connection,
+        socket: _req.socket,
+        ip: _req.ip,
+      };
+
+      const result = await this.chatGroupService.getRelationships({ groupId }, fakeReq);
+      return res.status(200).json({ success: true, data: result });
+    } catch (e: any) {
+      const status = e instanceof HttpException ? e.getStatus() : HttpStatus.INTERNAL_SERVER_ERROR;
+      const message = e?.message || '获取人物关系失败';
+      return res.status(status).json({ success: false, message });
+    }
+  }
 }

@@ -29,6 +29,7 @@ import { ShareModule } from './modules/share/share.module';
 import { SigninModule } from './modules/signin/signin.module';
 import { SpaModule } from './modules/spa/spa.module';
 import { StatisticModule } from './modules/statistic/statistic.module';
+import { StickerModule } from './modules/sticker/sticker.module';
 import { TaskModule } from './modules/task/task.module';
 import { TestModule } from './modules/test/test.module';
 import { UploadModule } from './modules/upload/upload.module';
@@ -132,6 +133,7 @@ import { VoiceCallModule } from './modules/voiceCall/voiceCall.module';
     VoiceModule,
     VoiceCallModule,
     AffectionModule,
+    StickerModule,
     TestModule,
 
     ShareModule,

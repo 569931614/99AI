@@ -63,6 +63,10 @@ export class OpenChatController {
         imageUrl: { type: 'string', description: '图片URL（可选）' },
         fileUrl: { type: 'string', description: '文件URL（可选）' },
         appId: { type: 'number', description: '角色(App) ID（可选）' },
+        speakerId: {
+          type: 'number',
+          description: '发言者ID（可选，群聊场景中指定哪个成员发言，等同于appId）',
+        },
         model: { type: 'string', description: '使用的模型标识（可选）' },
         modelName: { type: 'string', description: '模型名称（可选）' },
         modelType: { type: 'number', description: '模型类型（可选）' },
@@ -180,6 +184,11 @@ export class OpenChatController {
         if (!(body as any)?.imageUrl && !isAutoChat) {
           throw new HttpException('提问信息不能为空！', HttpStatus.BAD_REQUEST);
         }
+      }
+
+      // 支持 speakerId 作为 appId 的别名（群聊场景中指定发言者）
+      if (body?.speakerId && !body?.appId) {
+        body.appId = body.speakerId;
       }
 
       // 构造伪造的 req 对象，使用 visitor 角色跳过用户验证

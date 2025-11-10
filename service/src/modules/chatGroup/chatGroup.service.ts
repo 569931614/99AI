@@ -471,7 +471,7 @@ export class ChatGroupService {
       groupId,
       description,
       ownerNickname,
-      characterRelationships,
+      memberRelationships,
       openingRemark,
       proactivelySend,
       describingMental,
@@ -503,8 +503,10 @@ export class ChatGroupService {
     title && (data['title'] = title);
     typeof description !== 'undefined' && (data['description'] = description);
     typeof ownerNickname !== 'undefined' && (data['ownerNickname'] = ownerNickname);
-    typeof characterRelationships !== 'undefined' &&
-      (data['characterRelationships'] = characterRelationships);
+    typeof memberRelationships !== 'undefined' &&
+      (data['memberRelationships'] = typeof memberRelationships === 'string'
+        ? memberRelationships
+        : JSON.stringify(memberRelationships));
     typeof openingRemark !== 'undefined' && (data['openingRemark'] = openingRemark);
     typeof proactivelySend !== 'undefined' && (data['proactivelySend'] = proactivelySend);
     typeof describingMental !== 'undefined' && (data['describingMental'] = describingMental);
@@ -1307,6 +1309,71 @@ export class ChatGroupService {
       Logger.error(`群组 ${groupId} 头像生成失败: ${error.message}`, 'ChatGroupService');
       console.error(error);
       return null; // 降级：返回null，不影响主流程
+    }
+  }
+
+  // ==== 人物关系管理 ====
+  async updateRelationships(
+    body: {
+      groupId: number;
+      relationships: Array<{
+        memberA: number;
+        memberB: number;
+        type: string;
+        description?: string;
+      }>;
+    },
+    req: Request,
+  ) {
+    const { groupId, relationships } = body;
+    const { id } = req.user;
+
+    // 验证群组所有权
+    const g = await this.ensureGroupOwned(groupId, req);
+
+    // 验证成员是否都在群组中
+    const members = this.parseMembers(g.members);
+    const memberAppIds = new Set(members.map(m => m.appId));
+
+    for (const rel of relationships) {
+      if (!memberAppIds.has(rel.memberA) || !memberAppIds.has(rel.memberB)) {
+        throw new HttpException(
+          `成员 ${rel.memberA} 或 ${rel.memberB} 不在群组中`,
+          HttpStatus.BAD_REQUEST,
+        );
+      }
+    }
+
+    // 保存关系配置
+    const relationshipsData = {
+      relationships: relationships,
+    };
+
+    await this.chatGroupEntity.update(
+      { id: groupId },
+      { memberRelationships: JSON.stringify(relationshipsData) },
+    );
+
+    return { success: true, count: relationships.length };
+  }
+
+  async getRelationships(body: { groupId: number }, req: Request) {
+    const { groupId } = body;
+
+    // 验证群组所有权
+    const g = await this.ensureGroupOwned(groupId, req);
+
+    // 解析并返回关系配置
+    if (!g.memberRelationships) {
+      return { relationships: [] };
+    }
+
+    try {
+      const data = JSON.parse(g.memberRelationships);
+      return data;
+    } catch (error) {
+      Logger.error(`解析群组 ${groupId} 的人物关系配置失败: ${error.message}`);
+      return { relationships: [] };
     }
   }
 }

@@ -201,6 +201,67 @@ export class VoiceService implements OnModuleInit {
     }
   }
 
+  async listGptSovitsFiles() {
+    try {
+      await fsp.mkdir(this.gptSovitsStorageRoot, { recursive: true });
+
+      const files = await fsp.readdir(this.gptSovitsStorageRoot, { withFileTypes: true });
+
+      const gptModels: string[] = [];
+      const sovitsModels: string[] = [];
+      const promptAudios: string[] = [];
+
+      for (const file of files) {
+        if (file.isFile()) {
+          const ext = path.extname(file.name).toLowerCase();
+          const fullPath = path.join(this.gptSovitsStorageRoot, file.name);
+
+          if (ext === '.ckpt') {
+            gptModels.push(fullPath);
+          } else if (['.pth', '.pt'].includes(ext)) {
+            sovitsModels.push(fullPath);
+          } else if (['.wav', '.mp3', '.m4a', '.flac', '.ogg'].includes(ext)) {
+            promptAudios.push(fullPath);
+          }
+        } else if (file.isDirectory()) {
+          // 递归读取子目录
+          const subDir = path.join(this.gptSovitsStorageRoot, file.name);
+          const subFiles = await fsp.readdir(subDir, { withFileTypes: true });
+
+          for (const subFile of subFiles) {
+            if (subFile.isFile()) {
+              const ext = path.extname(subFile.name).toLowerCase();
+              const fullPath = path.join(subDir, subFile.name);
+
+              if (ext === '.ckpt') {
+                gptModels.push(fullPath);
+              } else if (['.pth', '.pt'].includes(ext)) {
+                sovitsModels.push(fullPath);
+              } else if (['.wav', '.mp3', '.m4a', '.flac', '.ogg'].includes(ext)) {
+                promptAudios.push(fullPath);
+              }
+            }
+          }
+        }
+      }
+
+      return {
+        gptModels,
+        sovitsModels,
+        promptAudios,
+        storageRoot: this.gptSovitsStorageRoot,
+      };
+    } catch (error) {
+      Logger.warn(`[listGptSovitsFiles] 读取文件失败: ${error?.message || error}`, 'VoiceService');
+      return {
+        gptModels: [],
+        sovitsModels: [],
+        promptAudios: [],
+        storageRoot: this.gptSovitsStorageRoot,
+      };
+    }
+  }
+
   async importGptSovitsVoice(
     files: {
       gptModel?: Array<{ originalname: string; buffer: Buffer }>;
@@ -209,15 +270,16 @@ export class VoiceService implements OnModuleInit {
     },
     body: Record<string, any>,
   ) {
-    const gptModelFile = files?.gptModel?.[0];
-    const sovitsModelFile = files?.sovitsModel?.[0];
-    const promptAudioFile = files?.promptAudio?.[0];
-    if (!gptModelFile || !sovitsModelFile || !promptAudioFile) {
-      throw new HttpException(
-        'gptModel、sovitsModel、promptAudio 均为必传文件',
-        HttpStatus.BAD_REQUEST,
-      );
-    }
+    // 支持两种模式：1. 上传文件 2. 从服务器路径选择
+    const useServerFiles = body?.useServerFiles === 'true' || body?.useServerFiles === true;
+
+    let gptModelFile = files?.gptModel?.[0];
+    let sovitsModelFile = files?.sovitsModel?.[0];
+    let promptAudioFile = files?.promptAudio?.[0];
+
+    let gptModelPath: string;
+    let sovitsModelPath: string;
+    let promptAudioPath: string;
 
     const promptText = String(body?.promptText || body?.prompt_text || '').trim();
     if (!promptText) {
@@ -231,28 +293,78 @@ export class VoiceService implements OnModuleInit {
     const voiceId = this.generateGptSovitsVoiceId(body?.voiceId || body?.voice_id);
     await this.assertVoiceIdAvailable(voiceId);
 
-    const voiceDir = await this.ensureGptSovitsDir(voiceId);
-    const gptModelPath = await this.persistGptSovitsFile(
-      gptModelFile,
-      voiceDir,
-      'gpt-model',
-      GPT_SOVITS_MODEL_EXT,
-      '.ckpt',
-    );
-    const sovitsModelPath = await this.persistGptSovitsFile(
-      sovitsModelFile,
-      voiceDir,
-      'sovits-model',
-      GPT_SOVITS_MODEL_EXT,
-      '.pth',
-    );
-    const promptAudioPath = await this.persistGptSovitsFile(
-      promptAudioFile,
-      voiceDir,
-      'prompt-audio',
-      GPT_SOVITS_AUDIO_EXT,
-      '.wav',
-    );
+    if (useServerFiles) {
+      // 模式2：从服务器路径选择文件
+      const gptModelServerPath = String(body?.gptModelPath || '').trim();
+      const sovitsModelServerPath = String(body?.sovitsModelPath || '').trim();
+      const promptAudioServerPath = String(body?.promptAudioPath || '').trim();
+
+      if (!gptModelServerPath || !sovitsModelServerPath || !promptAudioServerPath) {
+        throw new HttpException(
+          '使用服务器文件时，gptModelPath、sovitsModelPath、promptAudioPath 均为必填',
+          HttpStatus.BAD_REQUEST,
+        );
+      }
+
+      // 验证文件是否存在
+      try {
+        await fsp.access(gptModelServerPath);
+        await fsp.access(sovitsModelServerPath);
+        await fsp.access(promptAudioServerPath);
+      } catch (error) {
+        throw new HttpException('指定的服务器文件路径不存在或无法访问', HttpStatus.BAD_REQUEST);
+      }
+
+      // 验证文件在允许的存储目录下（安全检查）
+      const normalizedGptPath = path.resolve(gptModelServerPath);
+      const normalizedSovitsPath = path.resolve(sovitsModelServerPath);
+      const normalizedPromptPath = path.resolve(promptAudioServerPath);
+      const normalizedStorageRoot = path.resolve(this.gptSovitsStorageRoot);
+
+      if (
+        !normalizedGptPath.startsWith(normalizedStorageRoot) ||
+        !normalizedSovitsPath.startsWith(normalizedStorageRoot) ||
+        !normalizedPromptPath.startsWith(normalizedStorageRoot)
+      ) {
+        throw new HttpException('文件路径必须在存储目录范围内', HttpStatus.BAD_REQUEST);
+      }
+
+      // 直接使用服务器路径
+      gptModelPath = normalizedGptPath;
+      sovitsModelPath = normalizedSovitsPath;
+      promptAudioPath = normalizedPromptPath;
+    } else {
+      // 模式1：上传文件
+      if (!gptModelFile || !sovitsModelFile || !promptAudioFile) {
+        throw new HttpException(
+          'gptModel、sovitsModel、promptAudio 均为必传文件',
+          HttpStatus.BAD_REQUEST,
+        );
+      }
+
+      const voiceDir = await this.ensureGptSovitsDir(voiceId);
+      gptModelPath = await this.persistGptSovitsFile(
+        gptModelFile,
+        voiceDir,
+        'gpt-model',
+        GPT_SOVITS_MODEL_EXT,
+        '.ckpt',
+      );
+      sovitsModelPath = await this.persistGptSovitsFile(
+        sovitsModelFile,
+        voiceDir,
+        'sovits-model',
+        GPT_SOVITS_MODEL_EXT,
+        '.pth',
+      );
+      promptAudioPath = await this.persistGptSovitsFile(
+        promptAudioFile,
+        voiceDir,
+        'prompt-audio',
+        GPT_SOVITS_AUDIO_EXT,
+        '.wav',
+      );
+    }
 
     const config: VoiceGptSovitsConfig = {
       gptModelPath,
@@ -1751,19 +1863,19 @@ export class VoiceService implements OnModuleInit {
     },
   ) {
     const payload: any = {
-      refer_wav_path: config.promptAudioPath,
+      ref_audio_path: config.promptAudioPath,
       prompt_text: config.promptText,
-      prompt_language: config.promptLanguage,
+      prompt_lang: config.promptLanguage,
       text: options.text,
-      text_language:
+      text_lang:
         options.textLanguage || config.textLanguage || DEFAULT_GPT_SOVITS_TEXT_LANGUAGE,
-      cut_punc: options.cutPunc || config.cutPunc || undefined,
+      text_split_method: options.cutPunc || config.cutPunc || 'cut5',
       top_k: config.topK,
       top_p: config.topP,
       temperature: config.temperature,
-      speed: config.speed,
-      sample_steps: config.sampleSteps,
-      if_sr: false,
+      speed_factor: config.speed || 1.0,
+      media_type: 'wav',
+      streaming_mode: false,
     };
     Object.keys(payload).forEach(key => {
       if (payload[key] === undefined || payload[key] === null || payload[key] === '') {
@@ -1786,14 +1898,15 @@ export class VoiceService implements OnModuleInit {
   }): Promise<{ buffer?: Buffer; sampleRate: number }> {
     const config = this.getGptSovitsConfig(options.voice);
     const sampleRate = Number(options.sampleRate ?? config.sampleRate ?? 32000);
-    await this.ensureGptSovitsModelLoaded(options.voice.voiceId, config);
+
     const payload = this.buildGptSovitsPayload(config, {
       text: options.text,
       textLanguage: options.textLanguage,
       cutPunc: options.cutPunc,
     });
 
-    const url = this.normalizeGptSovitsUrl('/');
+    // GPT-SoVITS-v2 使用 /tts 端点
+    const url = this.normalizeGptSovitsUrl('/tts');
     if (options.stream) {
       const response = await axios.post(url, payload, {
         responseType: 'stream',

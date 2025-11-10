@@ -241,44 +241,57 @@
             </div>
             <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
               <el-form-item label="GPT 模型">
-                <el-upload
-                  :show-file-list="false"
-                  :auto-upload="false"
-                  :on-change="(file) => handleGptSovitsFileChange('gptModel', file)"
+                <el-select
+                  v-model="gptSovitsForm.gptModelPath"
+                  placeholder="选择模型文件"
+                  filterable
+                  style="width: 100%"
                 >
-                  <el-button>选择文件</el-button>
-                </el-upload>
-                <span v-if="gptSovitsForm.gptModelName" class="ml-2 text-gray-500">{{
-                  gptSovitsForm.gptModelName
-                }}</span>
+                  <el-option
+                    v-for="file in serverFiles.gptModels"
+                    :key="file"
+                    :label="getFileName(file)"
+                    :value="file"
+                  />
+                </el-select>
               </el-form-item>
               <el-form-item label="SoVITS 模型">
-                <el-upload
-                  :show-file-list="false"
-                  :auto-upload="false"
-                  :on-change="(file) => handleGptSovitsFileChange('sovitsModel', file)"
+                <el-select
+                  v-model="gptSovitsForm.sovitsModelPath"
+                  placeholder="选择模型文件"
+                  filterable
+                  style="width: 100%"
                 >
-                  <el-button>选择文件</el-button>
-                </el-upload>
-                <span v-if="gptSovitsForm.sovitsModelName" class="ml-2 text-gray-500">{{
-                  gptSovitsForm.sovitsModelName
-                }}</span>
+                  <el-option
+                    v-for="file in serverFiles.sovitsModels"
+                    :key="file"
+                    :label="getFileName(file)"
+                    :value="file"
+                  />
+                </el-select>
               </el-form-item>
               <el-form-item label="Prompt 音频">
-                <el-upload
-                  :show-file-list="false"
-                  :auto-upload="false"
-                  :on-change="(file) => handleGptSovitsFileChange('promptAudio', file)"
+                <el-select
+                  v-model="gptSovitsForm.promptAudioPath"
+                  placeholder="选择音频文件"
+                  filterable
+                  style="width: 100%"
+                  @change="onPromptAudioChange"
                 >
-                  <el-button>选择文件</el-button>
-                </el-upload>
-                <span v-if="gptSovitsForm.promptAudioName" class="ml-2 text-gray-500">{{
-                  gptSovitsForm.promptAudioName
-                }}</span>
+                  <el-option
+                    v-for="file in serverFiles.promptAudios"
+                    :key="file"
+                    :label="getFileName(file)"
+                    :value="file"
+                  />
+                </el-select>
               </el-form-item>
             </div>
             <div class="text-xs text-gray-500 leading-6">
-              支持上传 GPT (*.ckpt) / SoVITS (*.pth) 以及参考音频（建议 WAV），文件上限 600MB。
+              从服务器目录选择 GPT (*.ckpt) / SoVITS (*.pth) 以及参考音频文件。
+              <el-button type="primary" size="small" @click="loadServerFiles" :loading="loadingFiles"
+                >刷新文件列表</el-button
+              >
             </div>
           </el-form>
         </el-tab-pane>
@@ -599,13 +612,28 @@
   import { computed, onMounted, onUnmounted, reactive, ref } from 'vue';
   import { useRouter } from 'vue-router';
 
+  type VoicePreviewPayload = Parameters<(typeof voiceApi)['preview']>[0];
+
   const router = useRouter();
   const loading = ref(false);
   const enrolling = ref(false);
   const syncing = ref(false);
+  const loadingFiles = ref(false);
 
   const voices = ref<any[]>([]);
   const categories = ref<any[]>([]);
+
+  // 服务器文件列表
+  const serverFiles = reactive<{
+    gptModels: string[];
+    sovitsModels: string[];
+    promptAudios: string[];
+  }>({
+    gptModels: [],
+    sovitsModels: [],
+    promptAudios: [],
+  });
+
   const listQuery = reactive<{
     prefix?: string;
     page_index?: number;
@@ -642,6 +670,10 @@
   function openCreateVoice(mode: 'api' | 'gpt' = 'api') {
     createVoiceDialog.active = mode;
     createVoiceDialog.visible = true;
+    // 如果是 GPT-SoVITS 模式，自动加载文件列表
+    if (mode === 'gpt') {
+      loadServerFiles();
+    }
   }
 
   async function submitApiVoice() {
@@ -677,12 +709,9 @@
     temperature: 0.7,
     speed: 1,
     sampleSteps: 32,
-    gptModelFile: null as File | null,
-    gptModelName: '',
-    sovitsModelFile: null as File | null,
-    sovitsModelName: '',
-    promptAudioFile: null as File | null,
-    promptAudioName: '',
+    gptModelPath: '',
+    sovitsModelPath: '',
+    promptAudioPath: '',
     uploading: false,
   };
 
@@ -699,12 +728,9 @@
     temperature?: number;
     speed?: number;
     sampleSteps?: number;
-    gptModelFile: File | null;
-    gptModelName: string;
-    sovitsModelFile: File | null;
-    sovitsModelName: string;
-    promptAudioFile: File | null;
-    promptAudioName: string;
+    gptModelPath: string;
+    sovitsModelPath: string;
+    promptAudioPath: string;
     uploading: boolean;
   }>({ ...defaultGptSovits });
 
@@ -850,22 +876,37 @@
     Object.assign(gptSovitsForm, { ...defaultGptSovits });
   }
 
-  function handleGptSovitsFileChange(
-    field: 'gptModel' | 'sovitsModel' | 'promptAudio',
-    uploadFile: UploadFile,
-  ) {
-    if (!uploadFile?.raw) return;
-    const file = uploadFile.raw as File;
-    if (field === 'gptModel') {
-      gptSovitsForm.gptModelFile = file;
-      gptSovitsForm.gptModelName = uploadFile.name || file.name;
-    } else if (field === 'sovitsModel') {
-      gptSovitsForm.sovitsModelFile = file;
-      gptSovitsForm.sovitsModelName = uploadFile.name || file.name;
-    } else if (field === 'promptAudio') {
-      gptSovitsForm.promptAudioFile = file;
-      gptSovitsForm.promptAudioName = uploadFile.name || file.name;
+  // 获取文件名（从路径中提取）
+  function getFileName(filePath: string): string {
+    if (!filePath) return '';
+    // 处理 Windows 和 Unix 路径
+    const parts = filePath.replace(/\\/g, '/').split('/');
+    return parts[parts.length - 1] || filePath;
+  }
+
+  // 加载服务器文件列表
+  async function loadServerFiles() {
+    loadingFiles.value = true;
+    try {
+      const res = await voiceApi.listGptSovitsFiles();
+      const data = res?.data || res;
+      serverFiles.gptModels = data.gptModels || [];
+      serverFiles.sovitsModels = data.sovitsModels || [];
+      serverFiles.promptAudios = data.promptAudios || [];
+      ElMessage.success('文件列表已刷新');
+    } catch (e: any) {
+      ElMessage.error(e?.message || '获取文件列表失败');
+    } finally {
+      loadingFiles.value = false;
     }
+  }
+
+  // Prompt 音频改变时自动填充文本
+  function onPromptAudioChange(filePath: string) {
+    if (!filePath || gptSovitsForm.promptText.trim()) return;
+    const fileName = getFileName(filePath);
+    const fileNameWithoutExt = fileName.replace(/\.[^.]+$/, '');
+    gptSovitsForm.promptText = fileNameWithoutExt;
   }
 
   async function onSubmitGptSovits() {
@@ -874,16 +915,17 @@
       return;
     }
     if (
-      !gptSovitsForm.gptModelFile ||
-      !gptSovitsForm.sovitsModelFile ||
-      !gptSovitsForm.promptAudioFile
+      !gptSovitsForm.gptModelPath ||
+      !gptSovitsForm.sovitsModelPath ||
+      !gptSovitsForm.promptAudioPath
     ) {
-      ElMessage.warning('请上传 GPT 模型、SoVITS 模型和参考音频');
+      ElMessage.warning('请选择 GPT 模型、SoVITS 模型和参考音频');
       return;
     }
     gptSovitsForm.uploading = true;
     try {
       const fd = new FormData();
+      fd.append('useServerFiles', 'true');
       if (gptSovitsForm.name) fd.append('name', gptSovitsForm.name);
       if (gptSovitsForm.voiceId) fd.append('voiceId', gptSovitsForm.voiceId);
       fd.append('promptText', gptSovitsForm.promptText);
@@ -898,17 +940,17 @@
       if (gptSovitsForm.speed !== undefined) fd.append('speed', String(gptSovitsForm.speed));
       if (gptSovitsForm.sampleSteps !== undefined)
         fd.append('sampleSteps', String(gptSovitsForm.sampleSteps));
-      fd.append('gptModel', gptSovitsForm.gptModelFile);
-      fd.append('sovitsModel', gptSovitsForm.sovitsModelFile);
-      fd.append('promptAudio', gptSovitsForm.promptAudioFile);
+      fd.append('gptModelPath', gptSovitsForm.gptModelPath);
+      fd.append('sovitsModelPath', gptSovitsForm.sovitsModelPath);
+      fd.append('promptAudioPath', gptSovitsForm.promptAudioPath);
       await voiceApi.importGptSovits(fd);
-      ElMessage.success('上传成功');
+      ElMessage.success('导入成功');
       resetGptSovitsForm();
       if (createVoiceDialog.visible) createVoiceDialog.visible = false;
       createVoiceDialog.active = 'api';
       fetchList();
     } catch (e: any) {
-      ElMessage.error(e?.message || '上传失败');
+      ElMessage.error(e?.message || '导入失败');
     } finally {
       gptSovitsForm.uploading = false;
     }
@@ -1149,7 +1191,7 @@
     }
     previewDialog.loading = true;
     try {
-      const payload: Record<string, any> = {
+      const payload: VoicePreviewPayload = {
         voice_id: previewDialog.voice_id,
         text: previewDialog.text,
         model: previewDialog.model,

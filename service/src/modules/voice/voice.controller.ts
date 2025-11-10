@@ -36,6 +36,14 @@ export class VoiceController {
     return this.voiceService.enroll(body);
   }
 
+  @Get('gpt-sovits/files')
+  @ApiOperation({ summary: '列出服务器上的 GPT-SoVITS 模型文件' })
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  listGptSovitsFiles() {
+    return this.voiceService.listGptSovitsFiles();
+  }
+
   @Post('gpt-sovits/import')
   @ApiOperation({ summary: '导入 GPT-SoVITS 模型' })
   @UseGuards(JwtAuthGuard)

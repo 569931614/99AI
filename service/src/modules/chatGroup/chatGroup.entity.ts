@@ -63,8 +63,8 @@ export class ChatGroupEntity extends BaseEntity {
   @Column({ comment: '群主在群内的昵称', nullable: true })
   ownerNickname: string;
 
-  @Column({ comment: '人物关系：0-其他，1-恋人，2-朋友', type: 'tinyint', default: 0 })
-  characterRelationships: number;
+  @Column({ comment: '人物关系配置(JSON)', type: 'longtext', nullable: true })
+  memberRelationships: string;
 
   @Column({ comment: '是否主动发消息：0-否，1-是', type: 'tinyint', default: 0 })
   proactivelySend: number;

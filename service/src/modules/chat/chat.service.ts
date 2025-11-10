@@ -1268,7 +1268,10 @@ ${numberedOptions}
     }
 
     // 图片识别处理：如果模型不支持图片（isImageUpload === 0）且有图片，先识别图片内容
-    if (imageUrl && isImageUpload === 0) {
+    // 先检查prompt中是否已经包含了图片识别结果（避免重复识别）
+    const hasImageRecognitionResult = prompt && (prompt.includes('[这是一张图片，内容如下]') || prompt.includes('[图片内容:'));
+
+    if (imageUrl && isImageUpload === 0 && !hasImageRecognitionResult) {
       Logger.debug('[图片识别] 模型不支持图片，开始识别...', 'ChatService');
       try {
         // 使用通义千问识别图片（识别第一张图片）
@@ -1309,6 +1312,8 @@ ${numberedOptions}
           prompt = `[用户发送了一张图片]\n请根据图片内容进行回复`;
         }
       }
+    } else if (hasImageRecognitionResult) {
+      Logger.debug('[图片识别] 检测到prompt中已包含图片识别结果，跳过重复识别', 'ChatService');
     }
 
     // 群聊模式下，检查是否已经保存过用户消息（避免重复保存）

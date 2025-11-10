@@ -148,4 +148,33 @@ export class ChatGroupController {
   ) {
     return this.chatGroupService.updateMember(body, req);
   }
+
+  // ==== 人物关系管理 ====
+  @Post('relationships/update')
+  @ApiOperation({ summary: '更新群组人物关系配置' })
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  updateRelationships(
+    @Body()
+    body: {
+      groupId: number;
+      relationships: Array<{
+        memberA: number;
+        memberB: number;
+        type: string;
+        description?: string;
+      }>;
+    },
+    @Req() req: Request,
+  ) {
+    return this.chatGroupService.updateRelationships(body, req);
+  }
+
+  @Post('relationships/get')
+  @ApiOperation({ summary: '获取群组人物关系配置' })
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  getRelationships(@Body() body: { groupId: number }, @Req() req: Request) {
+    return this.chatGroupService.getRelationships(body, req);
+  }
 }

@@ -41,6 +41,15 @@ const routes: RouteRecordRaw = {
         icon: 'ic:outline-question-answer',
       },
     },
+    {
+      path: 'stickers',
+      name: 'StickerManager',
+      component: () => import('@/views/chat/stickers.vue'),
+      meta: {
+        title: '表情包管理',
+        icon: 'mdi:sticker-emoji',
+      },
+    },
   ],
 };
 

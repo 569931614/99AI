@@ -81,6 +81,35 @@ export class ChatGroupEntity extends BaseEntity {
   @Column({ comment: '我的简介', type: 'text', nullable: true })
   myProfile: string;
 
+  @Column({ comment: '对话记忆条数（1-100）', type: 'int', default: 10 })
+  conversationMemoryCount: number;
+
+  @Column({ comment: '是否开启自动总结：0-否，1-是', type: 'tinyint', default: 0 })
+  autoSummaryEnabled: number;
+
+  @Column({ comment: '自动总结提示词', type: 'text', nullable: true })
+  summaryPrompt: string;
+
+  @Column({ comment: '当前对话总结内容', type: 'text', nullable: true })
+  chatSummary: string;
+
+  @Column({
+    comment: '语音回复模式：voice_only-全部发语音，mixed-偶尔发一次，text_only-不要发语音',
+    type: 'varchar',
+    length: 20,
+    default: 'text_only',
+  })
+  voiceReplyMode: string;
+
+  @Column({ comment: '是否允许发送表情包：0-否，1-是', type: 'tinyint', default: 0 })
+  allowEmoji: number;
+
+  @Column({ comment: '是否允许拍一拍：0-否，1-是', type: 'tinyint', default: 0 })
+  allowTap: number;
+
+  @Column({ comment: '最多回复条数（1-5）', type: 'int', default: 5 })
+  maxReplyCount: number;
+
   @Column({ comment: '群组头像URL', nullable: true })
   groupAvatar: string;
 

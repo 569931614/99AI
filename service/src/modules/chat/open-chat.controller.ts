@@ -444,6 +444,7 @@ export class OpenChatController {
       let emotion: string | null = null;
       let psychologicalDesc: string | null = null;
       let audioUrl: string | null = null;
+      let voiceDuration: number | null = null;
 
       // 事件处理器存储
       const eventHandlers: Record<string, Function[]> = {};
@@ -467,7 +468,15 @@ export class OpenChatController {
               if (parsed.chatId !== undefined) chatId = parsed.chatId;
               if (parsed.emotion) emotion = parsed.emotion;
               if (parsed.psychologicalDesc) psychologicalDesc = parsed.psychologicalDesc;
-              if (parsed.audioUrl) audioUrl = parsed.audioUrl;
+              const resolvedAudioUrl = parsed.audioUrl ?? parsed.ttsUrl;
+              if (resolvedAudioUrl) audioUrl = resolvedAudioUrl;
+              const resolvedVoiceDuration =
+                parsed.voiceDuration ??
+                parsed.voice_duration ??
+                (parsed.voiceReply ? parsed.voiceReply?.duration : undefined);
+              if (resolvedVoiceDuration !== undefined) {
+                voiceDuration = Number(resolvedVoiceDuration) || null;
+              }
             } catch (e) {
               // 如果不是JSON，可能是纯文本
               if (line && !line.startsWith('{')) {
@@ -515,6 +524,7 @@ export class OpenChatController {
           emotion,
           psychologicalDesc,
           audioUrl,
+          voiceDuration,
         },
       };
     } catch (e: any) {

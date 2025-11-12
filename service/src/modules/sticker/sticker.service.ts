@@ -3,6 +3,14 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Brackets, Repository } from 'typeorm';
 import { StickerEntity } from './sticker.entity';
 
+const EMOTION_KEYWORDS = [
+  { emotion: 'happy', keywords: ['开心', '高兴', '快乐', '哈哈', '兴奋', '笑'] },
+  { emotion: 'sad', keywords: ['难过', '伤心', '沮丧', '委屈', '想哭', '失落'] },
+  { emotion: 'comfort', keywords: ['安慰', '别怕', '放松', '别担心', '拥抱'] },
+  { emotion: 'angry', keywords: ['生气', '愤怒', '火大', '气死', '抓狂'] },
+  { emotion: 'surprised', keywords: ['惊讶', '震惊', '哇', '不可思议'] },
+];
+
 interface StickerQuery {
   keyword?: string;
   tags?: string[];
@@ -61,7 +69,9 @@ export class StickerService {
       );
     }
 
-    qb.orderBy('sticker.uploadDate', 'DESC').skip((page - 1) * size).take(size);
+    qb.orderBy('sticker.uploadDate', 'DESC')
+      .skip((page - 1) * size)
+      .take(size);
 
     const [rows, count] = await qb.getManyAndCount();
     return { rows, count, page, size };

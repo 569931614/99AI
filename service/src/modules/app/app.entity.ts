@@ -3,105 +3,104 @@ import { Column, Entity } from 'typeorm';
 
 @Entity({ name: 'app' })
 export class AppEntity extends BaseEntity {
-  @Column({ comment: 'App应用名称' })
+  @Column({ comment: 'App 应用名称' })
   name: string;
 
-  @Column({ comment: 'App分类Id列表，多个分类Id以逗号分隔', type: 'text' })
+  @Column({ comment: 'App 分类 ID 列表，多个 ID 用逗号分隔', type: 'text' })
   catId: string;
 
-  @Column({ comment: 'App应用描述信息' })
+  @Column({ comment: 'App 描述信息', nullable: true, type: 'text' })
   des: string;
 
-  @Column({ comment: 'App应用预设场景信息', type: 'text' })
+  @Column({ comment: '预设场景（prompt 模板）', nullable: true, type: 'text' })
   preset: string;
 
-  @Column({ comment: 'App应用封面图片', nullable: true, type: 'text' })
+  @Column({ comment: '封面图片地址', nullable: true, type: 'text' })
   coverImg: string;
 
-  @Column({ comment: 'App应用排序、数字越大越靠前', default: 100 })
+  @Column({ comment: '排序，数字越大越靠前', default: 100 })
   order: number;
 
-  @Column({ comment: 'App应用是否启用中 0：禁用 1：启用', default: 1 })
+  @Column({ comment: '状态：0 禁用 / 1 启用', default: 1 })
   status: number;
 
-  @Column({ comment: 'App示例数据', nullable: true, type: 'text' })
+  @Column({ comment: '示例数据', nullable: true, type: 'text' })
   demoData: string;
 
-  @Column({ comment: 'App应用角色 system  user', default: 'system' })
+  @Column({ comment: '角色归属：system/user', default: 'system' })
   role: string;
 
-  @Column({ comment: 'App应用是否是GPTs', default: '0' })
+  @Column({ comment: '是否为 GPTs 应用', default: 0 })
   isGPTs: number;
 
-  @Column({ comment: 'App应用是否是固定使用模型', default: '0' })
+  @Column({ comment: '是否固定使用某模型', default: 0 })
   isFixedModel: number;
 
-  @Column({ comment: 'App应用使用的模型', type: 'text' })
+  @Column({ comment: '使用的模型配置', nullable: true, type: 'text' })
   appModel: string;
 
-  @Column({ comment: 'GPTs 的调用ID', default: '' })
+  @Column({ comment: 'GPTs 调用 ID', default: '' })
   gizmoID: string;
 
-  @Column({ comment: 'App是否共享到应用广场', default: false })
+  @Column({ comment: '是否公开到应用广场', default: false })
   public: boolean;
 
-  @Column({ comment: '用户Id', nullable: true })
+  @Column({ comment: '创建者用户 ID', nullable: true })
   userId: number;
 
-  @Column({ comment: '是否使用flowith模型', default: 0 })
+  @Column({ comment: '是否使用 Flowith 模型', default: 0 })
   isFlowith: number;
 
-  @Column({ comment: 'flowith模型ID', nullable: true })
+  @Column({ comment: 'Flowith 模型 ID', nullable: true })
   flowithId: string;
 
-  @Column({ comment: 'flowith模型名称', nullable: true })
+  @Column({ comment: 'Flowith 模型名称', nullable: true })
   flowithName: string;
 
-  @Column({ comment: 'flowith模型Key', nullable: true })
+  @Column({ comment: 'Flowith 模型 Key', nullable: true })
   flowithKey: string;
 
-  @Column({ comment: 'App背景图', nullable: true, type: 'text' })
+  @Column({ comment: '背景图', nullable: true, type: 'text' })
   backgroundImg: string;
 
-  @Column({ comment: 'App提问模版', nullable: true, type: 'text' })
+  @Column({ comment: '提示词模版', nullable: true, type: 'text' })
   prompt: string;
 
-  // 角色默认音色ID（用于TTS），来自 DashScope/CosyVoice voice_id
-  @Column({ comment: '角色默认音色ID', nullable: true })
+  @Column({ comment: '默认音色 ID（DashScope/CosyVoice voice_id）', nullable: true })
   voiceId: string;
 
   @Column({
-    comment: '情绪-音色映射 JSON: {"items":[{emotion,voiceId}] }',
+    comment: '情绪-音色映射 JSON：{"items":[{emotion,voiceId}]}',
     type: 'text',
     nullable: true,
   })
   emotionVoices: string;
 
-  // 星尘大模型API扩展字段
-  @Column({ comment: '是否开启真实时间（星尘API）', default: false })
+  // --- 星尘大模型 API 扩展字段 ---
+
+  @Column({ comment: '是否开启实时模式', default: false })
   enableRealTime: boolean;
 
-  @Column({ comment: '是否开启长期记忆（星尘API）', default: false })
+  @Column({ comment: '是否开启长期记忆', default: false })
   enableLongTermMemory: boolean;
 
-  @Column({ comment: '是否开启知识库搜索（星尘API）', default: false })
+  @Column({ comment: '是否开启知识库搜索', default: false })
   enableKnowledgeBase: boolean;
 
   @Column({
-    comment: '知识库ID列表（星尘API），JSON数组格式: ["kb_id_1","kb_id_2"]',
+    comment: '知识库 ID 列表（JSON 数组）',
     type: 'text',
     nullable: true,
   })
   knowledgeBaseIds: string;
 
   @Column({
-    comment:
-      '对话示例（星尘API），JSON格式: [{"role":"user","content":"..."},{"role":"assistant","content":"..."}]',
+    comment: '对话示例（JSON）',
     type: 'text',
     nullable: true,
   })
   dialogueExamples: string;
 
-  @Column({ comment: '开场白（角色初始问候语）', type: 'text', nullable: true })
+  @Column({ comment: '开场白', type: 'text', nullable: true })
   openingRemark: string;
 }

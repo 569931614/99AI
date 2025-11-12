@@ -307,6 +307,7 @@ export class ChatLogService {
           fileInfo,
           fileUrl,
           ttsUrl,
+          ttsDuration,
           videoUrl,
           audioUrl,
           customId,
@@ -352,6 +353,8 @@ export class ChatLogService {
           ttsUrl: ttsUrl,
           videoUrl: videoUrl,
           audioUrl: audioUrl,
+          audioDuration: ttsDuration || 0, // 添加audioDuration字段供cat_AI使用
+          ttsDuration: ttsDuration || 0, // 保留ttsDuration字段以兼容旧版本
           progress,
           model: model,
           modelName: modelName,

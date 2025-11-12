@@ -8,6 +8,16 @@ export default {
   listGptSovitsFiles: () => api.get('voice/gpt-sovits/files'),
   // 导入 GPT-SoVITS 模型（支持上传文件或选择服务器文件）
   importGptSovits: (data: FormData) => api.post('voice/gpt-sovits/import', data),
+  // 上传单个 GPT-SoVITS 模型文件
+  uploadGptSovitsModel: (file: File) => {
+    const fd = new FormData();
+    fd.append('file', file);
+    return api.post('voice/gpt-sovits/models/upload', fd, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+  },
+  // 获取 GPT-SoVITS 模型库（包含文件元信息）
+  listGptSovitsLibrary: () => api.get('voice/gpt-sovits/files'),
   // 列出音色
   list: (
     params: {

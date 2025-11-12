@@ -6,6 +6,7 @@ import * as os from 'os';
 import * as path from 'path';
 import { Readable } from 'stream';
 import { ILike, IsNull, Repository } from 'typeorm';
+import type { Express } from 'express';
 import { AppEntity } from '../app/app.entity';
 import { AppEmotionVoiceEntity } from '../app/appEmotionVoice.entity';
 import { AppVoiceEntity } from '../app/appVoice.entity';
@@ -26,6 +27,10 @@ const DEFAULT_GPT_SOVITS_STORAGE_ROOT = (() => {
 })();
 const GPT_SOVITS_MODEL_EXT = ['.ckpt', '.pth', '.pt', '.bin'];
 const GPT_SOVITS_AUDIO_EXT = ['.wav', '.mp3', '.m4a', '.flac', '.ogg'];
+const GPT_SOVITS_LIBRARY_DIR = {
+  gpt: 'gpt-models',
+  sovits: 'sovits-models',
+};
 const fsp = fs.promises;
 
 type VoiceProvider = 'dashscope' | 'gpt-sovits';
@@ -44,6 +49,17 @@ interface VoiceGptSovitsConfig {
   speed?: number;
   sampleSteps?: number;
   sampleRate?: number;
+}
+
+type GptSovitsLibraryType = 'gpt' | 'sovits';
+
+interface GptSovitsLibraryEntry {
+  type: GptSovitsLibraryType;
+  filename: string;
+  path: string;
+  relativePath: string;
+  size: number;
+  updatedAt: number;
 }
 
 @Injectable()
@@ -204,42 +220,49 @@ export class VoiceService implements OnModuleInit {
   async listGptSovitsFiles() {
     try {
       await fsp.mkdir(this.gptSovitsStorageRoot, { recursive: true });
-
-      const files = await fsp.readdir(this.gptSovitsStorageRoot, { withFileTypes: true });
+      const entries = await fsp.readdir(this.gptSovitsStorageRoot, { withFileTypes: true });
 
       const gptModels: string[] = [];
       const sovitsModels: string[] = [];
       const promptAudios: string[] = [];
+      const library: GptSovitsLibraryEntry[] = [];
 
-      for (const file of files) {
-        if (file.isFile()) {
-          const ext = path.extname(file.name).toLowerCase();
-          const fullPath = path.join(this.gptSovitsStorageRoot, file.name);
-
-          if (ext === '.ckpt') {
+      const processFile = async (fullPath: string) => {
+        const ext = path.extname(fullPath).toLowerCase();
+        const libraryType = this.getLibraryFileType(ext);
+        if (libraryType) {
+          const stat = await this.safeStat(fullPath);
+          if (!stat) return;
+          const entry: GptSovitsLibraryEntry = {
+            type: libraryType,
+            filename: path.basename(fullPath),
+            path: fullPath,
+            relativePath: this.normalizeLibraryRelativePath(fullPath),
+            size: stat.size,
+            updatedAt: stat.mtimeMs,
+          };
+          library.push(entry);
+          if (libraryType === 'gpt') {
             gptModels.push(fullPath);
-          } else if (['.pth', '.pt'].includes(ext)) {
+          } else {
             sovitsModels.push(fullPath);
-          } else if (['.wav', '.mp3', '.m4a', '.flac', '.ogg'].includes(ext)) {
-            promptAudios.push(fullPath);
           }
+          return;
+        }
+        if (GPT_SOVITS_AUDIO_EXT.includes(ext)) {
+          promptAudios.push(fullPath);
+        }
+      };
+
+      for (const file of entries) {
+        if (file.isFile()) {
+          await processFile(path.join(this.gptSovitsStorageRoot, file.name));
         } else if (file.isDirectory()) {
-          // 递归读取子目录
           const subDir = path.join(this.gptSovitsStorageRoot, file.name);
           const subFiles = await fsp.readdir(subDir, { withFileTypes: true });
-
           for (const subFile of subFiles) {
             if (subFile.isFile()) {
-              const ext = path.extname(subFile.name).toLowerCase();
-              const fullPath = path.join(subDir, subFile.name);
-
-              if (ext === '.ckpt') {
-                gptModels.push(fullPath);
-              } else if (['.pth', '.pt'].includes(ext)) {
-                sovitsModels.push(fullPath);
-              } else if (['.wav', '.mp3', '.m4a', '.flac', '.ogg'].includes(ext)) {
-                promptAudios.push(fullPath);
-              }
+              await processFile(path.join(subDir, subFile.name));
             }
           }
         }
@@ -250,6 +273,7 @@ export class VoiceService implements OnModuleInit {
         sovitsModels,
         promptAudios,
         storageRoot: this.gptSovitsStorageRoot,
+        library,
       };
     } catch (error) {
       Logger.warn(`[listGptSovitsFiles] 读取文件失败: ${error?.message || error}`, 'VoiceService');
@@ -258,8 +282,48 @@ export class VoiceService implements OnModuleInit {
         sovitsModels: [],
         promptAudios: [],
         storageRoot: this.gptSovitsStorageRoot,
+        library: [],
       };
     }
+  }
+
+  async uploadGptSovitsModel(file: Express.Multer.File) {
+    if (!file) {
+      throw new HttpException('file 为必传参数', HttpStatus.BAD_REQUEST);
+    }
+    if (!file?.buffer?.length) {
+      throw new HttpException('文件内容为空', HttpStatus.BAD_REQUEST);
+    }
+
+    const ext = path.extname(file.originalname || '').toLowerCase();
+    const type = this.getLibraryFileType(ext);
+    if (!type) {
+      throw new HttpException('仅支持上传 .ckpt/.bin/.pth/.pt 文件', HttpStatus.BAD_REQUEST);
+    }
+
+    await fsp.mkdir(this.gptSovitsStorageRoot, { recursive: true });
+    const subDir = type === 'gpt' ? GPT_SOVITS_LIBRARY_DIR.gpt : GPT_SOVITS_LIBRARY_DIR.sovits;
+    const targetDir = path.join(this.gptSovitsStorageRoot, subDir);
+    await fsp.mkdir(targetDir, { recursive: true });
+
+    const savedPath = await this.persistLibraryUpload(file, targetDir, type);
+    const stat = await this.safeStat(savedPath);
+    if (!stat) {
+      throw new HttpException('保存模型失败，请稍后重试', HttpStatus.INTERNAL_SERVER_ERROR);
+    }
+
+    const entry = {
+      type,
+      filename: path.basename(savedPath),
+      path: savedPath,
+      relativePath: this.normalizeLibraryRelativePath(savedPath),
+      size: stat.size,
+      updatedAt: stat.mtimeMs,
+      storageRoot: this.gptSovitsStorageRoot,
+    };
+
+    Logger.log(`[uploadGptSovitsModel] 上传 ${entry.filename} (${entry.type})`, 'VoiceService');
+    return entry;
   }
 
   async importGptSovitsVoice(
@@ -1791,6 +1855,61 @@ export class VoiceService implements OnModuleInit {
     return target;
   }
 
+  private getLibraryFileType(ext: string): GptSovitsLibraryType | null {
+    if (ext === '.ckpt' || ext === '.bin') return 'gpt';
+    if (ext === '.pth' || ext === '.pt') return 'sovits';
+    return null;
+  }
+
+  private normalizeLibraryRelativePath(fullPath: string): string {
+    const relative = path.relative(this.gptSovitsStorageRoot, fullPath);
+    return relative.split(path.sep).join('/');
+  }
+
+  private buildLibraryFileName(original: string, type: GptSovitsLibraryType) {
+    const fallbackBase = type === 'gpt' ? 'gpt-model' : 'sovits-model';
+    const fallbackExt = type === 'gpt' ? '.ckpt' : '.pth';
+    let ext = path.extname(original || '').toLowerCase();
+    if (!ext) {
+      ext = fallbackExt;
+    }
+    const baseRaw = path.basename(original || '', ext);
+    const sanitizedBase = baseRaw.replace(/[^a-zA-Z0-9._-]/g, '_').replace(/^_+$/, '');
+    return {
+      base: sanitizedBase || `${fallbackBase}-${Date.now()}`,
+      ext,
+    };
+  }
+
+  private async persistLibraryUpload(
+    file: Express.Multer.File,
+    dir: string,
+    type: GptSovitsLibraryType,
+  ): Promise<string> {
+    const { base, ext } = this.buildLibraryFileName(file.originalname || '', type);
+    let candidate = `${base}${ext}`;
+    let attempt = 1;
+    while (true) {
+      const target = path.join(dir, candidate);
+      try {
+        await fsp.access(target);
+        candidate = `${base}-${Date.now()}-${attempt}${ext}`;
+        attempt += 1;
+      } catch {
+        await fsp.writeFile(target, file.buffer);
+        return target;
+      }
+    }
+  }
+
+  private async safeStat(target: string): Promise<fs.Stats | null> {
+    try {
+      return await fsp.stat(target);
+    } catch {
+      return null;
+    }
+  }
+
   private parseOptionalNumber(input: any): number | undefined {
     if (input === undefined || input === null || input === '') return undefined;
     const num = Number(input);
@@ -1867,8 +1986,7 @@ export class VoiceService implements OnModuleInit {
       prompt_text: config.promptText,
       prompt_lang: config.promptLanguage,
       text: options.text,
-      text_lang:
-        options.textLanguage || config.textLanguage || DEFAULT_GPT_SOVITS_TEXT_LANGUAGE,
+      text_lang: options.textLanguage || config.textLanguage || DEFAULT_GPT_SOVITS_TEXT_LANGUAGE,
       text_split_method: options.cutPunc || config.cutPunc || 'cut5',
       top_k: config.topK,
       top_p: config.topP,

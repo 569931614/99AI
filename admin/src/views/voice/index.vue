@@ -248,10 +248,11 @@
                   style="width: 100%"
                 >
                   <el-option
-                    v-for="file in serverFiles.gptModels"
-                    :key="file"
-                    :label="getFileName(file)"
-                    :value="file"
+                    v-for="entry in gptLibraryOptions"
+                    :key="entry.path"
+                    :label="formatLibraryLabel(entry)"
+                    :value="entry.path"
+                    :title="entry.path"
                   />
                 </el-select>
               </el-form-item>
@@ -263,10 +264,11 @@
                   style="width: 100%"
                 >
                   <el-option
-                    v-for="file in serverFiles.sovitsModels"
-                    :key="file"
-                    :label="getFileName(file)"
-                    :value="file"
+                    v-for="entry in sovitsLibraryOptions"
+                    :key="entry.path"
+                    :label="formatLibraryLabel(entry)"
+                    :value="entry.path"
+                    :title="entry.path"
                   />
                 </el-select>
               </el-form-item>
@@ -292,6 +294,12 @@
               <el-button type="primary" size="small" @click="loadServerFiles" :loading="loadingFiles"
                 >刷新文件列表</el-button
               >
+              <div v-if="serverFiles.storageRoot" class="text-gray-400 mt-1">
+                当前存储目录：{{ serverFiles.storageRoot }}
+                <el-link type="primary" @click.prevent="goToModelLibrary" class="ml-2"
+                  >模型管理</el-link
+                >
+              </div>
             </div>
           </el-form>
         </el-tab-pane>
@@ -613,6 +621,14 @@
   import { useRouter } from 'vue-router';
 
   type VoicePreviewPayload = Parameters<(typeof voiceApi)['preview']>[0];
+  type GptSovitsLibraryEntry = {
+    type: 'gpt' | 'sovits';
+    filename: string;
+    path: string;
+    relativePath?: string;
+    size?: number;
+    updatedAt?: number;
+  };
 
   const router = useRouter();
   const loading = ref(false);
@@ -628,10 +644,14 @@
     gptModels: string[];
     sovitsModels: string[];
     promptAudios: string[];
+    library: GptSovitsLibraryEntry[];
+    storageRoot: string;
   }>({
     gptModels: [],
     sovitsModels: [],
     promptAudios: [],
+    library: [],
+    storageRoot: '',
   });
 
   const listQuery = reactive<{
@@ -647,6 +667,8 @@
   const uiPage = ref(1);
   const total = ref(0);
   const computedTotal = computed(() => Number(total.value) || 0);
+  const gptLibraryOptions = computed<GptSovitsLibraryEntry[]>(() => buildLibraryOptions('gpt'));
+  const sovitsLibraryOptions = computed<GptSovitsLibraryEntry[]>(() => buildLibraryOptions('sovits'));
 
   function onSearch() {
     listQuery.page_index = 0;
@@ -884,15 +906,66 @@
     return parts[parts.length - 1] || filePath;
   }
 
+  function deriveRelativePath(filePath: string): string {
+    if (!filePath) return '';
+    const normalizedPath = filePath.replace(/\\/g, '/');
+    const normalizedRoot = serverFiles.storageRoot.replace(/\\/g, '/');
+    if (normalizedRoot && normalizedPath.startsWith(normalizedRoot)) {
+      return normalizedPath.slice(normalizedRoot.length).replace(/^\/+/, '') || getFileName(filePath);
+    }
+    return getFileName(filePath);
+  }
+
+  function formatFileSize(bytes?: number): string {
+    if (!bytes || bytes <= 0) return '';
+    if (bytes < 1024) return `${bytes} B`;
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+    if (bytes < 1024 * 1024 * 1024) return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+    return `${(bytes / 1024 / 1024 / 1024).toFixed(2)} GB`;
+  }
+
+  function formatLibraryLabel(entry: GptSovitsLibraryEntry): string {
+    const rel = entry.relativePath || deriveRelativePath(entry.path);
+    const sizeLabel = formatFileSize(entry.size);
+    return sizeLabel ? `${rel} (${sizeLabel})` : rel;
+  }
+
+  function buildLibraryOptions(type: 'gpt' | 'sovits'): GptSovitsLibraryEntry[] {
+    if (serverFiles.library.length) {
+      return [...serverFiles.library]
+        .filter(entry => entry.type === type)
+        .sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
+    }
+    const fallback = type === 'gpt' ? serverFiles.gptModels : serverFiles.sovitsModels;
+    return fallback.map(path => ({
+      type,
+      filename: getFileName(path),
+      path,
+      relativePath: deriveRelativePath(path),
+    }));
+  }
+
   // 加载服务器文件列表
   async function loadServerFiles() {
     loadingFiles.value = true;
     try {
-      const res = await voiceApi.listGptSovitsFiles();
+      const fetcher = voiceApi.listGptSovitsLibrary || voiceApi.listGptSovitsFiles;
+      const res = await fetcher();
       const data = res?.data || res;
-      serverFiles.gptModels = data.gptModels || [];
-      serverFiles.sovitsModels = data.sovitsModels || [];
+      serverFiles.storageRoot = data.storageRoot || '';
       serverFiles.promptAudios = data.promptAudios || [];
+      serverFiles.library = Array.isArray(data.library) ? data.library : [];
+      if (serverFiles.library.length) {
+        serverFiles.gptModels = serverFiles.library
+          .filter(entry => entry.type === 'gpt')
+          .map(entry => entry.path);
+        serverFiles.sovitsModels = serverFiles.library
+          .filter(entry => entry.type === 'sovits')
+          .map(entry => entry.path);
+      } else {
+        serverFiles.gptModels = data.gptModels || [];
+        serverFiles.sovitsModels = data.sovitsModels || [];
+      }
       ElMessage.success('文件列表已刷新');
     } catch (e: any) {
       ElMessage.error(e?.message || '获取文件列表失败');
@@ -1054,6 +1127,10 @@
         step: '2', // 直接进入第3步（参数调节）
       },
     });
+  }
+
+  function goToModelLibrary() {
+    router.push({ name: 'VoiceGptModels' });
   }
 
   const debugDialog = reactive<{

@@ -32,6 +32,15 @@ const routes: RouteRecordRaw = {
         icon: 'mdi:test-tube',
       },
     },
+    {
+      path: 'gpt-library',
+      name: 'VoiceGptModels',
+      component: () => import('@/views/voice/gpt-library.vue'),
+      meta: {
+        title: 'GPT-SoVITS 模型管理',
+        icon: 'mdi:folder-star',
+      },
+    },
   ],
 };
 

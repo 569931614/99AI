@@ -6,12 +6,14 @@ import {
   Param,
   Post,
   Query,
+  UploadedFile,
   UploadedFiles,
   UseGuards,
   UseInterceptors,
 } from '@nestjs/common';
-import { FileFieldsInterceptor } from '@nestjs/platform-express';
+import { FileFieldsInterceptor, FileInterceptor } from '@nestjs/platform-express';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
+import type { Express } from 'express';
 import { VoiceService } from './voice.service';
 
 @ApiTags('voice')
@@ -64,6 +66,19 @@ export class VoiceController {
   )
   importGptSovits(@UploadedFiles() files, @Body() body: Record<string, any>) {
     return this.voiceService.importGptSovitsVoice(files, body);
+  }
+
+  @Post('gpt-sovits/models/upload')
+  @ApiOperation({ summary: '上传 GPT-SoVITS 模型文件' })
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @UseInterceptors(
+    FileInterceptor('file', {
+      limits: { fileSize: 1024 * 1024 * 1024 }, // 1GB
+    }),
+  )
+  uploadGptSovitsModel(@UploadedFile() file: Express.Multer.File) {
+    return this.voiceService.uploadGptSovitsModel(file);
   }
 
   @Get('list')

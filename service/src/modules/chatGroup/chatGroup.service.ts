@@ -478,6 +478,14 @@ export class ChatGroupService {
       realTime,
       myName,
       myProfile,
+      conversationMemoryCount,
+      autoSummaryEnabled,
+      summaryPrompt,
+      chatSummary,
+      voiceReplyMode,
+      allowEmoji,
+      allowTap,
+      maxReplyCount,
       members,
       backgroundImage,
     } = body;
@@ -504,15 +512,26 @@ export class ChatGroupService {
     typeof description !== 'undefined' && (data['description'] = description);
     typeof ownerNickname !== 'undefined' && (data['ownerNickname'] = ownerNickname);
     typeof memberRelationships !== 'undefined' &&
-      (data['memberRelationships'] = typeof memberRelationships === 'string'
-        ? memberRelationships
-        : JSON.stringify(memberRelationships));
+      (data['memberRelationships'] =
+        typeof memberRelationships === 'string'
+          ? memberRelationships
+          : JSON.stringify(memberRelationships));
     typeof openingRemark !== 'undefined' && (data['openingRemark'] = openingRemark);
     typeof proactivelySend !== 'undefined' && (data['proactivelySend'] = proactivelySend);
     typeof describingMental !== 'undefined' && (data['describingMental'] = describingMental);
     typeof realTime !== 'undefined' && (data['realTime'] = realTime);
     typeof myName !== 'undefined' && (data['myName'] = myName);
     typeof myProfile !== 'undefined' && (data['myProfile'] = myProfile);
+    typeof conversationMemoryCount !== 'undefined' &&
+      (data['conversationMemoryCount'] = conversationMemoryCount);
+    typeof autoSummaryEnabled !== 'undefined' &&
+      (data['autoSummaryEnabled'] = autoSummaryEnabled ? 1 : 0);
+    typeof summaryPrompt !== 'undefined' && (data['summaryPrompt'] = summaryPrompt);
+    typeof chatSummary !== 'undefined' && (data['chatSummary'] = chatSummary);
+    typeof voiceReplyMode !== 'undefined' && (data['voiceReplyMode'] = voiceReplyMode);
+    typeof allowEmoji !== 'undefined' && (data['allowEmoji'] = allowEmoji ? 1 : 0);
+    typeof allowTap !== 'undefined' && (data['allowTap'] = allowTap ? 1 : 0);
+    typeof maxReplyCount !== 'undefined' && (data['maxReplyCount'] = maxReplyCount);
     typeof backgroundImage !== 'undefined' && (data['backgroundImage'] = backgroundImage);
 
     // 处理 members 参数 - 如果传入则完整替换

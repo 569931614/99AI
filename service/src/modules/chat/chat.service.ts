@@ -25,6 +25,7 @@ import { GlobalConfigService } from '../globalConfig/globalConfig.service';
 import { ModelsService } from '../models/models.service';
 import { PluginEntity } from '../plugin/plugin.entity';
 import { UploadService } from '../upload/upload.service';
+import { StickerService } from '../sticker/sticker.service';
 import { UserEntity } from '../user/user.entity';
 import { UserService } from '../user/user.service';
 import { UserAppSettingsService } from '../userAppSettings/userAppSettings.service';
@@ -57,6 +58,7 @@ export class ChatService {
     private readonly affectionService: AffectionService,
     private readonly userAppSettingsService: UserAppSettingsService,
     private readonly conversationSummaryService: ConversationSummaryService,
+    private readonly stickerService: StickerService,
     @InjectRepository(AppEmotionVoiceEntity)
     private readonly appEmotionVoiceRepo: Repository<AppEmotionVoiceEntity>,
     @InjectRepository(RoleEmotionEntity)
@@ -275,6 +277,277 @@ export class ChatService {
 
     // 过滤掉空片段
     return chunks.filter(chunk => chunk && chunk.trim().length > 0);
+  }
+
+  private clampReplyCount(value?: number | null, fallback = 1): number {
+    const num = Number(value);
+    if (Number.isFinite(num)) {
+      return Math.max(1, Math.min(5, Math.floor(num)));
+    }
+    return Math.max(1, Math.min(5, Math.floor(fallback)));
+  }
+
+  private splitAssistantReplies(text?: string | null, maxReplies?: number | null): string[] {
+    if (!text) return [];
+    const normalizedMax = this.clampReplyCount(maxReplies ?? 1);
+    const segments = text
+      .split(/\n\s*\n+/g)
+      .map(segment => segment.trim())
+      .filter(segment => segment.length > 0);
+    if (!segments.length) {
+      return [text.trim()];
+    }
+    if (segments.length > normalizedMax) {
+      return segments.slice(0, normalizedMax);
+    }
+    return segments;
+  }
+
+  private parseStickerIds(raw?: string | null): number[] {
+    if (!raw) return [];
+    const trimmed = raw.trim();
+    if (!trimmed) return [];
+    try {
+      if (trimmed.startsWith('[')) {
+        const parsed = JSON.parse(trimmed);
+        if (Array.isArray(parsed)) {
+          return parsed.map(id => Number(id)).filter(num => Number.isFinite(num) && num > 0);
+        }
+      }
+    } catch {
+      // 如果不是有效的JSON，回退到逗号分隔解析
+    }
+    return trimmed
+      .split(',')
+      .map(id => Number(id.trim()))
+      .filter(num => Number.isFinite(num) && num > 0);
+  }
+
+  private shouldSendSticker(probability?: number | null): boolean {
+    const num = Number(probability);
+    if (!Number.isFinite(num) || num <= 0) return false;
+    const normalized = Math.max(0, Math.min(100, num));
+    return Math.random() * 100 < normalized;
+  }
+
+  private buildAssistantLogBasePayload(context: {
+    appId: number | null;
+    action?: string | null;
+    curIp?: string | null;
+    userId: number;
+    modelType?: number | null;
+    model: string;
+    modelName: string;
+    groupId?: number | null;
+    modelAvatar?: string | null;
+    pluginParam?: string | null;
+  }) {
+    return {
+      appId: context.appId,
+      action: context.action ?? null,
+      curIp: context.curIp ?? null,
+      userId: context.userId,
+      type: context.modelType ?? 1,
+      progress: '100%',
+      model: context.model,
+      modelName: context.modelName,
+      role: 'assistant',
+      groupId: context.groupId ?? null,
+      status: 3,
+      modelAvatar: context.modelAvatar ?? '',
+      pluginParam: context.pluginParam ?? null,
+    };
+  }
+
+  private async saveAdditionalAssistantReplies(
+    replies: string[],
+    basePayload: Record<string, any>,
+  ): Promise<Array<{ chatId: number; content: string }>> {
+    const saved: Array<{ chatId: number; content: string }> = [];
+    if (!replies?.length) {
+      return saved;
+    }
+    for (const reply of replies) {
+      if (!reply || !reply.trim()) continue;
+      const extraLog = await this.chatLogService.saveChatLog({
+        ...basePayload,
+        content: reply,
+        promptTokens: 0,
+        completionTokens: 0,
+        totalTokens: 0,
+      });
+      saved.push({ chatId: extraLog.id, content: reply });
+    }
+    return saved;
+  }
+
+  private async maybeCreateStickerMessage(options: {
+    allowEmoji: boolean;
+    basePayload?: Record<string, any> | null;
+  }): Promise<{ chatId: number; message: any } | null> {
+    const { allowEmoji, basePayload } = options;
+    if (!allowEmoji || !basePayload) {
+      return null;
+    }
+
+    // TODO: 从表情包列表表获取可用的表情包
+    // 这里需要根据实际的表情包列表表逻辑来实现
+    // 暂时返回null，表示不发送表情包
+    Logger.debug('[Sticker] 表情包功能需要对接专门的表情包列表', 'ChatService');
+    return null;
+  }
+
+  /* 原有逻辑保留作为参考 - 已废弃
+  private async maybeCreateStickerMessage_old(options: {
+    allowEmoji: boolean;
+    stickerIds?: string | null;
+    stickerProbability?: number;
+    basePayload?: Record<string, any> | null;
+  }): Promise<{ chatId: number; message: any } | null> {
+    const { allowEmoji, stickerIds, stickerProbability, basePayload } = options;
+    if (!allowEmoji || !basePayload) {
+      return null;
+    }
+    const parsedStickerIds = this.parseStickerIds(stickerIds);
+    if (!parsedStickerIds.length) {
+      return null;
+    }
+    if (!this.shouldSendSticker(stickerProbability ?? 30)) {
+      return null;
+    }
+    const selectedId = parsedStickerIds[Math.floor(Math.random() * parsedStickerIds.length)];
+    try {
+      const sticker = await this.stickerService.detail(selectedId);
+      if (!sticker?.imageUrl) {
+        Logger.warn(`[Sticker] 选中的表情包缺少图片，id=${selectedId}`, 'ChatService');
+        return null;
+      }
+      const extraParam = {
+        type: 'sticker',
+        stickerId: sticker.id,
+        stickerName: sticker.name,
+        emotion: sticker.emotion,
+        tags: sticker.tags,
+        scenario: sticker.scenario,
+      };
+      const stickerLog = await this.chatLogService.saveChatLog({
+        ...basePayload,
+        content: sticker.name || '',
+        imageUrl: sticker.imageUrl,
+        extraParam: JSON.stringify(extraParam),
+        promptTokens: 0,
+        completionTokens: 0,
+        totalTokens: 0,
+      });
+
+      return {
+        chatId: stickerLog.id,
+        message: {
+          chatId: stickerLog.id,
+          message_type: 'sticker',
+          content: sticker.name || '',
+          content_image: sticker.imageUrl,
+          sticker_id: sticker.id,
+          sticker_name: sticker.name,
+        },
+      };
+    } catch (error: any) {
+      Logger.warn(
+        `[Sticker] 自动发送表情包失败: ${error?.message || error}`,
+        'ChatService',
+      );
+      return null;
+    }
+  }
+  */
+
+  private async generateVoiceReplyForMessage(options: {
+    text: string;
+    chatId: number | null;
+    appId: number | null;
+    req: Request;
+  }): Promise<{ ttsUrl: string; duration: number } | null> {
+    const { text, chatId, appId, req } = options;
+    try {
+      const textToSpeak = this.cleanTextForTTS(text);
+      if (!textToSpeak) {
+        return null;
+      }
+      let selectedVoiceId: string | null = null;
+      let finalEmotion: string | null = null;
+      const emotionOptions = await this.getAppEmotionOptions(appId);
+      const emotionPairs = await this.getAppEmotionPairs(appId);
+      const psychologicalDesc = this.extractPsychologicalDescription(text);
+
+      if (emotionOptions.length) {
+        const chosen = await this.chooseEmotionFromOptions(psychologicalDesc, text, emotionOptions);
+        if (chosen?.emotion) {
+          finalEmotion = chosen.emotion;
+          selectedVoiceId =
+            emotionPairs.find(pair => pair.emotion === finalEmotion)?.voiceId || null;
+        }
+        if (!selectedVoiceId) {
+          finalEmotion = await this.getAppDefaultEmotion(appId, emotionOptions);
+          selectedVoiceId =
+            emotionPairs.find(pair => pair.emotion === finalEmotion)?.voiceId || null;
+        }
+      }
+
+      if (!selectedVoiceId && appId) {
+        const defaultVoice = await this.appVoiceRepo.findOne({
+          where: { appId: Number(appId), isDefault: 1 },
+        });
+        selectedVoiceId = defaultVoice?.voiceId || null;
+      }
+
+      if (!selectedVoiceId) {
+        Logger.debug('[TTSService] 未找到可用音色，跳过语音回复', 'ChatService');
+        return null;
+      }
+
+      const previewPayload: any = { voice_id: selectedVoiceId, text: textToSpeak };
+      const ttsParams = this.mapEmotionToTtsParams(finalEmotion);
+      if (ttsParams.rate !== undefined) previewPayload.rate = ttsParams.rate;
+      if (ttsParams.pitch !== undefined) previewPayload.pitch = ttsParams.pitch;
+      if (ttsParams.volume !== undefined) previewPayload.volume = ttsParams.volume;
+
+      const { url, duration } = await this.voiceService.preview(previewPayload);
+      const durationInt = Math.round(duration);
+
+      try {
+        const detailKeyInfo = await this.modelsService.getCurrentModelKeyInfo('tts-1');
+        if (detailKeyInfo) {
+          const { deduct, deductType } = detailKeyInfo;
+          await this.userBalanceService.validateBalance(req, deductType, deduct);
+          await this.userBalanceService.deductFromBalance(
+            req.user.id,
+            deductType,
+            deduct,
+            0,
+            req.user.role,
+          );
+        } else {
+          Logger.warn('[TTSService] 未找到tts-1模型配置，跳过扣费', 'ChatService');
+        }
+      } catch (chargeError: any) {
+        Logger.warn(
+          `[TTSService] 扣费失败或配置缺失，已跳过扣费: ${chargeError?.message || chargeError}`,
+          'ChatService',
+        );
+      }
+
+      if (chatId) {
+        await this.chatLogService.updateChatLog(chatId, {
+          ttsUrl: url,
+          ttsDuration: durationInt,
+        });
+      }
+
+      return { ttsUrl: url, duration: durationInt };
+    } catch (error: any) {
+      Logger.warn(`[TTSService] 自动语音生成失败: ${error?.message || error}`, 'ChatService');
+      return null;
+    }
   }
 
   // 将情绪映射为 TTS 合成参数（基于标准情绪名称）
@@ -1269,7 +1542,8 @@ ${numberedOptions}
 
     // 图片识别处理：如果模型不支持图片（isImageUpload === 0）且有图片，先识别图片内容
     // 先检查prompt中是否已经包含了图片识别结果（避免重复识别）
-    const hasImageRecognitionResult = prompt && (prompt.includes('[这是一张图片，内容如下]') || prompt.includes('[图片内容:'));
+    const hasImageRecognitionResult =
+      prompt && (prompt.includes('[这是一张图片，内容如下]') || prompt.includes('[图片内容:'));
 
     if (imageUrl && isImageUpload === 0 && !hasImageRecognitionResult) {
       Logger.debug('[图片识别] 模型不支持图片，开始识别...', 'ChatService');
@@ -1571,7 +1845,10 @@ ${numberedOptions}
     } else {
       // skipSaveToDatabase 模式：不保存 assistant 消息
       assistantLogId = null;
-      Logger.debug(`[跳过保存] skipSaveToDatabase=true，不保存 assistant 消息到数据库`, 'ChatService');
+      Logger.debug(
+        `[跳过保存] skipSaveToDatabase=true，不保存 assistant 消息到数据库`,
+        'ChatService',
+      );
     }
 
     if (autoReplyRes.answer && res) {
@@ -1604,20 +1881,78 @@ ${numberedOptions}
     // 心理描述开关逻辑
     // 优先使用会话组的 describingMental 配置，如果没有则使用用户级别配置
     let enablePsychologicalDesc = false; // 声明在外层，用于后续响应过滤
+    let groupConversationMemoryCount = maxRounds; // 默认使用模型配置的maxRounds
+    let groupVoiceReplyMode = 'text_only'; // 默认不发语音
+    let groupAllowEmoji = false; // 默认不允许表情包
+    let groupAllowTap = false; // 默认不允许拍一拍
+    let groupMaxReplyCount = 5; // 默认最多回复5条
+
     if (appId && setSystemMessage && this.userAppSettingsService) {
       try {
-        // 1. 优先检查会话组的 describingMental 配置（99AI使用）
+        // 1. 优先检查会话组的配置（99AI使用）
         if (groupId) {
           try {
             const groupInfo = await this.chatGroupService.getGroupInfoFromId(groupId);
-            if (groupInfo && typeof groupInfo.describingMental === 'number') {
-              enablePsychologicalDesc = groupInfo.describingMental === 1;
-              Logger.debug(
-                `[心理描述] 使用会话组配置: groupId=${groupId}, describingMental=${groupInfo.describingMental}`,
-                'ChatService',
-              );
-            } else {
-              // 2. 如果会话组没有配置，使用用户级别配置
+            if (groupInfo) {
+              // 心理描述开关
+              if (typeof groupInfo.describingMental === 'number') {
+                enablePsychologicalDesc = groupInfo.describingMental === 1;
+                Logger.debug(
+                  `[心理描述] 使用会话组配置: groupId=${groupId}, describingMental=${groupInfo.describingMental}`,
+                  'ChatService',
+                );
+              }
+
+              // 对话记忆条数
+              if (
+                typeof groupInfo.conversationMemoryCount === 'number' &&
+                groupInfo.conversationMemoryCount > 0
+              ) {
+                groupConversationMemoryCount = groupInfo.conversationMemoryCount;
+                Logger.debug(
+                  `[对话记忆] 使用会话组配置: groupId=${groupId}, conversationMemoryCount=${groupConversationMemoryCount}`,
+                  'ChatService',
+                );
+              }
+
+              // 语音回复模式
+              if (groupInfo.voiceReplyMode) {
+                groupVoiceReplyMode = groupInfo.voiceReplyMode;
+                Logger.debug(
+                  `[语音回复] 使用会话组配置: groupId=${groupId}, voiceReplyMode=${groupVoiceReplyMode}`,
+                  'ChatService',
+                );
+              }
+
+              // 表情包和拍一拍开关
+              if (typeof groupInfo.allowEmoji === 'number') {
+                groupAllowEmoji = groupInfo.allowEmoji === 1;
+                Logger.debug(
+                  `[表情包] 使用会话组配置: groupId=${groupId}, allowEmoji=${groupAllowEmoji}`,
+                  'ChatService',
+                );
+              }
+
+              if (typeof groupInfo.allowTap === 'number') {
+                groupAllowTap = groupInfo.allowTap === 1;
+                Logger.debug(
+                  `[拍一拍] 使用会话组配置: groupId=${groupId}, allowTap=${groupAllowTap}`,
+                  'ChatService',
+                );
+              }
+
+              // 最多回复条数（群聊使用）
+              if (typeof groupInfo.maxReplyCount === 'number' && groupInfo.maxReplyCount > 0) {
+                groupMaxReplyCount = groupInfo.maxReplyCount;
+                Logger.debug(
+                  `[最多回复] 使用会话组配置: groupId=${groupId}, maxReplyCount=${groupMaxReplyCount}`,
+                  'ChatService',
+                );
+              }
+            }
+
+            // 如果会话组没有配置心理描述，使用用户级别配置
+            if (!groupInfo || typeof groupInfo.describingMental !== 'number') {
               enablePsychologicalDesc =
                 await this.userAppSettingsService.getEnablePsychologicalDesc(req.user.id, appId);
               Logger.debug(
@@ -1681,7 +2016,7 @@ ${numberedOptions}
         appId: appId,
         systemMessage: setSystemMessage,
         maxModelTokens,
-        maxRounds: maxRounds,
+        maxRounds: groupConversationMemoryCount, // 使用会话组配置的对话记忆条数
         isConvertToBase64: isConvertToBase64,
         fileUrl: fileUrl,
         imageUrl: imageUrl,
@@ -1926,11 +2261,34 @@ ${numberedOptions}
 
               // 如果有群组信息，插入到messages副本的第一位作为system消息（背景信息）
               if (groupInfoParts.length > 0) {
-                const groupBasicInfo = `【群组背景信息】\n${groupInfoParts.join('\n')}`;
+                // 添加行为约束（基于会话组配置）
+                const behaviorConstraints: string[] = [];
+
+                // 表情包控制
+                if (groupAllowEmoji) {
+                  behaviorConstraints.push('- 你可以在合适的时候发送emoji表情来增加趣味性');
+                } else {
+                  behaviorConstraints.push('- 请不要发送emoji表情');
+                }
+
+                // 拍一拍控制
+                if (groupAllowTap) {
+                  behaviorConstraints.push('- 你可以在合适的时候使用"拍一拍"进行亲密互动');
+                } else {
+                  behaviorConstraints.push('- 请不要使用"拍一拍"');
+                }
+
+                behaviorConstraints.push(
+                  `- 你一次最多连续回复${groupMaxReplyCount}条消息，每条之间用一个空行分隔，并且每条都要表达完整意思`,
+                );
+
+                const groupBasicInfo = `【群组背景信息】\n${groupInfoParts.join(
+                  '\n',
+                )}\n\n【行为约束】\n${behaviorConstraints.join('\n')}`;
                 // 使用system角色，星尘API会将非第一条system消息保留在messages中
                 messagesForXingchen.unshift({ role: 'system', content: groupBasicInfo });
                 Logger.debug(
-                  `[群聊] 已将群组背景信息（含成员任务）添加到星尘API请求的messages第一位（system角色）`,
+                  `[群聊] 已将群组背景信息（含成员任务和行为约束）添加到星尘API请求的messages第一位（system角色）`,
                   'ChatService',
                 );
               }
@@ -1938,18 +2296,47 @@ ${numberedOptions}
               Logger.warn(`[群聊] 构建群组背景信息失败: ${error.message}`, 'ChatService');
             }
           } else if (!isGroupChat && groupId) {
-            // 单聊模式：只添加用户信息到messages（如果有）
+            // 单聊模式：添加用户信息和行为约束到messages（如果有）
             try {
+              const singleChatParts: string[] = [];
+
               if (userProfileText) {
-                const userProfileInfo = `【用户信息】\n${userProfileText}`;
+                singleChatParts.push(`【用户信息】\n${userProfileText}`);
+              }
+
+              // 添加行为约束（单聊也需要）
+              const behaviorConstraints: string[] = [];
+
+              // 表情包控制
+              if (groupAllowEmoji) {
+                behaviorConstraints.push('- 你可以在合适的时候发送emoji表情来增加趣味性');
+              } else {
+                behaviorConstraints.push('- 请不要发送emoji表情');
+              }
+
+              // 拍一拍控制
+              if (groupAllowTap) {
+                behaviorConstraints.push('- 你可以在合适的时候使用"拍一拍"进行亲密互动');
+              } else {
+                behaviorConstraints.push('- 请不要使用"拍一拍"');
+              }
+
+              behaviorConstraints.push(
+                `- 你一次最多连续回复${groupMaxReplyCount}条消息，消息之间使用空行，并保持语气自然`,
+              );
+
+              singleChatParts.push(`\n【行为约束】\n${behaviorConstraints.join('\n')}`);
+
+              if (singleChatParts.length > 0) {
+                const userProfileInfo = singleChatParts.join('\n');
                 // 使用system角色，添加到messages第一位
                 messagesForXingchen.unshift({ role: 'system', content: userProfileInfo });
                 Logger.debug(
-                  `[单聊] 已将用户信息添加到星尘API请求的messages第一位（system角色）`,
+                  `[单聊] 已将用户信息和行为约束添加到星尘API请求的messages第一位（system角色）`,
                   'ChatService',
                 );
               } else {
-                Logger.debug(`[单聊] 用户未设置用户名和简介，跳过添加`, 'ChatService');
+                Logger.debug(`[单聊] 用户未设置用户名和简介，仅添加行为约束`, 'ChatService');
               }
             } catch (error) {
               Logger.warn(`[单聊] 添加用户信息失败: ${error.message}`, 'ChatService');
@@ -2086,15 +2473,20 @@ ${numberedOptions}
             }
           }
 
-          // 更新response对象，使用过滤后的内容
-          response.full_content = sanitizedAnswer;
+          const splitReplies = this.splitAssistantReplies(sanitizedAnswer, groupMaxReplyCount);
+          const normalizedFullContent =
+            splitReplies.length > 0 ? splitReplies.join('\n\n') : sanitizedAnswer;
+          response.full_content = normalizedFullContent;
 
-          // 如果检测到敏感词，替换为 ***
-          // gpt回答 - 使用替换后的内容存入数据库
+          const assistantMessagesPayload: any[] = [];
+          const textReplies =
+            splitReplies.length > 0 ? splitReplies : sanitizedAnswer ? [sanitizedAnswer] : [];
+          const firstReply = textReplies[0] || '';
+
           if (assistantLogId) {
+            const replyContent = firstReply || '';
             await this.chatLogService.updateChatLog(assistantLogId, {
-              // imageUrl: response?.imageUrl,
-              content: sanitizedAnswer, // 使用替换后的内容
+              content: replyContent,
               reasoning_content: response.full_reasoning_content,
               tool_calls: response.tool_calls,
               promptTokens: promptTokens,
@@ -2102,7 +2494,102 @@ ${numberedOptions}
               totalTokens: promptTokens + completionTokens,
               status: 3,
             });
+
+            assistantMessagesPayload.push({
+              chatId: assistantLogId,
+              message_type: 'text',
+              content: replyContent,
+            });
+
+            const assistantLogBasePayload = this.buildAssistantLogBasePayload({
+              appId: appId ? Number(appId) : null,
+              action: action || null,
+              curIp,
+              userId: req.user.id,
+              modelType,
+              model: useModel,
+              modelName: assistantName,
+              groupId: groupId ? Number(groupId) : null,
+              modelAvatar: usingPlugin?.pluginImg || useModelAvatar || modelAvatar || '',
+              pluginParam:
+                assistantSaveLog?.pluginParam ||
+                (usingPlugin?.parameters
+                  ? usingPlugin.parameters
+                  : modelType === 2
+                  ? useModel
+                  : null),
+            });
+
+            if (textReplies.length > 1) {
+              const extraLogs = await this.saveAdditionalAssistantReplies(
+                textReplies.slice(1),
+                assistantLogBasePayload,
+              );
+              extraLogs.forEach(item => {
+                assistantMessagesPayload.push({
+                  chatId: item.chatId,
+                  message_type: 'text',
+                  content: item.content,
+                });
+              });
+            }
+
+            // 语音回复逻辑：
+            // - voice_only: 全部发语音（每次都生成）
+            // - mixed: 偶尔发一次（按概率生成，文字:语音 = 5:2）
+            let shouldGenerateVoice = false;
+            if (groupVoiceReplyMode === 'voice_only') {
+              shouldGenerateVoice = true;
+              Logger.debug('[语音回复] voice_only 模式 - 生成语音', 'ChatService');
+            } else if (groupVoiceReplyMode === 'mixed') {
+              // 按照 5:2 的比例随机生成语音（约 28.6% 的概率）
+              shouldGenerateVoice = Math.random() < 0.286;
+              Logger.debug(
+                `[语音回复] mixed 模式 - ${shouldGenerateVoice ? '生成语音' : '仅文字'}`,
+                'ChatService',
+              );
+            }
+
+            if (shouldGenerateVoice && replyContent) {
+              const voiceReply = await this.generateVoiceReplyForMessage({
+                text: replyContent,
+                chatId: assistantLogId,
+                appId: appId ? Number(appId) : null,
+                req,
+              });
+              if (voiceReply) {
+                response.ttsUrl = voiceReply.ttsUrl;
+                response.audioUrl = voiceReply.ttsUrl;
+                response.voiceDuration = voiceReply.duration;
+                response.audioDuration = voiceReply.duration; // 添加audioDuration字段供cat_AI使用
+                if (assistantMessagesPayload.length > 0) {
+                  assistantMessagesPayload[0].content_voice = voiceReply.ttsUrl;
+                  assistantMessagesPayload[0].voice_duration = voiceReply.duration;
+                  assistantMessagesPayload[0].audioDuration = voiceReply.duration; // 添加audioDuration字段
+                }
+              }
+            }
+
+            if (assistantLogBasePayload) {
+              const stickerMessage = await this.maybeCreateStickerMessage({
+                allowEmoji: groupAllowEmoji,
+                basePayload: assistantLogBasePayload,
+              });
+              if (stickerMessage?.message) {
+                assistantMessagesPayload.push(stickerMessage.message);
+              }
+            }
+          } else {
+            textReplies.forEach(reply => {
+              assistantMessagesPayload.push({
+                chatId: null,
+                message_type: 'text',
+                content: reply,
+              });
+            });
           }
+
+          response.messages = assistantMessagesPayload;
 
           try {
             if (isGeneratePromptReference === '1') {

@@ -1,4 +1,4 @@
-import { ApiProperty } from '@nestjs/swagger';
+﻿import { ApiProperty } from '@nestjs/swagger';
 import { IsDefined, IsIn, IsNumber, IsOptional } from 'class-validator';
 
 export class CreateAppDto {
@@ -24,7 +24,7 @@ export class CreateAppDto {
 
   @ApiProperty({
     example: '你现在是一个翻译官。接下来我说的所有话帮我翻译成中文',
-    description: '预设的prompt',
+    description: '预设的 prompt',
     required: false,
   })
   @IsOptional()
@@ -38,7 +38,7 @@ export class CreateAppDto {
   @IsOptional()
   gizmoID: string;
 
-  @ApiProperty({ description: '是否GPTs', required: false })
+  @ApiProperty({ description: '是否 GPTs', required: false })
   @IsOptional()
   isGPTs: number;
 
@@ -52,7 +52,7 @@ export class CreateAppDto {
 
   @ApiProperty({
     example: 100,
-    description: '套餐排序、数字越大越靠前',
+    description: '套餐排序，数字越大越靠前',
     required: false,
   })
   @IsOptional()
@@ -60,17 +60,17 @@ export class CreateAppDto {
 
   @ApiProperty({
     example: 1,
-    description: '套餐状态 0：禁用 1：启用（可选，默认为1）',
+    description: '套餐状态 0：禁用 1：启用（可选，默认为 1）',
     required: false,
   })
   @IsOptional()
-  @IsNumber({}, { message: '套餐状态必须是Number' })
+  @IsNumber({}, { message: '套餐状态必须是 Number' })
   @IsIn([0, 1, 3, 4, 5], { message: '套餐状态错误' })
   status: number;
 
   @ApiProperty({
     example: '这是一句示例数据',
-    description: 'app示例数据',
+    description: 'app 示例数据',
     required: false,
   })
   demoData: string;
@@ -84,7 +84,7 @@ export class CreateAppDto {
 
   @ApiProperty({
     example: 1,
-    description: '创建该角色的用户ID',
+    description: '创建该角色的用户 ID',
     required: false,
   })
   @IsOptional()
@@ -92,35 +92,35 @@ export class CreateAppDto {
 
   @ApiProperty({
     example: 0,
-    description: '是否使用flowith模型',
+    description: '是否使用 flowith 模型',
     required: false,
   })
   isFlowith: number;
 
   @ApiProperty({
-    example: 'flowith模型ID',
-    description: 'flowith模型ID',
+    example: 'flowith 模型 ID',
+    description: 'flowith 模型 ID',
     required: false,
   })
   flowithId: string;
 
   @ApiProperty({
-    example: 'flowith模型名称',
-    description: 'flowith模型名称',
+    example: 'flowith 模型名称',
+    description: 'flowith 模型名称',
     required: false,
   })
   flowithName: string;
 
   @ApiProperty({
-    example: 'flowith模型Key',
-    description: 'flowith模型Key',
+    example: 'flowith 模型 Key',
+    description: 'flowith 模型 Key',
     required: false,
   })
   flowithKey: string;
 
   @ApiProperty({
     example: 'cosyvoice-v2-xxxxxxxx',
-    description: '角色默认音色ID（DashScope/CosyVoice voice_id）',
+    description: '角色默认音色 ID（DashScope/CosyVoice voice_id）',
     required: false,
   })
   @IsOptional()
@@ -128,7 +128,7 @@ export class CreateAppDto {
 
   @ApiProperty({
     example: false,
-    description: '是否开启真实时间（星尘API）',
+    description: '是否开启实时模式（星尘 API）',
     required: false,
   })
   @IsOptional()
@@ -136,7 +136,7 @@ export class CreateAppDto {
 
   @ApiProperty({
     example: false,
-    description: '是否开启长期记忆（星尘API）',
+    description: '是否开启长期记忆（星尘 API）',
     required: false,
   })
   @IsOptional()
@@ -144,7 +144,7 @@ export class CreateAppDto {
 
   @ApiProperty({
     example: false,
-    description: '是否开启知识库搜索（星尘API）',
+    description: '是否开启知识库搜索（星尘 API）',
     required: false,
   })
   @IsOptional()
@@ -152,7 +152,7 @@ export class CreateAppDto {
 
   @ApiProperty({
     example: '["kb_id_1","kb_id_2"]',
-    description: '知识库ID列表（星尘API），JSON数组格式',
+    description: '知识库 ID 列表（星尘 API），JSON 数组格式',
     required: false,
   })
   @IsOptional()
@@ -161,14 +161,14 @@ export class CreateAppDto {
   @ApiProperty({
     example:
       '[{"role":"user","content":"你好"},{"role":"assistant","content":"你好！很高兴见到你"}]',
-    description: '对话示例（星尘API），JSON格式',
+    description: '对话示例（星尘 API），JSON 格式',
     required: false,
   })
   @IsOptional()
   dialogueExamples: string;
 
   @ApiProperty({
-    example: '你好！我是你的AI助手，有什么可以帮助你的吗？',
+    example: '你好！我是你的 AI 助手，有什么可以帮助你的吗？',
     description: '开场白（角色初始问候语）',
     required: false,
   })
@@ -186,4 +186,36 @@ export class CreateAppDto {
   })
   @IsOptional()
   emotionVoices: Array<{ emotion: string; emotionId: number; voiceId: string }>;
+
+  @ApiProperty({
+    example: 3,
+    description: '最大连续回复次数（1-5）',
+    required: false,
+  })
+  @IsOptional()
+  maxReplyCount: number;
+
+  @ApiProperty({
+    example: 1,
+    description: '是否允许发送表情包（1 启用 / 0 禁用）',
+    required: false,
+  })
+  @IsOptional()
+  allowEmoji: number;
+
+  @ApiProperty({
+    example: '1,2,3',
+    description: '可选的表情包 ID 列表，多个值逗号分隔',
+    required: false,
+  })
+  @IsOptional()
+  stickerIds: string;
+
+  @ApiProperty({
+    example: 30,
+    description: '表情包自动发送概率（0-100）',
+    required: false,
+  })
+  @IsOptional()
+  stickerProbability: number;
 }

@@ -241,7 +241,10 @@ async function renameColumn(
     await conn.execute(
       `ALTER TABLE ${tableName} CHANGE \`${oldColumnName}\` \`${newColumnName}\` ${columnDefinition}`,
     );
-    Logger.log(`${tableName} 表中的列已成功从 ${oldColumnName} 重命名为 ${newColumnName}`, 'Database');
+    Logger.log(
+      `${tableName} 表中的列已成功从 ${oldColumnName} 重命名为 ${newColumnName}`,
+      'Database',
+    );
 
     return true;
   } catch (error) {

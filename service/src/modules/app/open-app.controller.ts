@@ -389,7 +389,13 @@ export class OpenAppController {
     },
   })
   updateApp(@Body() body: any) {
-    return this.appService.updateApp(body);
+    console.log('[OpenAppController.updateApp] 收到请求参数:', JSON.stringify(body, null, 2));
+    try {
+      return this.appService.updateApp(body);
+    } catch (error) {
+      console.error('[OpenAppController.updateApp] 错误:', error);
+      throw error;
+    }
   }
 
   @Delete('delApp/:id')

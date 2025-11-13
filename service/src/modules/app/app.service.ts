@@ -739,59 +739,218 @@ export class AppService {
   }
 
   async updateApp(body: UpdateAppDto) {
-    const { id, name, catId, status } = body;
+    console.log('[AppService.updateApp] 开始处理，body:', JSON.stringify(body, null, 2));
+    const { id } = body;
 
     // 验证ID是否有效
     if (id === undefined || id === null || isNaN(Number(id))) {
+      console.error('[AppService.updateApp] ID验证失败:', { id, type: typeof id });
       throw new HttpException('无效的应用ID！', HttpStatus.BAD_REQUEST);
     }
-
-    // 检查应用名称是否重复 - 已移除限制，允许重复应用名
-    // const a = await this.appEntity.findOne({ where: { name, id: Not(id) } });
-    // if (a) {
-    //   throw new HttpException('该应用名称已存在！', HttpStatus.BAD_REQUEST);
-    // }
-
-    // 验证所有分类ID是否存在（仅在传递了 catId 时校验）
-    if (typeof (catId as any) === 'string' && String(catId).trim().length > 0) {
-      const catIds = String(catId).split(',');
-      for (const id of catIds) {
-        const c = await this.appCatsEntity.findOne({ where: { id: Number(id) } });
-        if (!c) {
-          throw new HttpException(`分类ID ${id} 不存在！`, HttpStatus.BAD_REQUEST);
-        }
-      }
-    }
+    console.log('[AppService.updateApp] ID验证通过:', id);
 
     // 创建更新数据对象
     const updateData = { ...body } as any;
-    const curApp = await this.appEntity.findOne({ where: { id } });
+    console.log('[AppService.updateApp] 开始查询数据库，id:', id);
+
+    let curApp;
+    try {
+      curApp = await this.appEntity.findOne({ where: { id } });
+      console.log(
+        '[AppService.updateApp] 数据库查询完成，结果:',
+        curApp ? '找到角色' : '未找到角色',
+      );
+    } catch (dbError) {
+      console.error('[AppService.updateApp] 数据库查询失败:', dbError);
+      throw new HttpException(
+        '数据库查询失败: ' + dbError.message,
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
+    }
+
     if (!curApp) {
+      console.error('[AppService.updateApp] 角色不存在，id:', id);
       throw new HttpException('角色不存在！', HttpStatus.BAD_REQUEST);
     }
+    console.log('[AppService.updateApp] 角色验证通过');
     const curAppData = curApp as any;
+
+    const hasPayload = (key: string) => Object.prototype.hasOwnProperty.call(body, key);
+    const normalizeCatIds = (value: any): string => {
+      if (value === null || value === undefined) return '';
+      if (Array.isArray(value)) {
+        return value
+          .map(item => String(item).trim())
+          .filter(Boolean)
+          .join(',');
+      }
+      return String(value)
+        .split(',')
+        .map(part => part.trim())
+        .filter(Boolean)
+        .join(',');
+    };
+    const pickNonEmptyString = (value: any, fallback: string): string => {
+      if (value === null || value === undefined) return fallback;
+      const str = String(value).trim();
+      return str.length > 0 ? str : fallback;
+    };
+    const pickOptionalString = (value: any, fallback: string | null): string | null => {
+      if (value === null || value === undefined) return fallback;
+      return String(value);
+    };
+    const pickTinyInt = (value: any, fallback: number): number => {
+      if (value === null || value === undefined || value === '') return fallback;
+      if (typeof value === 'boolean') return value ? 1 : 0;
+      if (typeof value === 'number') return value > 0 ? 1 : 0;
+      const normalized = String(value).trim().toLowerCase();
+      if (['1', 'true', 'yes', 'on'].includes(normalized)) return 1;
+      if (['0', 'false', 'no', 'off'].includes(normalized)) return 0;
+      const num = Number(value);
+      if (Number.isFinite(num)) {
+        return num > 0 ? 1 : 0;
+      }
+      return fallback;
+    };
+    const pickBoolean = (value: any, fallback: boolean): boolean => {
+      if (value === null || value === undefined || value === '') return fallback;
+      if (typeof value === 'boolean') return value;
+      if (typeof value === 'number') return value !== 0;
+      const normalized = String(value).trim().toLowerCase();
+      if (['1', 'true', 'yes', 'on'].includes(normalized)) return true;
+      if (['0', 'false', 'no', 'off'].includes(normalized)) return false;
+      return fallback;
+    };
+    const parseNumberOrNull = (value: any): number | null => {
+      if (value === null || value === undefined) return null;
+      if (typeof value === 'string' && value.trim() === '') return null;
+      const num = Number(value);
+      return Number.isFinite(num) ? num : null;
+    };
+
+    // 处理名称，确保不为空
+    const hasNamePayload = hasPayload('name');
+    const sanitizedName = pickNonEmptyString(updateData.name, curAppData.name || '');
+    if (hasNamePayload && !sanitizedName) {
+      throw new HttpException('角色名称不能为空！', HttpStatus.BAD_REQUEST);
+    }
+    updateData.name = sanitizedName || curAppData.name || '';
+
+    // 验证并规范化分类
+    console.log('[AppService.updateApp] 开始验证分类ID');
+    let sanitizedCatId = curAppData.catId;
+    if (hasPayload('catId')) {
+      console.log('[AppService.updateApp] 接收到catId参数:', body.catId);
+      sanitizedCatId = normalizeCatIds(body.catId);
+      console.log('[AppService.updateApp] 规范化后的catId:', sanitizedCatId);
+      if (!sanitizedCatId) {
+        throw new HttpException('分类ID不能为空！', HttpStatus.BAD_REQUEST);
+      }
+      const catIds = sanitizedCatId.split(',');
+      console.log('[AppService.updateApp] 开始验证分类ID列表:', catIds);
+      for (const cat of catIds) {
+        const numId = Number(cat);
+        if (Number.isNaN(numId)) {
+          throw new HttpException(`分类ID ${cat} 不是有效的数字！`, HttpStatus.BAD_REQUEST);
+        }
+        console.log('[AppService.updateApp] 查询分类ID:', numId);
+        const c = await this.appCatsEntity.findOne({ where: { id: numId } });
+        if (!c) {
+          console.error('[AppService.updateApp] 分类ID不存在:', numId);
+          throw new HttpException(`分类ID ${cat} 不存在！`, HttpStatus.BAD_REQUEST);
+        }
+        console.log('[AppService.updateApp] 分类ID验证通过:', numId);
+      }
+    }
+    updateData.catId = sanitizedCatId;
+    console.log('[AppService.updateApp] 分类验证完成');
+
+    // 确保 ID 不被误写回
+    if ('id' in updateData) delete updateData.id;
+    // 删除不应写入数据库的请求参数
+    if ('token' in updateData) delete updateData.token;
+    if ('maobingBaseUrl' in updateData) delete updateData.maobingBaseUrl;
 
     // 从 body 中取 voiceId，但不直接写入 app 表
     const newVoiceId = (body as any)?.voiceId;
     if ('voiceId' in updateData) delete updateData.voiceId;
     if ('emotionVoices' in updateData) delete updateData.emotionVoices;
 
-    // 设置默认值
-    updateData.appModel = updateData.appModel ?? (curAppData.appModel || '');
-    updateData.order = isNaN(Number(updateData.order)) ? 100 : updateData.order;
-    updateData.status = isNaN(Number(updateData.status)) ? 1 : updateData.status;
-    updateData.isGPTs = isNaN(Number(updateData.isGPTs)) ? 0 : updateData.isGPTs;
-    updateData.isFlowith = isNaN(Number(updateData.isFlowith)) ? 0 : updateData.isFlowith;
-    updateData.flowithId = updateData.flowithId ?? (curAppData.flowithId || '');
-    updateData.flowithName = updateData.flowithName ?? (curAppData.flowithName || '');
-    updateData.isFixedModel = isNaN(Number(updateData.isFixedModel)) ? 0 : updateData.isFixedModel;
-    updateData.backgroundImg = updateData.backgroundImg ?? (curAppData.backgroundImg || '');
-    updateData.prompt = updateData.prompt ?? (curAppData.prompt || '');
+    // 数值字段/布尔字段的兜底与规范化
+    const orderFromPayload = parseNumberOrNull(body.order);
+    updateData.order = orderFromPayload !== null ? orderFromPayload : curAppData.order ?? 100;
+    const allowedStatuses = new Set([0, 1, 3, 4, 5]);
+    const statusFromPayload = parseNumberOrNull(body.status);
+    if (statusFromPayload !== null) {
+      if (!allowedStatuses.has(statusFromPayload)) {
+        throw new HttpException('套餐状态错误', HttpStatus.BAD_REQUEST);
+      }
+      updateData.status = statusFromPayload;
+    } else {
+      updateData.status = typeof curAppData.status === 'number' ? curAppData.status : 1;
+    }
+    updateData.isGPTs = pickTinyInt(updateData.isGPTs, curAppData.isGPTs ?? 0);
+    updateData.isFlowith = pickTinyInt(updateData.isFlowith, curAppData.isFlowith ?? 0);
+    updateData.isFixedModel = pickTinyInt(updateData.isFixedModel, curAppData.isFixedModel ?? 0);
+    updateData.enableRealTime = pickBoolean(
+      updateData.enableRealTime,
+      curAppData.enableRealTime ?? false,
+    );
+    updateData.enableLongTermMemory = pickBoolean(
+      updateData.enableLongTermMemory,
+      curAppData.enableLongTermMemory ?? false,
+    );
+    updateData.enableKnowledgeBase = pickBoolean(
+      updateData.enableKnowledgeBase,
+      curAppData.enableKnowledgeBase ?? false,
+    );
+
+    // 其余可空字段保持原值或使用传入值
+    updateData.role = pickNonEmptyString(updateData.role, curAppData.role || 'system') || 'system';
+    updateData.gizmoID = pickNonEmptyString(updateData.gizmoID, curAppData.gizmoID || '');
+    updateData.appModel = pickOptionalString(updateData.appModel, curAppData.appModel ?? null);
+    updateData.flowithId = pickOptionalString(updateData.flowithId, curAppData.flowithId ?? null);
+    updateData.flowithName = pickOptionalString(
+      updateData.flowithName,
+      curAppData.flowithName ?? null,
+    );
+    updateData.flowithKey = pickOptionalString(
+      updateData.flowithKey,
+      curAppData.flowithKey ?? null,
+    );
+    updateData.backgroundImg = pickOptionalString(
+      updateData.backgroundImg,
+      curAppData.backgroundImg ?? null,
+    );
+    updateData.prompt = pickOptionalString(updateData.prompt, curAppData.prompt ?? null);
+    updateData.des = pickOptionalString(updateData.des, curAppData.des ?? null);
+    updateData.preset = pickOptionalString(updateData.preset, curAppData.preset ?? null);
+    updateData.coverImg = pickOptionalString(updateData.coverImg, curAppData.coverImg ?? null);
+    updateData.demoData = pickOptionalString(updateData.demoData, curAppData.demoData ?? null);
+    updateData.openingRemark = pickOptionalString(
+      updateData.openingRemark,
+      curAppData.openingRemark ?? null,
+    );
+    updateData.knowledgeBaseIds = pickOptionalString(
+      updateData.knowledgeBaseIds,
+      curAppData.knowledgeBaseIds ?? null,
+    );
+    updateData.dialogueExamples = pickOptionalString(
+      updateData.dialogueExamples,
+      curAppData.dialogueExamples ?? null,
+    );
+
+    console.log('[AppService.updateApp] 数据准备完成，准备更新数据库');
+    console.log('[AppService.updateApp] updateData keys:', Object.keys(updateData));
 
     if (curAppData.status !== updateData.status) {
+      console.log('[AppService.updateApp] 状态变化，更新userApps表');
       await this.userAppsEntity.update({ appId: id }, { status: updateData.status });
     }
+
+    console.log('[AppService.updateApp] 开始执行主更新操作');
     const res = await this.appEntity.update({ id }, updateData);
+    console.log('[AppService.updateApp] 主更新操作完成，affected:', res.affected);
     if ((res.affected ?? 0) >= 0) {
       // 同步角色音色关联（仅当提供了 voiceId 且不为空时才更新）
       if (

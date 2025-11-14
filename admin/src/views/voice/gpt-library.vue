@@ -13,7 +13,8 @@
         </div>
       </template>
       <div class="text-xs text-gray-500 leading-6">
-        管理上传到受控目录的 GPT (.ckpt/.bin) 和 SoVITS (.pth/.pt) 模型文件，声音复刻会直接使用此列表。
+        管理上传到受控目录的 GPT (.ckpt/.bin) 和 SoVITS (.pth/.pt)
+        模型文件，声音复刻会直接使用此列表。
       </div>
       <div v-if="storageRoot" class="text-xs text-gray-400 mt-2">
         当前存储目录：<span class="font-mono">{{ storageRoot }}</span>
@@ -107,7 +108,7 @@
   const filteredLibrary = computed(() => {
     const sorted = [...library.value].sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
     if (filterType.value === 'all') return sorted;
-    return sorted.filter(item => item.type === filterType.value);
+    return sorted.filter((item) => item.type === filterType.value);
   });
 
   onMounted(() => {
@@ -125,7 +126,9 @@
     const normalizedRoot = storageRoot.value.replace(/\\/g, '/');
     const normalizedPath = pathStr.replace(/\\/g, '/');
     if (normalizedRoot && normalizedPath.startsWith(normalizedRoot)) {
-      return normalizedPath.slice(normalizedRoot.length).replace(/^\/+/, '') || getFileName(pathStr);
+      return (
+        normalizedPath.slice(normalizedRoot.length).replace(/^\/+/, '') || getFileName(pathStr)
+      );
     }
     return getFileName(pathStr);
   }
@@ -263,7 +266,8 @@
     color: #6b7280;
   }
   .font-mono {
-    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New',
+    font-family:
+      ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New',
       monospace;
   }
   .text-xs {

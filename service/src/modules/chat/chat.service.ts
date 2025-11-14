@@ -1,4 +1,4 @@
-import {
+﻿import {
   convertUrlToBase64,
   formatUrl,
   getClientIp,
@@ -32,6 +32,8 @@ import { UserAppSettingsService } from '../userAppSettings/userAppSettings.servi
 import { UserBalanceService } from '../userBalance/userBalance.service';
 import { VoiceService } from '../voice/voice.service';
 
+const STICKER_EMOTION_LABELS = ['happy', 'sad', 'angry', 'comfort', 'surprised', 'neutral'];
+
 @Injectable()
 export class ChatService {
   constructor(
@@ -64,6 +66,17 @@ export class ChatService {
     @InjectRepository(RoleEmotionEntity)
     private readonly roleEmotionRepo: Repository<RoleEmotionEntity>,
   ) {}
+
+  // Gate verbose chat logs to avoid flooding production unless explicitly enabled.
+  private readonly enableVerboseChatLogs =
+    process.env.CHAT_DEBUG_LOG_ENABLED === 'true' || process.env.NODE_ENV === 'development';
+
+  private logDebug(message: any, context = ChatService.name) {
+    if (!this.enableVerboseChatLogs) {
+      return;
+    }
+    Logger.debug(message, context);
+  }
 
   /**
    * 从文本中提取括号内的心理描述
@@ -303,26 +316,6 @@ export class ChatService {
     return segments;
   }
 
-  private parseStickerIds(raw?: string | null): number[] {
-    if (!raw) return [];
-    const trimmed = raw.trim();
-    if (!trimmed) return [];
-    try {
-      if (trimmed.startsWith('[')) {
-        const parsed = JSON.parse(trimmed);
-        if (Array.isArray(parsed)) {
-          return parsed.map(id => Number(id)).filter(num => Number.isFinite(num) && num > 0);
-        }
-      }
-    } catch {
-      // 如果不是有效的JSON，回退到逗号分隔解析
-    }
-    return trimmed
-      .split(',')
-      .map(id => Number(id.trim()))
-      .filter(num => Number.isFinite(num) && num > 0);
-  }
-
   private shouldSendSticker(probability?: number | null): boolean {
     const num = Number(probability);
     if (!Number.isFinite(num) || num <= 0) return false;
@@ -384,55 +377,36 @@ export class ChatService {
   private async maybeCreateStickerMessage(options: {
     allowEmoji: boolean;
     basePayload?: Record<string, any> | null;
+    referenceText?: string | null;
+    probability?: number | null;
   }): Promise<{ chatId: number; message: any } | null> {
-    const { allowEmoji, basePayload } = options;
+    const { allowEmoji, basePayload, referenceText, probability } = options;
     if (!allowEmoji || !basePayload) {
       return null;
     }
+    if (!this.shouldSendSticker(probability ?? 30)) {
+      this.logDebug('[Sticker] 本次概率未命中，跳过自动发送', 'ChatService');
+      return null;
+    }
 
-    // TODO: 从表情包列表表获取可用的表情包
-    // 这里需要根据实际的表情包列表表逻辑来实现
-    // 暂时返回null，表示不发送表情包
-    Logger.debug('[Sticker] 表情包功能需要对接专门的表情包列表', 'ChatService');
-    return null;
-  }
-
-  /* 原有逻辑保留作为参考 - 已废弃
-  private async maybeCreateStickerMessage_old(options: {
-    allowEmoji: boolean;
-    stickerIds?: string | null;
-    stickerProbability?: number;
-    basePayload?: Record<string, any> | null;
-  }): Promise<{ chatId: number; message: any } | null> {
-    const { allowEmoji, stickerIds, stickerProbability, basePayload } = options;
-    if (!allowEmoji || !basePayload) {
-      return null;
-    }
-    const parsedStickerIds = this.parseStickerIds(stickerIds);
-    if (!parsedStickerIds.length) {
-      return null;
-    }
-    if (!this.shouldSendSticker(stickerProbability ?? 30)) {
-      return null;
-    }
-    const selectedId = parsedStickerIds[Math.floor(Math.random() * parsedStickerIds.length)];
     try {
-      const sticker = await this.stickerService.detail(selectedId);
+      const sticker = await this.stickerService.pickStickerByText(referenceText?.trim() || '');
       if (!sticker?.imageUrl) {
-        Logger.warn(`[Sticker] 选中的表情包缺少图片，id=${selectedId}`, 'ChatService');
+        this.logDebug('[Sticker] 公共表情库未返回有效图片，跳过', 'ChatService');
         return null;
       }
+
       const extraParam = {
         type: 'sticker',
         stickerId: sticker.id,
-        stickerName: sticker.name,
         emotion: sticker.emotion,
         tags: sticker.tags,
         scenario: sticker.scenario,
+        source: 'global',
       };
       const stickerLog = await this.chatLogService.saveChatLog({
         ...basePayload,
-        content: sticker.name || '',
+        content: '',
         imageUrl: sticker.imageUrl,
         extraParam: JSON.stringify(extraParam),
         promptTokens: 0,
@@ -445,21 +419,96 @@ export class ChatService {
         message: {
           chatId: stickerLog.id,
           message_type: 'sticker',
-          content: sticker.name || '',
+          content: '',
           content_image: sticker.imageUrl,
           sticker_id: sticker.id,
-          sticker_name: sticker.name,
         },
       };
     } catch (error: any) {
-      Logger.warn(
-        `[Sticker] 自动发送表情包失败: ${error?.message || error}`,
-        'ChatService',
-      );
+      Logger.warn(`[Sticker] 自动挑选表情包失败: ${error?.message || error}`, 'ChatService');
       return null;
     }
   }
-  */
+
+  private async detectEmotionWithAI(text: string): Promise<string | null> {
+    const trimmed = text?.trim();
+    if (!trimmed) {
+      return null;
+    }
+    try {
+      const prompt = `请阅读以下用户内容，并从["happy","sad","angry","comfort","surprised","neutral"]中选择最匹配的一项情绪。只返回该英文单词，不要包含其他任何内容。\n\n内容：${trimmed}`;
+      const systemMessage = 'You are an emotion classifier that only responds with one label.';
+      const result = await this.openAIChatService.chatFree(prompt, systemMessage);
+      const answer = (result?.text || '').toLowerCase();
+      return STICKER_EMOTION_LABELS.find(label => answer.includes(label)) || null;
+    } catch (error) {
+      Logger.warn(`[StickerEmotion] AI 情绪识别失败: ${error?.message || error}`, 'ChatService');
+      return null;
+    }
+  }
+
+  public async createStickerMessageFromContent(options: {
+    userId: number;
+    content: string;
+    appId?: number | null;
+    groupId?: number | null;
+    req?: Request;
+  }): Promise<{
+    chatId: number;
+    imageUrl: string;
+    stickerId: number;
+    emotion: string | null;
+  }> {
+    const { userId, content, appId, groupId, req } = options;
+    const trimmedContent = content?.trim();
+    if (!trimmedContent) {
+      throw new HttpException('content 不能为空', HttpStatus.BAD_REQUEST);
+    }
+
+    const detectedEmotion = await this.detectEmotionWithAI(trimmedContent);
+    const sticker = await this.stickerService.pickStickerByText(trimmedContent, detectedEmotion);
+    if (!sticker) {
+      throw new HttpException('暂时没有匹配的表情包', HttpStatus.NOT_FOUND);
+    }
+
+    const curIp = req ? getClientIp(req) : null;
+    const extraParam = {
+      type: 'sticker',
+      stickerId: sticker.id,
+      emotion: sticker.emotion,
+      tags: sticker.tags,
+      scenario: sticker.scenario,
+      source: 'external',
+      detectedEmotion: detectedEmotion,
+      originalContent: trimmedContent,
+    };
+
+    const stickerLog = await this.chatLogService.saveChatLog({
+      appId: appId ?? null,
+      curIp,
+      userId,
+      type: 1,
+      progress: '100%',
+      model: 'sticker-generator',
+      modelName: 'Sticker',
+      role: 'assistant',
+      groupId: groupId ?? null,
+      status: 3,
+      content: '',
+      imageUrl: sticker.imageUrl,
+      extraParam: JSON.stringify(extraParam),
+      promptTokens: 0,
+      completionTokens: 0,
+      totalTokens: 0,
+    });
+
+    return {
+      chatId: stickerLog.id,
+      imageUrl: sticker.imageUrl,
+      stickerId: sticker.id,
+      emotion: sticker.emotion || detectedEmotion || null,
+    };
+  }
 
   private async generateVoiceReplyForMessage(options: {
     text: string;
@@ -501,7 +550,7 @@ export class ChatService {
       }
 
       if (!selectedVoiceId) {
-        Logger.debug('[TTSService] 未找到可用音色，跳过语音回复', 'ChatService');
+        this.logDebug('[TTSService] 未找到可用音色，跳过语音回复', 'ChatService');
         return null;
       }
 
@@ -671,11 +720,11 @@ export class ChatService {
         ? `心理描述：${psychologicalDesc}\n对话内容：${text}`
         : text;
 
-      Logger.debug(
+      this.logDebug(
         `[AI情绪识别] 开始分析 - 文本: ${text.substring(0, 50)}..., 候选数: ${options.length}`,
         'ChatService',
       );
-      Logger.debug(`[AI情绪识别] 候选情绪: ${options.join(' | ')}`, 'ChatService');
+      this.logDebug(`[AI情绪识别] 候选情绪: ${options.join(' | ')}`, 'ChatService');
 
       const numberedOptions = options.map((opt, idx) => `${idx + 1}. ${opt}`).join('\n');
       const prompt = `你是一个专业的语音情绪分析专家。请分析角色说话时的语气情绪，从给定的候选情绪中选择最合适的音色。
@@ -735,7 +784,7 @@ ${numberedOptions}
       );
 
       const result = response.data?.output?.text?.trim() || '';
-      Logger.debug(`[AI情绪识别] AI原始返回: "${result}"`, 'ChatService');
+      this.logDebug(`[AI情绪识别] AI原始返回: "${result}"`, 'ChatService');
 
       // 检查是否为"无合适"
       if (
@@ -746,7 +795,7 @@ ${numberedOptions}
         result.toLowerCase().includes('none') ||
         result.toLowerCase().includes('no match')
       ) {
-        Logger.debug(`[AI情绪识别] ⚠ AI判断候选中无合适情绪，将使用默认音色`, 'ChatService');
+        this.logDebug(`[AI情绪识别] ⚠ AI判断候选中无合适情绪，将使用默认音色`, 'ChatService');
         return null;
       }
 
@@ -756,7 +805,7 @@ ${numberedOptions}
         const index = parseInt(numberMatch[1]) - 1;
         if (index >= 0 && index < options.length) {
           const matchedEmotion = options[index];
-          Logger.debug(`[AI情绪识别] ✓ 通过编号匹配成功: ${matchedEmotion}`, 'ChatService');
+          this.logDebug(`[AI情绪识别] ✓ 通过编号匹配成功: ${matchedEmotion}`, 'ChatService');
           return matchedEmotion;
         }
       }
@@ -764,7 +813,7 @@ ${numberedOptions}
       // 尝试直接匹配名称
       for (const opt of options) {
         if (result.includes(opt)) {
-          Logger.debug(`[AI情绪识别] ✓ 通过名称匹配成功: ${opt}`, 'ChatService');
+          this.logDebug(`[AI情绪识别] ✓ 通过名称匹配成功: ${opt}`, 'ChatService');
           return opt;
         }
       }
@@ -798,14 +847,14 @@ ${numberedOptions}
       // 1. 提取心理描述
       const psychologicalDesc = this.extractPsychologicalDescription(text);
       if (psychologicalDesc) {
-        Logger.debug(`[VoiceCall情绪识别] 提取到心理描述: ${psychologicalDesc}`, 'ChatService');
+        this.logDebug(`[VoiceCall情绪识别] 提取到心理描述: ${psychologicalDesc}`, 'ChatService');
       }
 
       // 2. 获取应用的情绪选项和映射（使用原始情绪名称，不标准化）
       const options = await this.getAppEmotionOptionsRaw(appId);
       const pairs = await this.getAppEmotionPairsRaw(appId);
 
-      Logger.debug(
+      this.logDebug(
         `[VoiceCall情绪识别] 应用情绪选项: ${options.join(', ') || '无'}`,
         'ChatService',
       );
@@ -821,7 +870,7 @@ ${numberedOptions}
       if (!chosen) {
         // 回退到默认情绪
         const fallback = await this.getAppDefaultEmotionRaw(appId, options);
-        Logger.debug(`[VoiceCall情绪识别] 使用默认情绪: ${fallback}`, 'ChatService');
+        this.logDebug(`[VoiceCall情绪识别] 使用默认情绪: ${fallback}`, 'ChatService');
         const mappedVoice = pairs.find(p => p.emotion === fallback)?.voiceId;
         if (mappedVoice) {
           return { emotion: fallback, voiceId: mappedVoice, method: 'default' };
@@ -836,7 +885,7 @@ ${numberedOptions}
         return null;
       }
 
-      Logger.debug(
+      this.logDebug(
         `[VoiceCall情绪识别] ✓ 识别成功: emotion=${chosen.emotion}, voiceId=${mappedVoice}, method=${chosen.method}`,
         'ChatService',
       );
@@ -926,14 +975,14 @@ ${numberedOptions}
       return null;
     }
 
-    Logger.debug(`[情绪选择Raw] 开始AI识别 - 候选数: ${options.length}`, 'ChatService');
+    this.logDebug(`[情绪选择Raw] 开始AI识别 - 候选数: ${options.length}`, 'ChatService');
 
     // 使用AI识别
     try {
       const aiEmotion = await this.detectEmotionByAI(fullText, options, psychologicalDesc);
 
       if (aiEmotion && options.includes(aiEmotion)) {
-        Logger.debug(`[情绪选择Raw] ✓ AI识别成功: ${aiEmotion}`, 'ChatService');
+        this.logDebug(`[情绪选择Raw] ✓ AI识别成功: ${aiEmotion}`, 'ChatService');
         return { emotion: aiEmotion, method: 'ai' };
       } else if (aiEmotion) {
         Logger.warn(`[情绪选择Raw] AI返回的情绪"${aiEmotion}"不在候选列表中`, 'ChatService');
@@ -958,14 +1007,14 @@ ${numberedOptions}
       return null;
     }
 
-    Logger.debug(`[情绪选择] 开始AI识别 - 候选数: ${options.length}`, 'ChatService');
+    this.logDebug(`[情绪选择] 开始AI识别 - 候选数: ${options.length}`, 'ChatService');
 
     // 使用AI识别
     try {
       const aiEmotion = await this.detectEmotionByAI(fullText, options, psychologicalDesc);
 
       if (aiEmotion && options.includes(aiEmotion)) {
-        Logger.debug(`[情绪选择] ✓ AI识别成功: ${aiEmotion}`, 'ChatService');
+        this.logDebug(`[情绪选择] ✓ AI识别成功: ${aiEmotion}`, 'ChatService');
         return { emotion: aiEmotion, method: 'ai' };
       } else if (aiEmotion) {
         Logger.warn(
@@ -974,7 +1023,7 @@ ${numberedOptions}
         );
         return null;
       } else {
-        Logger.debug(`[情绪选择] ⚠ AI判断候选中无合适情绪，将使用默认音色`, 'ChatService');
+        this.logDebug(`[情绪选择] ⚠ AI判断候选中无合适情绪，将使用默认音色`, 'ChatService');
         return null;
       }
     } catch (error: any) {
@@ -1001,7 +1050,7 @@ ${numberedOptions}
         return null;
       }
 
-      Logger.debug(`[图片识别] 开始识别图片: ${imageUrl}`, 'ChatService');
+      this.logDebug(`[图片识别] 开始识别图片: ${imageUrl}`, 'ChatService');
 
       const axios = require('axios');
       const response = await axios.post(
@@ -1035,7 +1084,7 @@ ${numberedOptions}
       );
 
       const result = response.data?.output?.choices?.[0]?.message?.content?.[0]?.text || '';
-      Logger.debug(`[图片识别] 识别结果: ${result}`, 'ChatService');
+      this.logDebug(`[图片识别] 识别结果: ${result}`, 'ChatService');
 
       return result || null;
     } catch (error: any) {
@@ -1064,15 +1113,15 @@ ${numberedOptions}
       modelAvatar,
     } = body;
 
-    Logger.debug(`body: ${JSON.stringify(body)}`, 'ChatService');
+    this.logDebug(`body: ${JSON.stringify(body)}`, 'ChatService');
 
     // 图片识别逻辑：当用户只发送图片时，先调用通义千问识别图片
     if (imageUrl && (!prompt || prompt.trim().length === 0)) {
-      Logger.debug('[图片识别] 检测到用户只发送图片，开始识别...', 'ChatService');
+      this.logDebug('[图片识别] 检测到用户只发送图片，开始识别...', 'ChatService');
       const imageDescription = await this.recognizeImageWithQwen(imageUrl);
       if (imageDescription) {
         prompt = `[这是一张图片，内容如下]\n${imageDescription}\n\n请根据图片内容进行回复。`;
-        Logger.debug(`[图片识别] 已将识别结果设置为prompt: ${prompt}`, 'ChatService');
+        this.logDebug(`[图片识别] 已将识别结果设置为prompt: ${prompt}`, 'ChatService');
       } else {
         Logger.warn('[图片识别] 图片识别失败，使用默认提示', 'ChatService');
         prompt = '请看这张图片，这是什么？';
@@ -1081,7 +1130,7 @@ ${numberedOptions}
 
     // 解析 appId：优先使用 body.appId；若缺失且存在 groupId，则尝试从群组信息推断
     let appId = body?.appId ?? null;
-    Logger.debug(
+    this.logDebug(
       `[好感度调试] 初始 appId=${appId}, body.appId=${body?.appId}, groupId=${
         (options as any)?.groupId
       }`,
@@ -1093,18 +1142,18 @@ ${numberedOptions}
         const gAppId = Number(groupInfo?.appId || 0);
         if (gAppId > 0) {
           appId = gAppId;
-          Logger.debug(`从 groupId=${(options as any).groupId} 推断 appId=${appId}`, 'ChatService');
+          this.logDebug(`从 groupId=${(options as any).groupId} 推断 appId=${appId}`, 'ChatService');
         }
       } catch (e: any) {
         Logger.warn(`无法从群组推断 appId: ${e?.message || e}`, 'ChatService');
       }
     }
-    Logger.debug(`[好感度调试] 最终 appId=${appId}`, 'ChatService');
+    this.logDebug(`[好感度调试] 最终 appId=${appId}`, 'ChatService');
 
     // 获取应用信息
     let appInfo;
     if (appId) {
-      Logger.debug(`正在使用应用ID: ${appId}`);
+      this.logDebug(`正在使用应用ID: ${appId}`);
       appInfo = await this.appEntity.findOne({
         where: { id: appId, status: In([1, 3, 4, 5]) },
       });
@@ -1119,13 +1168,13 @@ ${numberedOptions}
       // 检查应用是否为会员专属
       const isAppMemberOnly = await this.appService.checkAppIsMemberOnly(Number(appId));
       if (isAppMemberOnly) {
-        Logger.debug(`检测到会员专属应用: ${isAppMemberOnly}`);
+        this.logDebug(`检测到会员专属应用: ${isAppMemberOnly}`);
         const userCatIds = await this.userBalanceService.getUserApps(req.user.id);
-        Logger.debug(`用户权限分类: ${userCatIds.join(',')}`);
+        this.logDebug(`用户权限分类: ${userCatIds.join(',')}`);
 
         // 获取应用所属的分类ID列表
         const appCatIds = appInfo.catId.split(',').map(id => id.trim());
-        Logger.debug(`应用所属分类: ${appCatIds.join(',')}`);
+        this.logDebug(`应用所属分类: ${appCatIds.join(',')}`);
 
         const hasMatchingCategory = appCatIds.some(catId => userCatIds.includes(catId));
 
@@ -1147,7 +1196,7 @@ ${numberedOptions}
         const groupInfo = await this.chatGroupService.getGroupInfoFromId(groupId);
         isGroupChat =
           groupInfo?.isGroupChat === true || (groupInfo?.isGroupChat as any) === 1 || false;
-        Logger.debug(
+        this.logDebug(
           `[好感度调试] groupId=${groupId}, groupInfo.isGroupChat=${groupInfo?.isGroupChat}, 最终isGroupChat=${isGroupChat}`,
           'ChatService',
         );
@@ -1165,12 +1214,12 @@ ${numberedOptions}
         if (user) {
           realUserName = user.username || user.nickname || `用户${user.id}`;
         }
-        Logger.debug(`[用户名称] 真实用户名称: ${realUserName}`, 'ChatService');
+        this.logDebug(`[用户名称] 真实用户名称: ${realUserName}`, 'ChatService');
       } catch (error) {
-        Logger.debug(`获取真实用户名称失败: ${error.message}`, 'ChatService');
+        this.logDebug(`获取真实用户名称失败: ${error.message}`, 'ChatService');
       }
     } else if (modelName) {
-      Logger.debug(`[用户名称] 使用传入的用户名称: ${realUserName}`, 'ChatService');
+      this.logDebug(`[用户名称] 使用传入的用户名称: ${realUserName}`, 'ChatService');
     }
 
     const {
@@ -1210,7 +1259,7 @@ ${numberedOptions}
 
     /* 自动回复 */
     const autoReplyRes = await this.autoReplyService.checkAutoReply(prompt);
-    Logger.debug(`自动回复检查结果: ${JSON.stringify(autoReplyRes)}`, 'ChatService');
+    this.logDebug(`自动回复检查结果: ${JSON.stringify(autoReplyRes)}`, 'ChatService');
 
     /* 设置对话变量 */
     let currentRequestModelKey = null;
@@ -1222,7 +1271,7 @@ ${numberedOptions}
     let usingPlugin;
 
     if (usingPluginId) {
-      Logger.debug(`使用插件ID: ${usingPluginId}`, 'ChatService');
+      this.logDebug(`使用插件ID: ${usingPluginId}`, 'ChatService');
       if (usingPluginId === 999) {
         usingPlugin = {
           parameters: 'mermaid',
@@ -1242,12 +1291,12 @@ ${numberedOptions}
         appInfo.preset && (setSystemMessage = appInfo.preset);
         currentRequestModelKey = await this.modelsService.getCurrentModelKeyInfo(appModel);
         currentRequestModelKey.model = appModel;
-        Logger.debug(`使用固定模型和应用预设`, 'ChatService');
+        this.logDebug(`使用固定模型和应用预设`, 'ChatService');
       } else {
         // 使用应用预设
         appInfo.preset && (setSystemMessage = appInfo.preset);
         currentRequestModelKey = await this.modelsService.getCurrentModelKeyInfo(model);
-        Logger.debug(`使用应用预设模式`, 'ChatService');
+        this.logDebug(`使用应用预设模式`, 'ChatService');
       }
 
       // 将当前角色的任务信息添加到预设中（支持群聊和单聊）
@@ -1256,7 +1305,7 @@ ${numberedOptions}
           const groupInfo: any = await this.chatGroupService.getGroupInfoFromId(groupId);
           const members = JSON.parse(groupInfo?.members || '[]') || [];
 
-          Logger.debug(
+          this.logDebug(
             `[角色任务] 尝试获取任务信息，isGroupChat=${isGroupChat}, groupId=${groupId}, appId=${appId}, members数量=${members.length}`,
             'ChatService',
           );
@@ -1264,7 +1313,7 @@ ${numberedOptions}
           const currentMember = members.find((m: any) => Number(m.appId) === Number(appId));
 
           if (currentMember) {
-            Logger.debug(
+            this.logDebug(
               `[角色任务] 找到当前成员，appId=${appId}, taskDetail=${
                 currentMember.taskDetail
               }, tasks=${JSON.stringify(currentMember.tasks)}`,
@@ -1278,7 +1327,7 @@ ${numberedOptions}
             if (currentMember.taskDetail && currentMember.taskDetail.trim()) {
               // 如果有taskDetail字段，直接使用
               taskTitle = currentMember.taskDetail.trim();
-              Logger.debug(`[角色任务] 从taskDetail获取任务: ${taskTitle}`, 'ChatService');
+              this.logDebug(`[角色任务] 从taskDetail获取任务: ${taskTitle}`, 'ChatService');
             } else if (Array.isArray(currentMember.tasks) && currentMember.tasks.length > 0) {
               // 如果有tasks数组，找第一个未完成的任务
               const pendingTask = currentMember.tasks.find(
@@ -1287,7 +1336,7 @@ ${numberedOptions}
               if (pendingTask) {
                 taskTitle = pendingTask.title || '';
                 taskStatus = pendingTask.status || 'todo';
-                Logger.debug(`[角色任务] 从tasks数组获取任务: ${taskTitle}`, 'ChatService');
+                this.logDebug(`[角色任务] 从tasks数组获取任务: ${taskTitle}`, 'ChatService');
               }
             }
 
@@ -1302,21 +1351,21 @@ ${numberedOptions}
 
               const taskInfo = `\n\n【你的当前任务】\n任务：${taskTitle}\n状态：${taskStatus}\n请在对话中围绕这个任务进行回应。`;
               setSystemMessage = setSystemMessage + taskInfo;
-              Logger.debug(
+              this.logDebug(
                 `[角色任务] 已将角色任务添加到预设中，appId=${appId}, 任务="${taskTitle}"`,
                 'ChatService',
               );
             } else {
-              Logger.debug(`[角色任务] 当前成员没有任务信息`, 'ChatService');
+              this.logDebug(`[角色任务] 当前成员没有任务信息`, 'ChatService');
             }
           } else {
-            Logger.debug(`[角色任务] 未找到appId=${appId}的成员`, 'ChatService');
+            this.logDebug(`[角色任务] 未找到appId=${appId}的成员`, 'ChatService');
           }
         } catch (error) {
           Logger.warn(`[角色任务] 获取角色任务失败: ${error.message}`, 'ChatService');
         }
       } else {
-        Logger.debug(`[角色任务] 跳过任务获取，groupId=${groupId}, appId=${appId}`, 'ChatService');
+        this.logDebug(`[角色任务] 跳过任务获取，groupId=${groupId}, appId=${appId}`, 'ChatService');
       }
     } else {
       if (usingPlugin?.parameters === 'mermaid') {
@@ -1409,7 +1458,7 @@ ${numberedOptions}
 }
           `;
         currentRequestModelKey = await this.modelsService.getCurrentModelKeyInfo(model);
-        Logger.debug(`使用流程图插件`, 'ChatService');
+        this.logDebug(`使用流程图插件`, 'ChatService');
       } else {
         // 使用全局预设
         const now = new Date();
@@ -1438,12 +1487,12 @@ ${numberedOptions}
           setSystemMessage = systemPreMessage + `\n 现在时间是: ${currentDate}`;
         }
 
-        Logger.debug(`使用默认系统预设`, 'ChatService');
+        this.logDebug(`使用默认系统预设`, 'ChatService');
       }
     }
 
     if (!currentRequestModelKey) {
-      Logger.debug('未找到当前模型key，切换至全局模型', 'ChatService');
+      this.logDebug('未找到当前模型key，切换至全局模型', 'ChatService');
       currentRequestModelKey = await this.modelsService.getCurrentModelKeyInfo(openaiBaseModel);
       const groupInfo = await this.chatGroupService.getGroupInfoFromId(groupId);
 
@@ -1517,7 +1566,7 @@ ${numberedOptions}
         deduct * (usingDeepThinking ? deductDeepThink : 1),
       );
     } else {
-      Logger.debug(`群聊模式：跳过模型限制和余额检查`, 'ChatService');
+      this.logDebug(`群聊模式：跳过模型限制和余额检查`, 'ChatService');
     }
 
     // 整理对话参数
@@ -1525,7 +1574,7 @@ ${numberedOptions}
     let useModeName = modelName;
     if (appId && appInfo && !modelName) {
       useModeName = appInfo.name;
-      Logger.debug(`[模型名称] 从 appId=${appId} 获取角色名称: ${useModeName}`, 'ChatService');
+      this.logDebug(`[模型名称] 从 appId=${appId} 获取角色名称: ${useModeName}`, 'ChatService');
     }
     const proxyResUrl = formatUrl(proxyUrl || openaiBaseUrl || 'https://api.openai.com');
 
@@ -1546,7 +1595,7 @@ ${numberedOptions}
       prompt && (prompt.includes('[这是一张图片，内容如下]') || prompt.includes('[图片内容:'));
 
     if (imageUrl && isImageUpload === 0 && !hasImageRecognitionResult) {
-      Logger.debug('[图片识别] 模型不支持图片，开始识别...', 'ChatService');
+      this.logDebug('[图片识别] 模型不支持图片，开始识别...', 'ChatService');
       try {
         // 使用通义千问识别图片（识别第一张图片）
         const firstImageUrl = imageUrl.split(',')[0].trim();
@@ -1563,7 +1612,7 @@ ${numberedOptions}
             // 纯图片：图片内容 + 默认提示
             prompt = `[图片内容: ${imageDescription}]\n请根据图片内容进行回复`;
           }
-          Logger.debug(
+          this.logDebug(
             `[图片识别] 识别成功，描述: ${imageDescription.substring(0, 50)}...`,
             'ChatService',
           );
@@ -1587,7 +1636,7 @@ ${numberedOptions}
         }
       }
     } else if (hasImageRecognitionResult) {
-      Logger.debug('[图片识别] 检测到prompt中已包含图片识别结果，跳过重复识别', 'ChatService');
+      this.logDebug('[图片识别] 检测到prompt中已包含图片识别结果，跳过重复识别', 'ChatService');
     }
 
     // 群聊模式下，检查是否已经保存过用户消息（避免重复保存）
@@ -1613,7 +1662,7 @@ ${numberedOptions}
           // 使用已存在的用户消息
           userLogId = existingUserLog.id;
           userSaveLog = existingUserLog;
-          Logger.debug(
+          this.logDebug(
             `[群聊] 使用已存在的用户消息，id=${userLogId}, appId=${appId}`,
             'ChatService',
           );
@@ -1636,7 +1685,7 @@ ${numberedOptions}
             groupId: groupId ? groupId : null,
           });
           userLogId = userSaveLog.id;
-          Logger.debug(`[群聊] 保存新的用户消息，id=${userLogId}, appId=${appId}`, 'ChatService');
+          this.logDebug(`[群聊] 保存新的用户消息，id=${userLogId}, appId=${appId}`, 'ChatService');
         }
       } else {
         // 非第一个成员，查询已保存的用户消息（应该由第一个成员保存了）
@@ -1649,7 +1698,7 @@ ${numberedOptions}
         if (existingUserLog) {
           userLogId = existingUserLog.id;
           userSaveLog = existingUserLog;
-          Logger.debug(
+          this.logDebug(
             `[群聊] 非第一成员，复用已有用户消息，id=${userLogId}, appId=${appId}`,
             'ChatService',
           );
@@ -1673,7 +1722,7 @@ ${numberedOptions}
               60, // 扩大时间窗口到60秒
             );
             if (foundUserLog) {
-              Logger.debug(
+              this.logDebug(
                 `[群聊] 第${i + 1}次重试后找到用户消息，id=${foundUserLog.id}`,
                 'ChatService',
               );
@@ -1716,17 +1765,17 @@ ${numberedOptions}
         groupId: groupId ? groupId : null,
       });
       userLogId = userSaveLog.id;
-      Logger.debug(`[普通模式] 保存用户消息，modelName=${userDisplayName}`, 'ChatService');
+      this.logDebug(`[普通模式] 保存用户消息，modelName=${userDisplayName}`, 'ChatService');
     } else if (skipPromptInHistory) {
       // skipPromptInHistory 模式：不保存用户消息
-      Logger.debug(
+      this.logDebug(
         `[skipPromptInHistory] 跳过用户消息保存，skipPromptInHistory=true`,
         'ChatService',
       );
       userLogId = null;
     } else if (skipSave) {
       // 跳过保存模式：不保存用户消息到数据库，但会添加到上下文
-      Logger.debug(`[跳过保存] skipSaveToDatabase=true，不保存用户消息到数据库`, 'ChatService');
+      this.logDebug(`[跳过保存] skipSaveToDatabase=true，不保存用户消息到数据库`, 'ChatService');
       userLogId = null;
     }
 
@@ -1747,7 +1796,7 @@ ${numberedOptions}
           }
         }
       } catch (error) {
-        Logger.debug(`获取群聊助手名称失败: ${error.message}`, 'ChatService');
+        this.logDebug(`获取群聊助手名称失败: ${error.message}`, 'ChatService');
       }
     }
 
@@ -1774,7 +1823,7 @@ ${numberedOptions}
                 openingRemark = currentMember.openingRemark;
               }
             } catch (error) {
-              Logger.debug(`解析成员数据失败: ${error.message}`, 'ChatService');
+              this.logDebug(`解析成员数据失败: ${error.message}`, 'ChatService');
             }
           }
 
@@ -1805,14 +1854,14 @@ ${numberedOptions}
               modelAvatar: usingPlugin?.pluginImg || useModelAvatar || modelAvatar || '',
               isOpeningRemark: true, // 标记为开场白
             });
-            Logger.debug(
+            this.logDebug(
               `[开场白] 已插入角色开场白到会话记录，groupId=${groupId}, appId=${appId}`,
               'ChatService',
             );
           }
         }
       } catch (error) {
-        Logger.debug(`检查或插入角色开场白失败: ${error.message}`, 'ChatService');
+        this.logDebug(`检查或插入角色开场白失败: ${error.message}`, 'ChatService');
       }
     }
 
@@ -1841,11 +1890,11 @@ ${numberedOptions}
           : null,
       });
       assistantLogId = assistantSaveLog.id;
-      Logger.debug(`[保存] 已保存 assistant 消息到数据库，id=${assistantLogId}`, 'ChatService');
+      this.logDebug(`[保存] 已保存 assistant 消息到数据库，id=${assistantLogId}`, 'ChatService');
     } else {
       // skipSaveToDatabase 模式：不保存 assistant 消息
       assistantLogId = null;
-      Logger.debug(
+      this.logDebug(
         `[跳过保存] skipSaveToDatabase=true，不保存 assistant 消息到数据库`,
         'ChatService',
       );
@@ -1897,7 +1946,7 @@ ${numberedOptions}
               // 心理描述开关
               if (typeof groupInfo.describingMental === 'number') {
                 enablePsychologicalDesc = groupInfo.describingMental === 1;
-                Logger.debug(
+                this.logDebug(
                   `[心理描述] 使用会话组配置: groupId=${groupId}, describingMental=${groupInfo.describingMental}`,
                   'ChatService',
                 );
@@ -1909,7 +1958,7 @@ ${numberedOptions}
                 groupInfo.conversationMemoryCount > 0
               ) {
                 groupConversationMemoryCount = groupInfo.conversationMemoryCount;
-                Logger.debug(
+                this.logDebug(
                   `[对话记忆] 使用会话组配置: groupId=${groupId}, conversationMemoryCount=${groupConversationMemoryCount}`,
                   'ChatService',
                 );
@@ -1918,7 +1967,7 @@ ${numberedOptions}
               // 语音回复模式
               if (groupInfo.voiceReplyMode) {
                 groupVoiceReplyMode = groupInfo.voiceReplyMode;
-                Logger.debug(
+                this.logDebug(
                   `[语音回复] 使用会话组配置: groupId=${groupId}, voiceReplyMode=${groupVoiceReplyMode}`,
                   'ChatService',
                 );
@@ -1927,7 +1976,7 @@ ${numberedOptions}
               // 表情包和拍一拍开关
               if (typeof groupInfo.allowEmoji === 'number') {
                 groupAllowEmoji = groupInfo.allowEmoji === 1;
-                Logger.debug(
+                this.logDebug(
                   `[表情包] 使用会话组配置: groupId=${groupId}, allowEmoji=${groupAllowEmoji}`,
                   'ChatService',
                 );
@@ -1935,7 +1984,7 @@ ${numberedOptions}
 
               if (typeof groupInfo.allowTap === 'number') {
                 groupAllowTap = groupInfo.allowTap === 1;
-                Logger.debug(
+                this.logDebug(
                   `[拍一拍] 使用会话组配置: groupId=${groupId}, allowTap=${groupAllowTap}`,
                   'ChatService',
                 );
@@ -1944,7 +1993,7 @@ ${numberedOptions}
               // 最多回复条数（群聊使用）
               if (typeof groupInfo.maxReplyCount === 'number' && groupInfo.maxReplyCount > 0) {
                 groupMaxReplyCount = groupInfo.maxReplyCount;
-                Logger.debug(
+                this.logDebug(
                   `[最多回复] 使用会话组配置: groupId=${groupId}, maxReplyCount=${groupMaxReplyCount}`,
                   'ChatService',
                 );
@@ -1955,7 +2004,7 @@ ${numberedOptions}
             if (!groupInfo || typeof groupInfo.describingMental !== 'number') {
               enablePsychologicalDesc =
                 await this.userAppSettingsService.getEnablePsychologicalDesc(req.user.id, appId);
-              Logger.debug(
+              this.logDebug(
                 `[心理描述] 使用用户级别配置: userId=${req.user.id}, appId=${appId}, enable=${enablePsychologicalDesc}`,
                 'ChatService',
               );
@@ -1966,7 +2015,7 @@ ${numberedOptions}
               req.user.id,
               appId,
             );
-            Logger.debug(
+            this.logDebug(
               `[心理描述] 获取会话组配置失败，使用用户级别配置: enable=${enablePsychologicalDesc}`,
               'ChatService',
             );
@@ -1977,14 +2026,14 @@ ${numberedOptions}
             req.user.id,
             appId,
           );
-          Logger.debug(
+          this.logDebug(
             `[心理描述] 无groupId，使用用户级别配置: enable=${enablePsychologicalDesc}`,
             'ChatService',
           );
         }
 
         // 心理描述开关仅控制过滤，不再在预设中添加提示词
-        Logger.debug(
+        this.logDebug(
           `[心理描述] 开关状态: ${enablePsychologicalDesc ? '开启' : '关闭'}（将在响应时处理）`,
           'ChatService',
         );
@@ -1999,7 +2048,7 @@ ${numberedOptions}
         const historySummary = await this.conversationSummaryService.getSummary(groupId);
         if (historySummary) {
           setSystemMessage = `${setSystemMessage}\n\n【对话历史总结】\n${historySummary}`;
-          Logger.debug(
+          this.logDebug(
             `[对话总结] 已添加历史总结到system message，长度=${historySummary.length}字`,
             'ChatService',
           );
@@ -2078,7 +2127,7 @@ ${numberedOptions}
                 const currentMember = members.find(m => m.appId === appId || m.userId === appId);
                 if (currentMember?.openingRemark) {
                   openingRemarkForXingchen = currentMember.openingRemark;
-                  Logger.debug(
+                  this.logDebug(
                     `[群聊] 从成员数据中获取开场白: appId=${appId}, openingRemark=${openingRemarkForXingchen.substring(
                       0,
                       50,
@@ -2088,7 +2137,7 @@ ${numberedOptions}
                 }
               }
             } catch (error) {
-              Logger.debug(`获取群聊成员开场白失败: ${error.message}`, 'ChatService');
+              this.logDebug(`获取群聊成员开场白失败: ${error.message}`, 'ChatService');
             }
           }
           // 单聊模式：从 chatlog 中获取开场白（标记为 isOpeningRemark: true 的记录）
@@ -2098,7 +2147,7 @@ ${numberedOptions}
 
               if (openingRemarkLog?.content) {
                 openingRemarkForXingchen = openingRemarkLog.content;
-                Logger.debug(
+                this.logDebug(
                   `[单聊] 从 chatlog 中获取开场白: appId=${appId}, openingRemark=${openingRemarkForXingchen.substring(
                     0,
                     50,
@@ -2106,13 +2155,13 @@ ${numberedOptions}
                   'ChatService',
                 );
               } else {
-                Logger.debug(
+                this.logDebug(
                   `[单聊] chatlog 中未找到开场白记录: groupId=${groupId}, appId=${appId}`,
                   'ChatService',
                 );
               }
             } catch (error) {
-              Logger.debug(`从 chatlog 获取开场白失败: ${error.message}`, 'ChatService');
+              this.logDebug(`从 chatlog 获取开场白失败: ${error.message}`, 'ChatService');
             }
           }
 
@@ -2198,13 +2247,13 @@ ${numberedOptions}
                           });
                           if (memberAppInfo?.name) {
                             member.appName = memberAppInfo.name;
-                            Logger.debug(
+                            this.logDebug(
                               `[群组背景信息] 从 appId=${member.appId} 获取角色名称: ${memberAppInfo.name}`,
                               'ChatService',
                             );
                           }
                         } catch (error) {
-                          Logger.debug(
+                          this.logDebug(
                             `[群组背景信息] 获取 appId=${member.appId} 的角色名称失败: ${error.message}`,
                             'ChatService',
                           );
@@ -2287,7 +2336,7 @@ ${numberedOptions}
                 )}\n\n【行为约束】\n${behaviorConstraints.join('\n')}`;
                 // 使用system角色，星尘API会将非第一条system消息保留在messages中
                 messagesForXingchen.unshift({ role: 'system', content: groupBasicInfo });
-                Logger.debug(
+                this.logDebug(
                   `[群聊] 已将群组背景信息（含成员任务和行为约束）添加到星尘API请求的messages第一位（system角色）`,
                   'ChatService',
                 );
@@ -2331,12 +2380,12 @@ ${numberedOptions}
                 const userProfileInfo = singleChatParts.join('\n');
                 // 使用system角色，添加到messages第一位
                 messagesForXingchen.unshift({ role: 'system', content: userProfileInfo });
-                Logger.debug(
+                this.logDebug(
                   `[单聊] 已将用户信息和行为约束添加到星尘API请求的messages第一位（system角色）`,
                   'ChatService',
                 );
               } else {
-                Logger.debug(`[单聊] 用户未设置用户名和简介，仅添加行为约束`, 'ChatService');
+                this.logDebug(`[单聊] 用户未设置用户名和简介，仅添加行为约束`, 'ChatService');
               }
             } catch (error) {
               Logger.warn(`[单聊] 添加用户信息失败: ${error.message}`, 'ChatService');
@@ -2380,7 +2429,7 @@ ${numberedOptions}
           if (xingchenUsage) {
             promptTokens = xingchenUsage.inputTokens || xingchenUsage.userTokens || 0;
             completionTokens = xingchenUsage.outputTokens || 0;
-            Logger.debug(
+            this.logDebug(
               `使用星尘API返回的token数据 - promptTokens: ${promptTokens}, completionTokens: ${completionTokens}`,
               'ChatService',
             );
@@ -2392,7 +2441,7 @@ ${numberedOptions}
             });
             promptTokens = await getTokenCount(totalText);
             completionTokens = await getTokenCount(xingchenText);
-            Logger.debug(
+            this.logDebug(
               `星尘API未返回token数据，使用计算值 - promptTokens: ${promptTokens}, completionTokens: ${completionTokens}`,
               'ChatService',
             );
@@ -2412,6 +2461,7 @@ ${numberedOptions}
             promptTokens: promptTokens,
             completionTokens: completionTokens,
             totalTokens: promptTokens + completionTokens,
+            imageUrl: null,
             content: [
               {
                 type: 'text',
@@ -2426,7 +2476,7 @@ ${numberedOptions}
             ],
           };
 
-          Logger.debug(`JSON: ${JSON.stringify(response)}`, 'ChatService');
+          this.logDebug(`JSON: ${JSON.stringify(response)}`, 'ChatService');
 
           if (response.errMsg) {
             Logger.error(
@@ -2457,7 +2507,7 @@ ${numberedOptions}
               sanitizedAnswer = sanitizedAnswer.replace(regex, matched =>
                 '*'.repeat(matched.length),
               );
-              Logger.debug(`检测到敏感词，已进行屏蔽处理`, 'ChatService');
+              this.logDebug(`检测到敏感词，已进行屏蔽处理`, 'ChatService');
             }
           }
 
@@ -2466,7 +2516,7 @@ ${numberedOptions}
             const originalLength = sanitizedAnswer.length;
             sanitizedAnswer = this.removeBracketedContent(sanitizedAnswer);
             if (sanitizedAnswer.length < originalLength) {
-              Logger.debug(
+              this.logDebug(
                 `[心理描述过滤] 已移除心理描述内容，原长度=${originalLength}，过滤后长度=${sanitizedAnswer.length}`,
                 'ChatService',
               );
@@ -2479,6 +2529,8 @@ ${numberedOptions}
           response.full_content = normalizedFullContent;
 
           const assistantMessagesPayload: any[] = [];
+          let extraAssistantLogs: Array<{ chatId: number; content: string }> = [];
+          let generatedVoiceUrl: string | null = null;
           const textReplies =
             splitReplies.length > 0 ? splitReplies : sanitizedAnswer ? [sanitizedAnswer] : [];
           const firstReply = textReplies[0] || '';
@@ -2521,11 +2573,11 @@ ${numberedOptions}
             });
 
             if (textReplies.length > 1) {
-              const extraLogs = await this.saveAdditionalAssistantReplies(
+              extraAssistantLogs = await this.saveAdditionalAssistantReplies(
                 textReplies.slice(1),
                 assistantLogBasePayload,
               );
-              extraLogs.forEach(item => {
+              extraAssistantLogs.forEach(item => {
                 assistantMessagesPayload.push({
                   chatId: item.chatId,
                   message_type: 'text',
@@ -2540,11 +2592,11 @@ ${numberedOptions}
             let shouldGenerateVoice = false;
             if (groupVoiceReplyMode === 'voice_only') {
               shouldGenerateVoice = true;
-              Logger.debug('[语音回复] voice_only 模式 - 生成语音', 'ChatService');
+              this.logDebug('[语音回复] voice_only 模式 - 生成语音', 'ChatService');
             } else if (groupVoiceReplyMode === 'mixed') {
               // 按照 5:2 的比例随机生成语音（约 28.6% 的概率）
               shouldGenerateVoice = Math.random() < 0.286;
-              Logger.debug(
+              this.logDebug(
                 `[语音回复] mixed 模式 - ${shouldGenerateVoice ? '生成语音' : '仅文字'}`,
                 'ChatService',
               );
@@ -2558,6 +2610,7 @@ ${numberedOptions}
                 req,
               });
               if (voiceReply) {
+                generatedVoiceUrl = voiceReply.ttsUrl;
                 response.ttsUrl = voiceReply.ttsUrl;
                 response.audioUrl = voiceReply.ttsUrl;
                 response.voiceDuration = voiceReply.duration;
@@ -2574,10 +2627,21 @@ ${numberedOptions}
               const stickerMessage = await this.maybeCreateStickerMessage({
                 allowEmoji: groupAllowEmoji,
                 basePayload: assistantLogBasePayload,
+                referenceText: replyContent,
               });
               if (stickerMessage?.message) {
                 assistantMessagesPayload.push(stickerMessage.message);
               }
+            }
+
+            if (!generatedVoiceUrl && textReplies.length > 0) {
+              const updateTasks: Array<Promise<any>> = [
+                this.chatLogService.updateChatLog(assistantLogId, { display_state: 1 }),
+                ...extraAssistantLogs.map(log =>
+                  this.chatLogService.updateChatLog(log.chatId, { display_state: 1 }),
+                ),
+              ];
+              await Promise.all(updateTasks);
             }
           } else {
             textReplies.forEach(reply => {
@@ -2590,6 +2654,20 @@ ${numberedOptions}
           }
 
           response.messages = assistantMessagesPayload;
+
+          const stickerPayload = assistantMessagesPayload.find(
+            message => message?.message_type === 'sticker',
+          );
+          if (stickerPayload) {
+            const stickerImageUrl =
+              stickerPayload.content_image ||
+              stickerPayload.imageUrl ||
+              stickerPayload.image_url ||
+              null;
+            if (stickerImageUrl) {
+              response.imageUrl = stickerImageUrl;
+            }
+          }
 
           try {
             if (isGeneratePromptReference === '1') {
@@ -2604,10 +2682,10 @@ ${numberedOptions}
                   promptReference: promptReference,
                 });
               }
-              Logger.debug(`生成了相关问题推荐`, 'ChatService');
+              this.logDebug(`生成了相关问题推荐`, 'ChatService');
             }
           } catch (error) {
-            Logger.debug(`生成相关问题推荐失败: ${error}`);
+            this.logDebug(`生成相关问题推荐失败: ${error}`);
           }
 
           // 对话总结：异步更新总结
@@ -2634,7 +2712,7 @@ ${numberedOptions}
                   );
                 });
 
-              Logger.debug(`[对话总结] 已触发异步总结任务 - groupId=${groupId}`, 'ChatService');
+              this.logDebug(`[对话总结] 已触发异步总结任务 - groupId=${groupId}`, 'ChatService');
             } catch (error: any) {
               Logger.warn(`[对话总结] 触发异步总结失败: ${error?.message || error}`, 'ChatService');
             }
@@ -2670,7 +2748,7 @@ ${numberedOptions}
 
           // Increase affection upon successful chat (skip in group chat)
           try {
-            Logger.debug(
+            this.logDebug(
               `[好感度] 检查条件: appId=${appId}, isGroupChat=${isGroupChat}, userId=${req.user.id}`,
               'ChatService',
             );
@@ -2685,9 +2763,9 @@ ${numberedOptions}
                 'ChatService',
               );
             } else if (!appId) {
-              Logger.debug('[好感度] 跳过增加（缺少appId）', 'ChatService');
+              this.logDebug('[好感度] 跳过增加（缺少appId）', 'ChatService');
             } else if (isGroupChat) {
-              Logger.debug('[好感度] 跳过增加（群聊模式）', 'ChatService');
+              this.logDebug('[好感度] 跳过增加（群聊模式）', 'ChatService');
             }
           } catch (e) {
             Logger.warn(`[好感度] 增加失败: ${e?.message || e}`, 'ChatService');
@@ -2725,7 +2803,7 @@ ${numberedOptions}
       if (modelType === 1) {
         // 直接使用提问片段作为标题
         chatTitle = prompt.slice(0, 10);
-        Logger.debug(`使用提问片段作为标题: ${chatTitle}`);
+        this.logDebug(`使用提问片段作为标题: ${chatTitle}`);
       } else {
         chatTitle = '创意 AI';
       }
@@ -2738,7 +2816,7 @@ ${numberedOptions}
           },
           req,
         )
-        .then(() => Logger.debug(`更新对话标题: ${chatTitle}`))
+        .then(() => this.logDebug(`更新对话标题: ${chatTitle}`))
         .catch(error => Logger.error(`更新对话标题失败`, error));
     }
   }
@@ -2782,7 +2860,7 @@ ${numberedOptions}
           realUserName = user.username || user.nickname || `用户${user.id}`;
         }
       } catch (error) {
-        Logger.debug(`获取用户名称失败: ${error.message}`, 'ChatService');
+        this.logDebug(`获取用户名称失败: ${error.message}`, 'ChatService');
       }
     }
 
@@ -2807,7 +2885,7 @@ ${numberedOptions}
                 currentMemberName = memberAppInfo.name;
               }
             } catch (error) {
-              Logger.debug(
+              this.logDebug(
                 `获取 appId=${currentMember.appId} 的角色名称失败: ${error.message}`,
                 'ChatService',
               );
@@ -2836,7 +2914,7 @@ ${numberedOptions}
 
     // 确保 systemMessage 不超过 maxModelTokens
     // if (systemMessage.length > maxModelTokens) {
-    //   Logger.debug(
+    //   this.logDebug(
     //     `系统消息过长(${systemMessage.length} > ${maxModelTokens})，进行截断处理`,
     //     'ChatService',
     //   );
@@ -2847,19 +2925,19 @@ ${numberedOptions}
     // 查询历史对话列表
     if (groupId) {
       try {
-        Logger.debug(
+        this.logDebug(
           `[群聊] 开始查询历史对话，groupId=${groupId}, maxRounds=${maxRounds}, appId=${appId}`,
           'ChatService',
         );
         const history = await chatLogService.chatHistory(groupId, maxRounds);
-        Logger.debug(`[群聊] 查询到历史记录数=${history.length}`, 'ChatService');
+        this.logDebug(`[群聊] 查询到历史记录数=${history.length}`, 'ChatService');
 
         // 按时间顺序排序历史记录（如果需要）
         history.sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
 
         // 打印历史记录的详细信息
         history.forEach((record, index) => {
-          Logger.debug(
+          this.logDebug(
             `[群聊历史] 记录${index}: role=${record.role}, appId=${record.appId}, content=${
               typeof record.content === 'string' ? record.content.substring(0, 30) : '[复杂内容]'
             }`,
@@ -2876,7 +2954,7 @@ ${numberedOptions}
           try {
             // 跳过当前刚保存的用户消息（避免重复）
             if (excludeLogId && record.id === excludeLogId) {
-              Logger.debug(`[群聊历史] 跳过当前用户消息，id=${record.id}`, 'ChatService');
+              this.logDebug(`[群聊历史] 跳过当前用户消息，id=${record.id}`, 'ChatService');
               continue;
             }
 
@@ -2904,7 +2982,7 @@ ${numberedOptions}
               } catch (error) {
                 // 如果解析失败，说明可能是旧格式，直接拼接
                 content = record.fileUrl + '\n' + content;
-                Logger.debug(`解析fileUrl失败，使用原始格式: ${error.message}`, 'ChatService');
+                this.logDebug(`解析fileUrl失败，使用原始格式: ${error.message}`, 'ChatService');
               }
             }
 
@@ -2954,7 +3032,7 @@ ${numberedOptions}
               });
             }
           } catch (error) {
-            Logger.debug(`处理历史记录ID=${record.id}失败: ${error.message}`, 'ChatService');
+            this.logDebug(`处理历史记录ID=${record.id}失败: ${error.message}`, 'ChatService');
           }
         }
         // 获取群聊成员信息
@@ -2975,13 +3053,13 @@ ${numberedOptions}
                   });
                   if (memberAppInfo?.name) {
                     member.appName = memberAppInfo.name;
-                    Logger.debug(
+                    this.logDebug(
                       `[群聊成员] 从 appId=${member.appId} 获取角色名称: ${memberAppInfo.name}`,
                       'ChatService',
                     );
                   }
                 } catch (error) {
-                  Logger.debug(
+                  this.logDebug(
                     `获取 appId=${member.appId} 的角色名称失败: ${error.message}`,
                     'ChatService',
                   );
@@ -3005,11 +3083,11 @@ ${numberedOptions}
           const currentMember = groupMembers.find(m => m.appId === appId || m.userId === appId);
           const currentAppId = currentMember ? currentMember.appId || currentMember.userId : appId;
 
-          Logger.debug(
+          this.logDebug(
             `[群聊历史构建] 当前角色appId=${currentAppId}, 群组成员数=${groupMembers.length}`,
             'ChatService',
           );
-          Logger.debug(
+          this.logDebug(
             `[群聊历史构建] 用户消息数=${userMessages.length}, AI消息数=${assistantMessages.length}`,
             'ChatService',
           );
@@ -3019,7 +3097,7 @@ ${numberedOptions}
             (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime(),
           );
 
-          Logger.debug(
+          this.logDebug(
             `[群聊历史构建] 总消息数=${allMessages.length}, 按时间排序完成`,
             'ChatService',
           );
@@ -3044,19 +3122,19 @@ ${numberedOptions}
                     }
                   }
                 } catch (error) {
-                  Logger.debug(`获取用户名称失败: ${error.message}`, 'ChatService');
+                  this.logDebug(`获取用户名称失败: ${error.message}`, 'ChatService');
                 }
 
                 // 添加用户名前缀
                 userContent = `${userName}：${userContent}`;
-                Logger.debug(`[群聊历史] 为用户消息添加说话人标识: ${userName}`, 'ChatService');
+                this.logDebug(`[群聊历史] 为用户消息添加说话人标识: ${userName}`, 'ChatService');
               }
 
               messages.push({
                 role: 'user',
                 content: userContent,
               });
-              Logger.debug(
+              this.logDebug(
                 `[群聊历史] 用户消息: ${
                   typeof userContent === 'string' ? userContent.substring(0, 50) : '[复杂内容]'
                 }`,
@@ -3086,7 +3164,7 @@ ${numberedOptions}
 
                   // 添加说话人前缀，明确这是其他角色的发言
                   messageContent = `${speakerName}：${messageContent}`;
-                  Logger.debug(
+                  this.logDebug(
                     `[群聊历史] 为其他角色消息添加说话人标识: ${speakerName}`,
                     'ChatService',
                   );
@@ -3097,7 +3175,7 @@ ${numberedOptions}
                 role: finalRole,
                 content: messageContent,
               });
-              Logger.debug(
+              this.logDebug(
                 `[群聊历史] AI消息 (appId=${msgAppId}, 当前=${currentAppId}, role=${finalRole}): ${
                   typeof messageContent === 'string'
                     ? messageContent.substring(0, 50)
@@ -3108,7 +3186,7 @@ ${numberedOptions}
             }
           }
 
-          Logger.debug(`[群聊历史构建] 最终消息数组长度=${messages.length}`, 'ChatService');
+          this.logDebug(`[群聊历史构建] 最终消息数组长度=${messages.length}`, 'ChatService');
         } else {
           // 普通对话模式：保持原有逻辑
           const pairCount = Math.min(userMessages.length, assistantMessages.length);
@@ -3137,7 +3215,7 @@ ${numberedOptions}
 
     // 如果超出token限制，进行裁剪
     if (totalTokens > tokenLimit) {
-      Logger.debug(`消息超出token限制(${totalTokens} > ${tokenLimit})，开始裁剪`, 'ChatService');
+      this.logDebug(`消息超出token限制(${totalTokens} > ${tokenLimit})，开始裁剪`, 'ChatService');
 
       // 优化的裁剪算法
       let trimIteration = 0;
@@ -3183,7 +3261,7 @@ ${numberedOptions}
         const newTotalTokens = await getTokenCount(messages);
         if (newTotalTokens >= totalTokens) {
           // 如果token没有减少，说明无法继续优化，强制退出
-          Logger.debug('Token裁剪无效，停止裁剪过程');
+          this.logDebug('Token裁剪无效，停止裁剪过程');
           break;
         }
 
@@ -3255,7 +3333,7 @@ ${numberedOptions}
           if (!hasSpeakerPrefix && typeof userPrompt === 'string') {
             // 使用之前获取的真实用户名称
             userPrompt = `${realUserName}：${userPrompt}`;
-            Logger.debug(`[群聊历史] 为当前用户提问添加说话人标识: ${realUserName}`, 'ChatService');
+            this.logDebug(`[群聊历史] 为当前用户提问添加说话人标识: ${realUserName}`, 'ChatService');
           }
         }
 
@@ -3283,7 +3361,7 @@ ${numberedOptions}
               typeof userPrompt === 'string' && userPrompt.includes('[图片内容:');
             if (!hasImageDescription) {
               // 还没有图片识别结果，进行识别
-              Logger.debug('[群聊图片识别] 检测到未处理的图片，开始识别...', 'ChatService');
+              this.logDebug('[群聊图片识别] 检测到未处理的图片，开始识别...', 'ChatService');
               try {
                 // 使用通义千问识别图片（识别第一张图片）
                 const firstImageUrl = imageUrl.split(',')[0].trim();
@@ -3299,7 +3377,7 @@ ${numberedOptions}
                     // 纯图片：图片内容 + 默认提示
                     currentUserContent = `[图片内容: ${imageDescription}]\n请根据图片内容进行回复`;
                   }
-                  Logger.debug(
+                  this.logDebug(
                     `[群聊图片识别] 识别成功，描述: ${imageDescription.substring(0, 50)}...`,
                     'ChatService',
                   );
@@ -3333,7 +3411,7 @@ ${numberedOptions}
         };
 
         messages.push(currentUserMessage);
-        Logger.debug(
+        this.logDebug(
           `[群聊历史] 添加当前用户提问: ${
             typeof userPrompt === 'string' ? userPrompt.substring(0, 50) : '[复杂内容]'
           }`,
@@ -3341,7 +3419,7 @@ ${numberedOptions}
         );
       }
     } else if (options?.skipPromptInHistory) {
-      Logger.debug(
+      this.logDebug(
         `[群聊自动对话] skipPromptInHistory=true，跳过将 prompt 添加到历史`,
         'ChatService',
       );
@@ -3369,7 +3447,7 @@ ${numberedOptions}
                   roleName = memberAppInfo.name;
                 }
               } catch (error) {
-                Logger.debug(
+                this.logDebug(
                   `获取 appId=${currentMember.appId} 的角色名称失败: ${error.message}`,
                   'ChatService',
                 );
@@ -3386,22 +3464,22 @@ ${numberedOptions}
               role: 'assistant',
               content: `${roleName}：`,
             });
-            Logger.debug(`[群聊] 添加prefill消息: ${roleName}：`, 'ChatService');
+            this.logDebug(`[群聊] 添加prefill消息: ${roleName}：`, 'ChatService');
           }
         }
       } catch (error) {
-        Logger.debug(`添加prefill消息失败: ${error.message}`, 'ChatService');
+        this.logDebug(`添加prefill消息失败: ${error.message}`, 'ChatService');
       }
     }
 
-    Logger.debug(
+    this.logDebug(
       `构建消息历史完成: ${Math.floor(messages.length / 2)} 组对话, ${totalTokens} tokens, 耗时: ${
         Date.now() - startTime
       }ms`,
       'ChatService',
     );
 
-    Logger.debug(`messages: ${JSON.stringify(messages)}`, 'ChatService');
+    this.logDebug(`messages: ${JSON.stringify(messages)}`, 'ChatService');
 
     // throw new Error('test');
     return {
@@ -3413,7 +3491,7 @@ ${numberedOptions}
   async ttsProcess(body: any, req: any, res?: any) {
     const { chatId, prompt, emotion, appId: bodyAppId } = body;
 
-    Logger.debug(
+    this.logDebug(
       `开始TTS处理: ${String(prompt || '').substring(0, 50)}${
         (prompt || '').length > 50 ? '...' : ''
       }`,
@@ -3422,11 +3500,11 @@ ${numberedOptions}
 
     // 1. 提取括号内的心理描述（用于情绪识别）
     const psychologicalDesc = this.extractPsychologicalDescription(prompt);
-    Logger.debug(`提取心理描述: ${psychologicalDesc || '无'}`, 'TTSService');
+    this.logDebug(`提取心理描述: ${psychologicalDesc || '无'}`, 'TTSService');
 
     // 2. 清理文本用于TTS（移除括号、Markdown、emoji等）
     const textToSpeak = this.cleanTextForTTS(prompt);
-    Logger.debug(
+    this.logDebug(
       `清理后的TTS文本: ${textToSpeak.substring(0, 50)}${textToSpeak.length > 50 ? '...' : ''}`,
       'TTSService',
     );
@@ -3484,17 +3562,17 @@ ${numberedOptions}
         const chatLog = await this.chatLogService.findOneChatLog(chatId);
         appId = (chatLog as any)?.appId ?? null;
       }
-      Logger.debug(`[TTSService] 使用的appId: ${appId}`, 'TTSService');
+      this.logDebug(`[TTSService] 使用的appId: ${appId}`, 'TTSService');
 
       // 基础选项：仅限"应用绑定了音色的情绪 + 应用默认情绪"；并取出情绪-音色对
       const options = await this.getAppEmotionOptions(appId);
       const pairs = await this.getAppEmotionPairs(appId);
       try {
-        Logger.debug(
+        this.logDebug(
           `应用情绪选项(${appId ?? 'null'}): ${options.join(', ') || '[]'}`,
           'TTSService',
         );
-        Logger.debug(
+        this.logDebug(
           `应用情绪-音色对(${appId ?? 'null'}): ${
             pairs.map(p => p.emotion + '=>' + p.voiceId).join(', ') || '[]'
           }`,
@@ -3507,12 +3585,12 @@ ${numberedOptions}
       if (!chosen) {
         const fallback = await this.getAppDefaultEmotion(appId, options);
         chosen = { emotion: fallback, method: 'default' };
-        Logger.debug(`AI未识别到合适情绪，使用应用默认情绪: ${fallback}`, 'TTSService');
+        this.logDebug(`AI未识别到合适情绪，使用应用默认情绪: ${fallback}`, 'TTSService');
       }
 
       const finalEmotion = chosen.emotion;
       try {
-        Logger.debug(
+        this.logDebug(
           `最终情绪: ${finalEmotion}，识别方法: ${chosen.method || 'unknown'}`,
           'TTSService',
         );
@@ -3522,7 +3600,7 @@ ${numberedOptions}
         // 直接从 app_emotion_voices 的对中找 voiceId
         const mappedVoice = pairs.find(p => p.emotion === finalEmotion)?.voiceId || null;
         if (mappedVoice) {
-          Logger.debug(
+          this.logDebug(
             `命中情绪映射: emotion=${finalEmotion}, voice=${mappedVoice} (appId=${
               appId ?? 'global'
             })`,
@@ -3530,11 +3608,11 @@ ${numberedOptions}
           );
           const ttsParams = this.mapEmotionToTtsParams(finalEmotion);
           try {
-            Logger.debug(`情绪合成参数: ${JSON.stringify(ttsParams)}`, 'TTSService');
+            this.logDebug(`情绪合成参数: ${JSON.stringify(ttsParams)}`, 'TTSService');
           } catch {}
           return await doTtsWithVoice(mappedVoice, ttsParams);
         }
-        Logger.debug(
+        this.logDebug(
           `未找到情绪映射: emotion=${finalEmotion}, appId=${appId ?? 'null'}，尝试应用默认音色`,
           'TTSService',
         );
@@ -3546,13 +3624,13 @@ ${numberedOptions}
           const map = await this.appVoiceRepo.findOne({ where: { appId, isDefault: 1 } });
           const voiceId = map?.voiceId;
           if (voiceId) {
-            Logger.debug(
+            this.logDebug(
               `检测到应用(${appId})绑定默认音色: ${voiceId}，使用角色音色进行TTS`,
               'TTSService',
             );
             const ttsParams = this.mapEmotionToTtsParams(finalEmotion);
             try {
-              Logger.debug(`默认音色合成参数: ${JSON.stringify(ttsParams)}`, 'TTSService');
+              this.logDebug(`默认音色合成参数: ${JSON.stringify(ttsParams)}`, 'TTSService');
             } catch {}
             return await doTtsWithVoice(voiceId, ttsParams);
           }
@@ -3575,3 +3653,4 @@ ${numberedOptions}
     return res.status(400).send({ message: '请先为角色配置音色后再进行语音合成' });
   }
 }
+

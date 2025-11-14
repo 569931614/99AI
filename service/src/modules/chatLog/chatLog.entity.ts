@@ -93,6 +93,14 @@ export class ChatLogEntity extends BaseEntity {
   @Column({ comment: '语音时长（秒）', nullable: true, type: 'int' })
   ttsDuration: number;
 
+  @Column({
+    comment: '消息显示状态: 0或空=默认, 1=强制显示文字',
+    nullable: true,
+    default: 0,
+    type: 'tinyint',
+  })
+  display_state: number;
+
   @Column({ comment: '是否推荐0: 默认 1: 推荐', nullable: true, default: 0 })
   rec: number;
 

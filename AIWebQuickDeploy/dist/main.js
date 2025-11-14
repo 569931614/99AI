@@ -21,7 +21,7 @@ const ioredis_1 = __webpack_require__(1370);
 const path = __webpack_require__(674);
 __webpack_require__(4);
 const app_module_1 = __webpack_require__(2411);
-const allExceptions_filter_1 = __webpack_require__(4310);
+const allExceptions_filter_1 = __webpack_require__(4317);
 const voice_service_1 = __webpack_require__(4143);
 Dotenv.config({ path: '.env' });
 function findFilePath(filename) {
@@ -56,7 +56,7 @@ async function bootstrap() {
         common_1.Logger.log('Generating and setting new JWT_SECRET');
         await redis.set('JWT_SECRET', jwtSecret);
     }
-    const { initDatabase } = __webpack_require__(4311);
+    const { initDatabase } = __webpack_require__(4318);
     const app = await core_1.NestFactory.create(app_module_1.AppModule, {
         bufferLogs: true,
         logger: ['log', 'error', 'warn', 'debug', 'verbose'],
@@ -184,9 +184,9 @@ async function bootstrap() {
     server.timeout = 5 * 60 * 1000;
     try {
         const voiceService = app.get(voice_service_1.VoiceService);
-        const { VoiceCallService } = await Promise.resolve().then(() => __webpack_require__(4309));
+        const { VoiceCallService } = await Promise.resolve().then(() => __webpack_require__(4316));
         const voiceCallService = app.get(VoiceCallService);
-        const WSMod = await Promise.resolve().then(() => __webpack_require__(4165));
+        const WSMod = await Promise.resolve().then(() => __webpack_require__(4166));
         const WSServer = WSMod?.Server || WSMod?.WebSocketServer;
         if (!WSServer) {
             common_1.Logger.warn('ws Server not available, skip realtime voice-call');
@@ -237643,30 +237643,31 @@ const auth_module_1 = __webpack_require__(2786);
 const autoReply_module_1 = __webpack_require__(2807);
 const badWords_module_1 = __webpack_require__(2815);
 const chat_module_1 = __webpack_require__(2825);
-const chatGroup_module_1 = __webpack_require__(4187);
-const chatLog_module_1 = __webpack_require__(4193);
-const conversationSummary_module_1 = __webpack_require__(4180);
-const crami_module_1 = __webpack_require__(4205);
-const database_module_1 = __webpack_require__(4217);
+const chatGroup_module_1 = __webpack_require__(4194);
+const chatLog_module_1 = __webpack_require__(4200);
+const conversationSummary_module_1 = __webpack_require__(4183);
+const crami_module_1 = __webpack_require__(4212);
+const database_module_1 = __webpack_require__(4224);
 const globalConfig_module_1 = __webpack_require__(4136);
-const models_module_1 = __webpack_require__(4222);
-const official_module_1 = __webpack_require__(4228);
-const order_module_1 = __webpack_require__(4233);
-const pay_module_1 = __webpack_require__(4240);
-const plugin_module_1 = __webpack_require__(4242);
+const models_module_1 = __webpack_require__(4229);
+const official_module_1 = __webpack_require__(4235);
+const order_module_1 = __webpack_require__(4240);
+const pay_module_1 = __webpack_require__(4247);
+const plugin_module_1 = __webpack_require__(4249);
 const redisCache_module_1 = __webpack_require__(2416);
-const share_module_1 = __webpack_require__(4245);
-const signin_module_1 = __webpack_require__(4248);
-const spa_module_1 = __webpack_require__(4251);
-const statistic_module_1 = __webpack_require__(4253);
-const task_module_1 = __webpack_require__(4257);
-const test_module_1 = __webpack_require__(4303);
+const share_module_1 = __webpack_require__(4252);
+const signin_module_1 = __webpack_require__(4255);
+const spa_module_1 = __webpack_require__(4258);
+const statistic_module_1 = __webpack_require__(4260);
+const sticker_module_1 = __webpack_require__(4186);
+const task_module_1 = __webpack_require__(4264);
+const test_module_1 = __webpack_require__(4310);
 const upload_module_1 = __webpack_require__(4140);
 const user_module_1 = __webpack_require__(2794);
-const userBalance_module_1 = __webpack_require__(4305);
-const verification_module_1 = __webpack_require__(4307);
+const userBalance_module_1 = __webpack_require__(4312);
+const verification_module_1 = __webpack_require__(4314);
 const voice_module_1 = __webpack_require__(4135);
-const voiceCall_module_1 = __webpack_require__(4308);
+const voiceCall_module_1 = __webpack_require__(4315);
 let AppModule = class AppModule {
     configure(consumer) {
         consumer;
@@ -237761,6 +237762,7 @@ exports.AppModule = AppModule = __decorate([
             voice_module_1.VoiceModule,
             voiceCall_module_1.VoiceCallModule,
             affection_module_1.AffectionModule,
+            sticker_module_1.StickerModule,
             test_module_1.TestModule,
             share_module_1.ShareModule,
             spa_module_1.SpaModule,
@@ -252743,6 +252745,7 @@ let ChatLogEntity = class ChatLogEntity extends baseEntity_1.BaseEntity {
     drawId;
     ttsUrl;
     ttsDuration;
+    display_state;
     rec;
     groupId;
     appId;
@@ -252872,6 +252875,15 @@ __decorate([
     (0, typeorm_1.Column)({ comment: '语音时长（秒）', nullable: true, type: 'int' }),
     __metadata("design:type", Number)
 ], ChatLogEntity.prototype, "ttsDuration", void 0);
+__decorate([
+    (0, typeorm_1.Column)({
+        comment: '消息显示状态: 0或空=默认, 1=强制显示文字',
+        nullable: true,
+        default: 0,
+        type: 'tinyint',
+    }),
+    __metadata("design:type", Number)
+], ChatLogEntity.prototype, "display_state", void 0);
 __decorate([
     (0, typeorm_1.Column)({ comment: '是否推荐0: 默认 1: 推荐', nullable: true, default: 0 }),
     __metadata("design:type", Number)
@@ -278863,12 +278875,20 @@ let ChatGroupEntity = class ChatGroupEntity extends baseEntity_1.BaseEntity {
     openingRemark;
     description;
     ownerNickname;
-    characterRelationships;
+    memberRelationships;
     proactivelySend;
     describingMental;
     realTime;
     myName;
     myProfile;
+    conversationMemoryCount;
+    autoSummaryEnabled;
+    summaryPrompt;
+    chatSummary;
+    voiceReplyMode;
+    allowEmoji;
+    allowTap;
+    maxReplyCount;
     groupAvatar;
     backgroundImage;
 };
@@ -278930,9 +278950,9 @@ __decorate([
     __metadata("design:type", String)
 ], ChatGroupEntity.prototype, "ownerNickname", void 0);
 __decorate([
-    (0, typeorm_1.Column)({ comment: '人物关系：0-其他，1-恋人，2-朋友', type: 'tinyint', default: 0 }),
-    __metadata("design:type", Number)
-], ChatGroupEntity.prototype, "characterRelationships", void 0);
+    (0, typeorm_1.Column)({ comment: '人物关系配置(JSON)', type: 'longtext', nullable: true }),
+    __metadata("design:type", String)
+], ChatGroupEntity.prototype, "memberRelationships", void 0);
 __decorate([
     (0, typeorm_1.Column)({ comment: '是否主动发消息：0-否，1-是', type: 'tinyint', default: 0 }),
     __metadata("design:type", Number)
@@ -278953,6 +278973,43 @@ __decorate([
     (0, typeorm_1.Column)({ comment: '我的简介', type: 'text', nullable: true }),
     __metadata("design:type", String)
 ], ChatGroupEntity.prototype, "myProfile", void 0);
+__decorate([
+    (0, typeorm_1.Column)({ comment: '对话记忆条数（1-100）', type: 'int', default: 10 }),
+    __metadata("design:type", Number)
+], ChatGroupEntity.prototype, "conversationMemoryCount", void 0);
+__decorate([
+    (0, typeorm_1.Column)({ comment: '是否开启自动总结：0-否，1-是', type: 'tinyint', default: 0 }),
+    __metadata("design:type", Number)
+], ChatGroupEntity.prototype, "autoSummaryEnabled", void 0);
+__decorate([
+    (0, typeorm_1.Column)({ comment: '自动总结提示词', type: 'text', nullable: true }),
+    __metadata("design:type", String)
+], ChatGroupEntity.prototype, "summaryPrompt", void 0);
+__decorate([
+    (0, typeorm_1.Column)({ comment: '当前对话总结内容', type: 'text', nullable: true }),
+    __metadata("design:type", String)
+], ChatGroupEntity.prototype, "chatSummary", void 0);
+__decorate([
+    (0, typeorm_1.Column)({
+        comment: '语音回复模式：voice_only-全部发语音，mixed-偶尔发一次，text_only-不要发语音',
+        type: 'varchar',
+        length: 20,
+        default: 'text_only',
+    }),
+    __metadata("design:type", String)
+], ChatGroupEntity.prototype, "voiceReplyMode", void 0);
+__decorate([
+    (0, typeorm_1.Column)({ comment: '是否允许发送表情包：0-否，1-是', type: 'tinyint', default: 0 }),
+    __metadata("design:type", Number)
+], ChatGroupEntity.prototype, "allowEmoji", void 0);
+__decorate([
+    (0, typeorm_1.Column)({ comment: '是否允许拍一拍：0-否，1-是', type: 'tinyint', default: 0 }),
+    __metadata("design:type", Number)
+], ChatGroupEntity.prototype, "allowTap", void 0);
+__decorate([
+    (0, typeorm_1.Column)({ comment: '最多回复条数（1-5）', type: 'int', default: 5 }),
+    __metadata("design:type", Number)
+], ChatGroupEntity.prototype, "maxReplyCount", void 0);
 __decorate([
     (0, typeorm_1.Column)({ comment: '群组头像URL', nullable: true }),
     __metadata("design:type", String)
@@ -293057,44 +293114,184 @@ let AppService = AppService_1 = class AppService {
         }
     }
     async updateApp(body) {
-        const { id, name, catId, status } = body;
+        console.log('[AppService.updateApp] 开始处理，body:', JSON.stringify(body, null, 2));
+        const { id } = body;
         if (id === undefined || id === null || isNaN(Number(id))) {
+            console.error('[AppService.updateApp] ID验证失败:', { id, type: typeof id });
             throw new common_1.HttpException('无效的应用ID！', common_1.HttpStatus.BAD_REQUEST);
         }
-        if (typeof catId === 'string' && String(catId).trim().length > 0) {
-            const catIds = String(catId).split(',');
-            for (const id of catIds) {
-                const c = await this.appCatsEntity.findOne({ where: { id: Number(id) } });
-                if (!c) {
-                    throw new common_1.HttpException(`分类ID ${id} 不存在！`, common_1.HttpStatus.BAD_REQUEST);
-                }
-            }
-        }
+        console.log('[AppService.updateApp] ID验证通过:', id);
         const updateData = { ...body };
-        const curApp = await this.appEntity.findOne({ where: { id } });
+        console.log('[AppService.updateApp] 开始查询数据库，id:', id);
+        let curApp;
+        try {
+            curApp = await this.appEntity.findOne({ where: { id } });
+            console.log('[AppService.updateApp] 数据库查询完成，结果:', curApp ? '找到角色' : '未找到角色');
+        }
+        catch (dbError) {
+            console.error('[AppService.updateApp] 数据库查询失败:', dbError);
+            throw new common_1.HttpException('数据库查询失败: ' + dbError.message, common_1.HttpStatus.INTERNAL_SERVER_ERROR);
+        }
         if (!curApp) {
+            console.error('[AppService.updateApp] 角色不存在，id:', id);
             throw new common_1.HttpException('角色不存在！', common_1.HttpStatus.BAD_REQUEST);
         }
+        console.log('[AppService.updateApp] 角色验证通过');
         const curAppData = curApp;
+        const hasPayload = (key) => Object.prototype.hasOwnProperty.call(body, key);
+        const normalizeCatIds = (value) => {
+            if (value === null || value === undefined)
+                return '';
+            if (Array.isArray(value)) {
+                return value
+                    .map(item => String(item).trim())
+                    .filter(Boolean)
+                    .join(',');
+            }
+            return String(value)
+                .split(',')
+                .map(part => part.trim())
+                .filter(Boolean)
+                .join(',');
+        };
+        const pickNonEmptyString = (value, fallback) => {
+            if (value === null || value === undefined)
+                return fallback;
+            const str = String(value).trim();
+            return str.length > 0 ? str : fallback;
+        };
+        const pickOptionalString = (value, fallback) => {
+            if (value === null || value === undefined)
+                return fallback;
+            return String(value);
+        };
+        const pickTinyInt = (value, fallback) => {
+            if (value === null || value === undefined || value === '')
+                return fallback;
+            if (typeof value === 'boolean')
+                return value ? 1 : 0;
+            if (typeof value === 'number')
+                return value > 0 ? 1 : 0;
+            const normalized = String(value).trim().toLowerCase();
+            if (['1', 'true', 'yes', 'on'].includes(normalized))
+                return 1;
+            if (['0', 'false', 'no', 'off'].includes(normalized))
+                return 0;
+            const num = Number(value);
+            if (Number.isFinite(num)) {
+                return num > 0 ? 1 : 0;
+            }
+            return fallback;
+        };
+        const pickBoolean = (value, fallback) => {
+            if (value === null || value === undefined || value === '')
+                return fallback;
+            if (typeof value === 'boolean')
+                return value;
+            if (typeof value === 'number')
+                return value !== 0;
+            const normalized = String(value).trim().toLowerCase();
+            if (['1', 'true', 'yes', 'on'].includes(normalized))
+                return true;
+            if (['0', 'false', 'no', 'off'].includes(normalized))
+                return false;
+            return fallback;
+        };
+        const parseNumberOrNull = (value) => {
+            if (value === null || value === undefined)
+                return null;
+            if (typeof value === 'string' && value.trim() === '')
+                return null;
+            const num = Number(value);
+            return Number.isFinite(num) ? num : null;
+        };
+        const hasNamePayload = hasPayload('name');
+        const sanitizedName = pickNonEmptyString(updateData.name, curAppData.name || '');
+        if (hasNamePayload && !sanitizedName) {
+            throw new common_1.HttpException('角色名称不能为空！', common_1.HttpStatus.BAD_REQUEST);
+        }
+        updateData.name = sanitizedName || curAppData.name || '';
+        console.log('[AppService.updateApp] 开始验证分类ID');
+        let sanitizedCatId = curAppData.catId;
+        if (hasPayload('catId')) {
+            console.log('[AppService.updateApp] 接收到catId参数:', body.catId);
+            sanitizedCatId = normalizeCatIds(body.catId);
+            console.log('[AppService.updateApp] 规范化后的catId:', sanitizedCatId);
+            if (!sanitizedCatId) {
+                throw new common_1.HttpException('分类ID不能为空！', common_1.HttpStatus.BAD_REQUEST);
+            }
+            const catIds = sanitizedCatId.split(',');
+            console.log('[AppService.updateApp] 开始验证分类ID列表:', catIds);
+            for (const cat of catIds) {
+                const numId = Number(cat);
+                if (Number.isNaN(numId)) {
+                    throw new common_1.HttpException(`分类ID ${cat} 不是有效的数字！`, common_1.HttpStatus.BAD_REQUEST);
+                }
+                console.log('[AppService.updateApp] 查询分类ID:', numId);
+                const c = await this.appCatsEntity.findOne({ where: { id: numId } });
+                if (!c) {
+                    console.error('[AppService.updateApp] 分类ID不存在:', numId);
+                    throw new common_1.HttpException(`分类ID ${cat} 不存在！`, common_1.HttpStatus.BAD_REQUEST);
+                }
+                console.log('[AppService.updateApp] 分类ID验证通过:', numId);
+            }
+        }
+        updateData.catId = sanitizedCatId;
+        console.log('[AppService.updateApp] 分类验证完成');
+        if ('id' in updateData)
+            delete updateData.id;
+        if ('token' in updateData)
+            delete updateData.token;
+        if ('maobingBaseUrl' in updateData)
+            delete updateData.maobingBaseUrl;
         const newVoiceId = body?.voiceId;
         if ('voiceId' in updateData)
             delete updateData.voiceId;
         if ('emotionVoices' in updateData)
             delete updateData.emotionVoices;
-        updateData.appModel = updateData.appModel ?? (curAppData.appModel || '');
-        updateData.order = isNaN(Number(updateData.order)) ? 100 : updateData.order;
-        updateData.status = isNaN(Number(updateData.status)) ? 1 : updateData.status;
-        updateData.isGPTs = isNaN(Number(updateData.isGPTs)) ? 0 : updateData.isGPTs;
-        updateData.isFlowith = isNaN(Number(updateData.isFlowith)) ? 0 : updateData.isFlowith;
-        updateData.flowithId = updateData.flowithId ?? (curAppData.flowithId || '');
-        updateData.flowithName = updateData.flowithName ?? (curAppData.flowithName || '');
-        updateData.isFixedModel = isNaN(Number(updateData.isFixedModel)) ? 0 : updateData.isFixedModel;
-        updateData.backgroundImg = updateData.backgroundImg ?? (curAppData.backgroundImg || '');
-        updateData.prompt = updateData.prompt ?? (curAppData.prompt || '');
+        const orderFromPayload = parseNumberOrNull(body.order);
+        updateData.order = orderFromPayload !== null ? orderFromPayload : curAppData.order ?? 100;
+        const allowedStatuses = new Set([0, 1, 3, 4, 5]);
+        const statusFromPayload = parseNumberOrNull(body.status);
+        if (statusFromPayload !== null) {
+            if (!allowedStatuses.has(statusFromPayload)) {
+                throw new common_1.HttpException('套餐状态错误', common_1.HttpStatus.BAD_REQUEST);
+            }
+            updateData.status = statusFromPayload;
+        }
+        else {
+            updateData.status = typeof curAppData.status === 'number' ? curAppData.status : 1;
+        }
+        updateData.isGPTs = pickTinyInt(updateData.isGPTs, curAppData.isGPTs ?? 0);
+        updateData.isFlowith = pickTinyInt(updateData.isFlowith, curAppData.isFlowith ?? 0);
+        updateData.isFixedModel = pickTinyInt(updateData.isFixedModel, curAppData.isFixedModel ?? 0);
+        updateData.enableRealTime = pickBoolean(updateData.enableRealTime, curAppData.enableRealTime ?? false);
+        updateData.enableLongTermMemory = pickBoolean(updateData.enableLongTermMemory, curAppData.enableLongTermMemory ?? false);
+        updateData.enableKnowledgeBase = pickBoolean(updateData.enableKnowledgeBase, curAppData.enableKnowledgeBase ?? false);
+        updateData.role = pickNonEmptyString(updateData.role, curAppData.role || 'system') || 'system';
+        updateData.gizmoID = pickNonEmptyString(updateData.gizmoID, curAppData.gizmoID || '');
+        updateData.appModel = pickOptionalString(updateData.appModel, curAppData.appModel ?? null);
+        updateData.flowithId = pickOptionalString(updateData.flowithId, curAppData.flowithId ?? null);
+        updateData.flowithName = pickOptionalString(updateData.flowithName, curAppData.flowithName ?? null);
+        updateData.flowithKey = pickOptionalString(updateData.flowithKey, curAppData.flowithKey ?? null);
+        updateData.backgroundImg = pickOptionalString(updateData.backgroundImg, curAppData.backgroundImg ?? null);
+        updateData.prompt = pickOptionalString(updateData.prompt, curAppData.prompt ?? null);
+        updateData.des = pickOptionalString(updateData.des, curAppData.des ?? null);
+        updateData.preset = pickOptionalString(updateData.preset, curAppData.preset ?? null);
+        updateData.coverImg = pickOptionalString(updateData.coverImg, curAppData.coverImg ?? null);
+        updateData.demoData = pickOptionalString(updateData.demoData, curAppData.demoData ?? null);
+        updateData.openingRemark = pickOptionalString(updateData.openingRemark, curAppData.openingRemark ?? null);
+        updateData.knowledgeBaseIds = pickOptionalString(updateData.knowledgeBaseIds, curAppData.knowledgeBaseIds ?? null);
+        updateData.dialogueExamples = pickOptionalString(updateData.dialogueExamples, curAppData.dialogueExamples ?? null);
+        console.log('[AppService.updateApp] 数据准备完成，准备更新数据库');
+        console.log('[AppService.updateApp] updateData keys:', Object.keys(updateData));
         if (curAppData.status !== updateData.status) {
+            console.log('[AppService.updateApp] 状态变化，更新userApps表');
             await this.userAppsEntity.update({ appId: id }, { status: updateData.status });
         }
+        console.log('[AppService.updateApp] 开始执行主更新操作');
         const res = await this.appEntity.update({ id }, updateData);
+        console.log('[AppService.updateApp] 主更新操作完成，affected:', res.affected);
         if ((res.affected ?? 0) >= 0) {
             if (typeof newVoiceId !== 'undefined' &&
                 newVoiceId !== null &&
@@ -293608,116 +293805,116 @@ let AppEntity = class AppEntity extends baseEntity_1.BaseEntity {
 };
 exports.AppEntity = AppEntity;
 __decorate([
-    (0, typeorm_1.Column)({ comment: 'App应用名称' }),
+    (0, typeorm_1.Column)({ comment: 'App 应用名称' }),
     __metadata("design:type", String)
 ], AppEntity.prototype, "name", void 0);
 __decorate([
-    (0, typeorm_1.Column)({ comment: 'App分类Id列表，多个分类Id以逗号分隔', type: 'text' }),
+    (0, typeorm_1.Column)({ comment: 'App 分类 ID 列表，多个 ID 用逗号分隔', type: 'text' }),
     __metadata("design:type", String)
 ], AppEntity.prototype, "catId", void 0);
 __decorate([
-    (0, typeorm_1.Column)({ comment: 'App应用描述信息' }),
+    (0, typeorm_1.Column)({ comment: 'App 描述信息', nullable: true, type: 'text' }),
     __metadata("design:type", String)
 ], AppEntity.prototype, "des", void 0);
 __decorate([
-    (0, typeorm_1.Column)({ comment: 'App应用预设场景信息', type: 'text' }),
+    (0, typeorm_1.Column)({ comment: '预设场景（prompt 模板）', nullable: true, type: 'text' }),
     __metadata("design:type", String)
 ], AppEntity.prototype, "preset", void 0);
 __decorate([
-    (0, typeorm_1.Column)({ comment: 'App应用封面图片', nullable: true, type: 'text' }),
+    (0, typeorm_1.Column)({ comment: '封面图片地址', nullable: true, type: 'text' }),
     __metadata("design:type", String)
 ], AppEntity.prototype, "coverImg", void 0);
 __decorate([
-    (0, typeorm_1.Column)({ comment: 'App应用排序、数字越大越靠前', default: 100 }),
+    (0, typeorm_1.Column)({ comment: '排序，数字越大越靠前', default: 100 }),
     __metadata("design:type", Number)
 ], AppEntity.prototype, "order", void 0);
 __decorate([
-    (0, typeorm_1.Column)({ comment: 'App应用是否启用中 0：禁用 1：启用', default: 1 }),
+    (0, typeorm_1.Column)({ comment: '状态：0 禁用 / 1 启用', default: 1 }),
     __metadata("design:type", Number)
 ], AppEntity.prototype, "status", void 0);
 __decorate([
-    (0, typeorm_1.Column)({ comment: 'App示例数据', nullable: true, type: 'text' }),
+    (0, typeorm_1.Column)({ comment: '示例数据', nullable: true, type: 'text' }),
     __metadata("design:type", String)
 ], AppEntity.prototype, "demoData", void 0);
 __decorate([
-    (0, typeorm_1.Column)({ comment: 'App应用角色 system  user', default: 'system' }),
+    (0, typeorm_1.Column)({ comment: '角色归属：system/user', default: 'system' }),
     __metadata("design:type", String)
 ], AppEntity.prototype, "role", void 0);
 __decorate([
-    (0, typeorm_1.Column)({ comment: 'App应用是否是GPTs', default: '0' }),
+    (0, typeorm_1.Column)({ comment: '是否为 GPTs 应用', default: 0 }),
     __metadata("design:type", Number)
 ], AppEntity.prototype, "isGPTs", void 0);
 __decorate([
-    (0, typeorm_1.Column)({ comment: 'App应用是否是固定使用模型', default: '0' }),
+    (0, typeorm_1.Column)({ comment: '是否固定使用某模型', default: 0 }),
     __metadata("design:type", Number)
 ], AppEntity.prototype, "isFixedModel", void 0);
 __decorate([
-    (0, typeorm_1.Column)({ comment: 'App应用使用的模型', type: 'text' }),
+    (0, typeorm_1.Column)({ comment: '使用的模型配置', nullable: true, type: 'text' }),
     __metadata("design:type", String)
 ], AppEntity.prototype, "appModel", void 0);
 __decorate([
-    (0, typeorm_1.Column)({ comment: 'GPTs 的调用ID', default: '' }),
+    (0, typeorm_1.Column)({ comment: 'GPTs 调用 ID', default: '' }),
     __metadata("design:type", String)
 ], AppEntity.prototype, "gizmoID", void 0);
 __decorate([
-    (0, typeorm_1.Column)({ comment: 'App是否共享到应用广场', default: false }),
+    (0, typeorm_1.Column)({ comment: '是否公开到应用广场', default: false }),
     __metadata("design:type", Boolean)
 ], AppEntity.prototype, "public", void 0);
 __decorate([
-    (0, typeorm_1.Column)({ comment: '用户Id', nullable: true }),
+    (0, typeorm_1.Column)({ comment: '创建者用户 ID', nullable: true }),
     __metadata("design:type", Number)
 ], AppEntity.prototype, "userId", void 0);
 __decorate([
-    (0, typeorm_1.Column)({ comment: '是否使用flowith模型', default: 0 }),
+    (0, typeorm_1.Column)({ comment: '是否使用 Flowith 模型', default: 0 }),
     __metadata("design:type", Number)
 ], AppEntity.prototype, "isFlowith", void 0);
 __decorate([
-    (0, typeorm_1.Column)({ comment: 'flowith模型ID', nullable: true }),
+    (0, typeorm_1.Column)({ comment: 'Flowith 模型 ID', nullable: true }),
     __metadata("design:type", String)
 ], AppEntity.prototype, "flowithId", void 0);
 __decorate([
-    (0, typeorm_1.Column)({ comment: 'flowith模型名称', nullable: true }),
+    (0, typeorm_1.Column)({ comment: 'Flowith 模型名称', nullable: true }),
     __metadata("design:type", String)
 ], AppEntity.prototype, "flowithName", void 0);
 __decorate([
-    (0, typeorm_1.Column)({ comment: 'flowith模型Key', nullable: true }),
+    (0, typeorm_1.Column)({ comment: 'Flowith 模型 Key', nullable: true }),
     __metadata("design:type", String)
 ], AppEntity.prototype, "flowithKey", void 0);
 __decorate([
-    (0, typeorm_1.Column)({ comment: 'App背景图', nullable: true, type: 'text' }),
+    (0, typeorm_1.Column)({ comment: '背景图', nullable: true, type: 'text' }),
     __metadata("design:type", String)
 ], AppEntity.prototype, "backgroundImg", void 0);
 __decorate([
-    (0, typeorm_1.Column)({ comment: 'App提问模版', nullable: true, type: 'text' }),
+    (0, typeorm_1.Column)({ comment: '提示词模版', nullable: true, type: 'text' }),
     __metadata("design:type", String)
 ], AppEntity.prototype, "prompt", void 0);
 __decorate([
-    (0, typeorm_1.Column)({ comment: '角色默认音色ID', nullable: true }),
+    (0, typeorm_1.Column)({ comment: '默认音色 ID（DashScope/CosyVoice voice_id）', nullable: true }),
     __metadata("design:type", String)
 ], AppEntity.prototype, "voiceId", void 0);
 __decorate([
     (0, typeorm_1.Column)({
-        comment: '情绪-音色映射 JSON: {"items":[{emotion,voiceId}] }',
+        comment: '情绪-音色映射 JSON：{"items":[{emotion,voiceId}]}',
         type: 'text',
         nullable: true,
     }),
     __metadata("design:type", String)
 ], AppEntity.prototype, "emotionVoices", void 0);
 __decorate([
-    (0, typeorm_1.Column)({ comment: '是否开启真实时间（星尘API）', default: false }),
+    (0, typeorm_1.Column)({ comment: '是否开启实时模式', default: false }),
     __metadata("design:type", Boolean)
 ], AppEntity.prototype, "enableRealTime", void 0);
 __decorate([
-    (0, typeorm_1.Column)({ comment: '是否开启长期记忆（星尘API）', default: false }),
+    (0, typeorm_1.Column)({ comment: '是否开启长期记忆', default: false }),
     __metadata("design:type", Boolean)
 ], AppEntity.prototype, "enableLongTermMemory", void 0);
 __decorate([
-    (0, typeorm_1.Column)({ comment: '是否开启知识库搜索（星尘API）', default: false }),
+    (0, typeorm_1.Column)({ comment: '是否开启知识库搜索', default: false }),
     __metadata("design:type", Boolean)
 ], AppEntity.prototype, "enableKnowledgeBase", void 0);
 __decorate([
     (0, typeorm_1.Column)({
-        comment: '知识库ID列表（星尘API），JSON数组格式: ["kb_id_1","kb_id_2"]',
+        comment: '知识库 ID 列表（JSON 数组）',
         type: 'text',
         nullable: true,
     }),
@@ -293725,14 +293922,14 @@ __decorate([
 ], AppEntity.prototype, "knowledgeBaseIds", void 0);
 __decorate([
     (0, typeorm_1.Column)({
-        comment: '对话示例（星尘API），JSON格式: [{"role":"user","content":"..."},{"role":"assistant","content":"..."}]',
+        comment: '对话示例（JSON）',
         type: 'text',
         nullable: true,
     }),
     __metadata("design:type", String)
 ], AppEntity.prototype, "dialogueExamples", void 0);
 __decorate([
-    (0, typeorm_1.Column)({ comment: '开场白（角色初始问候语）', type: 'text', nullable: true }),
+    (0, typeorm_1.Column)({ comment: '开场白', type: 'text', nullable: true }),
     __metadata("design:type", String)
 ], AppEntity.prototype, "openingRemark", void 0);
 exports.AppEntity = AppEntity = __decorate([
@@ -294059,6 +294256,8 @@ class CreateAppDto {
     dialogueExamples;
     openingRemark;
     emotionVoices;
+    maxReplyCount;
+    allowEmoji;
 }
 exports.CreateAppDto = CreateAppDto;
 __decorate([
@@ -294087,7 +294286,7 @@ __decorate([
 __decorate([
     (0, swagger_1.ApiProperty)({
         example: '你现在是一个翻译官。接下来我说的所有话帮我翻译成中文',
-        description: '预设的prompt',
+        description: '预设的 prompt',
         required: false,
     }),
     (0, class_validator_1.IsOptional)(),
@@ -294103,7 +294302,7 @@ __decorate([
     __metadata("design:type", String)
 ], CreateAppDto.prototype, "gizmoID", void 0);
 __decorate([
-    (0, swagger_1.ApiProperty)({ description: '是否GPTs', required: false }),
+    (0, swagger_1.ApiProperty)({ description: '是否 GPTs', required: false }),
     (0, class_validator_1.IsOptional)(),
     __metadata("design:type", Number)
 ], CreateAppDto.prototype, "isGPTs", void 0);
@@ -294119,7 +294318,7 @@ __decorate([
 __decorate([
     (0, swagger_1.ApiProperty)({
         example: 100,
-        description: '套餐排序、数字越大越靠前',
+        description: '套餐排序，数字越大越靠前',
         required: false,
     }),
     (0, class_validator_1.IsOptional)(),
@@ -294128,18 +294327,18 @@ __decorate([
 __decorate([
     (0, swagger_1.ApiProperty)({
         example: 1,
-        description: '套餐状态 0：禁用 1：启用（可选，默认为1）',
+        description: '套餐状态 0：禁用 1：启用（可选，默认为 1）',
         required: false,
     }),
     (0, class_validator_1.IsOptional)(),
-    (0, class_validator_1.IsNumber)({}, { message: '套餐状态必须是Number' }),
+    (0, class_validator_1.IsNumber)({}, { message: '套餐状态必须是 Number' }),
     (0, class_validator_1.IsIn)([0, 1, 3, 4, 5], { message: '套餐状态错误' }),
     __metadata("design:type", Number)
 ], CreateAppDto.prototype, "status", void 0);
 __decorate([
     (0, swagger_1.ApiProperty)({
         example: '这是一句示例数据',
-        description: 'app示例数据',
+        description: 'app 示例数据',
         required: false,
     }),
     __metadata("design:type", String)
@@ -294155,7 +294354,7 @@ __decorate([
 __decorate([
     (0, swagger_1.ApiProperty)({
         example: 1,
-        description: '创建该角色的用户ID',
+        description: '创建该角色的用户 ID',
         required: false,
     }),
     (0, class_validator_1.IsOptional)(),
@@ -294164,31 +294363,31 @@ __decorate([
 __decorate([
     (0, swagger_1.ApiProperty)({
         example: 0,
-        description: '是否使用flowith模型',
+        description: '是否使用 flowith 模型',
         required: false,
     }),
     __metadata("design:type", Number)
 ], CreateAppDto.prototype, "isFlowith", void 0);
 __decorate([
     (0, swagger_1.ApiProperty)({
-        example: 'flowith模型ID',
-        description: 'flowith模型ID',
+        example: 'flowith 模型 ID',
+        description: 'flowith 模型 ID',
         required: false,
     }),
     __metadata("design:type", String)
 ], CreateAppDto.prototype, "flowithId", void 0);
 __decorate([
     (0, swagger_1.ApiProperty)({
-        example: 'flowith模型名称',
-        description: 'flowith模型名称',
+        example: 'flowith 模型名称',
+        description: 'flowith 模型名称',
         required: false,
     }),
     __metadata("design:type", String)
 ], CreateAppDto.prototype, "flowithName", void 0);
 __decorate([
     (0, swagger_1.ApiProperty)({
-        example: 'flowith模型Key',
-        description: 'flowith模型Key',
+        example: 'flowith 模型 Key',
+        description: 'flowith 模型 Key',
         required: false,
     }),
     __metadata("design:type", String)
@@ -294196,7 +294395,7 @@ __decorate([
 __decorate([
     (0, swagger_1.ApiProperty)({
         example: 'cosyvoice-v2-xxxxxxxx',
-        description: '角色默认音色ID（DashScope/CosyVoice voice_id）',
+        description: '角色默认音色 ID（DashScope/CosyVoice voice_id）',
         required: false,
     }),
     (0, class_validator_1.IsOptional)(),
@@ -294205,7 +294404,7 @@ __decorate([
 __decorate([
     (0, swagger_1.ApiProperty)({
         example: false,
-        description: '是否开启真实时间（星尘API）',
+        description: '是否开启实时模式（星尘 API）',
         required: false,
     }),
     (0, class_validator_1.IsOptional)(),
@@ -294214,7 +294413,7 @@ __decorate([
 __decorate([
     (0, swagger_1.ApiProperty)({
         example: false,
-        description: '是否开启长期记忆（星尘API）',
+        description: '是否开启长期记忆（星尘 API）',
         required: false,
     }),
     (0, class_validator_1.IsOptional)(),
@@ -294223,7 +294422,7 @@ __decorate([
 __decorate([
     (0, swagger_1.ApiProperty)({
         example: false,
-        description: '是否开启知识库搜索（星尘API）',
+        description: '是否开启知识库搜索（星尘 API）',
         required: false,
     }),
     (0, class_validator_1.IsOptional)(),
@@ -294232,7 +294431,7 @@ __decorate([
 __decorate([
     (0, swagger_1.ApiProperty)({
         example: '["kb_id_1","kb_id_2"]',
-        description: '知识库ID列表（星尘API），JSON数组格式',
+        description: '知识库 ID 列表（星尘 API），JSON 数组格式',
         required: false,
     }),
     (0, class_validator_1.IsOptional)(),
@@ -294241,7 +294440,7 @@ __decorate([
 __decorate([
     (0, swagger_1.ApiProperty)({
         example: '[{"role":"user","content":"你好"},{"role":"assistant","content":"你好！很高兴见到你"}]',
-        description: '对话示例（星尘API），JSON格式',
+        description: '对话示例（星尘 API），JSON 格式',
         required: false,
     }),
     (0, class_validator_1.IsOptional)(),
@@ -294249,7 +294448,7 @@ __decorate([
 ], CreateAppDto.prototype, "dialogueExamples", void 0);
 __decorate([
     (0, swagger_1.ApiProperty)({
-        example: '你好！我是你的AI助手，有什么可以帮助你的吗？',
+        example: '你好！我是你的 AI 助手，有什么可以帮助你的吗？',
         description: '开场白（角色初始问候语）',
         required: false,
     }),
@@ -294269,6 +294468,24 @@ __decorate([
     (0, class_validator_1.IsOptional)(),
     __metadata("design:type", typeof (_a = typeof Array !== "undefined" && Array) === "function" ? _a : Object)
 ], CreateAppDto.prototype, "emotionVoices", void 0);
+__decorate([
+    (0, swagger_1.ApiProperty)({
+        example: 3,
+        description: '最大连续回复次数（1-5）',
+        required: false,
+    }),
+    (0, class_validator_1.IsOptional)(),
+    __metadata("design:type", Number)
+], CreateAppDto.prototype, "maxReplyCount", void 0);
+__decorate([
+    (0, swagger_1.ApiProperty)({
+        example: 1,
+        description: '是否允许发送表情包（1 启用 / 0 禁用）',
+        required: false,
+    }),
+    (0, class_validator_1.IsOptional)(),
+    __metadata("design:type", Number)
+], CreateAppDto.prototype, "allowEmoji", void 0);
 
 
 /***/ }),
@@ -294750,7 +294967,14 @@ let OpenAppController = class OpenAppController {
         return this.appService.createApp(body);
     }
     updateApp(body) {
-        return this.appService.updateApp(body);
+        console.log('[OpenAppController.updateApp] 收到请求参数:', JSON.stringify(body, null, 2));
+        try {
+            return this.appService.updateApp(body);
+        }
+        catch (error) {
+            console.error('[OpenAppController.updateApp] 错误:', error);
+            throw error;
+        }
     }
     delApp(id) {
         return this.appService.delApp({ id: Number(id) });
@@ -295149,7 +295373,7 @@ class MaobingAuthUtil {
     static logger = new common_1.Logger('MaobingAuth');
     static DEFAULT_MAOBING_API_URL = 'https://maobingai.lnkj5.com/api/user/index';
     static tokenCache = new Map();
-    static CACHE_DURATION = 10 * 60 * 1000;
+    static CACHE_DURATION = 12 * 60 * 60 * 1000;
     static async validateTokenAndGetUserId(token, maobingBaseUrl) {
         if (!token) {
             return null;
@@ -297719,10 +297943,11 @@ const userBalance_service_1 = __webpack_require__(2696);
 const verification_entity_1 = __webpack_require__(2705);
 const verification_service_1 = __webpack_require__(2704);
 const voice_module_1 = __webpack_require__(4135);
-const conversationSummary_module_1 = __webpack_require__(4180);
-const chat_controller_1 = __webpack_require__(4183);
-const chat_service_2 = __webpack_require__(4184);
-const open_chat_controller_1 = __webpack_require__(4186);
+const conversationSummary_module_1 = __webpack_require__(4183);
+const sticker_module_1 = __webpack_require__(4186);
+const chat_controller_1 = __webpack_require__(4190);
+const chat_service_2 = __webpack_require__(4191);
+const open_chat_controller_1 = __webpack_require__(4193);
 let ChatModule = class ChatModule {
 };
 exports.ChatModule = ChatModule;
@@ -297759,6 +297984,7 @@ exports.ChatModule = ChatModule = __decorate([
             affection_module_1.AffectionModule,
             app_module_1.AppModule,
             conversationSummary_module_1.ConversationSummaryModule,
+            sticker_module_1.StickerModule,
         ],
         controllers: [chat_controller_1.ChatController, open_chat_controller_1.OpenChatController],
         providers: [
@@ -313533,6 +313759,8 @@ let ChatGroupService = class ChatGroupService {
                     chatGroup.appLogo = appInfo.coverImg;
                     chatGroup.appName = appInfo.name;
                     chatGroup.appUserId = appInfo.userId;
+                    chatGroup.des = appInfo.des;
+                    chatGroup.preset = appInfo.preset;
                 }
             }
             const members = this.parseMembers(chatGroup.members);
@@ -313605,10 +313833,7 @@ let ChatGroupService = class ChatGroupService {
                 let lastMessage = '';
                 let lastMessageTime = item.updatedAt;
                 try {
-                    const lastChat = await this.chatLogEntity.findOne({
-                        where: { groupId: item.id, isDelete: false },
-                        order: { createdAt: 'DESC' },
-                    });
+                    const lastChat = await this.findLastChatWithContent(item.id);
                     if (lastChat) {
                         lastMessage = lastChat.content || '';
                         lastMessageTime = lastChat.createdAt;
@@ -313686,10 +313911,7 @@ let ChatGroupService = class ChatGroupService {
                 let lastMessage = '';
                 let lastMessageTime = item.updatedAt;
                 try {
-                    const lastChat = await this.chatLogEntity.findOne({
-                        where: { groupId: item.id, isDelete: false },
-                        order: { createdAt: 'DESC' },
-                    });
+                    const lastChat = await this.findLastChatWithContent(item.id);
                     if (lastChat) {
                         lastMessage = lastChat.content || '';
                         lastMessageTime = lastChat.createdAt;
@@ -313729,8 +313951,17 @@ let ChatGroupService = class ChatGroupService {
             throw error;
         }
     }
+    findLastChatWithContent(groupId) {
+        return this.chatLogEntity
+            .createQueryBuilder('chatlog')
+            .where('chatlog.groupId = :groupId', { groupId })
+            .andWhere('chatlog.isDelete = :isDelete', { isDelete: false })
+            .andWhere("chatlog.content IS NOT NULL AND TRIM(chatlog.content) <> ''")
+            .orderBy('chatlog.createdAt', 'DESC')
+            .getOne();
+    }
     async update(body, req) {
-        const { title, groupId, description, ownerNickname, characterRelationships, openingRemark, proactivelySend, describingMental, realTime, myName, myProfile, members, backgroundImage, } = body;
+        const { title, groupId, description, ownerNickname, memberRelationships, openingRemark, proactivelySend, describingMental, realTime, myName, myProfile, conversationMemoryCount, autoSummaryEnabled, summaryPrompt, chatSummary, voiceReplyMode, allowEmoji, allowTap, maxReplyCount, members, backgroundImage, } = body;
         const { id } = req.user;
         const g = await this.chatGroupEntity.findOne({
             where: { id: groupId, userId: id },
@@ -313753,14 +313984,27 @@ let ChatGroupService = class ChatGroupService {
         title && (data['title'] = title);
         typeof description !== 'undefined' && (data['description'] = description);
         typeof ownerNickname !== 'undefined' && (data['ownerNickname'] = ownerNickname);
-        typeof characterRelationships !== 'undefined' &&
-            (data['characterRelationships'] = characterRelationships);
+        typeof memberRelationships !== 'undefined' &&
+            (data['memberRelationships'] =
+                typeof memberRelationships === 'string'
+                    ? memberRelationships
+                    : JSON.stringify(memberRelationships));
         typeof openingRemark !== 'undefined' && (data['openingRemark'] = openingRemark);
         typeof proactivelySend !== 'undefined' && (data['proactivelySend'] = proactivelySend);
         typeof describingMental !== 'undefined' && (data['describingMental'] = describingMental);
         typeof realTime !== 'undefined' && (data['realTime'] = realTime);
         typeof myName !== 'undefined' && (data['myName'] = myName);
         typeof myProfile !== 'undefined' && (data['myProfile'] = myProfile);
+        typeof conversationMemoryCount !== 'undefined' &&
+            (data['conversationMemoryCount'] = conversationMemoryCount);
+        typeof autoSummaryEnabled !== 'undefined' &&
+            (data['autoSummaryEnabled'] = autoSummaryEnabled ? 1 : 0);
+        typeof summaryPrompt !== 'undefined' && (data['summaryPrompt'] = summaryPrompt);
+        typeof chatSummary !== 'undefined' && (data['chatSummary'] = chatSummary);
+        typeof voiceReplyMode !== 'undefined' && (data['voiceReplyMode'] = voiceReplyMode);
+        typeof allowEmoji !== 'undefined' && (data['allowEmoji'] = allowEmoji ? 1 : 0);
+        typeof allowTap !== 'undefined' && (data['allowTap'] = allowTap ? 1 : 0);
+        typeof maxReplyCount !== 'undefined' && (data['maxReplyCount'] = maxReplyCount);
         typeof backgroundImage !== 'undefined' && (data['backgroundImage'] = backgroundImage);
         if (members && Array.isArray(members)) {
             data['members'] = this.stringifyMembers(members);
@@ -314322,6 +314566,38 @@ let ChatGroupService = class ChatGroupService {
             common_1.Logger.error(`群组 ${groupId} 头像生成失败: ${error.message}`, 'ChatGroupService');
             console.error(error);
             return null;
+        }
+    }
+    async updateRelationships(body, req) {
+        const { groupId, relationships } = body;
+        const { id } = req.user;
+        const g = await this.ensureGroupOwned(groupId, req);
+        const members = this.parseMembers(g.members);
+        const memberAppIds = new Set(members.map(m => m.appId));
+        for (const rel of relationships) {
+            if (!memberAppIds.has(rel.memberA) || !memberAppIds.has(rel.memberB)) {
+                throw new common_1.HttpException(`成员 ${rel.memberA} 或 ${rel.memberB} 不在群组中`, common_1.HttpStatus.BAD_REQUEST);
+            }
+        }
+        const relationshipsData = {
+            relationships: relationships,
+        };
+        await this.chatGroupEntity.update({ id: groupId }, { memberRelationships: JSON.stringify(relationshipsData) });
+        return { success: true, count: relationships.length };
+    }
+    async getRelationships(body, req) {
+        const { groupId } = body;
+        const g = await this.ensureGroupOwned(groupId, req);
+        if (!g.memberRelationships) {
+            return { relationships: [] };
+        }
+        try {
+            const data = JSON.parse(g.memberRelationships);
+            return data;
+        }
+        catch (error) {
+            common_1.Logger.error(`解析群组 ${groupId} 的人物关系配置失败: ${error.message}`);
+            return { relationships: [] };
         }
     }
 };
@@ -334431,7 +334707,7 @@ const inferPhysicalRegion = async () => {
     }
     if (!process.env[_constants__WEBPACK_IMPORTED_MODULE_4__.ENV_IMDS_DISABLED]) {
         try {
-            const { getInstanceMetadataEndpoint, httpRequest } = await __webpack_require__.e(/* import() */ 1).then(__webpack_require__.bind(__webpack_require__, 4312));
+            const { getInstanceMetadataEndpoint, httpRequest } = await __webpack_require__.e(/* import() */ 1).then(__webpack_require__.bind(__webpack_require__, 4319));
             const endpoint = await getInstanceMetadataEndpoint();
             return (await httpRequest({ ...endpoint, path: _constants__WEBPACK_IMPORTED_MODULE_4__.IMDS_REGION_PATH })).toString();
         }
@@ -334728,19 +335004,19 @@ const defaultProvider = (init = {}) => (0,_smithy_property_provider__WEBPACK_IMP
     if (!ssoStartUrl && !ssoAccountId && !ssoRegion && !ssoRoleName && !ssoSession) {
         throw new _smithy_property_provider__WEBPACK_IMPORTED_MODULE_4__.CredentialsProviderError("Skipping SSO provider in default chain (inputs do not include SSO fields).", { logger: init.logger });
     }
-    const { fromSSO } = await __webpack_require__.e(/* import() */ 2).then(__webpack_require__.bind(__webpack_require__, 4327));
+    const { fromSSO } = await __webpack_require__.e(/* import() */ 2).then(__webpack_require__.bind(__webpack_require__, 4334));
     return fromSSO(init)();
 }, async () => {
     init.logger?.debug("@aws-sdk/credential-provider-node - defaultProvider::fromIni");
-    const { fromIni } = await __webpack_require__.e(/* import() */ 7).then(__webpack_require__.bind(__webpack_require__, 4346));
+    const { fromIni } = await __webpack_require__.e(/* import() */ 7).then(__webpack_require__.bind(__webpack_require__, 4353));
     return fromIni(init)();
 }, async () => {
     init.logger?.debug("@aws-sdk/credential-provider-node - defaultProvider::fromProcess");
-    const { fromProcess } = await __webpack_require__.e(/* import() */ 4).then(__webpack_require__.bind(__webpack_require__, 4355));
+    const { fromProcess } = await __webpack_require__.e(/* import() */ 4).then(__webpack_require__.bind(__webpack_require__, 4362));
     return fromProcess(init)();
 }, async () => {
     init.logger?.debug("@aws-sdk/credential-provider-node - defaultProvider::fromTokenFile");
-    const { fromTokenFile } = await __webpack_require__.e(/* import() */ 6).then(__webpack_require__.bind(__webpack_require__, 4360));
+    const { fromTokenFile } = await __webpack_require__.e(/* import() */ 6).then(__webpack_require__.bind(__webpack_require__, 4367));
     return fromTokenFile(init)();
 }, async () => {
     init.logger?.debug("@aws-sdk/credential-provider-node - defaultProvider::remoteProvider");
@@ -334770,10 +335046,10 @@ __webpack_require__.r(__webpack_exports__);
 
 const ENV_IMDS_DISABLED = "AWS_EC2_METADATA_DISABLED";
 const remoteProvider = async (init) => {
-    const { ENV_CMDS_FULL_URI, ENV_CMDS_RELATIVE_URI, fromContainerMetadata, fromInstanceMetadata } = await __webpack_require__.e(/* import() */ 1).then(__webpack_require__.bind(__webpack_require__, 4312));
+    const { ENV_CMDS_FULL_URI, ENV_CMDS_RELATIVE_URI, fromContainerMetadata, fromInstanceMetadata } = await __webpack_require__.e(/* import() */ 1).then(__webpack_require__.bind(__webpack_require__, 4319));
     if (process.env[ENV_CMDS_RELATIVE_URI] || process.env[ENV_CMDS_FULL_URI]) {
         init.logger?.debug("@aws-sdk/credential-provider-node - remoteProvider::fromHttp/fromContainerMetadata");
-        const { fromHttp } = await __webpack_require__.e(/* import() */ 8).then(__webpack_require__.bind(__webpack_require__, 4363));
+        const { fromHttp } = await __webpack_require__.e(/* import() */ 8).then(__webpack_require__.bind(__webpack_require__, 4370));
         return (0,_smithy_property_provider__WEBPACK_IMPORTED_MODULE_0__.chain)(fromHttp(init), fromContainerMetadata(init));
     }
     if (process.env[ENV_IMDS_DISABLED] && process.env[ENV_IMDS_DISABLED] !== "false") {
@@ -399830,9 +400106,8 @@ let ChatLogService = class ChatLogService {
                 where,
             });
         }
-        const rows = list
-            .map(item => {
-            const { prompt, role, answer, createdAt, model, modelName, type, status, action, drawId, id, imageUrl, fileInfo, fileUrl, ttsUrl, videoUrl, audioUrl, customId, pluginParam, progress, modelAvatar, taskData, promptReference, networkSearchResult, fileVectorResult, taskId, reasoning_content, tool_calls, content, promptTokens, completionTokens, totalTokens, } = item;
+        const rows = list.map(item => {
+            const { prompt, role, answer, createdAt, model, modelName, type, status, action, drawId, id, imageUrl, fileInfo, fileUrl, ttsUrl, ttsDuration, videoUrl, audioUrl, customId, pluginParam, progress, modelAvatar, taskData, promptReference, networkSearchResult, fileVectorResult, taskId, reasoning_content, tool_calls, content, promptTokens, completionTokens, totalTokens, display_state, } = item;
             let rawContent = content || (role === 'assistant' ? answer : prompt);
             if (rawContent && typeof rawContent === 'string') {
                 rawContent = rawContent.replace(/\[图片内容:[\s\S]*?\]/g, '').trim();
@@ -399855,6 +400130,8 @@ let ChatLogService = class ChatLogService {
                 ttsUrl: ttsUrl,
                 videoUrl: videoUrl,
                 audioUrl: audioUrl,
+                audioDuration: ttsDuration || 0,
+                ttsDuration: ttsDuration || 0,
                 progress,
                 model: model,
                 modelName: modelName,
@@ -399868,10 +400145,8 @@ let ChatLogService = class ChatLogService {
                 promptTokens: promptTokens,
                 completionTokens: completionTokens,
                 totalTokens: totalTokens,
+                display_state: display_state,
             };
-        })
-            .filter(item => {
-            return item.content && item.content.trim() !== '';
         });
         if (isPaginated) {
             const hasMore = page * pageSize < total;
@@ -478112,12 +478387,12 @@ const appVoice_entity_1 = __webpack_require__(2772);
 const globalConfig_module_1 = __webpack_require__(4136);
 const upload_module_1 = __webpack_require__(4140);
 const open_voice_controller_1 = __webpack_require__(4142);
-const voice_controller_1 = __webpack_require__(4179);
+const voice_controller_1 = __webpack_require__(4181);
 const voice_entity_1 = __webpack_require__(4144);
 const voice_service_1 = __webpack_require__(4143);
-const voiceCategory_controller_1 = __webpack_require__(4425);
-const voiceCategory_entity_1 = __webpack_require__(4427);
-const voiceCategory_service_1 = __webpack_require__(4426);
+const voiceCategory_controller_1 = __webpack_require__(4182);
+const voiceCategory_entity_1 = __webpack_require__(4145);
+const voiceCategory_service_1 = __webpack_require__(4180);
 let VoiceModule = class VoiceModule {
 };
 exports.VoiceModule = VoiceModule;
@@ -478539,7 +478814,7 @@ exports.OpenVoiceController = void 0;
 const common_1 = __webpack_require__(2);
 const swagger_1 = __webpack_require__(2281);
 const voice_service_1 = __webpack_require__(4143);
-const voiceCategory_service_1 = __webpack_require__(4426);
+const voiceCategory_service_1 = __webpack_require__(4180);
 let OpenVoiceController = class OpenVoiceController {
     voiceService;
     voiceCategoryService;
@@ -478902,6 +479177,8 @@ __decorate([
                 volume: { type: 'number', description: '音量（可选）' },
                 rate: { type: 'number', description: '语速（可选）' },
                 pitch: { type: 'number', description: '音调（可选）' },
+                text_language: { type: 'string', description: '文本语言（GPT-SoVITS 可选）' },
+                cut_punc: { type: 'string', description: '文本切分符（GPT-SoVITS 可选）' },
             },
             required: ['voice_id', 'text'],
         },
@@ -478959,6 +479236,23 @@ const upload_service_1 = __webpack_require__(2954);
 const voice_entity_1 = __webpack_require__(4144);
 const COSY_CUSTOMIZATION_URL = 'https://dashscope.aliyuncs.com/api/v1/services/audio/tts/customization';
 const COSY_WS_URL = 'wss://dashscope.aliyuncs.com/api-ws/v1/inference/';
+const DEFAULT_GPT_SOVITS_BASE_URL = process.env.GPT_SOVITS_BASE_URL || 'http://127.0.0.1:9880';
+const DEFAULT_GPT_SOVITS_TEXT_LANGUAGE = process.env.GPT_SOVITS_DEFAULT_TEXT_LANGUAGE || 'zh';
+const DEFAULT_GPT_SOVITS_STORAGE_ROOT = (() => {
+    const custom = process.env.GPT_SOVITS_STORAGE_ROOT;
+    if (custom && path.isAbsolute(custom))
+        return custom;
+    if (custom)
+        return path.resolve(process.cwd(), custom);
+    return path.resolve(process.cwd(), 'storage/gpt-sovits');
+})();
+const GPT_SOVITS_MODEL_EXT = ['.ckpt', '.pth', '.pt', '.bin'];
+const GPT_SOVITS_AUDIO_EXT = ['.wav', '.mp3', '.m4a', '.flac', '.ogg'];
+const GPT_SOVITS_LIBRARY_DIR = {
+    gpt: 'gpt-models',
+    sovits: 'sovits-models',
+};
+const fsp = fs.promises;
 let VoiceService = class VoiceService {
     globalConfigService;
     uploadService;
@@ -478988,6 +479282,17 @@ let VoiceService = class VoiceService {
             'Content-Type': 'application/json',
         };
     }
+    gptSovitsBaseUrl = DEFAULT_GPT_SOVITS_BASE_URL;
+    gptSovitsStorageRoot = DEFAULT_GPT_SOVITS_STORAGE_ROOT;
+    gptSovitsModelCache = new Map();
+    async onModuleInit() {
+        try {
+            await this.ensureVoiceProviderColumns();
+        }
+        catch (error) {
+            common_1.Logger.warn(`[VoiceService] ensureVoiceProviderColumns failed: ${error?.message || error}`, 'VoiceService');
+        }
+    }
     async upsertVoice(partial) {
         if (!partial.voiceId) {
             console.warn('upsertVoice: voiceId为空，跳过保存');
@@ -478997,11 +479302,17 @@ let VoiceService = class VoiceService {
             console.log(`upsertVoice: 查找现有记录 voiceId=${partial.voiceId}`);
             const existing = await this.voiceRepo.findOne({ where: { voiceId: partial.voiceId } });
             const now = new Date();
+            const provider = partial.provider ||
+                existing?.provider ||
+                'dashscope';
+            const mergedConfig = partial.config !== undefined ? partial.config : existing?.config ?? null;
             const data = existing
                 ? {
                     ...existing,
                     ...partial,
                     userId: partial.userId !== undefined ? partial.userId : existing.userId,
+                    provider,
+                    config: mergedConfig,
                     updatedAt: now,
                 }
                 : {
@@ -479011,6 +479322,8 @@ let VoiceService = class VoiceService {
                     volume: partial.volume ?? 52,
                     sampleRate: partial.sampleRate ?? 24000,
                     format: partial.format ?? 'mp3',
+                    provider,
+                    config: mergedConfig,
                     createdAt: now,
                     updatedAt: now,
                 };
@@ -479029,6 +479342,192 @@ let VoiceService = class VoiceService {
             console.error(`upsertVoice: 保存失败 voiceId=${partial.voiceId}`, error.message);
             throw error;
         }
+    }
+    async listGptSovitsFiles() {
+        try {
+            await fsp.mkdir(this.gptSovitsStorageRoot, { recursive: true });
+            const entries = await fsp.readdir(this.gptSovitsStorageRoot, { withFileTypes: true });
+            const gptModels = [];
+            const sovitsModels = [];
+            const promptAudios = [];
+            const library = [];
+            const processFile = async (fullPath) => {
+                const ext = path.extname(fullPath).toLowerCase();
+                const libraryType = this.getLibraryFileType(ext);
+                if (libraryType) {
+                    const stat = await this.safeStat(fullPath);
+                    if (!stat)
+                        return;
+                    const entry = {
+                        type: libraryType,
+                        filename: path.basename(fullPath),
+                        path: fullPath,
+                        relativePath: this.normalizeLibraryRelativePath(fullPath),
+                        size: stat.size,
+                        updatedAt: stat.mtimeMs,
+                    };
+                    library.push(entry);
+                    if (libraryType === 'gpt') {
+                        gptModels.push(fullPath);
+                    }
+                    else {
+                        sovitsModels.push(fullPath);
+                    }
+                    return;
+                }
+                if (GPT_SOVITS_AUDIO_EXT.includes(ext)) {
+                    promptAudios.push(fullPath);
+                }
+            };
+            for (const file of entries) {
+                if (file.isFile()) {
+                    await processFile(path.join(this.gptSovitsStorageRoot, file.name));
+                }
+                else if (file.isDirectory()) {
+                    const subDir = path.join(this.gptSovitsStorageRoot, file.name);
+                    const subFiles = await fsp.readdir(subDir, { withFileTypes: true });
+                    for (const subFile of subFiles) {
+                        if (subFile.isFile()) {
+                            await processFile(path.join(subDir, subFile.name));
+                        }
+                    }
+                }
+            }
+            return {
+                gptModels,
+                sovitsModels,
+                promptAudios,
+                storageRoot: this.gptSovitsStorageRoot,
+                library,
+            };
+        }
+        catch (error) {
+            common_1.Logger.warn(`[listGptSovitsFiles] 读取文件失败: ${error?.message || error}`, 'VoiceService');
+            return {
+                gptModels: [],
+                sovitsModels: [],
+                promptAudios: [],
+                storageRoot: this.gptSovitsStorageRoot,
+                library: [],
+            };
+        }
+    }
+    async uploadGptSovitsModel(file) {
+        if (!file) {
+            throw new common_1.HttpException('file 为必传参数', common_1.HttpStatus.BAD_REQUEST);
+        }
+        if (!file?.buffer?.length) {
+            throw new common_1.HttpException('文件内容为空', common_1.HttpStatus.BAD_REQUEST);
+        }
+        const ext = path.extname(file.originalname || '').toLowerCase();
+        const type = this.getLibraryFileType(ext);
+        if (!type) {
+            throw new common_1.HttpException('仅支持上传 .ckpt/.bin/.pth/.pt 文件', common_1.HttpStatus.BAD_REQUEST);
+        }
+        await fsp.mkdir(this.gptSovitsStorageRoot, { recursive: true });
+        const subDir = type === 'gpt' ? GPT_SOVITS_LIBRARY_DIR.gpt : GPT_SOVITS_LIBRARY_DIR.sovits;
+        const targetDir = path.join(this.gptSovitsStorageRoot, subDir);
+        await fsp.mkdir(targetDir, { recursive: true });
+        const savedPath = await this.persistLibraryUpload(file, targetDir, type);
+        const stat = await this.safeStat(savedPath);
+        if (!stat) {
+            throw new common_1.HttpException('保存模型失败，请稍后重试', common_1.HttpStatus.INTERNAL_SERVER_ERROR);
+        }
+        const entry = {
+            type,
+            filename: path.basename(savedPath),
+            path: savedPath,
+            relativePath: this.normalizeLibraryRelativePath(savedPath),
+            size: stat.size,
+            updatedAt: stat.mtimeMs,
+            storageRoot: this.gptSovitsStorageRoot,
+        };
+        common_1.Logger.log(`[uploadGptSovitsModel] 上传 ${entry.filename} (${entry.type})`, 'VoiceService');
+        return entry;
+    }
+    async importGptSovitsVoice(files, body) {
+        const useServerFiles = body?.useServerFiles === 'true' || body?.useServerFiles === true;
+        let gptModelFile = files?.gptModel?.[0];
+        let sovitsModelFile = files?.sovitsModel?.[0];
+        let promptAudioFile = files?.promptAudio?.[0];
+        let gptModelPath;
+        let sovitsModelPath;
+        let promptAudioPath;
+        const promptText = String(body?.promptText || body?.prompt_text || '').trim();
+        if (!promptText) {
+            throw new common_1.HttpException('promptText 必填', common_1.HttpStatus.BAD_REQUEST);
+        }
+        const promptLanguage = String(body?.promptLanguage || body?.prompt_language || 'zh').trim();
+        const textLanguage = String(body?.textLanguage || body?.text_language || DEFAULT_GPT_SOVITS_TEXT_LANGUAGE).trim();
+        const voiceId = this.generateGptSovitsVoiceId(body?.voiceId || body?.voice_id);
+        await this.assertVoiceIdAvailable(voiceId);
+        if (useServerFiles) {
+            const gptModelServerPath = String(body?.gptModelPath || '').trim();
+            const sovitsModelServerPath = String(body?.sovitsModelPath || '').trim();
+            const promptAudioServerPath = String(body?.promptAudioPath || '').trim();
+            if (!gptModelServerPath || !sovitsModelServerPath || !promptAudioServerPath) {
+                throw new common_1.HttpException('使用服务器文件时，gptModelPath、sovitsModelPath、promptAudioPath 均为必填', common_1.HttpStatus.BAD_REQUEST);
+            }
+            try {
+                await fsp.access(gptModelServerPath);
+                await fsp.access(sovitsModelServerPath);
+                await fsp.access(promptAudioServerPath);
+            }
+            catch (error) {
+                throw new common_1.HttpException('指定的服务器文件路径不存在或无法访问', common_1.HttpStatus.BAD_REQUEST);
+            }
+            const normalizedGptPath = path.resolve(gptModelServerPath);
+            const normalizedSovitsPath = path.resolve(sovitsModelServerPath);
+            const normalizedPromptPath = path.resolve(promptAudioServerPath);
+            const normalizedStorageRoot = path.resolve(this.gptSovitsStorageRoot);
+            if (!normalizedGptPath.startsWith(normalizedStorageRoot) ||
+                !normalizedSovitsPath.startsWith(normalizedStorageRoot) ||
+                !normalizedPromptPath.startsWith(normalizedStorageRoot)) {
+                throw new common_1.HttpException('文件路径必须在存储目录范围内', common_1.HttpStatus.BAD_REQUEST);
+            }
+            gptModelPath = normalizedGptPath;
+            sovitsModelPath = normalizedSovitsPath;
+            promptAudioPath = normalizedPromptPath;
+        }
+        else {
+            if (!gptModelFile || !sovitsModelFile || !promptAudioFile) {
+                throw new common_1.HttpException('gptModel、sovitsModel、promptAudio 均为必传文件', common_1.HttpStatus.BAD_REQUEST);
+            }
+            const voiceDir = await this.ensureGptSovitsDir(voiceId);
+            gptModelPath = await this.persistGptSovitsFile(gptModelFile, voiceDir, 'gpt-model', GPT_SOVITS_MODEL_EXT, '.ckpt');
+            sovitsModelPath = await this.persistGptSovitsFile(sovitsModelFile, voiceDir, 'sovits-model', GPT_SOVITS_MODEL_EXT, '.pth');
+            promptAudioPath = await this.persistGptSovitsFile(promptAudioFile, voiceDir, 'prompt-audio', GPT_SOVITS_AUDIO_EXT, '.wav');
+        }
+        const config = {
+            gptModelPath,
+            sovitsModelPath,
+            promptAudioPath,
+            promptText,
+            promptLanguage,
+            textLanguage,
+            cutPunc: (body?.cutPunc || body?.cut_punc || '').trim() || undefined,
+            topK: this.parseOptionalNumber(body?.topK ?? body?.top_k),
+            topP: this.parseOptionalNumber(body?.topP ?? body?.top_p),
+            temperature: this.parseOptionalNumber(body?.temperature),
+            speed: this.parseOptionalNumber(body?.speed),
+            sampleSteps: this.parseOptionalNumber(body?.sampleSteps ?? body?.sample_steps),
+            sampleRate: this.parseOptionalNumber(body?.sampleRate ?? body?.sample_rate),
+        };
+        const name = String(body?.name || '').trim() || null;
+        await this.upsertVoice({
+            voiceId,
+            name,
+            provider: 'gpt-sovits',
+            status: 'SUCCEEDED',
+            prefix: 'gptsovits',
+            model: 'gpt-sovits',
+            format: 'wav',
+            sampleRate: config.sampleRate ?? 32000,
+            config,
+        });
+        this.gptSovitsModelCache.delete(voiceId);
+        common_1.Logger.log(`[importGptSovitsVoice] 新增 GPT-SoVITS 音色 ${voiceId}`, 'VoiceService');
+        return { voice_id: voiceId, provider: 'gpt-sovits', status: 'SUCCEEDED' };
     }
     async listFromDB(query) {
         const pageIndex = Math.max(0, Number(query?.page_index ?? 0));
@@ -479074,6 +479573,7 @@ let VoiceService = class VoiceService {
                 name: r.name,
                 prefix: r.prefix,
                 model: r.model,
+                provider: r.provider,
                 rate: r.rate,
                 pitch: r.pitch,
                 categoryId: r.categoryId,
@@ -479107,6 +479607,7 @@ let VoiceService = class VoiceService {
             name: r.name,
             prefix: r.prefix,
             model: r.model,
+            provider: r.provider,
             rate: r.rate,
             pitch: r.pitch,
             categoryId: r.categoryId,
@@ -479210,7 +479711,7 @@ let VoiceService = class VoiceService {
                 common_1.Logger.log(`[preprocessAudioToLocal] 音频下载完成，开始转换`, 'VoiceService');
                 let ffmpeg;
                 try {
-                    const mod = await Promise.resolve().then(() => __webpack_require__(4145));
+                    const mod = await Promise.resolve().then(() => __webpack_require__(4146));
                     ffmpeg = mod?.default || mod;
                 }
                 catch (e) {
@@ -479284,7 +479785,7 @@ let VoiceService = class VoiceService {
                 common_1.Logger.log(`[preprocessAudio] 音频下载完成，开始转换`, 'VoiceService');
                 let ffmpeg;
                 try {
-                    const mod = await Promise.resolve().then(() => __webpack_require__(4145));
+                    const mod = await Promise.resolve().then(() => __webpack_require__(4146));
                     ffmpeg = mod?.default || mod;
                 }
                 catch (e) {
@@ -479445,6 +479946,15 @@ let VoiceService = class VoiceService {
     async query(voiceId) {
         if (!voiceId)
             throw new common_1.HttpException('voiceId 必填', common_1.HttpStatus.BAD_REQUEST);
+        const local = await this.voiceRepo.findOne({ where: { voiceId } });
+        if (local && local.provider === 'gpt-sovits') {
+            return {
+                voice_id: local.voiceId,
+                status: local.status || 'SUCCEEDED',
+                provider: local.provider,
+                name: local.name,
+            };
+        }
         const apiKey = await this.getApiKey();
         const payload = {
             model: 'voice-enrollment',
@@ -479514,7 +480024,7 @@ let VoiceService = class VoiceService {
         try {
             console.log('开始自动同步PENDING状态的音色...');
             const pendingVoices = await this.voiceRepo.find({
-                where: { status: 'PENDING' },
+                where: { status: 'PENDING', provider: 'dashscope' },
                 order: { createdAt: 'ASC' },
             });
             console.log(`找到 ${pendingVoices.length} 个PENDING状态的音色`);
@@ -479581,8 +480091,15 @@ let VoiceService = class VoiceService {
         const { voice_id } = body;
         if (!voice_id)
             throw new common_1.HttpException('voice_id 必填', common_1.HttpStatus.BAD_REQUEST);
+        const existing = await this.voiceRepo.findOne({ where: { voiceId: voice_id } });
+        if (existing && existing.provider === 'gpt-sovits') {
+            common_1.Logger.log(`开始删除 GPT-SoVITS 音色 ${voice_id}`, 'VoiceService');
+            await this.deleteVoiceAssociations(voice_id);
+            await this.cleanupGptSovitsAssets(voice_id);
+            return { success: true };
+        }
         try {
-            console.log(`开始删除音色: ${voice_id}`);
+            console.log(`开始删除音色 ${voice_id}`);
             const apiKey = await this.getApiKey();
             const payload = {
                 model: 'voice-enrollment',
@@ -479595,22 +480112,7 @@ let VoiceService = class VoiceService {
                 headers: this.getAxiosHeaders(apiKey),
             });
             try {
-                const appVoiceDeleteResult = await this.appVoiceRepo.delete({ voiceId: voice_id });
-                console.log(`删除应用音色关联: affected rows = ${appVoiceDeleteResult.affected}`);
-                const appEmotionVoiceDeleteResult = await this.appEmotionVoiceRepo.delete({
-                    voiceId: voice_id,
-                });
-                console.log(`删除应用情绪音色关联: affected rows = ${appEmotionVoiceDeleteResult.affected}`);
-                const appUpdateResult = await this.appRepo.update({ voiceId: voice_id }, { voiceId: null });
-                console.log(`清空应用默认音色: affected rows = ${appUpdateResult.affected}`);
-                const deleteResult = await this.voiceRepo.delete({ voiceId: voice_id });
-                console.log(`删除音色记录: affected rows = ${deleteResult.affected}`);
-                if (deleteResult.affected === 0) {
-                    console.warn(`本地数据库中未找到音色记录: ${voice_id}`);
-                }
-                else {
-                    console.log(`本地数据库删除成功: ${voice_id}`);
-                }
+                await this.deleteVoiceAssociations(voice_id);
             }
             catch (dbError) {
                 console.error(`本地数据库删除失败: ${voice_id}`, dbError.message);
@@ -479658,7 +480160,7 @@ let VoiceService = class VoiceService {
         const apiKey = await this.getApiKey();
         let WS;
         try {
-            const WSMod = await Promise.resolve().then(() => __webpack_require__(4165));
+            const WSMod = await Promise.resolve().then(() => __webpack_require__(4166));
             WS = WSMod?.default || WSMod;
             if (!WS)
                 throw new Error('ws module not resolved');
@@ -479854,13 +480356,22 @@ let VoiceService = class VoiceService {
             const voice = await this.voiceRepo.findOne({ where: { voiceId } });
             if (!voice)
                 return null;
-            return {
+            const data = {
                 rate: voice.rate,
                 pitch: voice.pitch,
                 volume: voice.volume,
                 sample_rate: voice.sampleRate,
                 format: voice.format,
             };
+            if (voice.provider === 'gpt-sovits') {
+                const cfg = this.getGptSovitsConfig(voice);
+                data.text_language = cfg.textLanguage;
+                data.prompt_language = cfg.promptLanguage;
+                data.prompt_text = cfg.promptText;
+                data.sample_rate = cfg.sampleRate ?? voice.sampleRate ?? 32000;
+                data.format = 'wav';
+            }
+            return data;
         }
         catch (error) {
             console.error(`获取音色参数失败: ${voiceId}`, error.message);
@@ -479868,34 +480379,36 @@ let VoiceService = class VoiceService {
         }
     }
     async setVoiceParams(body) {
-        const { voice_id, params } = body;
+        const { voice_id, params } = body || {};
         if (!voice_id || !params)
-            throw new common_1.HttpException('voice_id 与 params 必填', common_1.HttpStatus.BAD_REQUEST);
-        try {
-            console.log(`设置音色参数: ${voice_id}`, params);
-            const existing = await this.voiceRepo.findOne({ where: { voiceId: voice_id } });
-            if (!existing) {
-                throw new common_1.HttpException(`音色 ${voice_id} 不存在`, common_1.HttpStatus.NOT_FOUND);
-            }
-            const updateData = {};
-            if (params.rate !== undefined)
-                updateData.rate = Number(params.rate);
-            if (params.pitch !== undefined)
-                updateData.pitch = Number(params.pitch);
-            if (params.volume !== undefined)
-                updateData.volume = Number(params.volume);
-            if (params.sample_rate !== undefined)
-                updateData.sampleRate = Number(params.sample_rate);
-            if (params.format !== undefined)
-                updateData.format = String(params.format);
-            await this.voiceRepo.update({ voiceId: voice_id }, updateData);
-            console.log(`音色参数设置成功: ${voice_id}`);
-            return { success: true, message: '参数保存成功' };
+            throw new common_1.HttpException('voice_id 和 params 必填', common_1.HttpStatus.BAD_REQUEST);
+        const voice = await this.voiceRepo.findOne({ where: { voiceId: voice_id } });
+        if (!voice)
+            throw new common_1.HttpException(`音色不存在: ${voice_id}`, common_1.HttpStatus.NOT_FOUND);
+        const updateData = { updatedAt: new Date() };
+        if (params.rate !== undefined)
+            updateData.rate = Number(params.rate);
+        if (params.pitch !== undefined)
+            updateData.pitch = Number(params.pitch);
+        if (params.volume !== undefined)
+            updateData.volume = Number(params.volume);
+        if (params.sample_rate !== undefined)
+            updateData.sampleRate = Number(params.sample_rate);
+        if (params.format !== undefined)
+            updateData.format = String(params.format);
+        if (voice.provider === 'gpt-sovits') {
+            const cfg = this.getGptSovitsConfig(voice);
+            const nextCfg = {
+                ...cfg,
+                textLanguage: params.text_language || params.textLanguage || cfg.textLanguage,
+                promptLanguage: params.prompt_language || params.promptLanguage || cfg.promptLanguage,
+                promptText: params.prompt_text || params.promptText || cfg.promptText,
+                sampleRate: params.sample_rate ? Number(params.sample_rate) : cfg.sampleRate,
+            };
+            updateData.config = nextCfg;
         }
-        catch (error) {
-            console.error(`设置音色参数失败: ${voice_id}`, error.message);
-            throw new common_1.HttpException(`参数保存失败: ${error.message}`, common_1.HttpStatus.BAD_REQUEST);
-        }
+        await this.voiceRepo.update({ voiceId: voice_id }, updateData);
+        return { success: true };
     }
     async getVoiceMeta(voiceId) {
         if (!voiceId)
@@ -479947,7 +480460,7 @@ let VoiceService = class VoiceService {
     }
     async getAudioDuration(audioBuffer, format, sampleRate) {
         try {
-            const mod = await Promise.resolve().then(() => __webpack_require__(4145));
+            const mod = await Promise.resolve().then(() => __webpack_require__(4146));
             const ffmpeg = mod?.default || mod;
             const tempDir = os.tmpdir();
             const tempFile = path.join(tempDir, `audio-duration-${Date.now()}.${format === 'pcm' ? 'wav' : format}`);
@@ -479998,10 +480511,269 @@ let VoiceService = class VoiceService {
         common_1.Logger.warn(`[estimateAudioDuration] 未知格式 ${format}，使用保守估算`, 'VoiceService');
         return dataSize / (sampleRate * 2);
     }
+    async ensureVoiceProviderColumns() {
+        const columns = await this.voiceRepo.query("SELECT COLUMN_NAME FROM information_schema.columns WHERE table_schema = DATABASE() AND table_name = 'voice'");
+        const columnNames = new Set(columns.map((c) => String(c?.COLUMN_NAME || c?.column_name || '').toLowerCase()));
+        const alters = [];
+        if (!columnNames.has('provider')) {
+            alters.push("ADD COLUMN `provider` varchar(64) NOT NULL DEFAULT 'dashscope' COMMENT '音色提供商（dashscope/gpt-sovits）' AFTER `model`");
+        }
+        if (!columnNames.has('config')) {
+            alters.push("ADD COLUMN `config` text NULL COMMENT '提供商配置JSON' AFTER `status`");
+        }
+        if (alters.length) {
+            await this.voiceRepo.query(`ALTER TABLE \`voice\` ${alters.join(', ')}`);
+            common_1.Logger.log('[VoiceService] 自动添加 provider/config 列成功', 'VoiceService');
+        }
+        if (!columnNames.has('provider')) {
+            columnNames.add('provider');
+        }
+        const indexRows = await this.voiceRepo.query("SHOW INDEX FROM `voice` WHERE Key_name = 'IDX_voice_provider'");
+        if (!indexRows?.length && columnNames.has('provider')) {
+            await this.voiceRepo.query('ALTER TABLE `voice` ADD INDEX `IDX_voice_provider` (`provider`)');
+            common_1.Logger.log('[VoiceService] 自动添加 IDX_voice_provider 索引成功', 'VoiceService');
+        }
+    }
+    generateGptSovitsVoiceId(raw) {
+        const base = String(raw || '')
+            .trim()
+            .toLowerCase();
+        const sanitized = base.replace(/[^a-z0-9-_]/g, '');
+        if (sanitized)
+            return sanitized;
+        return `gptsovits-${Date.now().toString(36)}-${cryptoRandomId().slice(0, 8)}`;
+    }
+    async assertVoiceIdAvailable(voiceId) {
+        const exists = await this.voiceRepo.findOne({ where: { voiceId } });
+        if (exists) {
+            throw new common_1.HttpException(`音色 ${voiceId} 已存在`, common_1.HttpStatus.CONFLICT);
+        }
+    }
+    async ensureGptSovitsDir(voiceId) {
+        await fsp.mkdir(this.gptSovitsStorageRoot, { recursive: true });
+        const dir = path.join(this.gptSovitsStorageRoot, voiceId);
+        await fsp.mkdir(dir, { recursive: true });
+        return dir;
+    }
+    async persistGptSovitsFile(file, dir, baseName, allowedExts, fallbackExt) {
+        if (!file?.buffer?.length) {
+            throw new common_1.HttpException(`${baseName} 文件内容为空`, common_1.HttpStatus.BAD_REQUEST);
+        }
+        const ext = path.extname(file.originalname || '').toLowerCase();
+        if (ext && !allowedExts.includes(ext)) {
+            throw new common_1.HttpException(`${baseName} 文件扩展名仅支持 ${allowedExts.join(', ')}`, common_1.HttpStatus.BAD_REQUEST);
+        }
+        const safeName = `${baseName}${ext || fallbackExt}`;
+        const target = path.join(dir, safeName);
+        await fsp.writeFile(target, file.buffer);
+        return target;
+    }
+    getLibraryFileType(ext) {
+        if (ext === '.ckpt' || ext === '.bin')
+            return 'gpt';
+        if (ext === '.pth' || ext === '.pt')
+            return 'sovits';
+        return null;
+    }
+    normalizeLibraryRelativePath(fullPath) {
+        const relative = path.relative(this.gptSovitsStorageRoot, fullPath);
+        return relative.split(path.sep).join('/');
+    }
+    buildLibraryFileName(original, type) {
+        const fallbackBase = type === 'gpt' ? 'gpt-model' : 'sovits-model';
+        const fallbackExt = type === 'gpt' ? '.ckpt' : '.pth';
+        let ext = path.extname(original || '').toLowerCase();
+        if (!ext) {
+            ext = fallbackExt;
+        }
+        const baseRaw = path.basename(original || '', ext);
+        const sanitizedBase = baseRaw.replace(/[^a-zA-Z0-9._-]/g, '_').replace(/^_+$/, '');
+        return {
+            base: sanitizedBase || `${fallbackBase}-${Date.now()}`,
+            ext,
+        };
+    }
+    async persistLibraryUpload(file, dir, type) {
+        const { base, ext } = this.buildLibraryFileName(file.originalname || '', type);
+        let candidate = `${base}${ext}`;
+        let attempt = 1;
+        while (true) {
+            const target = path.join(dir, candidate);
+            try {
+                await fsp.access(target);
+                candidate = `${base}-${Date.now()}-${attempt}${ext}`;
+                attempt += 1;
+            }
+            catch {
+                await fsp.writeFile(target, file.buffer);
+                return target;
+            }
+        }
+    }
+    async safeStat(target) {
+        try {
+            return await fsp.stat(target);
+        }
+        catch {
+            return null;
+        }
+    }
+    parseOptionalNumber(input) {
+        if (input === undefined || input === null || input === '')
+            return undefined;
+        const num = Number(input);
+        if (Number.isFinite(num))
+            return num;
+        return undefined;
+    }
+    getGptSovitsConfig(voice) {
+        const cfg = (voice.config || {});
+        if (!cfg?.gptModelPath || !cfg?.sovitsModelPath || !cfg?.promptAudioPath || !cfg?.promptText) {
+            throw new common_1.HttpException(`音色 ${voice.voiceId} 缺少 GPT-SoVITS 配置`, common_1.HttpStatus.BAD_REQUEST);
+        }
+        return {
+            ...cfg,
+            promptLanguage: cfg.promptLanguage || 'zh',
+            textLanguage: cfg.textLanguage || DEFAULT_GPT_SOVITS_TEXT_LANGUAGE,
+        };
+    }
+    normalizeGptSovitsUrl(pathname = '/') {
+        const base = this.gptSovitsBaseUrl?.replace(/\/+$/, '') || 'http://127.0.0.1:9880';
+        const path = pathname.startsWith('/') ? pathname : `/${pathname}`;
+        return `${base}${path}`;
+    }
+    async ensureGptSovitsModelLoaded(voiceId, config) {
+        const cached = this.gptSovitsModelCache.get(voiceId);
+        if (cached &&
+            cached.gptModelPath === config.gptModelPath &&
+            cached.sovitsModelPath === config.sovitsModelPath) {
+            return;
+        }
+        try {
+            await axios_1.default.post(this.normalizeGptSovitsUrl('/set_model'), {
+                gpt_model_path: config.gptModelPath,
+                sovits_model_path: config.sovitsModelPath,
+            }, { timeout: 120000 });
+            this.gptSovitsModelCache.set(voiceId, {
+                gptModelPath: config.gptModelPath,
+                sovitsModelPath: config.sovitsModelPath,
+                loadedAt: Date.now(),
+            });
+        }
+        catch (error) {
+            common_1.Logger.error(`[ensureGptSovitsModelLoaded] 加载模型失败: ${error?.message || error}`, 'VoiceService');
+            throw new common_1.HttpException(error?.response?.data?.message || '加载 GPT-SoVITS 模型失败', common_1.HttpStatus.BAD_GATEWAY);
+        }
+    }
+    buildGptSovitsPayload(config, options) {
+        const payload = {
+            ref_audio_path: config.promptAudioPath,
+            prompt_text: config.promptText,
+            prompt_lang: config.promptLanguage,
+            text: options.text,
+            text_lang: options.textLanguage || config.textLanguage || DEFAULT_GPT_SOVITS_TEXT_LANGUAGE,
+            text_split_method: options.cutPunc || config.cutPunc || 'cut5',
+            top_k: config.topK,
+            top_p: config.topP,
+            temperature: config.temperature,
+            speed_factor: config.speed || 1.0,
+            media_type: 'wav',
+            streaming_mode: false,
+        };
+        Object.keys(payload).forEach(key => {
+            if (payload[key] === undefined || payload[key] === null || payload[key] === '') {
+                delete payload[key];
+            }
+        });
+        return payload;
+    }
+    async requestGptSovitsAudio(options) {
+        const config = this.getGptSovitsConfig(options.voice);
+        const sampleRate = Number(options.sampleRate ?? config.sampleRate ?? 32000);
+        const payload = this.buildGptSovitsPayload(config, {
+            text: options.text,
+            textLanguage: options.textLanguage,
+            cutPunc: options.cutPunc,
+        });
+        const url = this.normalizeGptSovitsUrl('/tts');
+        if (options.stream) {
+            const response = await axios_1.default.post(url, payload, {
+                responseType: 'stream',
+                timeout: 120000,
+                validateStatus: () => true,
+            });
+            if (response.status >= 400) {
+                throw new common_1.HttpException(response.data?.message || 'GPT-SoVITS 合成失败', common_1.HttpStatus.BAD_GATEWAY);
+            }
+            const stream = response.data;
+            options.onStart?.({ sampleRate });
+            await new Promise((resolve, reject) => {
+                stream.on('data', chunk => {
+                    try {
+                        const buf = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
+                        options.onData?.(buf);
+                    }
+                    catch (err) {
+                        common_1.Logger.warn(`[requestGptSovitsAudio] onData 回调异常: ${err}`, 'VoiceService');
+                    }
+                });
+                stream.on('end', () => {
+                    try {
+                        options.onEnd?.();
+                    }
+                    catch { }
+                    resolve();
+                });
+                stream.on('error', err => {
+                    reject(err);
+                });
+            }).catch(err => {
+                throw new common_1.HttpException(err?.message || 'GPT-SoVITS 流式输出失败', common_1.HttpStatus.BAD_GATEWAY);
+            });
+            return { sampleRate };
+        }
+        const response = await axios_1.default.post(url, payload, {
+            responseType: 'arraybuffer',
+            timeout: 120000,
+            validateStatus: () => true,
+        });
+        if (response.status >= 400) {
+            throw new common_1.HttpException(response.data?.message || 'GPT-SoVITS 合成失败', common_1.HttpStatus.BAD_GATEWAY);
+        }
+        const buffer = Buffer.from(response.data);
+        return { buffer, sampleRate };
+    }
+    async deleteVoiceAssociations(voiceId) {
+        const appVoiceDeleteResult = await this.appVoiceRepo.delete({ voiceId });
+        console.log(`删除应用音色关联: affected rows = ${appVoiceDeleteResult.affected}`);
+        const appEmotionVoiceDeleteResult = await this.appEmotionVoiceRepo.delete({ voiceId });
+        console.log(`删除应用情绪音色关联: affected rows = ${appEmotionVoiceDeleteResult.affected}`);
+        const appUpdateResult = await this.appRepo.update({ voiceId }, { voiceId: null });
+        console.log(`清空应用默认音色: affected rows = ${appUpdateResult.affected}`);
+        const deleteResult = await this.voiceRepo.delete({ voiceId });
+        console.log(`删除音色记录: affected rows = ${deleteResult.affected}`);
+    }
+    async cleanupGptSovitsAssets(voiceId) {
+        const dir = path.join(this.gptSovitsStorageRoot, voiceId);
+        try {
+            await fsp.rm(dir, { recursive: true, force: true });
+            common_1.Logger.log(`[cleanupGptSovitsAssets] 已清理 ${dir}`, 'VoiceService');
+        }
+        catch (error) {
+            common_1.Logger.warn(`[cleanupGptSovitsAssets] 清理目录失败 ${dir}: ${error?.message || error}`, 'VoiceService');
+        }
+        this.gptSovitsModelCache.delete(voiceId);
+    }
     async preview(body) {
         const { voice_id, text } = body;
         if (!voice_id || !text)
-            throw new common_1.HttpException('voice_id 与 text 必填', common_1.HttpStatus.BAD_REQUEST);
+            throw new common_1.HttpException('voice_id 和 text 必填', common_1.HttpStatus.BAD_REQUEST);
+        const voiceEntity = await this.voiceRepo.findOne({ where: { voiceId: voice_id } });
+        if (!voiceEntity)
+            throw new common_1.HttpException(`音色不存在: ${voice_id}`, common_1.HttpStatus.NOT_FOUND);
+        if (voiceEntity.provider === 'gpt-sovits') {
+            return this.previewWithGptSovits(voiceEntity, body);
+        }
         const saved = (await this.getVoiceParams(voice_id)) || {};
         const format = (body.format || saved.format || 'mp3');
         const sample_rate = Number(body.sample_rate ?? saved.sample_rate ?? 24000);
@@ -480021,7 +480793,7 @@ let VoiceService = class VoiceService {
         const apiKey = await this.getApiKey();
         let WS;
         try {
-            const WSMod = await Promise.resolve().then(() => __webpack_require__(4165));
+            const WSMod = await Promise.resolve().then(() => __webpack_require__(4166));
             WS = WSMod?.default || WSMod;
             if (!WS)
                 throw new Error('ws module not resolved');
@@ -480037,7 +480809,7 @@ let VoiceService = class VoiceService {
         };
         const ws = new WS(COSY_WS_URL, { headers });
         const audioBuffers = [];
-        const uploadOnFinish = new Promise((resolve, reject) => {
+        await new Promise((resolve, reject) => {
             ws.on('open', () => {
                 const parameters = {
                     text_type: 'PlainText',
@@ -480048,10 +480820,9 @@ let VoiceService = class VoiceService {
                     rate,
                     pitch,
                 };
-                if (body.instruction) {
+                if (body.instruction)
                     parameters.instruction = body.instruction;
-                }
-                const runTask = {
+                ws.send(JSON.stringify({
                     header: { action: 'run-task', task_id: taskId, streaming: 'duplex' },
                     payload: {
                         task_group: 'audio',
@@ -480061,8 +480832,7 @@ let VoiceService = class VoiceService {
                         parameters,
                         input: {},
                     },
-                };
-                ws.send(JSON.stringify(runTask));
+                }));
             });
             ws.on('message', (data, isBinary) => {
                 if (isBinary) {
@@ -480074,16 +480844,14 @@ let VoiceService = class VoiceService {
                     const msg = JSON.parse(data.toString());
                     const event = msg?.header?.event;
                     if (event === 'task-started') {
-                        const continueTask = {
+                        ws.send(JSON.stringify({
                             header: { action: 'continue-task', task_id: taskId, streaming: 'duplex' },
                             payload: { input: { text } },
-                        };
-                        ws.send(JSON.stringify(continueTask));
-                        const finishTask = {
+                        }));
+                        ws.send(JSON.stringify({
                             header: { action: 'finish-task', task_id: taskId, streaming: 'duplex' },
                             payload: { input: {} },
-                        };
-                        ws.send(JSON.stringify(finishTask));
+                        }));
                     }
                     else if (event === 'task-finished') {
                         ws.close();
@@ -480094,40 +480862,77 @@ let VoiceService = class VoiceService {
                     }
                 }
                 catch (err) {
+                    common_1.Logger.warn(`解析TTS消息失败: ${err}`, 'VoiceService');
                 }
             });
-            ws.on('close', async () => {
-                try {
-                    if (!audioBuffers.length)
-                        throw new Error('未收到音频数据');
-                    const buffer = Buffer.concat(audioBuffers);
-                    const mimetype = format === 'mp3'
-                        ? 'audio/mpeg'
-                        : format === 'wav'
-                            ? 'audio/wav'
-                            : 'application/octet-stream';
-                    const url = await this.uploadService.uploadFile({ buffer, mimetype }, 'voicePreview');
-                    const duration = await this.getAudioDuration(buffer, format, sample_rate);
-                    common_1.Logger.log(`[preview] 音频生成完成 - URL: ${url}, 时长: ${Math.round(duration)}秒`, 'VoiceService');
-                    resolve({ url: url, duration });
-                }
-                catch (e) {
-                    if (e instanceof common_1.HttpException)
-                        return reject(e);
-                    reject(new common_1.HttpException(e?.message || '音频上传失败', common_1.HttpStatus.INTERNAL_SERVER_ERROR));
-                }
-            });
+            ws.on('close', () => resolve());
             ws.on('error', (err) => {
                 reject(new common_1.HttpException(err?.message || 'WebSocket错误', common_1.HttpStatus.BAD_GATEWAY));
             });
         });
-        const result = await uploadOnFinish;
-        return result;
+        if (!audioBuffers.length) {
+            throw new common_1.HttpException('未收到音频数据', common_1.HttpStatus.BAD_GATEWAY);
+        }
+        const buffer = Buffer.concat(audioBuffers);
+        const mimetype = format === 'mp3' ? 'audio/mpeg' : format === 'wav' ? 'audio/wav' : 'application/octet-stream';
+        const url = await this.uploadService.uploadFile({ buffer, mimetype }, 'voicePreview');
+        const duration = await this.getAudioDuration(buffer, format, sample_rate);
+        common_1.Logger.log(`[preview] 音频生成完成 - URL: ${url}, 时长: ${Math.round(duration)}秒`, 'VoiceService');
+        return { url: url, duration };
+    }
+    async previewWithGptSovits(voice, body) {
+        const config = this.getGptSovitsConfig(voice);
+        const sampleRate = Number(body.sample_rate ?? config.sampleRate ?? 32000);
+        const response = await this.requestGptSovitsAudio({
+            voice,
+            text: body.text,
+            textLanguage: body.text_language,
+            cutPunc: body.cut_punc,
+            sampleRate,
+            stream: false,
+        });
+        const buffer = response.buffer;
+        const uploadUrl = await this.uploadService.uploadFile({ buffer, mimetype: 'audio/wav' }, 'voicePreview');
+        const duration = await this.getAudioDuration(buffer, 'wav', sampleRate);
+        common_1.Logger.log(`[previewWithGptSovits] 音频生成完成 - URL: ${uploadUrl}, 时长: ${Math.round(duration)}秒`, 'VoiceService');
+        return { url: uploadUrl, duration };
     }
     async ttsStream(body, opts) {
         const { voice_id, text } = body || {};
         if (!voice_id || !text)
-            throw new common_1.HttpException('voice_id 与 text 必填', common_1.HttpStatus.BAD_REQUEST);
+            throw new common_1.HttpException('voice_id 和 text 必填', common_1.HttpStatus.BAD_REQUEST);
+        const voiceEntity = await this.voiceRepo.findOne({ where: { voiceId: voice_id } });
+        if (!voiceEntity)
+            throw new common_1.HttpException(`音色不存在: ${voice_id}`, common_1.HttpStatus.NOT_FOUND);
+        if (voiceEntity.provider === 'gpt-sovits') {
+            await this.requestGptSovitsAudio({
+                voice: voiceEntity,
+                text,
+                textLanguage: body.text_language,
+                cutPunc: body.cut_punc,
+                sampleRate: body.sample_rate,
+                stream: true,
+                onStart: info => {
+                    try {
+                        opts?.onStart?.({ format: 'wav', sample_rate: info.sampleRate });
+                    }
+                    catch { }
+                },
+                onData: chunk => {
+                    try {
+                        opts?.onData?.(chunk);
+                    }
+                    catch { }
+                },
+                onEnd: () => {
+                    try {
+                        opts?.onEnd?.();
+                    }
+                    catch { }
+                },
+            });
+            return { success: true };
+        }
         const saved = (await this.getVoiceParams(voice_id)) || {};
         const format = (body.format || saved.format || 'mp3');
         const sample_rate = Number(body.sample_rate ?? saved.sample_rate ?? 24000);
@@ -480147,7 +480952,7 @@ let VoiceService = class VoiceService {
         const apiKey = await this.getApiKey();
         let WS;
         try {
-            const WSMod = await Promise.resolve().then(() => __webpack_require__(4165));
+            const WSMod = await Promise.resolve().then(() => __webpack_require__(4166));
             WS = WSMod?.default || WSMod;
             if (!WS)
                 throw new Error('ws module not resolved');
@@ -480164,10 +480969,6 @@ let VoiceService = class VoiceService {
         const ws = new WS(COSY_WS_URL, { headers });
         await new Promise((resolve, reject) => {
             ws.on('open', () => {
-                try {
-                    opts?.onStart?.({ format, sample_rate });
-                }
-                catch { }
                 const parameters = {
                     text_type: 'PlainText',
                     voice: voice_id,
@@ -480177,10 +480978,9 @@ let VoiceService = class VoiceService {
                     rate,
                     pitch,
                 };
-                if (body.instruction) {
+                if (body.instruction)
                     parameters.instruction = body.instruction;
-                }
-                const runTask = {
+                ws.send(JSON.stringify({
                     header: { action: 'run-task', task_id: taskId, streaming: 'duplex' },
                     payload: {
                         task_group: 'audio',
@@ -480190,13 +480990,12 @@ let VoiceService = class VoiceService {
                         parameters,
                         input: {},
                     },
-                };
-                ws.send(JSON.stringify(runTask));
+                }));
             });
             ws.on('message', (data, isBinary) => {
                 if (isBinary) {
                     try {
-                        opts?.onData?.(Buffer.from(data));
+                        opts?.onData?.(Buffer.isBuffer(data) ? data : Buffer.from(data));
                     }
                     catch { }
                     return;
@@ -480205,16 +481004,14 @@ let VoiceService = class VoiceService {
                     const msg = JSON.parse(data.toString());
                     const event = msg?.header?.event;
                     if (event === 'task-started') {
-                        const continueTask = {
+                        ws.send(JSON.stringify({
                             header: { action: 'continue-task', task_id: taskId, streaming: 'duplex' },
                             payload: { input: { text } },
-                        };
-                        ws.send(JSON.stringify(continueTask));
-                        const finishTask = {
+                        }));
+                        ws.send(JSON.stringify({
                             header: { action: 'finish-task', task_id: taskId, streaming: 'duplex' },
                             payload: { input: {} },
-                        };
-                        ws.send(JSON.stringify(finishTask));
+                        }));
                     }
                     else if (event === 'task-finished') {
                         ws.close();
@@ -480224,7 +481021,8 @@ let VoiceService = class VoiceService {
                         reject(new common_1.HttpException(msg?.header?.error_message || 'TTS任务失败', common_1.HttpStatus.BAD_GATEWAY));
                     }
                 }
-                catch {
+                catch (err) {
+                    common_1.Logger.warn(`解析TTS消息失败: ${err}`, 'VoiceService');
                 }
             });
             ws.on('close', () => {
@@ -480244,6 +481042,12 @@ let VoiceService = class VoiceService {
         const { voice_id, onStart, onData, onEnd, onError } = params;
         if (!voice_id)
             throw new common_1.HttpException('voice_id 必填', common_1.HttpStatus.BAD_REQUEST);
+        const voiceEntity = await this.voiceRepo.findOne({ where: { voiceId: voice_id } });
+        if (!voiceEntity)
+            throw new common_1.HttpException(`音色不存在: ${voice_id}`, common_1.HttpStatus.NOT_FOUND);
+        if (voiceEntity.provider === 'gpt-sovits') {
+            throw new common_1.HttpException('GPT-SoVITS 暂不支持 createTTSStreamSession', common_1.HttpStatus.NOT_IMPLEMENTED);
+        }
         const saved = (await this.getVoiceParams(voice_id)) || {};
         const format = (params.format || saved.format || 'mp3');
         const sample_rate = Number(params.sample_rate ?? saved.sample_rate ?? 24000);
@@ -480264,7 +481068,7 @@ let VoiceService = class VoiceService {
         const apiKey = await this.getApiKey();
         let WS;
         try {
-            const WSMod = await Promise.resolve().then(() => __webpack_require__(4165));
+            const WSMod = await Promise.resolve().then(() => __webpack_require__(4166));
             WS = WSMod?.default || WSMod;
             if (!WS)
                 throw new Error('ws module not resolved');
@@ -480497,19 +481301,21 @@ var __decorate = (this && this.__decorate) || function (decorators, target, key,
 var __metadata = (this && this.__metadata) || function (k, v) {
     if (typeof Reflect === "object" && typeof Reflect.metadata === "function") return Reflect.metadata(k, v);
 };
-var _a;
+var _a, _b;
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.VoiceEntity = void 0;
 const baseEntity_1 = __webpack_require__(2541);
 const typeorm_1 = __webpack_require__(666);
-const voiceCategory_entity_1 = __webpack_require__(4427);
+const voiceCategory_entity_1 = __webpack_require__(4145);
 let VoiceEntity = class VoiceEntity extends baseEntity_1.BaseEntity {
     voiceId;
     userId;
     prefix;
     model;
+    provider;
     name;
     status;
+    config;
     rate;
     pitch;
     volume;
@@ -480539,6 +481345,14 @@ __decorate([
     __metadata("design:type", String)
 ], VoiceEntity.prototype, "model", void 0);
 __decorate([
+    (0, typeorm_1.Index)(),
+    (0, typeorm_1.Column)({
+        comment: '音色提供商（dashscope/gpt-sovits）',
+        default: 'dashscope',
+    }),
+    __metadata("design:type", String)
+], VoiceEntity.prototype, "provider", void 0);
+__decorate([
     (0, typeorm_1.Column)({ comment: '自定义名称', nullable: true }),
     __metadata("design:type", String)
 ], VoiceEntity.prototype, "name", void 0);
@@ -480547,6 +481361,14 @@ __decorate([
     (0, typeorm_1.Column)({ comment: '状态（PENDING/SUCCEEDED/FAILED 等）', nullable: true }),
     __metadata("design:type", String)
 ], VoiceEntity.prototype, "status", void 0);
+__decorate([
+    (0, typeorm_1.Column)({
+        type: 'simple-json',
+        comment: '提供商专属配置（JSON）',
+        nullable: true,
+    }),
+    __metadata("design:type", typeof (_a = typeof Record !== "undefined" && Record) === "function" ? _a : Object)
+], VoiceEntity.prototype, "config", void 0);
 __decorate([
     (0, typeorm_1.Column)({ comment: '语速（0.5-2.0，默认1.0）', type: 'float', nullable: true, default: 1.0 }),
     __metadata("design:type", Number)
@@ -480575,7 +481397,7 @@ __decorate([
 __decorate([
     (0, typeorm_1.ManyToOne)(() => voiceCategory_entity_1.VoiceCategoryEntity, { nullable: true }),
     (0, typeorm_1.JoinColumn)({ name: 'categoryId' }),
-    __metadata("design:type", typeof (_a = typeof voiceCategory_entity_1.VoiceCategoryEntity !== "undefined" && voiceCategory_entity_1.VoiceCategoryEntity) === "function" ? _a : Object)
+    __metadata("design:type", typeof (_b = typeof voiceCategory_entity_1.VoiceCategoryEntity !== "undefined" && voiceCategory_entity_1.VoiceCategoryEntity) === "function" ? _b : Object)
 ], VoiceEntity.prototype, "category", void 0);
 exports.VoiceEntity = VoiceEntity = __decorate([
     (0, typeorm_1.Entity)({ name: 'voice' })
@@ -480584,13 +481406,62 @@ exports.VoiceEntity = VoiceEntity = __decorate([
 
 /***/ }),
 /* 4145 */
-/***/ ((module, __unused_webpack_exports, __webpack_require__) => {
+/***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
-module.exports = __webpack_require__(4146);
+"use strict";
+
+var __decorate = (this && this.__decorate) || function (decorators, target, key, desc) {
+    var c = arguments.length, r = c < 3 ? target : desc === null ? desc = Object.getOwnPropertyDescriptor(target, key) : desc, d;
+    if (typeof Reflect === "object" && typeof Reflect.decorate === "function") r = Reflect.decorate(decorators, target, key, desc);
+    else for (var i = decorators.length - 1; i >= 0; i--) if (d = decorators[i]) r = (c < 3 ? d(r) : c > 3 ? d(target, key, r) : d(target, key)) || r;
+    return c > 3 && r && Object.defineProperty(target, key, r), r;
+};
+var __metadata = (this && this.__metadata) || function (k, v) {
+    if (typeof Reflect === "object" && typeof Reflect.metadata === "function") return Reflect.metadata(k, v);
+};
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.VoiceCategoryEntity = void 0;
+const baseEntity_1 = __webpack_require__(2541);
+const typeorm_1 = __webpack_require__(666);
+let VoiceCategoryEntity = class VoiceCategoryEntity extends baseEntity_1.BaseEntity {
+    name;
+    description;
+    sort;
+    isEnabled;
+};
+exports.VoiceCategoryEntity = VoiceCategoryEntity;
+__decorate([
+    (0, typeorm_1.Index)(),
+    (0, typeorm_1.Column)({ comment: '分类名称（如 男声、女声、童声等）' }),
+    __metadata("design:type", String)
+], VoiceCategoryEntity.prototype, "name", void 0);
+__decorate([
+    (0, typeorm_1.Column)({ comment: '分类描述', nullable: true }),
+    __metadata("design:type", String)
+], VoiceCategoryEntity.prototype, "description", void 0);
+__decorate([
+    (0, typeorm_1.Column)({ comment: '排序权重（数字越大越靠前）', type: 'int', default: 0 }),
+    __metadata("design:type", Number)
+], VoiceCategoryEntity.prototype, "sort", void 0);
+__decorate([
+    (0, typeorm_1.Index)(),
+    (0, typeorm_1.Column)({ comment: '是否启用', type: 'boolean', default: true }),
+    __metadata("design:type", Boolean)
+], VoiceCategoryEntity.prototype, "isEnabled", void 0);
+exports.VoiceCategoryEntity = VoiceCategoryEntity = __decorate([
+    (0, typeorm_1.Entity)({ name: 'voice_category' })
+], VoiceCategoryEntity);
 
 
 /***/ }),
 /* 4146 */
+/***/ ((module, __unused_webpack_exports, __webpack_require__) => {
+
+module.exports = __webpack_require__(4147);
+
+
+/***/ }),
+/* 4147 */
 /***/ ((module, __unused_webpack_exports, __webpack_require__) => {
 
 "use strict";
@@ -480601,7 +481472,7 @@ var path = __webpack_require__(674);
 var util = __webpack_require__(72);
 var EventEmitter = (__webpack_require__(695).EventEmitter);
 
-var utils = __webpack_require__(4147);
+var utils = __webpack_require__(4148);
 var ARGLISTS = ['_global', '_audio', '_audioFilters', '_video', '_videoFilters', '_sizeFilters', '_complexFilters'];
 
 
@@ -480757,23 +481628,23 @@ FfmpegCommand.prototype.clone = function() {
 
 /* Add methods from options submodules */
 
-__webpack_require__(4152)(FfmpegCommand.prototype);
 __webpack_require__(4153)(FfmpegCommand.prototype);
 __webpack_require__(4154)(FfmpegCommand.prototype);
 __webpack_require__(4155)(FfmpegCommand.prototype);
 __webpack_require__(4156)(FfmpegCommand.prototype);
 __webpack_require__(4157)(FfmpegCommand.prototype);
 __webpack_require__(4158)(FfmpegCommand.prototype);
+__webpack_require__(4159)(FfmpegCommand.prototype);
 
 
 /* Add processor methods */
 
-__webpack_require__(4160)(FfmpegCommand.prototype);
+__webpack_require__(4161)(FfmpegCommand.prototype);
 
 
 /* Add capabilities methods */
 
-__webpack_require__(4162)(FfmpegCommand.prototype);
+__webpack_require__(4163)(FfmpegCommand.prototype);
 
 FfmpegCommand.setFfmpegPath = function(path) {
   (new FfmpegCommand()).setFfmpegPath(path);
@@ -480810,7 +481681,7 @@ FfmpegCommand.getAvailableEncoders = function(callback) {
 
 /* Add ffprobe methods */
 
-__webpack_require__(4163)(FfmpegCommand.prototype);
+__webpack_require__(4164)(FfmpegCommand.prototype);
 
 FfmpegCommand.ffprobe = function(file) {
   var instance = new FfmpegCommand(file);
@@ -480819,11 +481690,11 @@ FfmpegCommand.ffprobe = function(file) {
 
 /* Add processing recipes */
 
-__webpack_require__(4164)(FfmpegCommand.prototype);
+__webpack_require__(4165)(FfmpegCommand.prototype);
 
 
 /***/ }),
-/* 4147 */
+/* 4148 */
 /***/ ((module, __unused_webpack_exports, __webpack_require__) => {
 
 "use strict";
@@ -480832,7 +481703,7 @@ __webpack_require__(4164)(FfmpegCommand.prototype);
 
 var exec = (__webpack_require__(2689).exec);
 var isWindows = (__webpack_require__(675).platform)().match(/win(32|64)/);
-var which = __webpack_require__(4148);
+var which = __webpack_require__(4149);
 
 var nlRegexp = /\r\n|\r|\n/g;
 var streamRegexp = /^\[?(.*?)\]?$/;
@@ -481285,7 +482156,7 @@ var utils = module.exports = {
 
 
 /***/ }),
-/* 4148 */
+/* 4149 */
 /***/ ((module, __unused_webpack_exports, __webpack_require__) => {
 
 module.exports = which
@@ -481297,7 +482168,7 @@ var isWindows = process.platform === 'win32' ||
 
 var path = __webpack_require__(674)
 var COLON = isWindows ? ';' : ':'
-var isexe = __webpack_require__(4149)
+var isexe = __webpack_require__(4150)
 
 function getNotFoundError (cmd) {
   var er = new Error('not found: ' + cmd)
@@ -481426,15 +482297,15 @@ function whichSync (cmd, opt) {
 
 
 /***/ }),
-/* 4149 */
+/* 4150 */
 /***/ ((module, __unused_webpack_exports, __webpack_require__) => {
 
 var fs = __webpack_require__(673)
 var core
 if (process.platform === 'win32' || global.TESTING_WINDOWS) {
-  core = __webpack_require__(4150)
-} else {
   core = __webpack_require__(4151)
+} else {
+  core = __webpack_require__(4152)
 }
 
 module.exports = isexe
@@ -481489,7 +482360,7 @@ function sync (path, options) {
 
 
 /***/ }),
-/* 4150 */
+/* 4151 */
 /***/ ((module, __unused_webpack_exports, __webpack_require__) => {
 
 module.exports = isexe
@@ -481537,7 +482408,7 @@ function sync (path, options) {
 
 
 /***/ }),
-/* 4151 */
+/* 4152 */
 /***/ ((module, __unused_webpack_exports, __webpack_require__) => {
 
 module.exports = isexe
@@ -481584,14 +482455,14 @@ function checkMode (stat, options) {
 
 
 /***/ }),
-/* 4152 */
+/* 4153 */
 /***/ ((module, __unused_webpack_exports, __webpack_require__) => {
 
 "use strict";
 /*jshint node:true*/
 
 
-var utils = __webpack_require__(4147);
+var utils = __webpack_require__(4148);
 
 /*
  *! Input-related methods
@@ -481769,14 +482640,14 @@ module.exports = function(proto) {
 
 
 /***/ }),
-/* 4153 */
+/* 4154 */
 /***/ ((module, __unused_webpack_exports, __webpack_require__) => {
 
 "use strict";
 /*jshint node:true*/
 
 
-var utils = __webpack_require__(4147);
+var utils = __webpack_require__(4148);
 
 
 /*
@@ -481954,14 +482825,14 @@ module.exports = function(proto) {
 
 
 /***/ }),
-/* 4154 */
+/* 4155 */
 /***/ ((module, __unused_webpack_exports, __webpack_require__) => {
 
 "use strict";
 /*jshint node:true*/
 
 
-var utils = __webpack_require__(4147);
+var utils = __webpack_require__(4148);
 
 
 /*
@@ -482145,7 +483016,7 @@ module.exports = function(proto) {
 
 
 /***/ }),
-/* 4155 */
+/* 4156 */
 /***/ ((module) => {
 
 "use strict";
@@ -482443,14 +483314,14 @@ module.exports = function(proto) {
 
 
 /***/ }),
-/* 4156 */
+/* 4157 */
 /***/ ((module, __unused_webpack_exports, __webpack_require__) => {
 
 "use strict";
 /*jshint node:true*/
 
 
-var utils = __webpack_require__(4147);
+var utils = __webpack_require__(4148);
 
 
 /*
@@ -482612,14 +483483,14 @@ module.exports = function(proto) {
 
 
 /***/ }),
-/* 4157 */
+/* 4158 */
 /***/ ((module, __unused_webpack_exports, __webpack_require__) => {
 
 "use strict";
 /*jshint node:true*/
 
 
-var utils = __webpack_require__(4147);
+var utils = __webpack_require__(4148);
 
 
 /*
@@ -482831,7 +483702,7 @@ module.exports = function(proto) {
 
 
 /***/ }),
-/* 4158 */
+/* 4159 */
 /***/ ((module, __unused_webpack_exports, __webpack_require__) => {
 
 "use strict";
@@ -482861,7 +483732,7 @@ module.exports = function(proto) {
     } else {
       try {
         var modulePath = path.join(this.options.presets, preset);
-        var module = __webpack_require__(4159)(modulePath);
+        var module = __webpack_require__(4160)(modulePath);
 
         if (typeof module.load === 'function') {
           module.load(this);
@@ -482879,7 +483750,7 @@ module.exports = function(proto) {
 
 
 /***/ }),
-/* 4159 */
+/* 4160 */
 /***/ ((module) => {
 
 function webpackEmptyContext(req) {
@@ -482889,11 +483760,11 @@ function webpackEmptyContext(req) {
 }
 webpackEmptyContext.keys = () => ([]);
 webpackEmptyContext.resolve = webpackEmptyContext;
-webpackEmptyContext.id = 4159;
+webpackEmptyContext.id = 4160;
 module.exports = webpackEmptyContext;
 
 /***/ }),
-/* 4160 */
+/* 4161 */
 /***/ ((module, __unused_webpack_exports, __webpack_require__) => {
 
 "use strict";
@@ -482903,8 +483774,8 @@ module.exports = webpackEmptyContext;
 var spawn = (__webpack_require__(2689).spawn);
 var path = __webpack_require__(674);
 var fs = __webpack_require__(673);
-var async = __webpack_require__(4161);
-var utils = __webpack_require__(4147);
+var async = __webpack_require__(4162);
+var utils = __webpack_require__(4148);
 
 /*
  *! Processor methods
@@ -483562,7 +484433,7 @@ module.exports = function(proto) {
 
 
 /***/ }),
-/* 4161 */
+/* 4162 */
 /***/ ((module, exports) => {
 
 var __WEBPACK_AMD_DEFINE_ARRAY__, __WEBPACK_AMD_DEFINE_RESULT__;/*global setImmediate: false, setTimeout: false, console: false */
@@ -484521,7 +485392,7 @@ var __WEBPACK_AMD_DEFINE_ARRAY__, __WEBPACK_AMD_DEFINE_RESULT__;/*global setImme
 
 
 /***/ }),
-/* 4162 */
+/* 4163 */
 /***/ ((module, __unused_webpack_exports, __webpack_require__) => {
 
 "use strict";
@@ -484530,8 +485401,8 @@ var __WEBPACK_AMD_DEFINE_ARRAY__, __WEBPACK_AMD_DEFINE_RESULT__;/*global setImme
 
 var fs = __webpack_require__(673);
 var path = __webpack_require__(674);
-var async = __webpack_require__(4161);
-var utils = __webpack_require__(4147);
+var async = __webpack_require__(4162);
+var utils = __webpack_require__(4148);
 
 /*
  *! Capability helpers
@@ -485193,7 +486064,7 @@ module.exports = function(proto) {
 
 
 /***/ }),
-/* 4163 */
+/* 4164 */
 /***/ ((module, __unused_webpack_exports, __webpack_require__) => {
 
 "use strict";
@@ -485461,7 +486332,7 @@ module.exports = function(proto) {
 
 
 /***/ }),
-/* 4164 */
+/* 4165 */
 /***/ ((module, __unused_webpack_exports, __webpack_require__) => {
 
 "use strict";
@@ -485471,8 +486342,8 @@ module.exports = function(proto) {
 var fs = __webpack_require__(673);
 var path = __webpack_require__(674);
 var PassThrough = (__webpack_require__(71).PassThrough);
-var async = __webpack_require__(4161);
-var utils = __webpack_require__(4147);
+var async = __webpack_require__(4162);
+var utils = __webpack_require__(4148);
 
 
 /*
@@ -485924,18 +486795,18 @@ module.exports = function recipes(proto) {
 
 
 /***/ }),
-/* 4165 */
+/* 4166 */
 /***/ ((module, __unused_webpack_exports, __webpack_require__) => {
 
 "use strict";
 
 
-const WebSocket = __webpack_require__(4166);
+const WebSocket = __webpack_require__(4167);
 
-WebSocket.createWebSocketStream = __webpack_require__(4176);
-WebSocket.Server = __webpack_require__(4177);
-WebSocket.Receiver = __webpack_require__(4171);
-WebSocket.Sender = __webpack_require__(4173);
+WebSocket.createWebSocketStream = __webpack_require__(4177);
+WebSocket.Server = __webpack_require__(4178);
+WebSocket.Receiver = __webpack_require__(4172);
+WebSocket.Sender = __webpack_require__(4174);
 
 WebSocket.WebSocket = WebSocket;
 WebSocket.WebSocketServer = WebSocket.Server;
@@ -485944,7 +486815,7 @@ module.exports = WebSocket;
 
 
 /***/ }),
-/* 4166 */
+/* 4167 */
 /***/ ((module, __unused_webpack_exports, __webpack_require__) => {
 
 "use strict";
@@ -485961,10 +486832,10 @@ const { randomBytes, createHash } = __webpack_require__(676);
 const { Duplex, Readable } = __webpack_require__(71);
 const { URL } = __webpack_require__(700);
 
-const PerMessageDeflate = __webpack_require__(4167);
-const Receiver = __webpack_require__(4171);
-const Sender = __webpack_require__(4173);
-const { isBlob } = __webpack_require__(4172);
+const PerMessageDeflate = __webpack_require__(4168);
+const Receiver = __webpack_require__(4172);
+const Sender = __webpack_require__(4174);
+const { isBlob } = __webpack_require__(4173);
 
 const {
   BINARY_TYPES,
@@ -485975,12 +486846,12 @@ const {
   kStatusCode,
   kWebSocket,
   NOOP
-} = __webpack_require__(4169);
+} = __webpack_require__(4170);
 const {
   EventTarget: { addEventListener, removeEventListener }
-} = __webpack_require__(4174);
-const { format, parse } = __webpack_require__(4175);
-const { toBuffer } = __webpack_require__(4168);
+} = __webpack_require__(4175);
+const { format, parse } = __webpack_require__(4176);
+const { toBuffer } = __webpack_require__(4169);
 
 const closeTimeout = 30 * 1000;
 const kAborted = Symbol('kAborted');
@@ -487339,7 +488210,7 @@ function socketOnError() {
 
 
 /***/ }),
-/* 4167 */
+/* 4168 */
 /***/ ((module, __unused_webpack_exports, __webpack_require__) => {
 
 "use strict";
@@ -487347,9 +488218,9 @@ function socketOnError() {
 
 const zlib = __webpack_require__(785);
 
-const bufferUtil = __webpack_require__(4168);
-const Limiter = __webpack_require__(4170);
-const { kStatusCode } = __webpack_require__(4169);
+const bufferUtil = __webpack_require__(4169);
+const Limiter = __webpack_require__(4171);
+const { kStatusCode } = __webpack_require__(4170);
 
 const FastBuffer = Buffer[Symbol.species];
 const TRAILER = Buffer.from([0x00, 0x00, 0xff, 0xff]);
@@ -487874,13 +488745,13 @@ function inflateOnError(err) {
 
 
 /***/ }),
-/* 4168 */
+/* 4169 */
 /***/ ((module, __unused_webpack_exports, __webpack_require__) => {
 
 "use strict";
 
 
-const { EMPTY_BUFFER } = __webpack_require__(4169);
+const { EMPTY_BUFFER } = __webpack_require__(4170);
 
 const FastBuffer = Buffer[Symbol.species];
 
@@ -488012,7 +488883,7 @@ if (!process.env.WS_NO_BUFFER_UTIL) {
 
 
 /***/ }),
-/* 4169 */
+/* 4170 */
 /***/ ((module) => {
 
 "use strict";
@@ -488037,7 +488908,7 @@ module.exports = {
 
 
 /***/ }),
-/* 4170 */
+/* 4171 */
 /***/ ((module) => {
 
 "use strict";
@@ -488099,7 +488970,7 @@ module.exports = Limiter;
 
 
 /***/ }),
-/* 4171 */
+/* 4172 */
 /***/ ((module, __unused_webpack_exports, __webpack_require__) => {
 
 "use strict";
@@ -488107,15 +488978,15 @@ module.exports = Limiter;
 
 const { Writable } = __webpack_require__(71);
 
-const PerMessageDeflate = __webpack_require__(4167);
+const PerMessageDeflate = __webpack_require__(4168);
 const {
   BINARY_TYPES,
   EMPTY_BUFFER,
   kStatusCode,
   kWebSocket
-} = __webpack_require__(4169);
-const { concat, toArrayBuffer, unmask } = __webpack_require__(4168);
-const { isValidStatusCode, isValidUTF8 } = __webpack_require__(4172);
+} = __webpack_require__(4170);
+const { concat, toArrayBuffer, unmask } = __webpack_require__(4169);
+const { isValidStatusCode, isValidUTF8 } = __webpack_require__(4173);
 
 const FastBuffer = Buffer[Symbol.species];
 
@@ -488812,7 +489683,7 @@ module.exports = Receiver;
 
 
 /***/ }),
-/* 4172 */
+/* 4173 */
 /***/ ((module, __unused_webpack_exports, __webpack_require__) => {
 
 "use strict";
@@ -488820,7 +489691,7 @@ module.exports = Receiver;
 
 const { isUtf8 } = __webpack_require__(719);
 
-const { hasBlob } = __webpack_require__(4169);
+const { hasBlob } = __webpack_require__(4170);
 
 //
 // Allowed token characters:
@@ -488971,7 +489842,7 @@ if (isUtf8) {
 
 
 /***/ }),
-/* 4173 */
+/* 4174 */
 /***/ ((module, __unused_webpack_exports, __webpack_require__) => {
 
 "use strict";
@@ -488982,10 +489853,10 @@ if (isUtf8) {
 const { Duplex } = __webpack_require__(71);
 const { randomFillSync } = __webpack_require__(676);
 
-const PerMessageDeflate = __webpack_require__(4167);
-const { EMPTY_BUFFER, kWebSocket, NOOP } = __webpack_require__(4169);
-const { isBlob, isValidStatusCode } = __webpack_require__(4172);
-const { mask: applyMask, toBuffer } = __webpack_require__(4168);
+const PerMessageDeflate = __webpack_require__(4168);
+const { EMPTY_BUFFER, kWebSocket, NOOP } = __webpack_require__(4170);
+const { isBlob, isValidStatusCode } = __webpack_require__(4173);
+const { mask: applyMask, toBuffer } = __webpack_require__(4169);
 
 const kByteLength = Symbol('kByteLength');
 const maskBuffer = Buffer.alloc(4);
@@ -489580,13 +490451,13 @@ function onError(sender, err, cb) {
 
 
 /***/ }),
-/* 4174 */
+/* 4175 */
 /***/ ((module, __unused_webpack_exports, __webpack_require__) => {
 
 "use strict";
 
 
-const { kForOnEventAttribute, kListener } = __webpack_require__(4169);
+const { kForOnEventAttribute, kListener } = __webpack_require__(4170);
 
 const kCode = Symbol('kCode');
 const kData = Symbol('kData');
@@ -489879,13 +490750,13 @@ function callListener(listener, thisArg, event) {
 
 
 /***/ }),
-/* 4175 */
+/* 4176 */
 /***/ ((module, __unused_webpack_exports, __webpack_require__) => {
 
 "use strict";
 
 
-const { tokenChars } = __webpack_require__(4172);
+const { tokenChars } = __webpack_require__(4173);
 
 /**
  * Adds an offer to the map of extension offers or a parameter to the map of
@@ -490089,14 +490960,14 @@ module.exports = { format, parse };
 
 
 /***/ }),
-/* 4176 */
+/* 4177 */
 /***/ ((module, __unused_webpack_exports, __webpack_require__) => {
 
 "use strict";
 /* eslint no-unused-vars: ["error", { "varsIgnorePattern": "^WebSocket$" }] */
 
 
-const WebSocket = __webpack_require__(4166);
+const WebSocket = __webpack_require__(4167);
 const { Duplex } = __webpack_require__(71);
 
 /**
@@ -490257,7 +491128,7 @@ module.exports = createWebSocketStream;
 
 
 /***/ }),
-/* 4177 */
+/* 4178 */
 /***/ ((module, __unused_webpack_exports, __webpack_require__) => {
 
 "use strict";
@@ -490270,11 +491141,11 @@ const http = __webpack_require__(2175);
 const { Duplex } = __webpack_require__(71);
 const { createHash } = __webpack_require__(676);
 
-const extension = __webpack_require__(4175);
-const PerMessageDeflate = __webpack_require__(4167);
-const subprotocol = __webpack_require__(4178);
-const WebSocket = __webpack_require__(4166);
-const { GUID, kWebSocket } = __webpack_require__(4169);
+const extension = __webpack_require__(4176);
+const PerMessageDeflate = __webpack_require__(4168);
+const subprotocol = __webpack_require__(4179);
+const WebSocket = __webpack_require__(4167);
+const { GUID, kWebSocket } = __webpack_require__(4170);
 
 const keyRegex = /^[+/0-9A-Za-z]{22}==$/;
 
@@ -490814,13 +491685,13 @@ function abortHandshakeOrEmitwsClientError(
 
 
 /***/ }),
-/* 4178 */
+/* 4179 */
 /***/ ((module, __unused_webpack_exports, __webpack_require__) => {
 
 "use strict";
 
 
-const { tokenChars } = __webpack_require__(4172);
+const { tokenChars } = __webpack_require__(4173);
 
 /**
  * Parses the `Sec-WebSocket-Protocol` header into a set of subprotocol names.
@@ -490883,7 +491754,7 @@ module.exports = { parse };
 
 
 /***/ }),
-/* 4179 */
+/* 4180 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 "use strict";
@@ -490902,9 +491773,106 @@ var __param = (this && this.__param) || function (paramIndex, decorator) {
 };
 var _a;
 Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.VoiceCategoryService = void 0;
+const common_1 = __webpack_require__(2);
+const typeorm_1 = __webpack_require__(2436);
+const typeorm_2 = __webpack_require__(666);
+const voiceCategory_entity_1 = __webpack_require__(4145);
+let VoiceCategoryService = class VoiceCategoryService {
+    voiceCategoryRepo;
+    constructor(voiceCategoryRepo) {
+        this.voiceCategoryRepo = voiceCategoryRepo;
+    }
+    async create(data) {
+        if (!data.name || !data.name.trim()) {
+            throw new common_1.HttpException('分类名称不能为空', common_1.HttpStatus.BAD_REQUEST);
+        }
+        const existing = await this.voiceCategoryRepo.findOne({
+            where: { name: data.name.trim() },
+        });
+        if (existing) {
+            throw new common_1.HttpException('该分类名称已存在', common_1.HttpStatus.BAD_REQUEST);
+        }
+        const category = this.voiceCategoryRepo.create({
+            name: data.name.trim(),
+            description: data.description?.trim() || null,
+            sort: data.sort ?? 0,
+            isEnabled: data.isEnabled ?? true,
+        });
+        return await this.voiceCategoryRepo.save(category);
+    }
+    async list() {
+        return await this.voiceCategoryRepo.find({
+            order: { sort: 'DESC', createdAt: 'DESC' },
+        });
+    }
+    async detail(id) {
+        const category = await this.voiceCategoryRepo.findOne({ where: { id } });
+        if (!category) {
+            throw new common_1.HttpException('分类不存在', common_1.HttpStatus.NOT_FOUND);
+        }
+        return category;
+    }
+    async update(id, data) {
+        const category = await this.detail(id);
+        if (data.name && data.name.trim() !== category.name) {
+            const existing = await this.voiceCategoryRepo.findOne({
+                where: { name: data.name.trim() },
+            });
+            if (existing && existing.id !== id) {
+                throw new common_1.HttpException('该分类名称已存在', common_1.HttpStatus.BAD_REQUEST);
+            }
+            category.name = data.name.trim();
+        }
+        if (data.description !== undefined) {
+            category.description = data.description?.trim() || null;
+        }
+        if (data.sort !== undefined) {
+            category.sort = data.sort;
+        }
+        if (data.isEnabled !== undefined) {
+            category.isEnabled = data.isEnabled;
+        }
+        return await this.voiceCategoryRepo.save(category);
+    }
+    async remove(id) {
+        const category = await this.detail(id);
+        await this.voiceCategoryRepo.remove(category);
+        return { message: '删除成功' };
+    }
+};
+exports.VoiceCategoryService = VoiceCategoryService;
+exports.VoiceCategoryService = VoiceCategoryService = __decorate([
+    (0, common_1.Injectable)(),
+    __param(0, (0, typeorm_1.InjectRepository)(voiceCategory_entity_1.VoiceCategoryEntity)),
+    __metadata("design:paramtypes", [typeof (_a = typeof typeorm_2.Repository !== "undefined" && typeorm_2.Repository) === "function" ? _a : Object])
+], VoiceCategoryService);
+
+
+/***/ }),
+/* 4181 */
+/***/ (function(__unused_webpack_module, exports, __webpack_require__) {
+
+"use strict";
+
+var __decorate = (this && this.__decorate) || function (decorators, target, key, desc) {
+    var c = arguments.length, r = c < 3 ? target : desc === null ? desc = Object.getOwnPropertyDescriptor(target, key) : desc, d;
+    if (typeof Reflect === "object" && typeof Reflect.decorate === "function") r = Reflect.decorate(decorators, target, key, desc);
+    else for (var i = decorators.length - 1; i >= 0; i--) if (d = decorators[i]) r = (c < 3 ? d(r) : c > 3 ? d(target, key, r) : d(target, key)) || r;
+    return c > 3 && r && Object.defineProperty(target, key, r), r;
+};
+var __metadata = (this && this.__metadata) || function (k, v) {
+    if (typeof Reflect === "object" && typeof Reflect.metadata === "function") return Reflect.metadata(k, v);
+};
+var __param = (this && this.__param) || function (paramIndex, decorator) {
+    return function (target, key) { decorator(target, key, paramIndex); }
+};
+var _a, _b;
+Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.VoiceController = void 0;
 const jwtAuth_guard_1 = __webpack_require__(2466);
 const common_1 = __webpack_require__(2);
+const platform_express_1 = __webpack_require__(2101);
 const swagger_1 = __webpack_require__(2281);
 const voice_service_1 = __webpack_require__(4143);
 let VoiceController = class VoiceController {
@@ -490914,6 +491882,15 @@ let VoiceController = class VoiceController {
     }
     enroll(body) {
         return this.voiceService.enroll(body);
+    }
+    listGptSovitsFiles() {
+        return this.voiceService.listGptSovitsFiles();
+    }
+    importGptSovits(files, body) {
+        return this.voiceService.importGptSovitsVoice(files, body);
+    }
+    uploadGptSovitsModel(file) {
+        return this.voiceService.uploadGptSovitsModel(file);
     }
     async list(query) {
         try {
@@ -490971,6 +491948,48 @@ __decorate([
     __metadata("design:paramtypes", [Object]),
     __metadata("design:returntype", void 0)
 ], VoiceController.prototype, "enroll", null);
+__decorate([
+    (0, common_1.Get)('gpt-sovits/files'),
+    (0, swagger_1.ApiOperation)({ summary: '列出服务器上的 GPT-SoVITS 模型文件' }),
+    (0, common_1.UseGuards)(jwtAuth_guard_1.JwtAuthGuard),
+    (0, swagger_1.ApiBearerAuth)(),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", []),
+    __metadata("design:returntype", void 0)
+], VoiceController.prototype, "listGptSovitsFiles", null);
+__decorate([
+    (0, common_1.Post)('gpt-sovits/import'),
+    (0, swagger_1.ApiOperation)({ summary: '导入 GPT-SoVITS 模型' }),
+    (0, common_1.UseGuards)(jwtAuth_guard_1.JwtAuthGuard),
+    (0, swagger_1.ApiBearerAuth)(),
+    (0, common_1.UseInterceptors)((0, platform_express_1.FileFieldsInterceptor)([
+        { name: 'gptModel', maxCount: 1 },
+        { name: 'sovitsModel', maxCount: 1 },
+        { name: 'promptAudio', maxCount: 1 },
+    ], {
+        limits: {
+            fileSize: 600 * 1024 * 1024,
+        },
+    })),
+    __param(0, (0, common_1.UploadedFiles)()),
+    __param(1, (0, common_1.Body)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object, typeof (_b = typeof Record !== "undefined" && Record) === "function" ? _b : Object]),
+    __metadata("design:returntype", void 0)
+], VoiceController.prototype, "importGptSovits", null);
+__decorate([
+    (0, common_1.Post)('gpt-sovits/models/upload'),
+    (0, swagger_1.ApiOperation)({ summary: '上传 GPT-SoVITS 模型文件' }),
+    (0, common_1.UseGuards)(jwtAuth_guard_1.JwtAuthGuard),
+    (0, swagger_1.ApiBearerAuth)(),
+    (0, common_1.UseInterceptors)((0, platform_express_1.FileInterceptor)('file', {
+        limits: { fileSize: 1024 * 1024 * 1024 },
+    })),
+    __param(0, (0, common_1.UploadedFile)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object]),
+    __metadata("design:returntype", void 0)
+], VoiceController.prototype, "uploadGptSovitsModel", null);
 __decorate([
     (0, common_1.Get)('list'),
     (0, swagger_1.ApiOperation)({ summary: '查询音色列表' }),
@@ -491108,7 +492127,111 @@ exports.VoiceController = VoiceController = __decorate([
 
 
 /***/ }),
-/* 4180 */
+/* 4182 */
+/***/ (function(__unused_webpack_module, exports, __webpack_require__) {
+
+"use strict";
+
+var __decorate = (this && this.__decorate) || function (decorators, target, key, desc) {
+    var c = arguments.length, r = c < 3 ? target : desc === null ? desc = Object.getOwnPropertyDescriptor(target, key) : desc, d;
+    if (typeof Reflect === "object" && typeof Reflect.decorate === "function") r = Reflect.decorate(decorators, target, key, desc);
+    else for (var i = decorators.length - 1; i >= 0; i--) if (d = decorators[i]) r = (c < 3 ? d(r) : c > 3 ? d(target, key, r) : d(target, key)) || r;
+    return c > 3 && r && Object.defineProperty(target, key, r), r;
+};
+var __metadata = (this && this.__metadata) || function (k, v) {
+    if (typeof Reflect === "object" && typeof Reflect.metadata === "function") return Reflect.metadata(k, v);
+};
+var __param = (this && this.__param) || function (paramIndex, decorator) {
+    return function (target, key) { decorator(target, key, paramIndex); }
+};
+var _a;
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.VoiceCategoryController = void 0;
+const jwtAuth_guard_1 = __webpack_require__(2466);
+const common_1 = __webpack_require__(2);
+const swagger_1 = __webpack_require__(2281);
+const voiceCategory_service_1 = __webpack_require__(4180);
+let VoiceCategoryController = class VoiceCategoryController {
+    voiceCategoryService;
+    constructor(voiceCategoryService) {
+        this.voiceCategoryService = voiceCategoryService;
+    }
+    create(body) {
+        return this.voiceCategoryService.create(body);
+    }
+    list() {
+        return this.voiceCategoryService.list();
+    }
+    detail(id) {
+        return this.voiceCategoryService.detail(id);
+    }
+    update(id, body) {
+        return this.voiceCategoryService.update(id, body);
+    }
+    remove(id) {
+        return this.voiceCategoryService.remove(id);
+    }
+};
+exports.VoiceCategoryController = VoiceCategoryController;
+__decorate([
+    (0, common_1.Post)(),
+    (0, swagger_1.ApiOperation)({ summary: '创建音色分类' }),
+    (0, common_1.UseGuards)(jwtAuth_guard_1.JwtAuthGuard),
+    (0, swagger_1.ApiBearerAuth)(),
+    __param(0, (0, common_1.Body)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object]),
+    __metadata("design:returntype", void 0)
+], VoiceCategoryController.prototype, "create", null);
+__decorate([
+    (0, common_1.Get)(),
+    (0, swagger_1.ApiOperation)({ summary: '获取音色分类列表' }),
+    (0, common_1.UseGuards)(jwtAuth_guard_1.JwtAuthGuard),
+    (0, swagger_1.ApiBearerAuth)(),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", []),
+    __metadata("design:returntype", void 0)
+], VoiceCategoryController.prototype, "list", null);
+__decorate([
+    (0, common_1.Get)(':id'),
+    (0, swagger_1.ApiOperation)({ summary: '获取音色分类详情' }),
+    (0, common_1.UseGuards)(jwtAuth_guard_1.JwtAuthGuard),
+    (0, swagger_1.ApiBearerAuth)(),
+    __param(0, (0, common_1.Param)('id')),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Number]),
+    __metadata("design:returntype", void 0)
+], VoiceCategoryController.prototype, "detail", null);
+__decorate([
+    (0, common_1.Put)(':id'),
+    (0, swagger_1.ApiOperation)({ summary: '更新音色分类' }),
+    (0, common_1.UseGuards)(jwtAuth_guard_1.JwtAuthGuard),
+    (0, swagger_1.ApiBearerAuth)(),
+    __param(0, (0, common_1.Param)('id')),
+    __param(1, (0, common_1.Body)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Number, Object]),
+    __metadata("design:returntype", void 0)
+], VoiceCategoryController.prototype, "update", null);
+__decorate([
+    (0, common_1.Delete)(':id'),
+    (0, swagger_1.ApiOperation)({ summary: '删除音色分类' }),
+    (0, common_1.UseGuards)(jwtAuth_guard_1.JwtAuthGuard),
+    (0, swagger_1.ApiBearerAuth)(),
+    __param(0, (0, common_1.Param)('id')),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Number]),
+    __metadata("design:returntype", void 0)
+], VoiceCategoryController.prototype, "remove", null);
+exports.VoiceCategoryController = VoiceCategoryController = __decorate([
+    (0, swagger_1.ApiTags)('voice-category'),
+    (0, common_1.Controller)('voice-category'),
+    __metadata("design:paramtypes", [typeof (_a = typeof voiceCategory_service_1.VoiceCategoryService !== "undefined" && voiceCategory_service_1.VoiceCategoryService) === "function" ? _a : Object])
+], VoiceCategoryController);
+
+
+/***/ }),
+/* 4183 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 "use strict";
@@ -491124,8 +492247,8 @@ exports.ConversationSummaryModule = void 0;
 const common_1 = __webpack_require__(2);
 const typeorm_1 = __webpack_require__(2436);
 const globalConfig_module_1 = __webpack_require__(4136);
-const conversationSummary_entity_1 = __webpack_require__(4181);
-const conversationSummary_service_1 = __webpack_require__(4182);
+const conversationSummary_entity_1 = __webpack_require__(4184);
+const conversationSummary_service_1 = __webpack_require__(4185);
 let ConversationSummaryModule = class ConversationSummaryModule {
 };
 exports.ConversationSummaryModule = ConversationSummaryModule;
@@ -491139,7 +492262,7 @@ exports.ConversationSummaryModule = ConversationSummaryModule = __decorate([
 
 
 /***/ }),
-/* 4181 */
+/* 4184 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 "use strict";
@@ -491198,7 +492321,7 @@ exports.ConversationSummaryEntity = ConversationSummaryEntity = __decorate([
 
 
 /***/ }),
-/* 4182 */
+/* 4185 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 "use strict";
@@ -491222,7 +492345,7 @@ const common_1 = __webpack_require__(2);
 const typeorm_1 = __webpack_require__(2436);
 const typeorm_2 = __webpack_require__(666);
 const globalConfig_service_1 = __webpack_require__(2467);
-const conversationSummary_entity_1 = __webpack_require__(4181);
+const conversationSummary_entity_1 = __webpack_require__(4184);
 let ConversationSummaryService = class ConversationSummaryService {
     conversationSummaryRepo;
     globalConfigService;
@@ -491372,7 +492495,423 @@ exports.ConversationSummaryService = ConversationSummaryService = __decorate([
 
 
 /***/ }),
-/* 4183 */
+/* 4186 */
+/***/ (function(__unused_webpack_module, exports, __webpack_require__) {
+
+"use strict";
+
+var __decorate = (this && this.__decorate) || function (decorators, target, key, desc) {
+    var c = arguments.length, r = c < 3 ? target : desc === null ? desc = Object.getOwnPropertyDescriptor(target, key) : desc, d;
+    if (typeof Reflect === "object" && typeof Reflect.decorate === "function") r = Reflect.decorate(decorators, target, key, desc);
+    else for (var i = decorators.length - 1; i >= 0; i--) if (d = decorators[i]) r = (c < 3 ? d(r) : c > 3 ? d(target, key, r) : d(target, key)) || r;
+    return c > 3 && r && Object.defineProperty(target, key, r), r;
+};
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.StickerModule = void 0;
+const common_1 = __webpack_require__(2);
+const typeorm_1 = __webpack_require__(2436);
+const sticker_controller_1 = __webpack_require__(4187);
+const sticker_entity_1 = __webpack_require__(4189);
+const sticker_service_1 = __webpack_require__(4188);
+let StickerModule = class StickerModule {
+};
+exports.StickerModule = StickerModule;
+exports.StickerModule = StickerModule = __decorate([
+    (0, common_1.Module)({
+        imports: [typeorm_1.TypeOrmModule.forFeature([sticker_entity_1.StickerEntity])],
+        controllers: [sticker_controller_1.StickerController],
+        providers: [sticker_service_1.StickerService],
+        exports: [sticker_service_1.StickerService],
+    })
+], StickerModule);
+
+
+/***/ }),
+/* 4187 */
+/***/ (function(__unused_webpack_module, exports, __webpack_require__) {
+
+"use strict";
+
+var __decorate = (this && this.__decorate) || function (decorators, target, key, desc) {
+    var c = arguments.length, r = c < 3 ? target : desc === null ? desc = Object.getOwnPropertyDescriptor(target, key) : desc, d;
+    if (typeof Reflect === "object" && typeof Reflect.decorate === "function") r = Reflect.decorate(decorators, target, key, desc);
+    else for (var i = decorators.length - 1; i >= 0; i--) if (d = decorators[i]) r = (c < 3 ? d(r) : c > 3 ? d(target, key, r) : d(target, key)) || r;
+    return c > 3 && r && Object.defineProperty(target, key, r), r;
+};
+var __metadata = (this && this.__metadata) || function (k, v) {
+    if (typeof Reflect === "object" && typeof Reflect.metadata === "function") return Reflect.metadata(k, v);
+};
+var __param = (this && this.__param) || function (paramIndex, decorator) {
+    return function (target, key) { decorator(target, key, paramIndex); }
+};
+var _a;
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.StickerController = void 0;
+const jwtAuth_guard_1 = __webpack_require__(2466);
+const common_1 = __webpack_require__(2);
+const swagger_1 = __webpack_require__(2281);
+const sticker_service_1 = __webpack_require__(4188);
+let StickerController = class StickerController {
+    stickerService;
+    constructor(stickerService) {
+        this.stickerService = stickerService;
+    }
+    list(query) {
+        const parsedTags = this.parseTags(query.tags);
+        return this.stickerService.list({
+            keyword: query.keyword,
+            emotion: query.emotion,
+            page: query.page ? Number(query.page) : undefined,
+            size: query.size ? Number(query.size) : undefined,
+            tags: parsedTags,
+        });
+    }
+    detail(id) {
+        return this.stickerService.detail(Number(id));
+    }
+    create(body, req) {
+        if (!body?.name?.trim()) {
+            throw new common_1.BadRequestException('Sticker name is required');
+        }
+        if (!body?.imageUrl?.trim()) {
+            throw new common_1.BadRequestException('Sticker imageUrl is required');
+        }
+        return this.stickerService.create({
+            name: body.name.trim(),
+            imageUrl: body.imageUrl.trim(),
+            tags: this.normalizeBodyTags(body.tags),
+            emotion: body.emotion,
+            scenario: body.scenario,
+        }, req?.user?.id);
+    }
+    update(id, body) {
+        if (!body?.name?.trim()) {
+            throw new common_1.BadRequestException('Sticker name is required');
+        }
+        if (!body?.imageUrl?.trim()) {
+            throw new common_1.BadRequestException('Sticker imageUrl is required');
+        }
+        return this.stickerService.update(Number(id), {
+            name: body.name.trim(),
+            imageUrl: body.imageUrl.trim(),
+            tags: this.normalizeBodyTags(body.tags),
+            emotion: body.emotion,
+            scenario: body.scenario,
+        });
+    }
+    remove(id) {
+        return this.stickerService.remove(Number(id));
+    }
+    parseTags(tags) {
+        if (!tags)
+            return undefined;
+        if (Array.isArray(tags)) {
+            return tags.map(tag => tag.trim()).filter(Boolean);
+        }
+        return tags
+            .split(',')
+            .map(item => item.trim())
+            .filter(Boolean);
+    }
+    normalizeBodyTags(tags) {
+        if (!tags)
+            return null;
+        if (Array.isArray(tags)) {
+            return tags.map(tag => tag.trim()).filter(Boolean);
+        }
+        return tags
+            .split(',')
+            .map(t => t.trim())
+            .filter(Boolean);
+    }
+};
+exports.StickerController = StickerController;
+__decorate([
+    (0, common_1.Get)(),
+    (0, swagger_1.ApiOperation)({ summary: 'List stickers with filters' }),
+    __param(0, (0, common_1.Query)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object]),
+    __metadata("design:returntype", void 0)
+], StickerController.prototype, "list", null);
+__decorate([
+    (0, common_1.Get)(':id'),
+    (0, swagger_1.ApiOperation)({ summary: 'Get sticker detail' }),
+    __param(0, (0, common_1.Param)('id')),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [String]),
+    __metadata("design:returntype", void 0)
+], StickerController.prototype, "detail", null);
+__decorate([
+    (0, common_1.Post)(),
+    (0, swagger_1.ApiOperation)({ summary: 'Create sticker' }),
+    __param(0, (0, common_1.Body)()),
+    __param(1, (0, common_1.Req)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object, Object]),
+    __metadata("design:returntype", void 0)
+], StickerController.prototype, "create", null);
+__decorate([
+    (0, common_1.Put)(':id'),
+    (0, swagger_1.ApiOperation)({ summary: 'Update sticker' }),
+    __param(0, (0, common_1.Param)('id')),
+    __param(1, (0, common_1.Body)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [String, Object]),
+    __metadata("design:returntype", void 0)
+], StickerController.prototype, "update", null);
+__decorate([
+    (0, common_1.Delete)(':id'),
+    (0, swagger_1.ApiOperation)({ summary: 'Delete sticker' }),
+    __param(0, (0, common_1.Param)('id')),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [String]),
+    __metadata("design:returntype", void 0)
+], StickerController.prototype, "remove", null);
+exports.StickerController = StickerController = __decorate([
+    (0, swagger_1.ApiTags)('stickers'),
+    (0, common_1.Controller)('stickers'),
+    (0, common_1.UseGuards)(jwtAuth_guard_1.JwtAuthGuard),
+    (0, swagger_1.ApiBearerAuth)(),
+    __metadata("design:paramtypes", [typeof (_a = typeof sticker_service_1.StickerService !== "undefined" && sticker_service_1.StickerService) === "function" ? _a : Object])
+], StickerController);
+
+
+/***/ }),
+/* 4188 */
+/***/ (function(__unused_webpack_module, exports, __webpack_require__) {
+
+"use strict";
+
+var __decorate = (this && this.__decorate) || function (decorators, target, key, desc) {
+    var c = arguments.length, r = c < 3 ? target : desc === null ? desc = Object.getOwnPropertyDescriptor(target, key) : desc, d;
+    if (typeof Reflect === "object" && typeof Reflect.decorate === "function") r = Reflect.decorate(decorators, target, key, desc);
+    else for (var i = decorators.length - 1; i >= 0; i--) if (d = decorators[i]) r = (c < 3 ? d(r) : c > 3 ? d(target, key, r) : d(target, key)) || r;
+    return c > 3 && r && Object.defineProperty(target, key, r), r;
+};
+var __metadata = (this && this.__metadata) || function (k, v) {
+    if (typeof Reflect === "object" && typeof Reflect.metadata === "function") return Reflect.metadata(k, v);
+};
+var __param = (this && this.__param) || function (paramIndex, decorator) {
+    return function (target, key) { decorator(target, key, paramIndex); }
+};
+var _a;
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.StickerService = void 0;
+const common_1 = __webpack_require__(2);
+const typeorm_1 = __webpack_require__(2436);
+const typeorm_2 = __webpack_require__(666);
+const sticker_entity_1 = __webpack_require__(4189);
+const EMOTION_KEYWORDS = [
+    { emotion: 'happy', keywords: ['开心', '高兴', '快乐', '哈哈', '兴奋', '笑'] },
+    { emotion: 'sad', keywords: ['难过', '伤心', '沮丧', '委屈', '想哭', '失落'] },
+    { emotion: 'comfort', keywords: ['安慰', '别怕', '放松', '别担心', '拥抱'] },
+    { emotion: 'angry', keywords: ['生气', '愤怒', '火大', '气死', '抓狂'] },
+    { emotion: 'surprised', keywords: ['惊讶', '震惊', '哇', '不可思议'] },
+];
+let StickerService = class StickerService {
+    stickerRepo;
+    constructor(stickerRepo) {
+        this.stickerRepo = stickerRepo;
+    }
+    async list(params) {
+        const page = Math.max(Number(params.page) || 1, 1);
+        const size = Math.min(Math.max(Number(params.size) || 20, 1), 100);
+        const keyword = params.keyword?.trim();
+        const emotion = params.emotion?.trim();
+        const tags = this.normalizeTags(params.tags);
+        const qb = this.stickerRepo.createQueryBuilder('sticker');
+        if (keyword) {
+            qb.andWhere(new typeorm_2.Brackets(qb1 => {
+                qb1
+                    .where('sticker.name LIKE :keyword', { keyword: `%${keyword}%` })
+                    .orWhere('sticker.scenario LIKE :keyword', { keyword: `%${keyword}%` });
+            }));
+        }
+        if (emotion) {
+            qb.andWhere('sticker.emotion = :emotion', { emotion });
+        }
+        if (tags?.length) {
+            qb.andWhere(new typeorm_2.Brackets(qb2 => {
+                tags.forEach((tag, index) => {
+                    qb2.orWhere(`FIND_IN_SET(:tag${index}, IFNULL(sticker.tags, '')) > 0`, {
+                        [`tag${index}`]: tag,
+                    });
+                });
+            }));
+        }
+        qb.orderBy('sticker.uploadDate', 'DESC')
+            .skip((page - 1) * size)
+            .take(size);
+        const [rows, count] = await qb.getManyAndCount();
+        return { rows, count, page, size };
+    }
+    async detail(id) {
+        const record = await this.stickerRepo.findOne({ where: { id } });
+        if (!record) {
+            throw new common_1.NotFoundException('Sticker not found');
+        }
+        return record;
+    }
+    async create(payload, uploaderId) {
+        const entity = this.stickerRepo.create({
+            ...payload,
+            tags: this.normalizeTags(payload.tags),
+            emotion: payload.emotion?.trim() || null,
+            scenario: payload.scenario?.trim() || null,
+            uploadDate: new Date(),
+            uploadedBy: uploaderId,
+        });
+        return this.stickerRepo.save(entity);
+    }
+    async update(id, payload) {
+        const entity = await this.stickerRepo.findOne({ where: { id } });
+        if (!entity) {
+            throw new common_1.NotFoundException('Sticker not found');
+        }
+        entity.name = payload.name;
+        entity.imageUrl = payload.imageUrl;
+        entity.tags = this.normalizeTags(payload.tags);
+        entity.emotion = payload.emotion?.trim() || null;
+        entity.scenario = payload.scenario?.trim() || null;
+        return this.stickerRepo.save(entity);
+    }
+    async remove(id) {
+        const record = await this.stickerRepo.findOne({ where: { id } });
+        if (!record) {
+            throw new common_1.NotFoundException('Sticker not found');
+        }
+        await this.stickerRepo.softDelete(id);
+        return { success: true };
+    }
+    async pickStickerByText(text, preferredEmotion) {
+        const normalizedText = text?.trim() ?? '';
+        const detectedEmotion = preferredEmotion?.trim()?.toLowerCase() ||
+            (normalizedText ? this.detectEmotionFromText(normalizedText) : null);
+        let sticker = await this.pickRandomSticker(detectedEmotion);
+        if (!sticker && detectedEmotion) {
+            sticker = await this.pickRandomSticker();
+        }
+        return sticker;
+    }
+    detectEmotionFromText(text) {
+        if (!text)
+            return null;
+        const lowered = text.toLowerCase();
+        for (const item of EMOTION_KEYWORDS) {
+            if (item?.keywords?.some(keyword => keyword && lowered.includes(keyword.toLowerCase()))) {
+                return item.emotion;
+            }
+        }
+        return null;
+    }
+    async pickRandomSticker(emotion) {
+        const qb = this.stickerRepo.createQueryBuilder('sticker');
+        if (emotion) {
+            qb.where('sticker.emotion = :emotion', { emotion });
+        }
+        const total = await qb.clone().getCount();
+        if (total === 0) {
+            return null;
+        }
+        const offset = Math.floor(Math.random() * total);
+        return qb.skip(offset).take(1).getOne();
+    }
+    normalizeTags(tags) {
+        if (!tags || !tags.length)
+            return null;
+        const normalized = tags
+            .map(tag => tag?.trim())
+            .filter(Boolean)
+            .map(tag => tag);
+        const unique = Array.from(new Set(normalized));
+        return unique.length ? unique : null;
+    }
+};
+exports.StickerService = StickerService;
+exports.StickerService = StickerService = __decorate([
+    (0, common_1.Injectable)(),
+    __param(0, (0, typeorm_1.InjectRepository)(sticker_entity_1.StickerEntity)),
+    __metadata("design:paramtypes", [typeof (_a = typeof typeorm_2.Repository !== "undefined" && typeorm_2.Repository) === "function" ? _a : Object])
+], StickerService);
+
+
+/***/ }),
+/* 4189 */
+/***/ (function(__unused_webpack_module, exports, __webpack_require__) {
+
+"use strict";
+
+var __decorate = (this && this.__decorate) || function (decorators, target, key, desc) {
+    var c = arguments.length, r = c < 3 ? target : desc === null ? desc = Object.getOwnPropertyDescriptor(target, key) : desc, d;
+    if (typeof Reflect === "object" && typeof Reflect.decorate === "function") r = Reflect.decorate(decorators, target, key, desc);
+    else for (var i = decorators.length - 1; i >= 0; i--) if (d = decorators[i]) r = (c < 3 ? d(r) : c > 3 ? d(target, key, r) : d(target, key)) || r;
+    return c > 3 && r && Object.defineProperty(target, key, r), r;
+};
+var __metadata = (this && this.__metadata) || function (k, v) {
+    if (typeof Reflect === "object" && typeof Reflect.metadata === "function") return Reflect.metadata(k, v);
+};
+var _a;
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.StickerEntity = void 0;
+const baseEntity_1 = __webpack_require__(2541);
+const typeorm_1 = __webpack_require__(666);
+let StickerEntity = class StickerEntity extends baseEntity_1.BaseEntity {
+    name;
+    imageUrl;
+    tags;
+    emotion;
+    scenario;
+    uploadDate;
+    uploadedBy;
+};
+exports.StickerEntity = StickerEntity;
+__decorate([
+    (0, typeorm_1.Index)(),
+    (0, typeorm_1.Column)({ length: 120, comment: 'Sticker name' }),
+    __metadata("design:type", String)
+], StickerEntity.prototype, "name", void 0);
+__decorate([
+    (0, typeorm_1.Column)({ length: 500, comment: 'Sticker image url' }),
+    __metadata("design:type", String)
+], StickerEntity.prototype, "imageUrl", void 0);
+__decorate([
+    (0, typeorm_1.Column)({
+        type: 'simple-array',
+        nullable: true,
+        comment: 'Tags stored as comma separated values',
+    }),
+    __metadata("design:type", Array)
+], StickerEntity.prototype, "tags", void 0);
+__decorate([
+    (0, typeorm_1.Index)(),
+    (0, typeorm_1.Column)({ length: 30, nullable: true, comment: 'Emotion category' }),
+    __metadata("design:type", String)
+], StickerEntity.prototype, "emotion", void 0);
+__decorate([
+    (0, typeorm_1.Column)({ type: 'text', nullable: true, comment: 'Usage scenario description' }),
+    __metadata("design:type", String)
+], StickerEntity.prototype, "scenario", void 0);
+__decorate([
+    (0, typeorm_1.Column)({
+        type: 'datetime',
+        default: () => 'CURRENT_TIMESTAMP',
+        comment: 'Uploaded datetime',
+    }),
+    __metadata("design:type", typeof (_a = typeof Date !== "undefined" && Date) === "function" ? _a : Object)
+], StickerEntity.prototype, "uploadDate", void 0);
+__decorate([
+    (0, typeorm_1.Index)(),
+    (0, typeorm_1.Column)({ type: 'int', nullable: true, comment: 'Admin user id of uploader' }),
+    __metadata("design:type", Number)
+], StickerEntity.prototype, "uploadedBy", void 0);
+exports.StickerEntity = StickerEntity = __decorate([
+    (0, typeorm_1.Entity)({ name: 'sticker' })
+], StickerEntity);
+
+
+/***/ }),
+/* 4190 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 "use strict";
@@ -491396,10 +492935,10 @@ const swagger_1 = __webpack_require__(2281);
 const axios_1 = __webpack_require__(2471);
 const jwtAuth_guard_1 = __webpack_require__(2466);
 const voice_service_1 = __webpack_require__(4143);
-const chat_service_1 = __webpack_require__(4184);
+const chat_service_1 = __webpack_require__(4191);
 const common_1 = __webpack_require__(2);
 const express_1 = __webpack_require__(2161);
-const chatProcess_dto_1 = __webpack_require__(4185);
+const chatProcess_dto_1 = __webpack_require__(4192);
 let ChatController = class ChatController {
     chatService;
     voiceService;
@@ -491539,7 +493078,7 @@ exports.ChatController = ChatController = __decorate([
 
 
 /***/ }),
-/* 4184 */
+/* 4191 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 "use strict";
@@ -491556,7 +493095,7 @@ var __metadata = (this && this.__metadata) || function (k, v) {
 var __param = (this && this.__param) || function (paramIndex, decorator) {
     return function (target, key) { decorator(target, key, paramIndex); }
 };
-var _a, _b, _c, _d, _e, _f, _g, _h, _j, _k, _l, _m, _o, _p, _q, _r, _s, _t, _u, _v, _w;
+var _a, _b, _c, _d, _e, _f, _g, _h, _j, _k, _l, _m, _o, _p, _q, _r, _s, _t, _u, _v, _w, _x;
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.ChatService = void 0;
 const utils_1 = __webpack_require__(2468);
@@ -491574,16 +493113,18 @@ const autoReply_service_1 = __webpack_require__(2809);
 const badWords_service_1 = __webpack_require__(2817);
 const chatGroup_service_1 = __webpack_require__(2952);
 const chatLog_service_1 = __webpack_require__(3720);
-const conversationSummary_service_1 = __webpack_require__(4182);
+const conversationSummary_service_1 = __webpack_require__(4185);
 const globalConfig_service_1 = __webpack_require__(2467);
 const models_service_1 = __webpack_require__(2542);
 const plugin_entity_1 = __webpack_require__(4134);
 const upload_service_1 = __webpack_require__(2954);
+const sticker_service_1 = __webpack_require__(4188);
 const user_entity_1 = __webpack_require__(2702);
 const user_service_1 = __webpack_require__(2693);
 const userAppSettings_service_1 = __webpack_require__(2764);
 const userBalance_service_1 = __webpack_require__(2696);
 const voice_service_1 = __webpack_require__(4143);
+const STICKER_EMOTION_LABELS = ['happy', 'sad', 'angry', 'comfort', 'surprised', 'neutral'];
 let ChatService = class ChatService {
     appEntity;
     appVoiceRepo;
@@ -491604,9 +493145,10 @@ let ChatService = class ChatService {
     affectionService;
     userAppSettingsService;
     conversationSummaryService;
+    stickerService;
     appEmotionVoiceRepo;
     roleEmotionRepo;
-    constructor(appEntity, appVoiceRepo, pluginEntity, userEntity, openAIChatService, chatLogService, userBalanceService, userService, uploadService, badWordsService, autoReplyService, globalConfigService, chatGroupService, modelsService, appService, voiceService, affectionService, userAppSettingsService, conversationSummaryService, appEmotionVoiceRepo, roleEmotionRepo) {
+    constructor(appEntity, appVoiceRepo, pluginEntity, userEntity, openAIChatService, chatLogService, userBalanceService, userService, uploadService, badWordsService, autoReplyService, globalConfigService, chatGroupService, modelsService, appService, voiceService, affectionService, userAppSettingsService, conversationSummaryService, stickerService, appEmotionVoiceRepo, roleEmotionRepo) {
         this.appEntity = appEntity;
         this.appVoiceRepo = appVoiceRepo;
         this.pluginEntity = pluginEntity;
@@ -491626,6 +493168,7 @@ let ChatService = class ChatService {
         this.affectionService = affectionService;
         this.userAppSettingsService = userAppSettingsService;
         this.conversationSummaryService = conversationSummaryService;
+        this.stickerService = stickerService;
         this.appEmotionVoiceRepo = appEmotionVoiceRepo;
         this.roleEmotionRepo = roleEmotionRepo;
     }
@@ -491754,6 +493297,260 @@ let ChatService = class ChatService {
             chunks.push(currentChunk.trim());
         }
         return chunks.filter(chunk => chunk && chunk.trim().length > 0);
+    }
+    clampReplyCount(value, fallback = 1) {
+        const num = Number(value);
+        if (Number.isFinite(num)) {
+            return Math.max(1, Math.min(5, Math.floor(num)));
+        }
+        return Math.max(1, Math.min(5, Math.floor(fallback)));
+    }
+    splitAssistantReplies(text, maxReplies) {
+        if (!text)
+            return [];
+        const normalizedMax = this.clampReplyCount(maxReplies ?? 1);
+        const segments = text
+            .split(/\n\s*\n+/g)
+            .map(segment => segment.trim())
+            .filter(segment => segment.length > 0);
+        if (!segments.length) {
+            return [text.trim()];
+        }
+        if (segments.length > normalizedMax) {
+            return segments.slice(0, normalizedMax);
+        }
+        return segments;
+    }
+    shouldSendSticker(probability) {
+        const num = Number(probability);
+        if (!Number.isFinite(num) || num <= 0)
+            return false;
+        const normalized = Math.max(0, Math.min(100, num));
+        return Math.random() * 100 < normalized;
+    }
+    buildAssistantLogBasePayload(context) {
+        return {
+            appId: context.appId,
+            action: context.action ?? null,
+            curIp: context.curIp ?? null,
+            userId: context.userId,
+            type: context.modelType ?? 1,
+            progress: '100%',
+            model: context.model,
+            modelName: context.modelName,
+            role: 'assistant',
+            groupId: context.groupId ?? null,
+            status: 3,
+            modelAvatar: context.modelAvatar ?? '',
+            pluginParam: context.pluginParam ?? null,
+        };
+    }
+    async saveAdditionalAssistantReplies(replies, basePayload) {
+        const saved = [];
+        if (!replies?.length) {
+            return saved;
+        }
+        for (const reply of replies) {
+            if (!reply || !reply.trim())
+                continue;
+            const extraLog = await this.chatLogService.saveChatLog({
+                ...basePayload,
+                content: reply,
+                promptTokens: 0,
+                completionTokens: 0,
+                totalTokens: 0,
+            });
+            saved.push({ chatId: extraLog.id, content: reply });
+        }
+        return saved;
+    }
+    async maybeCreateStickerMessage(options) {
+        const { allowEmoji, basePayload, referenceText, probability } = options;
+        if (!allowEmoji || !basePayload) {
+            return null;
+        }
+        if (!this.shouldSendSticker(probability ?? 30)) {
+            common_1.Logger.debug('[Sticker] 本次概率未命中，跳过自动发送', 'ChatService');
+            return null;
+        }
+        try {
+            const sticker = await this.stickerService.pickStickerByText(referenceText?.trim() || '');
+            if (!sticker?.imageUrl) {
+                common_1.Logger.debug('[Sticker] 公共表情库未返回有效图片，跳过', 'ChatService');
+                return null;
+            }
+            const extraParam = {
+                type: 'sticker',
+                stickerId: sticker.id,
+                emotion: sticker.emotion,
+                tags: sticker.tags,
+                scenario: sticker.scenario,
+                source: 'global',
+            };
+            const stickerLog = await this.chatLogService.saveChatLog({
+                ...basePayload,
+                content: '',
+                imageUrl: sticker.imageUrl,
+                extraParam: JSON.stringify(extraParam),
+                promptTokens: 0,
+                completionTokens: 0,
+                totalTokens: 0,
+            });
+            return {
+                chatId: stickerLog.id,
+                message: {
+                    chatId: stickerLog.id,
+                    message_type: 'sticker',
+                    content: '',
+                    content_image: sticker.imageUrl,
+                    sticker_id: sticker.id,
+                },
+            };
+        }
+        catch (error) {
+            common_1.Logger.warn(`[Sticker] 自动挑选表情包失败: ${error?.message || error}`, 'ChatService');
+            return null;
+        }
+    }
+    async detectEmotionWithAI(text) {
+        const trimmed = text?.trim();
+        if (!trimmed) {
+            return null;
+        }
+        try {
+            const prompt = `请阅读以下用户内容，并从["happy","sad","angry","comfort","surprised","neutral"]中选择最匹配的一项情绪。只返回该英文单词，不要包含其他任何内容。\n\n内容：${trimmed}`;
+            const systemMessage = 'You are an emotion classifier that only responds with one label.';
+            const result = await this.openAIChatService.chatFree(prompt, systemMessage);
+            const answer = (result?.text || '').toLowerCase();
+            return STICKER_EMOTION_LABELS.find(label => answer.includes(label)) || null;
+        }
+        catch (error) {
+            common_1.Logger.warn(`[StickerEmotion] AI 情绪识别失败: ${error?.message || error}`, 'ChatService');
+            return null;
+        }
+    }
+    async createStickerMessageFromContent(options) {
+        const { userId, content, appId, groupId, req } = options;
+        const trimmedContent = content?.trim();
+        if (!trimmedContent) {
+            throw new common_1.HttpException('content 不能为空', common_1.HttpStatus.BAD_REQUEST);
+        }
+        const user = await this.userEntity.findOne({ where: { id: userId } });
+        if (!user) {
+            throw new common_1.HttpException('用户不存在', common_1.HttpStatus.BAD_REQUEST);
+        }
+        const detectedEmotion = await this.detectEmotionWithAI(trimmedContent);
+        const sticker = await this.stickerService.pickStickerByText(trimmedContent, detectedEmotion);
+        if (!sticker) {
+            throw new common_1.HttpException('暂时没有匹配的表情包', common_1.HttpStatus.NOT_FOUND);
+        }
+        const curIp = req ? (0, utils_1.getClientIp)(req) : null;
+        const extraParam = {
+            type: 'sticker',
+            stickerId: sticker.id,
+            emotion: sticker.emotion,
+            tags: sticker.tags,
+            scenario: sticker.scenario,
+            source: 'external',
+            detectedEmotion: detectedEmotion,
+            originalContent: trimmedContent,
+        };
+        const stickerLog = await this.chatLogService.saveChatLog({
+            appId: appId ?? null,
+            curIp,
+            userId,
+            type: 1,
+            progress: '100%',
+            model: 'sticker-generator',
+            modelName: 'Sticker',
+            role: 'assistant',
+            groupId: groupId ?? null,
+            status: 3,
+            content: '',
+            imageUrl: sticker.imageUrl,
+            extraParam: JSON.stringify(extraParam),
+            promptTokens: 0,
+            completionTokens: 0,
+            totalTokens: 0,
+        });
+        return {
+            chatId: stickerLog.id,
+            imageUrl: sticker.imageUrl,
+            stickerId: sticker.id,
+            emotion: sticker.emotion || detectedEmotion || null,
+        };
+    }
+    async generateVoiceReplyForMessage(options) {
+        const { text, chatId, appId, req } = options;
+        try {
+            const textToSpeak = this.cleanTextForTTS(text);
+            if (!textToSpeak) {
+                return null;
+            }
+            let selectedVoiceId = null;
+            let finalEmotion = null;
+            const emotionOptions = await this.getAppEmotionOptions(appId);
+            const emotionPairs = await this.getAppEmotionPairs(appId);
+            const psychologicalDesc = this.extractPsychologicalDescription(text);
+            if (emotionOptions.length) {
+                const chosen = await this.chooseEmotionFromOptions(psychologicalDesc, text, emotionOptions);
+                if (chosen?.emotion) {
+                    finalEmotion = chosen.emotion;
+                    selectedVoiceId =
+                        emotionPairs.find(pair => pair.emotion === finalEmotion)?.voiceId || null;
+                }
+                if (!selectedVoiceId) {
+                    finalEmotion = await this.getAppDefaultEmotion(appId, emotionOptions);
+                    selectedVoiceId =
+                        emotionPairs.find(pair => pair.emotion === finalEmotion)?.voiceId || null;
+                }
+            }
+            if (!selectedVoiceId && appId) {
+                const defaultVoice = await this.appVoiceRepo.findOne({
+                    where: { appId: Number(appId), isDefault: 1 },
+                });
+                selectedVoiceId = defaultVoice?.voiceId || null;
+            }
+            if (!selectedVoiceId) {
+                common_1.Logger.debug('[TTSService] 未找到可用音色，跳过语音回复', 'ChatService');
+                return null;
+            }
+            const previewPayload = { voice_id: selectedVoiceId, text: textToSpeak };
+            const ttsParams = this.mapEmotionToTtsParams(finalEmotion);
+            if (ttsParams.rate !== undefined)
+                previewPayload.rate = ttsParams.rate;
+            if (ttsParams.pitch !== undefined)
+                previewPayload.pitch = ttsParams.pitch;
+            if (ttsParams.volume !== undefined)
+                previewPayload.volume = ttsParams.volume;
+            const { url, duration } = await this.voiceService.preview(previewPayload);
+            const durationInt = Math.round(duration);
+            try {
+                const detailKeyInfo = await this.modelsService.getCurrentModelKeyInfo('tts-1');
+                if (detailKeyInfo) {
+                    const { deduct, deductType } = detailKeyInfo;
+                    await this.userBalanceService.validateBalance(req, deductType, deduct);
+                    await this.userBalanceService.deductFromBalance(req.user.id, deductType, deduct, 0, req.user.role);
+                }
+                else {
+                    common_1.Logger.warn('[TTSService] 未找到tts-1模型配置，跳过扣费', 'ChatService');
+                }
+            }
+            catch (chargeError) {
+                common_1.Logger.warn(`[TTSService] 扣费失败或配置缺失，已跳过扣费: ${chargeError?.message || chargeError}`, 'ChatService');
+            }
+            if (chatId) {
+                await this.chatLogService.updateChatLog(chatId, {
+                    ttsUrl: url,
+                    ttsDuration: durationInt,
+                });
+            }
+            return { ttsUrl: url, duration: durationInt };
+        }
+        catch (error) {
+            common_1.Logger.warn(`[TTSService] 自动语音生成失败: ${error?.message || error}`, 'ChatService');
+            return null;
+        }
     }
     mapEmotionToTtsParams(emotion) {
         if (!emotion)
@@ -492501,7 +494298,8 @@ ${numberedOptions}
             this.updateChatTitle(groupId, groupInfo, modelType, prompt, req);
             await this.chatGroupService.updateTime(groupId);
         }
-        if (imageUrl && isImageUpload === 0) {
+        const hasImageRecognitionResult = prompt && (prompt.includes('[这是一张图片，内容如下]') || prompt.includes('[图片内容:'));
+        if (imageUrl && isImageUpload === 0 && !hasImageRecognitionResult) {
             common_1.Logger.debug('[图片识别] 模型不支持图片，开始识别...', 'ChatService');
             try {
                 const firstImageUrl = imageUrl.split(',')[0].trim();
@@ -492536,6 +494334,9 @@ ${numberedOptions}
                     prompt = `[用户发送了一张图片]\n请根据图片内容进行回复`;
                 }
             }
+        }
+        else if (hasImageRecognitionResult) {
+            common_1.Logger.debug('[图片识别] 检测到prompt中已包含图片识别结果，跳过重复识别', 'ChatService');
         }
         let userSaveLog;
         let userLogId;
@@ -492701,26 +494502,35 @@ ${numberedOptions}
                 common_1.Logger.debug(`检查或插入角色开场白失败: ${error.message}`, 'ChatService');
             }
         }
-        const assistantSaveLog = await this.chatLogService.saveChatLog({
-            appId: appId ? appId : null,
-            action: action ? action : null,
-            curIp,
-            userId: req.user.id,
-            type: modelType ? modelType : 1,
-            progress: '0%',
-            model: useModel,
-            modelName: assistantName,
-            role: 'assistant',
-            groupId: groupId ? groupId : null,
-            status: 2,
-            modelAvatar: usingPlugin?.pluginImg || useModelAvatar || modelAvatar || '',
-            pluginParam: usingPlugin?.parameters
-                ? usingPlugin.parameters
-                : modelType === 2
-                    ? useModel
-                    : null,
-        });
-        const assistantLogId = assistantSaveLog.id;
+        let assistantSaveLog;
+        let assistantLogId;
+        if (!skipSave) {
+            assistantSaveLog = await this.chatLogService.saveChatLog({
+                appId: appId ? appId : null,
+                action: action ? action : null,
+                curIp,
+                userId: req.user.id,
+                type: modelType ? modelType : 1,
+                progress: '0%',
+                model: useModel,
+                modelName: assistantName,
+                role: 'assistant',
+                groupId: groupId ? groupId : null,
+                status: 2,
+                modelAvatar: usingPlugin?.pluginImg || useModelAvatar || modelAvatar || '',
+                pluginParam: usingPlugin?.parameters
+                    ? usingPlugin.parameters
+                    : modelType === 2
+                        ? useModel
+                        : null,
+            });
+            assistantLogId = assistantSaveLog.id;
+            common_1.Logger.debug(`[保存] 已保存 assistant 消息到数据库，id=${assistantLogId}`, 'ChatService');
+        }
+        else {
+            assistantLogId = null;
+            common_1.Logger.debug(`[跳过保存] skipSaveToDatabase=true，不保存 assistant 消息到数据库`, 'ChatService');
+        }
         if (autoReplyRes.answer && res) {
             if (autoReplyRes.isAIReplyEnabled === 0) {
                 const chars = autoReplyRes.answer.split('');
@@ -492735,9 +494545,11 @@ ${numberedOptions}
                     }
                 };
                 sendCharByChar(0);
-                await this.chatLogService.updateChatLog(assistantLogId, {
-                    content: autoReplyRes.answer,
-                });
+                if (assistantLogId) {
+                    await this.chatLogService.updateChatLog(assistantLogId, {
+                        content: autoReplyRes.answer,
+                    });
+                }
                 return;
             }
             else {
@@ -492745,16 +494557,44 @@ ${numberedOptions}
             }
         }
         let enablePsychologicalDesc = false;
+        let groupConversationMemoryCount = maxRounds;
+        let groupVoiceReplyMode = 'text_only';
+        let groupAllowEmoji = false;
+        let groupAllowTap = false;
+        let groupMaxReplyCount = 5;
         if (appId && setSystemMessage && this.userAppSettingsService) {
             try {
                 if (groupId) {
                     try {
                         const groupInfo = await this.chatGroupService.getGroupInfoFromId(groupId);
-                        if (groupInfo && typeof groupInfo.describingMental === 'number') {
-                            enablePsychologicalDesc = groupInfo.describingMental === 1;
-                            common_1.Logger.debug(`[心理描述] 使用会话组配置: groupId=${groupId}, describingMental=${groupInfo.describingMental}`, 'ChatService');
+                        if (groupInfo) {
+                            if (typeof groupInfo.describingMental === 'number') {
+                                enablePsychologicalDesc = groupInfo.describingMental === 1;
+                                common_1.Logger.debug(`[心理描述] 使用会话组配置: groupId=${groupId}, describingMental=${groupInfo.describingMental}`, 'ChatService');
+                            }
+                            if (typeof groupInfo.conversationMemoryCount === 'number' &&
+                                groupInfo.conversationMemoryCount > 0) {
+                                groupConversationMemoryCount = groupInfo.conversationMemoryCount;
+                                common_1.Logger.debug(`[对话记忆] 使用会话组配置: groupId=${groupId}, conversationMemoryCount=${groupConversationMemoryCount}`, 'ChatService');
+                            }
+                            if (groupInfo.voiceReplyMode) {
+                                groupVoiceReplyMode = groupInfo.voiceReplyMode;
+                                common_1.Logger.debug(`[语音回复] 使用会话组配置: groupId=${groupId}, voiceReplyMode=${groupVoiceReplyMode}`, 'ChatService');
+                            }
+                            if (typeof groupInfo.allowEmoji === 'number') {
+                                groupAllowEmoji = groupInfo.allowEmoji === 1;
+                                common_1.Logger.debug(`[表情包] 使用会话组配置: groupId=${groupId}, allowEmoji=${groupAllowEmoji}`, 'ChatService');
+                            }
+                            if (typeof groupInfo.allowTap === 'number') {
+                                groupAllowTap = groupInfo.allowTap === 1;
+                                common_1.Logger.debug(`[拍一拍] 使用会话组配置: groupId=${groupId}, allowTap=${groupAllowTap}`, 'ChatService');
+                            }
+                            if (typeof groupInfo.maxReplyCount === 'number' && groupInfo.maxReplyCount > 0) {
+                                groupMaxReplyCount = groupInfo.maxReplyCount;
+                                common_1.Logger.debug(`[最多回复] 使用会话组配置: groupId=${groupId}, maxReplyCount=${groupMaxReplyCount}`, 'ChatService');
+                            }
                         }
-                        else {
+                        if (!groupInfo || typeof groupInfo.describingMental !== 'number') {
                             enablePsychologicalDesc =
                                 await this.userAppSettingsService.getEnablePsychologicalDesc(req.user.id, appId);
                             common_1.Logger.debug(`[心理描述] 使用用户级别配置: userId=${req.user.id}, appId=${appId}, enable=${enablePsychologicalDesc}`, 'ChatService');
@@ -492792,7 +494632,7 @@ ${numberedOptions}
             appId: appId,
             systemMessage: setSystemMessage,
             maxModelTokens,
-            maxRounds: maxRounds,
+            maxRounds: groupConversationMemoryCount,
             isConvertToBase64: isConvertToBase64,
             fileUrl: fileUrl,
             imageUrl: imageUrl,
@@ -492970,9 +494810,23 @@ ${numberedOptions}
                                 }
                             }
                             if (groupInfoParts.length > 0) {
-                                const groupBasicInfo = `【群组背景信息】\n${groupInfoParts.join('\n')}`;
+                                const behaviorConstraints = [];
+                                if (groupAllowEmoji) {
+                                    behaviorConstraints.push('- 你可以在合适的时候发送emoji表情来增加趣味性');
+                                }
+                                else {
+                                    behaviorConstraints.push('- 请不要发送emoji表情');
+                                }
+                                if (groupAllowTap) {
+                                    behaviorConstraints.push('- 你可以在合适的时候使用"拍一拍"进行亲密互动');
+                                }
+                                else {
+                                    behaviorConstraints.push('- 请不要使用"拍一拍"');
+                                }
+                                behaviorConstraints.push(`- 你一次最多连续回复${groupMaxReplyCount}条消息，每条之间用一个空行分隔，并且每条都要表达完整意思`);
+                                const groupBasicInfo = `【群组背景信息】\n${groupInfoParts.join('\n')}\n\n【行为约束】\n${behaviorConstraints.join('\n')}`;
                                 messagesForXingchen.unshift({ role: 'system', content: groupBasicInfo });
-                                common_1.Logger.debug(`[群聊] 已将群组背景信息（含成员任务）添加到星尘API请求的messages第一位（system角色）`, 'ChatService');
+                                common_1.Logger.debug(`[群聊] 已将群组背景信息（含成员任务和行为约束）添加到星尘API请求的messages第一位（system角色）`, 'ChatService');
                             }
                         }
                         catch (error) {
@@ -492981,13 +494835,32 @@ ${numberedOptions}
                     }
                     else if (!isGroupChat && groupId) {
                         try {
+                            const singleChatParts = [];
                             if (userProfileText) {
-                                const userProfileInfo = `【用户信息】\n${userProfileText}`;
-                                messagesForXingchen.unshift({ role: 'system', content: userProfileInfo });
-                                common_1.Logger.debug(`[单聊] 已将用户信息添加到星尘API请求的messages第一位（system角色）`, 'ChatService');
+                                singleChatParts.push(`【用户信息】\n${userProfileText}`);
+                            }
+                            const behaviorConstraints = [];
+                            if (groupAllowEmoji) {
+                                behaviorConstraints.push('- 你可以在合适的时候发送emoji表情来增加趣味性');
                             }
                             else {
-                                common_1.Logger.debug(`[单聊] 用户未设置用户名和简介，跳过添加`, 'ChatService');
+                                behaviorConstraints.push('- 请不要发送emoji表情');
+                            }
+                            if (groupAllowTap) {
+                                behaviorConstraints.push('- 你可以在合适的时候使用"拍一拍"进行亲密互动');
+                            }
+                            else {
+                                behaviorConstraints.push('- 请不要使用"拍一拍"');
+                            }
+                            behaviorConstraints.push(`- 你一次最多连续回复${groupMaxReplyCount}条消息，消息之间使用空行，并保持语气自然`);
+                            singleChatParts.push(`\n【行为约束】\n${behaviorConstraints.join('\n')}`);
+                            if (singleChatParts.length > 0) {
+                                const userProfileInfo = singleChatParts.join('\n');
+                                messagesForXingchen.unshift({ role: 'system', content: userProfileInfo });
+                                common_1.Logger.debug(`[单聊] 已将用户信息和行为约束添加到星尘API请求的messages第一位（system角色）`, 'ChatService');
+                            }
+                            else {
+                                common_1.Logger.debug(`[单聊] 用户未设置用户名和简介，仅添加行为约束`, 'ChatService');
                             }
                         }
                         catch (error) {
@@ -493043,6 +494916,7 @@ ${numberedOptions}
                         promptTokens: promptTokens,
                         completionTokens: completionTokens,
                         totalTokens: promptTokens + completionTokens,
+                        imageUrl: null,
                         content: [
                             {
                                 type: 'text',
@@ -493082,23 +494956,133 @@ ${numberedOptions}
                             common_1.Logger.debug(`[心理描述过滤] 已移除心理描述内容，原长度=${originalLength}，过滤后长度=${sanitizedAnswer.length}`, 'ChatService');
                         }
                     }
-                    response.full_content = sanitizedAnswer;
-                    await this.chatLogService.updateChatLog(assistantLogId, {
-                        content: sanitizedAnswer,
-                        reasoning_content: response.full_reasoning_content,
-                        tool_calls: response.tool_calls,
-                        promptTokens: promptTokens,
-                        completionTokens: completionTokens,
-                        totalTokens: promptTokens + completionTokens,
-                        status: 3,
-                    });
+                    const splitReplies = this.splitAssistantReplies(sanitizedAnswer, groupMaxReplyCount);
+                    const normalizedFullContent = splitReplies.length > 0 ? splitReplies.join('\n\n') : sanitizedAnswer;
+                    response.full_content = normalizedFullContent;
+                    const assistantMessagesPayload = [];
+                    let extraAssistantLogs = [];
+                    let generatedVoiceUrl = null;
+                    const textReplies = splitReplies.length > 0 ? splitReplies : sanitizedAnswer ? [sanitizedAnswer] : [];
+                    const firstReply = textReplies[0] || '';
+                    if (assistantLogId) {
+                        const replyContent = firstReply || '';
+                        await this.chatLogService.updateChatLog(assistantLogId, {
+                            content: replyContent,
+                            reasoning_content: response.full_reasoning_content,
+                            tool_calls: response.tool_calls,
+                            promptTokens: promptTokens,
+                            completionTokens: completionTokens,
+                            totalTokens: promptTokens + completionTokens,
+                            status: 3,
+                        });
+                        assistantMessagesPayload.push({
+                            chatId: assistantLogId,
+                            message_type: 'text',
+                            content: replyContent,
+                        });
+                        const assistantLogBasePayload = this.buildAssistantLogBasePayload({
+                            appId: appId ? Number(appId) : null,
+                            action: action || null,
+                            curIp,
+                            userId: req.user.id,
+                            modelType,
+                            model: useModel,
+                            modelName: assistantName,
+                            groupId: groupId ? Number(groupId) : null,
+                            modelAvatar: usingPlugin?.pluginImg || useModelAvatar || modelAvatar || '',
+                            pluginParam: assistantSaveLog?.pluginParam ||
+                                (usingPlugin?.parameters
+                                    ? usingPlugin.parameters
+                                    : modelType === 2
+                                        ? useModel
+                                        : null),
+                        });
+                        if (textReplies.length > 1) {
+                            extraAssistantLogs = await this.saveAdditionalAssistantReplies(textReplies.slice(1), assistantLogBasePayload);
+                            extraAssistantLogs.forEach(item => {
+                                assistantMessagesPayload.push({
+                                    chatId: item.chatId,
+                                    message_type: 'text',
+                                    content: item.content,
+                                });
+                            });
+                        }
+                        let shouldGenerateVoice = false;
+                        if (groupVoiceReplyMode === 'voice_only') {
+                            shouldGenerateVoice = true;
+                            common_1.Logger.debug('[语音回复] voice_only 模式 - 生成语音', 'ChatService');
+                        }
+                        else if (groupVoiceReplyMode === 'mixed') {
+                            shouldGenerateVoice = Math.random() < 0.286;
+                            common_1.Logger.debug(`[语音回复] mixed 模式 - ${shouldGenerateVoice ? '生成语音' : '仅文字'}`, 'ChatService');
+                        }
+                        if (shouldGenerateVoice && replyContent) {
+                            const voiceReply = await this.generateVoiceReplyForMessage({
+                                text: replyContent,
+                                chatId: assistantLogId,
+                                appId: appId ? Number(appId) : null,
+                                req,
+                            });
+                            if (voiceReply) {
+                                generatedVoiceUrl = voiceReply.ttsUrl;
+                                response.ttsUrl = voiceReply.ttsUrl;
+                                response.audioUrl = voiceReply.ttsUrl;
+                                response.voiceDuration = voiceReply.duration;
+                                response.audioDuration = voiceReply.duration;
+                                if (assistantMessagesPayload.length > 0) {
+                                    assistantMessagesPayload[0].content_voice = voiceReply.ttsUrl;
+                                    assistantMessagesPayload[0].voice_duration = voiceReply.duration;
+                                    assistantMessagesPayload[0].audioDuration = voiceReply.duration;
+                                }
+                            }
+                        }
+                        if (assistantLogBasePayload) {
+                            const stickerMessage = await this.maybeCreateStickerMessage({
+                                allowEmoji: groupAllowEmoji,
+                                basePayload: assistantLogBasePayload,
+                                referenceText: replyContent,
+                            });
+                            if (stickerMessage?.message) {
+                                assistantMessagesPayload.push(stickerMessage.message);
+                            }
+                        }
+                        if (!generatedVoiceUrl && textReplies.length > 0) {
+                            const updateTasks = [
+                                this.chatLogService.updateChatLog(assistantLogId, { display_state: 1 }),
+                                ...extraAssistantLogs.map(log => this.chatLogService.updateChatLog(log.chatId, { display_state: 1 })),
+                            ];
+                            await Promise.all(updateTasks);
+                        }
+                    }
+                    else {
+                        textReplies.forEach(reply => {
+                            assistantMessagesPayload.push({
+                                chatId: null,
+                                message_type: 'text',
+                                content: reply,
+                            });
+                        });
+                    }
+                    response.messages = assistantMessagesPayload;
+                    const stickerPayload = assistantMessagesPayload.find(message => message?.message_type === 'sticker');
+                    if (stickerPayload) {
+                        const stickerImageUrl = stickerPayload.content_image ||
+                            stickerPayload.imageUrl ||
+                            stickerPayload.image_url ||
+                            null;
+                        if (stickerImageUrl) {
+                            response.imageUrl = stickerImageUrl;
+                        }
+                    }
                     try {
                         if (isGeneratePromptReference === '1') {
                             const promptRefResult = await this.openAIChatService.chatFree(`根据用户提问{${prompt}}以及AI的回答{${response.full_content}}，生成三个更进入一步的问题来向AI提问，用{}包裹每个问题，不需要分行，不需要其他任何内容，单个提问不超过30个字`, setSystemMessage, messagesHistory);
                             promptReference = promptRefResult.text || '';
-                            await this.chatLogService.updateChatLog(assistantLogId, {
-                                promptReference: promptReference,
-                            });
+                            if (assistantLogId) {
+                                await this.chatLogService.updateChatLog(assistantLogId, {
+                                    promptReference: promptReference,
+                                });
+                            }
                             common_1.Logger.debug(`生成了相关问题推荐`, 'ChatService');
                         }
                     }
@@ -493157,9 +495141,11 @@ ${numberedOptions}
                 }
                 catch (error) {
                     common_1.Logger.error('处理请求出错:', error);
-                    await this.chatLogService.updateChatLog(assistantLogId, {
-                        status: 5,
-                    });
+                    if (assistantLogId) {
+                        await this.chatLogService.updateChatLog(assistantLogId, {
+                            status: 5,
+                        });
+                    }
                     response = { error: '处理请求时发生错误' };
                 }
             }
@@ -493728,14 +495714,14 @@ exports.ChatService = ChatService = __decorate([
     __param(1, (0, typeorm_1.InjectRepository)(appVoice_entity_1.AppVoiceEntity)),
     __param(2, (0, typeorm_1.InjectRepository)(plugin_entity_1.PluginEntity)),
     __param(3, (0, typeorm_1.InjectRepository)(user_entity_1.UserEntity)),
-    __param(19, (0, typeorm_1.InjectRepository)(appEmotionVoice_entity_1.AppEmotionVoiceEntity)),
-    __param(20, (0, typeorm_1.InjectRepository)(roleEmotion_entity_1.RoleEmotionEntity)),
-    __metadata("design:paramtypes", [typeof (_a = typeof typeorm_2.Repository !== "undefined" && typeorm_2.Repository) === "function" ? _a : Object, typeof (_b = typeof typeorm_2.Repository !== "undefined" && typeorm_2.Repository) === "function" ? _b : Object, typeof (_c = typeof typeorm_2.Repository !== "undefined" && typeorm_2.Repository) === "function" ? _c : Object, typeof (_d = typeof typeorm_2.Repository !== "undefined" && typeorm_2.Repository) === "function" ? _d : Object, typeof (_e = typeof chat_service_1.OpenAIChatService !== "undefined" && chat_service_1.OpenAIChatService) === "function" ? _e : Object, typeof (_f = typeof chatLog_service_1.ChatLogService !== "undefined" && chatLog_service_1.ChatLogService) === "function" ? _f : Object, typeof (_g = typeof userBalance_service_1.UserBalanceService !== "undefined" && userBalance_service_1.UserBalanceService) === "function" ? _g : Object, typeof (_h = typeof user_service_1.UserService !== "undefined" && user_service_1.UserService) === "function" ? _h : Object, typeof (_j = typeof upload_service_1.UploadService !== "undefined" && upload_service_1.UploadService) === "function" ? _j : Object, typeof (_k = typeof badWords_service_1.BadWordsService !== "undefined" && badWords_service_1.BadWordsService) === "function" ? _k : Object, typeof (_l = typeof autoReply_service_1.AutoReplyService !== "undefined" && autoReply_service_1.AutoReplyService) === "function" ? _l : Object, typeof (_m = typeof globalConfig_service_1.GlobalConfigService !== "undefined" && globalConfig_service_1.GlobalConfigService) === "function" ? _m : Object, typeof (_o = typeof chatGroup_service_1.ChatGroupService !== "undefined" && chatGroup_service_1.ChatGroupService) === "function" ? _o : Object, typeof (_p = typeof models_service_1.ModelsService !== "undefined" && models_service_1.ModelsService) === "function" ? _p : Object, typeof (_q = typeof app_service_1.AppService !== "undefined" && app_service_1.AppService) === "function" ? _q : Object, typeof (_r = typeof voice_service_1.VoiceService !== "undefined" && voice_service_1.VoiceService) === "function" ? _r : Object, typeof (_s = typeof affection_service_1.AffectionService !== "undefined" && affection_service_1.AffectionService) === "function" ? _s : Object, typeof (_t = typeof userAppSettings_service_1.UserAppSettingsService !== "undefined" && userAppSettings_service_1.UserAppSettingsService) === "function" ? _t : Object, typeof (_u = typeof conversationSummary_service_1.ConversationSummaryService !== "undefined" && conversationSummary_service_1.ConversationSummaryService) === "function" ? _u : Object, typeof (_v = typeof typeorm_2.Repository !== "undefined" && typeorm_2.Repository) === "function" ? _v : Object, typeof (_w = typeof typeorm_2.Repository !== "undefined" && typeorm_2.Repository) === "function" ? _w : Object])
+    __param(20, (0, typeorm_1.InjectRepository)(appEmotionVoice_entity_1.AppEmotionVoiceEntity)),
+    __param(21, (0, typeorm_1.InjectRepository)(roleEmotion_entity_1.RoleEmotionEntity)),
+    __metadata("design:paramtypes", [typeof (_a = typeof typeorm_2.Repository !== "undefined" && typeorm_2.Repository) === "function" ? _a : Object, typeof (_b = typeof typeorm_2.Repository !== "undefined" && typeorm_2.Repository) === "function" ? _b : Object, typeof (_c = typeof typeorm_2.Repository !== "undefined" && typeorm_2.Repository) === "function" ? _c : Object, typeof (_d = typeof typeorm_2.Repository !== "undefined" && typeorm_2.Repository) === "function" ? _d : Object, typeof (_e = typeof chat_service_1.OpenAIChatService !== "undefined" && chat_service_1.OpenAIChatService) === "function" ? _e : Object, typeof (_f = typeof chatLog_service_1.ChatLogService !== "undefined" && chatLog_service_1.ChatLogService) === "function" ? _f : Object, typeof (_g = typeof userBalance_service_1.UserBalanceService !== "undefined" && userBalance_service_1.UserBalanceService) === "function" ? _g : Object, typeof (_h = typeof user_service_1.UserService !== "undefined" && user_service_1.UserService) === "function" ? _h : Object, typeof (_j = typeof upload_service_1.UploadService !== "undefined" && upload_service_1.UploadService) === "function" ? _j : Object, typeof (_k = typeof badWords_service_1.BadWordsService !== "undefined" && badWords_service_1.BadWordsService) === "function" ? _k : Object, typeof (_l = typeof autoReply_service_1.AutoReplyService !== "undefined" && autoReply_service_1.AutoReplyService) === "function" ? _l : Object, typeof (_m = typeof globalConfig_service_1.GlobalConfigService !== "undefined" && globalConfig_service_1.GlobalConfigService) === "function" ? _m : Object, typeof (_o = typeof chatGroup_service_1.ChatGroupService !== "undefined" && chatGroup_service_1.ChatGroupService) === "function" ? _o : Object, typeof (_p = typeof models_service_1.ModelsService !== "undefined" && models_service_1.ModelsService) === "function" ? _p : Object, typeof (_q = typeof app_service_1.AppService !== "undefined" && app_service_1.AppService) === "function" ? _q : Object, typeof (_r = typeof voice_service_1.VoiceService !== "undefined" && voice_service_1.VoiceService) === "function" ? _r : Object, typeof (_s = typeof affection_service_1.AffectionService !== "undefined" && affection_service_1.AffectionService) === "function" ? _s : Object, typeof (_t = typeof userAppSettings_service_1.UserAppSettingsService !== "undefined" && userAppSettings_service_1.UserAppSettingsService) === "function" ? _t : Object, typeof (_u = typeof conversationSummary_service_1.ConversationSummaryService !== "undefined" && conversationSummary_service_1.ConversationSummaryService) === "function" ? _u : Object, typeof (_v = typeof sticker_service_1.StickerService !== "undefined" && sticker_service_1.StickerService) === "function" ? _v : Object, typeof (_w = typeof typeorm_2.Repository !== "undefined" && typeorm_2.Repository) === "function" ? _w : Object, typeof (_x = typeof typeorm_2.Repository !== "undefined" && typeorm_2.Repository) === "function" ? _x : Object])
 ], ChatService);
 
 
 /***/ }),
-/* 4185 */
+/* 4192 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 "use strict";
@@ -493849,7 +495835,7 @@ __decorate([
 
 
 /***/ }),
-/* 4186 */
+/* 4193 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 "use strict";
@@ -493866,7 +495852,7 @@ var __metadata = (this && this.__metadata) || function (k, v) {
 var __param = (this && this.__param) || function (paramIndex, decorator) {
     return function (target, key) { decorator(target, key, paramIndex); }
 };
-var _a, _b, _c, _d, _e, _f, _g, _h, _j, _k;
+var _a, _b, _c, _d, _e, _f, _g, _h, _j, _k, _l;
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.OpenChatController = void 0;
 const common_1 = __webpack_require__(2);
@@ -493876,7 +495862,7 @@ const express_1 = __webpack_require__(2161);
 const maobing_auth_util_1 = __webpack_require__(2785);
 const affection_service_1 = __webpack_require__(2757);
 const voice_service_1 = __webpack_require__(4143);
-const chat_service_1 = __webpack_require__(4184);
+const chat_service_1 = __webpack_require__(4191);
 let OpenChatController = class OpenChatController {
     chatService;
     voiceService;
@@ -493924,6 +495910,9 @@ let OpenChatController = class OpenChatController {
                     throw new common_1.HttpException('提问信息不能为空！', common_1.HttpStatus.BAD_REQUEST);
                 }
             }
+            if (body?.speakerId && !body?.appId) {
+                body.appId = body.speakerId;
+            }
             const fakeReq = {
                 user: { id: userId, role: 'visitor' },
                 header: (name) => _req.header(name),
@@ -493939,6 +495928,31 @@ let OpenChatController = class OpenChatController {
             const message = e?.message || '对话处理失败';
             return res.status(status).json({ code: status, message });
         }
+    }
+    async pickSticker(body, req) {
+        const { token, userId, content, appId, groupId } = body || {};
+        if (!content || content.trim().length === 0) {
+            throw new common_1.HttpException('content 不能为空', common_1.HttpStatus.BAD_REQUEST);
+        }
+        let finalUserId = userId ? Number(userId) : null;
+        if (token) {
+            const validatedUserId = await maobing_auth_util_1.MaobingAuthUtil.validateTokenAndGetUserId(token);
+            if (!validatedUserId) {
+                throw new common_1.HttpException('token 无效或已过期', common_1.HttpStatus.UNAUTHORIZED);
+            }
+            finalUserId = validatedUserId;
+        }
+        if (!finalUserId) {
+            throw new common_1.HttpException('请提供 userId 或 token', common_1.HttpStatus.BAD_REQUEST);
+        }
+        const result = await this.chatService.createStickerMessageFromContent({
+            userId: Number(finalUserId),
+            content,
+            appId: appId ? Number(appId) : null,
+            groupId: groupId ? Number(groupId) : null,
+            req,
+        });
+        return { success: true, data: result };
     }
     async ttsProcess(body, _req, res) {
         const { token, userId: originalUserId } = body || {};
@@ -494059,6 +496073,8 @@ let OpenChatController = class OpenChatController {
             let emotion = null;
             let psychologicalDesc = null;
             let audioUrl = null;
+            let voiceDuration = null;
+            let imageUrl = null;
             const eventHandlers = {};
             const mockRes = {
                 write: (data) => {
@@ -494079,8 +496095,27 @@ let OpenChatController = class OpenChatController {
                                 emotion = parsed.emotion;
                             if (parsed.psychologicalDesc)
                                 psychologicalDesc = parsed.psychologicalDesc;
-                            if (parsed.audioUrl)
-                                audioUrl = parsed.audioUrl;
+                            const resolvedAudioUrl = parsed.audioUrl ?? parsed.ttsUrl;
+                            if (resolvedAudioUrl)
+                                audioUrl = resolvedAudioUrl;
+                            const resolvedVoiceDuration = parsed.voiceDuration ??
+                                parsed.voice_duration ??
+                                (parsed.voiceReply ? parsed.voiceReply?.duration : undefined);
+                            if (resolvedVoiceDuration !== undefined) {
+                                voiceDuration = Number(resolvedVoiceDuration) || null;
+                            }
+                            if (!imageUrl && parsed.imageUrl) {
+                                imageUrl = parsed.imageUrl;
+                            }
+                            if (!imageUrl && Array.isArray(parsed.messages)) {
+                                const stickerMessage = parsed.messages.find((message) => message?.message_type === 'sticker');
+                                const stickerImageUrl = stickerMessage?.content_image ||
+                                    stickerMessage?.imageUrl ||
+                                    stickerMessage?.image_url;
+                                if (stickerImageUrl) {
+                                    imageUrl = stickerImageUrl;
+                                }
+                            }
                         }
                         catch (e) {
                             if (line && !line.startsWith('{')) {
@@ -494122,6 +496157,8 @@ let OpenChatController = class OpenChatController {
                     emotion,
                     psychologicalDesc,
                     audioUrl,
+                    voiceDuration,
+                    imageUrl,
                 },
             };
         }
@@ -494188,6 +496225,10 @@ __decorate([
                 imageUrl: { type: 'string', description: '图片URL（可选）' },
                 fileUrl: { type: 'string', description: '文件URL（可选）' },
                 appId: { type: 'number', description: '角色(App) ID（可选）' },
+                speakerId: {
+                    type: 'number',
+                    description: '发言者ID（可选，群聊场景中指定哪个成员发言，等同于appId）',
+                },
                 model: { type: 'string', description: '使用的模型标识（可选）' },
                 modelName: { type: 'string', description: '模型名称（可选）' },
                 modelType: { type: 'number', description: '模型类型（可选）' },
@@ -494270,6 +496311,31 @@ __decorate([
     __metadata("design:returntype", Promise)
 ], OpenChatController.prototype, "chatProcess", null);
 __decorate([
+    (0, common_1.Post)('sticker/pick'),
+    (0, swagger_1.ApiOperation)({ summary: '【开放】根据文本生成表情包（可选token鉴权）' }),
+    (0, swagger_1.ApiBody)({
+        schema: {
+            type: 'object',
+            properties: {
+                token: {
+                    type: 'string',
+                    description: 'Maobing平台用户token（可选，传入则会验证并获取userId）',
+                },
+                userId: { type: 'number', description: '用户ID（可选，优先使用token验证获取的userId）' },
+                content: { type: 'string', description: '需要分析情绪的文本内容' },
+                appId: { type: 'number', description: '角色(App) ID（可选）' },
+                groupId: { type: 'number', description: '会话组ID（可选）' },
+            },
+            required: ['content'],
+        },
+    }),
+    __param(0, (0, common_1.Body)()),
+    __param(1, (0, common_1.Req)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object, typeof (_f = typeof express_1.Request !== "undefined" && express_1.Request) === "function" ? _f : Object]),
+    __metadata("design:returntype", Promise)
+], OpenChatController.prototype, "pickSticker", null);
+__decorate([
     (0, common_1.Post)('tts-process'),
     (0, swagger_1.ApiOperation)({ summary: '【开放】TTS 文字转语音（可选token鉴权）' }),
     (0, swagger_1.ApiBody)({
@@ -494291,7 +496357,7 @@ __decorate([
     __param(1, (0, common_1.Req)()),
     __param(2, (0, common_1.Res)()),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [Object, typeof (_f = typeof express_1.Request !== "undefined" && express_1.Request) === "function" ? _f : Object, typeof (_g = typeof express_1.Response !== "undefined" && express_1.Response) === "function" ? _g : Object]),
+    __metadata("design:paramtypes", [Object, typeof (_g = typeof express_1.Request !== "undefined" && express_1.Request) === "function" ? _g : Object, typeof (_h = typeof express_1.Response !== "undefined" && express_1.Response) === "function" ? _h : Object]),
     __metadata("design:returntype", Promise)
 ], OpenChatController.prototype, "ttsProcess", null);
 __decorate([
@@ -494324,7 +496390,7 @@ __decorate([
     __param(1, (0, common_1.Req)()),
     __param(2, (0, common_1.Res)()),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [Object, typeof (_h = typeof express_1.Request !== "undefined" && express_1.Request) === "function" ? _h : Object, typeof (_j = typeof express_1.Response !== "undefined" && express_1.Response) === "function" ? _j : Object]),
+    __metadata("design:paramtypes", [Object, typeof (_j = typeof express_1.Request !== "undefined" && express_1.Request) === "function" ? _j : Object, typeof (_k = typeof express_1.Response !== "undefined" && express_1.Response) === "function" ? _k : Object]),
     __metadata("design:returntype", Promise)
 ], OpenChatController.prototype, "chatProcessVoice", null);
 __decorate([
@@ -494368,7 +496434,7 @@ __decorate([
     __param(0, (0, common_1.Body)()),
     __param(1, (0, common_1.Req)()),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [Object, typeof (_k = typeof express_1.Request !== "undefined" && express_1.Request) === "function" ? _k : Object]),
+    __metadata("design:paramtypes", [Object, typeof (_l = typeof express_1.Request !== "undefined" && express_1.Request) === "function" ? _l : Object]),
     __metadata("design:returntype", Promise)
 ], OpenChatController.prototype, "chatProcessSync", null);
 __decorate([
@@ -494404,7 +496470,7 @@ exports.OpenChatController = OpenChatController = __decorate([
 
 
 /***/ }),
-/* 4187 */
+/* 4194 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 "use strict";
@@ -494423,10 +496489,10 @@ const affection_module_1 = __webpack_require__(2435);
 const app_entity_1 = __webpack_require__(2769);
 const chatLog_entity_1 = __webpack_require__(2540);
 const user_entity_1 = __webpack_require__(2702);
-const chatGroup_controller_1 = __webpack_require__(4188);
+const chatGroup_controller_1 = __webpack_require__(4195);
 const chatGroup_entity_1 = __webpack_require__(2701);
 const chatGroup_service_1 = __webpack_require__(2952);
-const open_chatGroup_controller_1 = __webpack_require__(4192);
+const open_chatGroup_controller_1 = __webpack_require__(4199);
 let ChatGroupModule = class ChatGroupModule {
 };
 exports.ChatGroupModule = ChatGroupModule;
@@ -494445,7 +496511,7 @@ exports.ChatGroupModule = ChatGroupModule = __decorate([
 
 
 /***/ }),
-/* 4188 */
+/* 4195 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 "use strict";
@@ -494462,7 +496528,7 @@ var __metadata = (this && this.__metadata) || function (k, v) {
 var __param = (this && this.__param) || function (paramIndex, decorator) {
     return function (target, key) { decorator(target, key, paramIndex); }
 };
-var _a, _b, _c, _d, _e, _f, _g, _h, _j, _k, _l, _m, _o, _p, _q, _r;
+var _a, _b, _c, _d, _e, _f, _g, _h, _j, _k, _l, _m, _o, _p, _q, _r, _s, _t;
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.ChatGroupController = void 0;
 const jwtAuth_guard_1 = __webpack_require__(2466);
@@ -494470,9 +496536,9 @@ const common_1 = __webpack_require__(2);
 const swagger_1 = __webpack_require__(2281);
 const express_1 = __webpack_require__(2161);
 const chatGroup_service_1 = __webpack_require__(2952);
-const createGroup_dto_1 = __webpack_require__(4189);
-const delGroup_dto_1 = __webpack_require__(4190);
-const updateGroup_dto_1 = __webpack_require__(4191);
+const createGroup_dto_1 = __webpack_require__(4196);
+const delGroup_dto_1 = __webpack_require__(4197);
+const updateGroup_dto_1 = __webpack_require__(4198);
 let ChatGroupController = class ChatGroupController {
     chatGroupService;
     constructor(chatGroupService) {
@@ -494513,6 +496579,12 @@ let ChatGroupController = class ChatGroupController {
     }
     updateMember(body, req) {
         return this.chatGroupService.updateMember(body, req);
+    }
+    updateRelationships(body, req) {
+        return this.chatGroupService.updateRelationships(body, req);
+    }
+    getRelationships(body, req) {
+        return this.chatGroupService.getRelationships(body, req);
     }
 };
 exports.ChatGroupController = ChatGroupController;
@@ -494646,6 +496718,28 @@ __decorate([
     __metadata("design:paramtypes", [Object, typeof (_r = typeof express_1.Request !== "undefined" && express_1.Request) === "function" ? _r : Object]),
     __metadata("design:returntype", void 0)
 ], ChatGroupController.prototype, "updateMember", null);
+__decorate([
+    (0, common_1.Post)('relationships/update'),
+    (0, swagger_1.ApiOperation)({ summary: '更新群组人物关系配置' }),
+    (0, common_1.UseGuards)(jwtAuth_guard_1.JwtAuthGuard),
+    (0, swagger_1.ApiBearerAuth)(),
+    __param(0, (0, common_1.Body)()),
+    __param(1, (0, common_1.Req)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object, typeof (_s = typeof express_1.Request !== "undefined" && express_1.Request) === "function" ? _s : Object]),
+    __metadata("design:returntype", void 0)
+], ChatGroupController.prototype, "updateRelationships", null);
+__decorate([
+    (0, common_1.Post)('relationships/get'),
+    (0, swagger_1.ApiOperation)({ summary: '获取群组人物关系配置' }),
+    (0, common_1.UseGuards)(jwtAuth_guard_1.JwtAuthGuard),
+    (0, swagger_1.ApiBearerAuth)(),
+    __param(0, (0, common_1.Body)()),
+    __param(1, (0, common_1.Req)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object, typeof (_t = typeof express_1.Request !== "undefined" && express_1.Request) === "function" ? _t : Object]),
+    __metadata("design:returntype", void 0)
+], ChatGroupController.prototype, "getRelationships", null);
 exports.ChatGroupController = ChatGroupController = __decorate([
     (0, swagger_1.ApiTags)('group'),
     (0, common_1.Controller)('group'),
@@ -494654,7 +496748,7 @@ exports.ChatGroupController = ChatGroupController = __decorate([
 
 
 /***/ }),
-/* 4189 */
+/* 4196 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 "use strict";
@@ -494782,7 +496876,7 @@ __decorate([
 
 
 /***/ }),
-/* 4190 */
+/* 4197 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 "use strict";
@@ -494810,7 +496904,7 @@ __decorate([
 
 
 /***/ }),
-/* 4191 */
+/* 4198 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 "use strict";
@@ -494858,7 +496952,7 @@ __decorate([
 
 
 /***/ }),
-/* 4192 */
+/* 4199 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 "use strict";
@@ -494875,7 +496969,7 @@ var __metadata = (this && this.__metadata) || function (k, v) {
 var __param = (this && this.__param) || function (paramIndex, decorator) {
     return function (target, key) { decorator(target, key, paramIndex); }
 };
-var _a, _b, _c, _d, _e, _f, _g, _h, _j, _k, _l, _m, _o, _p, _q, _r, _s, _t, _u, _v, _w, _x, _y, _z, _0, _1, _2, _3, _4;
+var _a, _b, _c, _d, _e, _f, _g, _h, _j, _k, _l, _m, _o, _p, _q, _r, _s, _t, _u, _v, _w, _x, _y, _z, _0, _1, _2, _3, _4, _5, _6, _7, _8;
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.OpenChatGroupController = void 0;
 const common_1 = __webpack_require__(2);
@@ -495053,7 +497147,7 @@ let OpenChatGroupController = class OpenChatGroupController {
     }
     async update(body, _req, res) {
         try {
-            const { userId, userAvatarUrl, groupId, title, description, ownerNickname, characterRelationships, openingRemark, proactivelySend, describingMental, realTime, myName, myProfile, members, backgroundImage, } = body || {};
+            const { userId, userAvatarUrl, groupId, title, description, ownerNickname, characterRelationships, openingRemark, proactivelySend, describingMental, realTime, myName, myProfile, conversationMemoryCount, autoSummaryEnabled, summaryPrompt, chatSummary, voiceReplyMode, allowEmoji, allowTap, maxReplyCount, members, backgroundImage, } = body || {};
             if (!userId)
                 throw new common_1.HttpException('userId 必填', common_1.HttpStatus.BAD_REQUEST);
             if (!groupId)
@@ -495079,6 +497173,14 @@ let OpenChatGroupController = class OpenChatGroupController {
                 realTime,
                 myName,
                 myProfile,
+                conversationMemoryCount,
+                autoSummaryEnabled,
+                summaryPrompt,
+                chatSummary,
+                voiceReplyMode,
+                allowEmoji,
+                allowTap,
+                maxReplyCount,
                 members,
                 backgroundImage,
             }, fakeReq);
@@ -495325,6 +497427,57 @@ let OpenChatGroupController = class OpenChatGroupController {
             return res.status(status).json({ success: false, message });
         }
     }
+    async updateRelationships(body, _req, res) {
+        try {
+            const { userId, groupId, relationships } = body || {};
+            if (!userId)
+                throw new common_1.HttpException('userId 必填', common_1.HttpStatus.BAD_REQUEST);
+            if (!groupId)
+                throw new common_1.HttpException('groupId 必填', common_1.HttpStatus.BAD_REQUEST);
+            if (!relationships || !Array.isArray(relationships)) {
+                throw new common_1.HttpException('relationships 必填且必须是数组', common_1.HttpStatus.BAD_REQUEST);
+            }
+            const fakeReq = {
+                user: { id: userId, role: 'visitor' },
+                header: (name) => _req.header(name),
+                headers: _req.headers,
+                connection: _req.connection,
+                socket: _req.socket,
+                ip: _req.ip,
+            };
+            const result = await this.chatGroupService.updateRelationships({ groupId, relationships }, fakeReq);
+            return res.status(200).json({ success: true, data: result });
+        }
+        catch (e) {
+            const status = e instanceof common_1.HttpException ? e.getStatus() : common_1.HttpStatus.INTERNAL_SERVER_ERROR;
+            const message = e?.message || '更新人物关系失败';
+            return res.status(status).json({ success: false, message });
+        }
+    }
+    async getRelationships(body, _req, res) {
+        try {
+            const { userId, groupId } = body || {};
+            if (!userId)
+                throw new common_1.HttpException('userId 必填', common_1.HttpStatus.BAD_REQUEST);
+            if (!groupId)
+                throw new common_1.HttpException('groupId 必填', common_1.HttpStatus.BAD_REQUEST);
+            const fakeReq = {
+                user: { id: userId, role: 'visitor' },
+                header: (name) => _req.header(name),
+                headers: _req.headers,
+                connection: _req.connection,
+                socket: _req.socket,
+                ip: _req.ip,
+            };
+            const result = await this.chatGroupService.getRelationships({ groupId }, fakeReq);
+            return res.status(200).json({ success: true, data: result });
+        }
+        catch (e) {
+            const status = e instanceof common_1.HttpException ? e.getStatus() : common_1.HttpStatus.INTERNAL_SERVER_ERROR;
+            const message = e?.message || '获取人物关系失败';
+            return res.status(status).json({ success: false, message });
+        }
+    }
 };
 exports.OpenChatGroupController = OpenChatGroupController;
 __decorate([
@@ -495515,6 +497668,28 @@ __decorate([
                 description: { type: 'string', description: '群聊描述信息（可选）' },
                 ownerNickname: { type: 'string', description: '群主在群内的昵称（可选）' },
                 backgroundImage: { type: 'string', description: '群聊背景图片URL（可选）' },
+                characterRelationships: { type: 'string', description: '人物关系（可选）' },
+                openingRemark: { type: 'string', description: '开场白（可选）' },
+                proactivelySend: { type: 'number', description: '是否主动发消息（0否 1是，可选）' },
+                describingMental: { type: 'number', description: '是否开启心理动作描述（0否 1是，可选）' },
+                realTime: { type: 'number', description: '是否开启真实时间（0否 1是，可选）' },
+                myName: { type: 'string', description: '对我的称呼（可选）' },
+                myProfile: { type: 'string', description: '我的简介（可选）' },
+                conversationMemoryCount: {
+                    type: 'number',
+                    description: '对话记忆条数（1-100，可选，默认10）',
+                },
+                autoSummaryEnabled: { type: 'boolean', description: '是否开启自动总结（可选）' },
+                summaryPrompt: { type: 'string', description: '自动总结提示词（可选）' },
+                chatSummary: { type: 'string', description: '当前对话总结内容（可选）' },
+                voiceReplyMode: {
+                    type: 'string',
+                    description: '语音回复模式（可选）：voice_only=全部发语音 或 mixed=偶尔发一次（文字和语音5:2） 或 text_only=不要发语音',
+                    enum: ['voice_only', 'mixed', 'text_only'],
+                },
+                allowEmoji: { type: 'boolean', description: '是否允许发送表情包（可选）' },
+                allowTap: { type: 'boolean', description: '是否允许拍一拍（可选）' },
+                maxReplyCount: { type: 'number', description: '最多回复条数（1-5，可选，默认5）' },
                 members: {
                     type: 'array',
                     description: '成员列表（可选，传入则完整替换现有成员列表）',
@@ -496056,6 +498231,92 @@ __decorate([
     __metadata("design:paramtypes", [Object, typeof (_3 = typeof express_1.Request !== "undefined" && express_1.Request) === "function" ? _3 : Object, typeof (_4 = typeof express_1.Response !== "undefined" && express_1.Response) === "function" ? _4 : Object]),
     __metadata("design:returntype", Promise)
 ], OpenChatGroupController.prototype, "queryGroupChats", null);
+__decorate([
+    (0, common_1.Post)('relationships/update'),
+    (0, swagger_1.ApiOperation)({ summary: '【开放】更新群组人物关系配置（无鉴权，需显式传 userId）' }),
+    (0, swagger_1.ApiBody)({
+        schema: {
+            type: 'object',
+            properties: {
+                userId: { type: 'number', description: '外部用户ID' },
+                groupId: { type: 'number', description: '对话分组ID' },
+                relationships: {
+                    type: 'array',
+                    description: '人物关系配置数组',
+                    items: {
+                        type: 'object',
+                        properties: {
+                            memberA: { type: 'number', description: '成员A的appId' },
+                            memberB: { type: 'number', description: '成员B的appId' },
+                            type: { type: 'string', description: '关系类型（如：朋友、同事、恋人、家人等）' },
+                            description: { type: 'string', description: '关系描述（可选）' },
+                        },
+                        required: ['memberA', 'memberB', 'type'],
+                    },
+                },
+            },
+            required: ['userId', 'groupId', 'relationships'],
+        },
+        examples: {
+            basic: {
+                summary: '设置人物关系',
+                value: {
+                    userId: 1001,
+                    groupId: 123,
+                    relationships: [
+                        {
+                            memberA: 456,
+                            memberB: 457,
+                            type: '朋友',
+                            description: '多年好友',
+                        },
+                        {
+                            memberA: 456,
+                            memberB: 458,
+                            type: '同事',
+                            description: '同公司同事',
+                        },
+                    ],
+                },
+            },
+        },
+    }),
+    __param(0, (0, common_1.Body)()),
+    __param(1, (0, common_1.Req)()),
+    __param(2, (0, common_1.Res)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object, typeof (_5 = typeof express_1.Request !== "undefined" && express_1.Request) === "function" ? _5 : Object, typeof (_6 = typeof express_1.Response !== "undefined" && express_1.Response) === "function" ? _6 : Object]),
+    __metadata("design:returntype", Promise)
+], OpenChatGroupController.prototype, "updateRelationships", null);
+__decorate([
+    (0, common_1.Post)('relationships/get'),
+    (0, swagger_1.ApiOperation)({ summary: '【开放】获取群组人物关系配置（无鉴权，需显式传 userId）' }),
+    (0, swagger_1.ApiBody)({
+        schema: {
+            type: 'object',
+            properties: {
+                userId: { type: 'number', description: '外部用户ID' },
+                groupId: { type: 'number', description: '对话分组ID' },
+            },
+            required: ['userId', 'groupId'],
+        },
+        examples: {
+            basic: {
+                summary: '获取人物关系',
+                value: {
+                    userId: 1001,
+                    groupId: 123,
+                },
+            },
+        },
+    }),
+    __param(0, (0, common_1.Body)()),
+    __param(1, (0, common_1.Req)()),
+    __param(2, (0, common_1.Res)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object, typeof (_7 = typeof express_1.Request !== "undefined" && express_1.Request) === "function" ? _7 : Object, typeof (_8 = typeof express_1.Response !== "undefined" && express_1.Response) === "function" ? _8 : Object]),
+    __metadata("design:returntype", Promise)
+], OpenChatGroupController.prototype, "getRelationships", null);
 exports.OpenChatGroupController = OpenChatGroupController = __decorate([
     (0, swagger_1.ApiTags)('open-chatGroup'),
     (0, common_1.Controller)('open/group'),
@@ -496064,7 +498325,7 @@ exports.OpenChatGroupController = OpenChatGroupController = __decorate([
 
 
 /***/ }),
-/* 4193 */
+/* 4200 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 "use strict";
@@ -496081,10 +498342,10 @@ const common_1 = __webpack_require__(2);
 const typeorm_1 = __webpack_require__(2436);
 const chatGroup_entity_1 = __webpack_require__(2701);
 const user_entity_1 = __webpack_require__(2702);
-const chatLog_controller_1 = __webpack_require__(4194);
+const chatLog_controller_1 = __webpack_require__(4201);
 const chatLog_entity_1 = __webpack_require__(2540);
 const chatLog_service_1 = __webpack_require__(3720);
-const open_chatLog_controller_1 = __webpack_require__(4204);
+const open_chatLog_controller_1 = __webpack_require__(4211);
 let ChatLogModule = class ChatLogModule {
 };
 exports.ChatLogModule = ChatLogModule;
@@ -496100,7 +498361,7 @@ exports.ChatLogModule = ChatLogModule = __decorate([
 
 
 /***/ }),
-/* 4194 */
+/* 4201 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 "use strict";
@@ -496127,15 +498388,15 @@ const common_1 = __webpack_require__(2);
 const swagger_1 = __webpack_require__(2281);
 const express_1 = __webpack_require__(2161);
 const chatLog_service_1 = __webpack_require__(3720);
-const chatList_dto_1 = __webpack_require__(4195);
-const del_dto_1 = __webpack_require__(4196);
-const delByGroup_dto_1 = __webpack_require__(4197);
-const exportExcelChatlog_dto_1 = __webpack_require__(4198);
-const queryAllChatLog_dto_1 = __webpack_require__(4199);
-const queryByAppId_dto_1 = __webpack_require__(4200);
-const queryMyChatLog_dto_1 = __webpack_require__(4201);
-const querySingleChat_dto_1 = __webpack_require__(4202);
-const recDrawImg_dto_1 = __webpack_require__(4203);
+const chatList_dto_1 = __webpack_require__(4202);
+const del_dto_1 = __webpack_require__(4203);
+const delByGroup_dto_1 = __webpack_require__(4204);
+const exportExcelChatlog_dto_1 = __webpack_require__(4205);
+const queryAllChatLog_dto_1 = __webpack_require__(4206);
+const queryByAppId_dto_1 = __webpack_require__(4207);
+const queryMyChatLog_dto_1 = __webpack_require__(4208);
+const querySingleChat_dto_1 = __webpack_require__(4209);
+const recDrawImg_dto_1 = __webpack_require__(4210);
 let ChatLogController = class ChatLogController {
     chatLogService;
     constructor(chatLogService) {
@@ -496289,7 +498550,7 @@ exports.ChatLogController = ChatLogController = __decorate([
 
 
 /***/ }),
-/* 4195 */
+/* 4202 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 "use strict";
@@ -496331,7 +498592,7 @@ __decorate([
 
 
 /***/ }),
-/* 4196 */
+/* 4203 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 "use strict";
@@ -496359,7 +498620,7 @@ __decorate([
 
 
 /***/ }),
-/* 4197 */
+/* 4204 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 "use strict";
@@ -496387,7 +498648,7 @@ __decorate([
 
 
 /***/ }),
-/* 4198 */
+/* 4205 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 "use strict";
@@ -496443,7 +498704,7 @@ __decorate([
 
 
 /***/ }),
-/* 4199 */
+/* 4206 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 "use strict";
@@ -496512,7 +498773,7 @@ __decorate([
 
 
 /***/ }),
-/* 4200 */
+/* 4207 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 "use strict";
@@ -496554,7 +498815,7 @@ __decorate([
 
 
 /***/ }),
-/* 4201 */
+/* 4208 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 "use strict";
@@ -496584,7 +498845,7 @@ __decorate([
 
 
 /***/ }),
-/* 4202 */
+/* 4209 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 "use strict";
@@ -496614,7 +498875,7 @@ __decorate([
 
 
 /***/ }),
-/* 4203 */
+/* 4210 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 "use strict";
@@ -496642,7 +498903,7 @@ __decorate([
 
 
 /***/ }),
-/* 4204 */
+/* 4211 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 "use strict";
@@ -496821,7 +499082,7 @@ exports.OpenChatLogController = OpenChatLogController = __decorate([
 
 
 /***/ }),
-/* 4205 */
+/* 4212 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 "use strict";
@@ -496845,9 +499106,9 @@ const balance_entity_1 = __webpack_require__(2699);
 const fingerprint_entity_1 = __webpack_require__(2703);
 const userBalance_entity_1 = __webpack_require__(2700);
 const userBalance_service_1 = __webpack_require__(2696);
-const crami_controller_1 = __webpack_require__(4206);
-const crami_entity_1 = __webpack_require__(4208);
-const crami_service_1 = __webpack_require__(4207);
+const crami_controller_1 = __webpack_require__(4213);
+const crami_entity_1 = __webpack_require__(4215);
+const crami_service_1 = __webpack_require__(4214);
 const cramiPackage_entity_1 = __webpack_require__(2697);
 let CramiModule = class CramiModule {
 };
@@ -496877,7 +499138,7 @@ exports.CramiModule = CramiModule = __decorate([
 
 
 /***/ }),
-/* 4206 */
+/* 4213 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 "use strict";
@@ -496903,15 +499164,15 @@ const superAuth_guard_1 = __webpack_require__(2767);
 const common_1 = __webpack_require__(2);
 const swagger_1 = __webpack_require__(2281);
 const express_1 = __webpack_require__(2161);
-const crami_service_1 = __webpack_require__(4207);
-const batchDelCrami_dto_1 = __webpack_require__(4209);
-const createCrami_dto_1 = __webpack_require__(4210);
-const createPackage_dto_1 = __webpack_require__(4211);
-const deletePackage_dto_1 = __webpack_require__(4212);
-const queryAllCrami_dto_1 = __webpack_require__(4213);
-const queryAllPackage_dto_1 = __webpack_require__(4214);
-const updatePackage_dto_1 = __webpack_require__(4215);
-const useCrami_dto_1 = __webpack_require__(4216);
+const crami_service_1 = __webpack_require__(4214);
+const batchDelCrami_dto_1 = __webpack_require__(4216);
+const createCrami_dto_1 = __webpack_require__(4217);
+const createPackage_dto_1 = __webpack_require__(4218);
+const deletePackage_dto_1 = __webpack_require__(4219);
+const queryAllCrami_dto_1 = __webpack_require__(4220);
+const queryAllPackage_dto_1 = __webpack_require__(4221);
+const updatePackage_dto_1 = __webpack_require__(4222);
+const useCrami_dto_1 = __webpack_require__(4223);
 let CramiController = class CramiController {
     cramiService;
     constructor(cramiService) {
@@ -497055,7 +499316,7 @@ exports.CramiController = CramiController = __decorate([
 
 
 /***/ }),
-/* 4207 */
+/* 4214 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 "use strict";
@@ -497082,7 +499343,7 @@ const typeorm_1 = __webpack_require__(2436);
 const typeorm_2 = __webpack_require__(666);
 const user_entity_1 = __webpack_require__(2702);
 const userBalance_service_1 = __webpack_require__(2696);
-const crami_entity_1 = __webpack_require__(4208);
+const crami_entity_1 = __webpack_require__(4215);
 const cramiPackage_entity_1 = __webpack_require__(2697);
 let CramiService = class CramiService {
     cramiEntity;
@@ -497300,7 +499561,7 @@ exports.CramiService = CramiService = __decorate([
 
 
 /***/ }),
-/* 4208 */
+/* 4215 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 "use strict";
@@ -497386,7 +499647,7 @@ exports.CramiEntity = CramiEntity = __decorate([
 
 
 /***/ }),
-/* 4209 */
+/* 4216 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 "use strict";
@@ -497417,7 +499678,7 @@ __decorate([
 
 
 /***/ }),
-/* 4210 */
+/* 4217 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 "use strict";
@@ -497478,7 +499739,7 @@ __decorate([
 
 
 /***/ }),
-/* 4211 */
+/* 4218 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 "use strict";
@@ -497600,7 +499861,7 @@ __decorate([
 
 
 /***/ }),
-/* 4212 */
+/* 4219 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 "use strict";
@@ -497630,7 +499891,7 @@ __decorate([
 
 
 /***/ }),
-/* 4213 */
+/* 4220 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 "use strict";
@@ -497682,7 +499943,7 @@ __decorate([
 
 
 /***/ }),
-/* 4214 */
+/* 4221 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 "use strict";
@@ -497744,7 +500005,7 @@ __decorate([
 
 
 /***/ }),
-/* 4215 */
+/* 4222 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 "use strict";
@@ -497762,7 +500023,7 @@ Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.UpdatePackageDto = void 0;
 const class_validator_1 = __webpack_require__(158);
 const swagger_1 = __webpack_require__(2281);
-const createPackage_dto_1 = __webpack_require__(4211);
+const createPackage_dto_1 = __webpack_require__(4218);
 class UpdatePackageDto extends createPackage_dto_1.CreatePackageDto {
     id;
 }
@@ -497775,7 +500036,7 @@ __decorate([
 
 
 /***/ }),
-/* 4216 */
+/* 4223 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 "use strict";
@@ -497809,7 +500070,7 @@ __decorate([
 
 
 /***/ }),
-/* 4217 */
+/* 4224 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 "use strict";
@@ -497830,7 +500091,7 @@ exports.DatabaseModule = void 0;
 const common_1 = __webpack_require__(2);
 const typeorm_1 = __webpack_require__(2436);
 const typeorm_2 = __webpack_require__(666);
-const database_service_1 = __webpack_require__(4218);
+const database_service_1 = __webpack_require__(4225);
 const affection_entity_1 = __webpack_require__(2758);
 const app_entity_1 = __webpack_require__(2769);
 const appCats_entity_1 = __webpack_require__(2770);
@@ -497843,15 +500104,16 @@ const badWords_entity_1 = __webpack_require__(2818);
 const violationLog_entity_1 = __webpack_require__(2819);
 const chatGroup_entity_1 = __webpack_require__(2701);
 const chatLog_entity_1 = __webpack_require__(2540);
-const conversationSummary_entity_1 = __webpack_require__(4181);
-const crami_entity_1 = __webpack_require__(4208);
+const conversationSummary_entity_1 = __webpack_require__(4184);
+const crami_entity_1 = __webpack_require__(4215);
 const cramiPackage_entity_1 = __webpack_require__(2697);
 const config_entity_1 = __webpack_require__(2545);
 const models_entity_1 = __webpack_require__(2544);
-const order_entity_1 = __webpack_require__(4219);
+const order_entity_1 = __webpack_require__(4226);
 const plugin_entity_1 = __webpack_require__(4134);
-const share_entity_1 = __webpack_require__(4220);
-const signIn_entity_1 = __webpack_require__(4221);
+const share_entity_1 = __webpack_require__(4227);
+const signIn_entity_1 = __webpack_require__(4228);
+const sticker_entity_1 = __webpack_require__(4189);
 const user_entity_1 = __webpack_require__(2702);
 const accountLog_entity_1 = __webpack_require__(2698);
 const balance_entity_1 = __webpack_require__(2699);
@@ -497860,7 +500122,7 @@ const userBalance_entity_1 = __webpack_require__(2700);
 const userAppSettings_entity_1 = __webpack_require__(2762);
 const verification_entity_1 = __webpack_require__(2705);
 const voice_entity_1 = __webpack_require__(4144);
-const voiceCategory_entity_1 = __webpack_require__(4427);
+const voiceCategory_entity_1 = __webpack_require__(4145);
 let DatabaseModule = DatabaseModule_1 = class DatabaseModule {
     connection;
     constructor(connection) {
@@ -497934,6 +500196,7 @@ exports.DatabaseModule = DatabaseModule = DatabaseModule_1 = __decorate([
                         affection_entity_1.UserAppAffectionEntity,
                         conversationSummary_entity_1.ConversationSummaryEntity,
                         userAppSettings_entity_1.UserAppSettingsEntity,
+                        sticker_entity_1.StickerEntity,
                     ],
                     synchronize: false,
                     logging: false,
@@ -497957,7 +500220,7 @@ exports.DatabaseModule = DatabaseModule = DatabaseModule_1 = __decorate([
 
 
 /***/ }),
-/* 4218 */
+/* 4225 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 "use strict";
@@ -498143,7 +500406,7 @@ exports.DatabaseService = DatabaseService = __decorate([
 
 
 /***/ }),
-/* 4219 */
+/* 4226 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 "use strict";
@@ -498238,7 +500501,7 @@ exports.OrderEntity = OrderEntity = __decorate([
 
 
 /***/ }),
-/* 4220 */
+/* 4227 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 "use strict";
@@ -498285,7 +500548,7 @@ exports.Share = Share = __decorate([
 
 
 /***/ }),
-/* 4221 */
+/* 4228 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 "use strict";
@@ -498333,7 +500596,7 @@ exports.SigninEntity = SigninEntity = __decorate([
 
 
 /***/ }),
-/* 4222 */
+/* 4229 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 "use strict";
@@ -498347,7 +500610,7 @@ var __decorate = (this && this.__decorate) || function (decorators, target, key,
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.ModelsModule = void 0;
 const common_1 = __webpack_require__(2);
-const models_controller_1 = __webpack_require__(4223);
+const models_controller_1 = __webpack_require__(4230);
 const models_service_1 = __webpack_require__(2542);
 const typeorm_1 = __webpack_require__(2436);
 const models_entity_1 = __webpack_require__(2544);
@@ -498366,7 +500629,7 @@ exports.ModelsModule = ModelsModule = __decorate([
 
 
 /***/ }),
-/* 4223 */
+/* 4230 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 "use strict";
@@ -498390,10 +500653,10 @@ const adminAuth_guard_1 = __webpack_require__(2766);
 const superAuth_guard_1 = __webpack_require__(2767);
 const common_1 = __webpack_require__(2);
 const swagger_1 = __webpack_require__(2281);
-const queryModel_dto_1 = __webpack_require__(4224);
-const queryModelType_dto_1 = __webpack_require__(4225);
-const setModel_dto_1 = __webpack_require__(4226);
-const setModelType_dto_1 = __webpack_require__(4227);
+const queryModel_dto_1 = __webpack_require__(4231);
+const queryModelType_dto_1 = __webpack_require__(4232);
+const setModel_dto_1 = __webpack_require__(4233);
+const setModelType_dto_1 = __webpack_require__(4234);
 const models_service_1 = __webpack_require__(2542);
 let ModelsController = class ModelsController {
     modelsService;
@@ -498507,7 +500770,7 @@ exports.ModelsController = ModelsController = __decorate([
 
 
 /***/ }),
-/* 4224 */
+/* 4231 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 "use strict";
@@ -498572,7 +500835,7 @@ __decorate([
 
 
 /***/ }),
-/* 4225 */
+/* 4232 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 "use strict";
@@ -498619,7 +500882,7 @@ __decorate([
 
 
 /***/ }),
-/* 4226 */
+/* 4233 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 "use strict";
@@ -498773,7 +501036,7 @@ __decorate([
 
 
 /***/ }),
-/* 4227 */
+/* 4234 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 "use strict";
@@ -498915,7 +501178,7 @@ __decorate([
 
 
 /***/ }),
-/* 4228 */
+/* 4235 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 "use strict";
@@ -498929,8 +501192,8 @@ var __decorate = (this && this.__decorate) || function (decorators, target, key,
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.OfficialModule = void 0;
 const common_1 = __webpack_require__(2);
-const official_controller_1 = __webpack_require__(4229);
-const official_service_1 = __webpack_require__(4232);
+const official_controller_1 = __webpack_require__(4236);
+const official_service_1 = __webpack_require__(4239);
 let OfficialModule = class OfficialModule {
 };
 exports.OfficialModule = OfficialModule;
@@ -498945,7 +501208,7 @@ exports.OfficialModule = OfficialModule = __decorate([
 
 
 /***/ }),
-/* 4229 */
+/* 4236 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 "use strict";
@@ -498971,9 +501234,9 @@ const utils_1 = __webpack_require__(2468);
 const common_1 = __webpack_require__(2);
 const swagger_1 = __webpack_require__(2281);
 const express_1 = __webpack_require__(2161);
-const createMenu_dto_1 = __webpack_require__(4230);
-const getQrCode_dto_1 = __webpack_require__(4231);
-const official_service_1 = __webpack_require__(4232);
+const createMenu_dto_1 = __webpack_require__(4237);
+const getQrCode_dto_1 = __webpack_require__(4238);
+const official_service_1 = __webpack_require__(4239);
 let OfficialController = class OfficialController {
     officialService;
     constructor(officialService) {
@@ -499325,7 +501588,7 @@ exports.OfficialController = OfficialController = __decorate([
 
 
 /***/ }),
-/* 4230 */
+/* 4237 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 "use strict";
@@ -499462,7 +501725,7 @@ __decorate([
 
 
 /***/ }),
-/* 4231 */
+/* 4238 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 "use strict";
@@ -499496,7 +501759,7 @@ __decorate([
 
 
 /***/ }),
-/* 4232 */
+/* 4239 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 "use strict";
@@ -499518,7 +501781,7 @@ const common_1 = __webpack_require__(2);
 const axios_1 = __webpack_require__(2471);
 const crypto = __webpack_require__(676);
 const autoReply_service_1 = __webpack_require__(2809);
-const chat_service_1 = __webpack_require__(4184);
+const chat_service_1 = __webpack_require__(4191);
 const auth_service_1 = __webpack_require__(2643);
 const globalConfig_service_1 = __webpack_require__(2467);
 const user_service_1 = __webpack_require__(2693);
@@ -499927,7 +502190,7 @@ exports.OfficialService = OfficialService = __decorate([
 
 
 /***/ }),
-/* 4233 */
+/* 4240 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 "use strict";
@@ -499942,9 +502205,9 @@ Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.OrderModule = void 0;
 const cramiPackage_entity_1 = __webpack_require__(2697);
 const common_1 = __webpack_require__(2);
-const order_controller_1 = __webpack_require__(4234);
-const order_service_1 = __webpack_require__(4235);
-const order_entity_1 = __webpack_require__(4219);
+const order_controller_1 = __webpack_require__(4241);
+const order_service_1 = __webpack_require__(4242);
+const order_entity_1 = __webpack_require__(4226);
 const typeorm_1 = __webpack_require__(2436);
 const user_entity_1 = __webpack_require__(2702);
 let OrderModule = class OrderModule {
@@ -499960,7 +502223,7 @@ exports.OrderModule = OrderModule = __decorate([
 
 
 /***/ }),
-/* 4234 */
+/* 4241 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 "use strict";
@@ -499984,12 +502247,12 @@ const superAuth_guard_1 = __webpack_require__(2767);
 const jwtAuth_guard_1 = __webpack_require__(2466);
 const common_1 = __webpack_require__(2);
 const swagger_1 = __webpack_require__(2281);
-const order_service_1 = __webpack_require__(4235);
+const order_service_1 = __webpack_require__(4242);
 const express_1 = __webpack_require__(2161);
-const buy_dto_1 = __webpack_require__(4237);
-const queryByOrder_dto_1 = __webpack_require__(4238);
+const buy_dto_1 = __webpack_require__(4244);
+const queryByOrder_dto_1 = __webpack_require__(4245);
 const adminAuth_guard_1 = __webpack_require__(2766);
-const queryAllOrder_dto_1 = __webpack_require__(4239);
+const queryAllOrder_dto_1 = __webpack_require__(4246);
 let OrderController = class OrderController {
     orderService;
     constructor(orderService) {
@@ -500069,7 +502332,7 @@ exports.OrderController = OrderController = __decorate([
 
 
 /***/ }),
-/* 4235 */
+/* 4242 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 "use strict";
@@ -500095,9 +502358,9 @@ const typeorm_1 = __webpack_require__(2436);
 const typeorm_2 = __webpack_require__(666);
 const cramiPackage_entity_1 = __webpack_require__(2697);
 const globalConfig_service_1 = __webpack_require__(2467);
-const pay_service_1 = __webpack_require__(4236);
+const pay_service_1 = __webpack_require__(4243);
 const user_entity_1 = __webpack_require__(2702);
-const order_entity_1 = __webpack_require__(4219);
+const order_entity_1 = __webpack_require__(4226);
 let OrderService = class OrderService {
     orderEntity;
     cramiPackageEntity;
@@ -500232,7 +502495,7 @@ exports.OrderService = OrderService = __decorate([
 
 
 /***/ }),
-/* 4236 */
+/* 4243 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 "use strict";
@@ -500260,7 +502523,7 @@ const crypto = __webpack_require__(676);
 const typeorm_2 = __webpack_require__(666);
 const cramiPackage_entity_1 = __webpack_require__(2697);
 const globalConfig_service_1 = __webpack_require__(2467);
-const order_entity_1 = __webpack_require__(4219);
+const order_entity_1 = __webpack_require__(4226);
 const user_service_1 = __webpack_require__(2693);
 const userBalance_service_1 = __webpack_require__(2696);
 let PayService = class PayService {
@@ -500955,7 +503218,7 @@ exports.PayService = PayService = __decorate([
 
 
 /***/ }),
-/* 4237 */
+/* 4244 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 "use strict";
@@ -500993,7 +503256,7 @@ __decorate([
 
 
 /***/ }),
-/* 4238 */
+/* 4245 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 "use strict";
@@ -501025,7 +503288,7 @@ __decorate([
 
 
 /***/ }),
-/* 4239 */
+/* 4246 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 "use strict";
@@ -501079,7 +503342,7 @@ __decorate([
 
 
 /***/ }),
-/* 4240 */
+/* 4247 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 "use strict";
@@ -501093,9 +503356,9 @@ var __decorate = (this && this.__decorate) || function (decorators, target, key,
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.PayModule = void 0;
 const common_1 = __webpack_require__(2);
-const pay_controller_1 = __webpack_require__(4241);
-const pay_service_1 = __webpack_require__(4236);
-const order_entity_1 = __webpack_require__(4219);
+const pay_controller_1 = __webpack_require__(4248);
+const pay_service_1 = __webpack_require__(4243);
+const order_entity_1 = __webpack_require__(4226);
 const cramiPackage_entity_1 = __webpack_require__(2697);
 const typeorm_1 = __webpack_require__(2436);
 let PayModule = class PayModule {
@@ -501113,7 +503376,7 @@ exports.PayModule = PayModule = __decorate([
 
 
 /***/ }),
-/* 4241 */
+/* 4248 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 "use strict";
@@ -501135,7 +503398,7 @@ Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.PayController = void 0;
 const common_1 = __webpack_require__(2);
 const swagger_1 = __webpack_require__(2281);
-const pay_service_1 = __webpack_require__(4236);
+const pay_service_1 = __webpack_require__(4243);
 let PayController = class PayController {
     payService;
     constructor(payService) {
@@ -501199,7 +503462,7 @@ exports.PayController = PayController = __decorate([
 
 
 /***/ }),
-/* 4242 */
+/* 4249 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 "use strict";
@@ -501214,9 +503477,9 @@ Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.PluginModule = void 0;
 const common_1 = __webpack_require__(2);
 const typeorm_1 = __webpack_require__(2436);
-const plugin_controller_1 = __webpack_require__(4243);
+const plugin_controller_1 = __webpack_require__(4250);
 const plugin_entity_1 = __webpack_require__(4134);
-const plugin_service_1 = __webpack_require__(4244);
+const plugin_service_1 = __webpack_require__(4251);
 let PluginModule = class PluginModule {
 };
 exports.PluginModule = PluginModule;
@@ -501230,7 +503493,7 @@ exports.PluginModule = PluginModule = __decorate([
 
 
 /***/ }),
-/* 4243 */
+/* 4250 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 "use strict";
@@ -501254,7 +503517,7 @@ const superAuth_guard_1 = __webpack_require__(2767);
 const common_1 = __webpack_require__(2);
 const swagger_1 = __webpack_require__(2281);
 const express_1 = __webpack_require__(2161);
-const plugin_service_1 = __webpack_require__(4244);
+const plugin_service_1 = __webpack_require__(4251);
 let PluginController = class PluginController {
     pluginService;
     constructor(pluginService) {
@@ -501320,7 +503583,7 @@ exports.PluginController = PluginController = __decorate([
 
 
 /***/ }),
-/* 4244 */
+/* 4251 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 "use strict";
@@ -501451,7 +503714,7 @@ exports.PluginService = PluginService = __decorate([
 
 
 /***/ }),
-/* 4245 */
+/* 4252 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 "use strict";
@@ -501466,9 +503729,9 @@ Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.ShareModule = void 0;
 const common_1 = __webpack_require__(2);
 const typeorm_1 = __webpack_require__(2436);
-const share_controller_1 = __webpack_require__(4246);
-const share_entity_1 = __webpack_require__(4220);
-const share_service_1 = __webpack_require__(4247);
+const share_controller_1 = __webpack_require__(4253);
+const share_entity_1 = __webpack_require__(4227);
+const share_service_1 = __webpack_require__(4254);
 let ShareModule = class ShareModule {
 };
 exports.ShareModule = ShareModule;
@@ -501482,7 +503745,7 @@ exports.ShareModule = ShareModule = __decorate([
 
 
 /***/ }),
-/* 4246 */
+/* 4253 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 "use strict";
@@ -501505,7 +503768,7 @@ exports.ShareController = void 0;
 const jwtAuth_guard_1 = __webpack_require__(2466);
 const common_1 = __webpack_require__(2);
 const swagger_1 = __webpack_require__(2281);
-const share_service_1 = __webpack_require__(4247);
+const share_service_1 = __webpack_require__(4254);
 let ShareController = class ShareController {
     shareService;
     constructor(shareService) {
@@ -501553,7 +503816,7 @@ exports.ShareController = ShareController = __decorate([
 
 
 /***/ }),
-/* 4247 */
+/* 4254 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 "use strict";
@@ -501577,7 +503840,7 @@ const common_1 = __webpack_require__(2);
 const typeorm_1 = __webpack_require__(2436);
 const typeorm_2 = __webpack_require__(666);
 const globalConfig_service_1 = __webpack_require__(2467);
-const share_entity_1 = __webpack_require__(4220);
+const share_entity_1 = __webpack_require__(4227);
 let ShareService = class ShareService {
     shareRepository;
     globalConfigService;
@@ -501633,7 +503896,7 @@ exports.ShareService = ShareService = __decorate([
 
 
 /***/ }),
-/* 4248 */
+/* 4255 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 "use strict";
@@ -501647,10 +503910,10 @@ var __decorate = (this && this.__decorate) || function (decorators, target, key,
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.SigninModule = void 0;
 const common_1 = __webpack_require__(2);
-const signin_controller_1 = __webpack_require__(4249);
-const signin_service_1 = __webpack_require__(4250);
+const signin_controller_1 = __webpack_require__(4256);
+const signin_service_1 = __webpack_require__(4257);
 const typeorm_1 = __webpack_require__(2436);
-const signIn_entity_1 = __webpack_require__(4221);
+const signIn_entity_1 = __webpack_require__(4228);
 const user_entity_1 = __webpack_require__(2702);
 let SigninModule = class SigninModule {
 };
@@ -501667,7 +503930,7 @@ exports.SigninModule = SigninModule = __decorate([
 
 
 /***/ }),
-/* 4249 */
+/* 4256 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 "use strict";
@@ -501688,7 +503951,7 @@ var _a, _b, _c;
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.SigninController = void 0;
 const common_1 = __webpack_require__(2);
-const signin_service_1 = __webpack_require__(4250);
+const signin_service_1 = __webpack_require__(4257);
 const swagger_1 = __webpack_require__(2281);
 const jwtAuth_guard_1 = __webpack_require__(2466);
 const express_1 = __webpack_require__(2161);
@@ -501733,7 +503996,7 @@ exports.SigninController = SigninController = __decorate([
 
 
 /***/ }),
-/* 4250 */
+/* 4257 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 "use strict";
@@ -501756,7 +504019,7 @@ exports.SigninService = void 0;
 const globalConfig_service_1 = __webpack_require__(2467);
 const userBalance_service_1 = __webpack_require__(2696);
 const common_1 = __webpack_require__(2);
-const signIn_entity_1 = __webpack_require__(4221);
+const signIn_entity_1 = __webpack_require__(4228);
 const typeorm_1 = __webpack_require__(2436);
 const typeorm_2 = __webpack_require__(666);
 const date_1 = __webpack_require__(2500);
@@ -501869,7 +504132,7 @@ exports.SigninService = SigninService = __decorate([
 
 
 /***/ }),
-/* 4251 */
+/* 4258 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 "use strict";
@@ -501883,7 +504146,7 @@ var __decorate = (this && this.__decorate) || function (decorators, target, key,
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.SpaModule = void 0;
 const common_1 = __webpack_require__(2);
-const spa_controller_1 = __webpack_require__(4252);
+const spa_controller_1 = __webpack_require__(4259);
 let SpaModule = class SpaModule {
 };
 exports.SpaModule = SpaModule;
@@ -501895,7 +504158,7 @@ exports.SpaModule = SpaModule = __decorate([
 
 
 /***/ }),
-/* 4252 */
+/* 4259 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 "use strict";
@@ -501975,7 +504238,7 @@ exports.SpaController = SpaController = SpaController_1 = __decorate([
 
 
 /***/ }),
-/* 4253 */
+/* 4260 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 "use strict";
@@ -501992,10 +504255,10 @@ const common_1 = __webpack_require__(2);
 const typeorm_1 = __webpack_require__(2436);
 const chatLog_entity_1 = __webpack_require__(2540);
 const config_entity_1 = __webpack_require__(2545);
-const order_entity_1 = __webpack_require__(4219);
+const order_entity_1 = __webpack_require__(4226);
 const user_entity_1 = __webpack_require__(2702);
-const statistic_controller_1 = __webpack_require__(4254);
-const statistic_service_1 = __webpack_require__(4256);
+const statistic_controller_1 = __webpack_require__(4261);
+const statistic_service_1 = __webpack_require__(4263);
 let StatisticModule = class StatisticModule {
 };
 exports.StatisticModule = StatisticModule;
@@ -502009,7 +504272,7 @@ exports.StatisticModule = StatisticModule = __decorate([
 
 
 /***/ }),
-/* 4254 */
+/* 4261 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 "use strict";
@@ -502032,8 +504295,8 @@ exports.StatisticController = void 0;
 const adminAuth_guard_1 = __webpack_require__(2766);
 const common_1 = __webpack_require__(2);
 const swagger_1 = __webpack_require__(2281);
-const queryStatisticDto_dto_1 = __webpack_require__(4255);
-const statistic_service_1 = __webpack_require__(4256);
+const queryStatisticDto_dto_1 = __webpack_require__(4262);
+const statistic_service_1 = __webpack_require__(4263);
 let StatisticController = class StatisticController {
     statisticService;
     constructor(statisticService) {
@@ -502087,7 +504350,7 @@ exports.StatisticController = StatisticController = __decorate([
 
 
 /***/ }),
-/* 4255 */
+/* 4262 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 "use strict";
@@ -502115,7 +504378,7 @@ __decorate([
 
 
 /***/ }),
-/* 4256 */
+/* 4263 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 "use strict";
@@ -502144,7 +504407,7 @@ const typeorm_2 = __webpack_require__(666);
 const chatLog_entity_1 = __webpack_require__(2540);
 const config_entity_1 = __webpack_require__(2545);
 const globalConfig_service_1 = __webpack_require__(2467);
-const order_entity_1 = __webpack_require__(4219);
+const order_entity_1 = __webpack_require__(4226);
 const user_entity_1 = __webpack_require__(2702);
 let StatisticService = class StatisticService {
     userEntity;
@@ -502400,7 +504663,7 @@ exports.StatisticService = StatisticService = __decorate([
 
 
 /***/ }),
-/* 4257 */
+/* 4264 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 "use strict";
@@ -502414,12 +504677,12 @@ var __decorate = (this && this.__decorate) || function (decorators, target, key,
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.TaskModule = void 0;
 const common_1 = __webpack_require__(2);
-const schedule_1 = __webpack_require__(4258);
+const schedule_1 = __webpack_require__(4265);
 const typeorm_1 = __webpack_require__(2436);
 const globalConfig_module_1 = __webpack_require__(4136);
-const models_module_1 = __webpack_require__(4222);
+const models_module_1 = __webpack_require__(4229);
 const userBalance_entity_1 = __webpack_require__(2700);
-const task_service_1 = __webpack_require__(4302);
+const task_service_1 = __webpack_require__(4309);
 let TaskModule = class TaskModule {
 };
 exports.TaskModule = TaskModule;
@@ -502437,7 +504700,7 @@ exports.TaskModule = TaskModule = __decorate([
 
 
 /***/ }),
-/* 4258 */
+/* 4265 */
 /***/ ((__unused_webpack_module, exports, __webpack_require__) => {
 
 "use strict";
@@ -502446,11 +504709,11 @@ function __export(m) {
     for (var p in m) if (!exports.hasOwnProperty(p)) exports[p] = m[p];
 }
 exports.__esModule = true;
-__export(__webpack_require__(4259));
+__export(__webpack_require__(4266));
 
 
 /***/ }),
-/* 4259 */
+/* 4266 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 "use strict";
@@ -502470,26 +504733,26 @@ var __exportStar = (this && this.__exportStar) || function(m, exports) {
     for (var p in m) if (p !== "default" && !Object.prototype.hasOwnProperty.call(exports, p)) __createBinding(exports, m, p);
 };
 Object.defineProperty(exports, "__esModule", ({ value: true }));
-__exportStar(__webpack_require__(4260), exports);
-__exportStar(__webpack_require__(4262), exports);
-__exportStar(__webpack_require__(4268), exports);
-__exportStar(__webpack_require__(4300), exports);
+__exportStar(__webpack_require__(4267), exports);
+__exportStar(__webpack_require__(4269), exports);
+__exportStar(__webpack_require__(4275), exports);
+__exportStar(__webpack_require__(4307), exports);
 
 
 /***/ }),
-/* 4260 */
+/* 4267 */
 /***/ ((__unused_webpack_module, exports, __webpack_require__) => {
 
 "use strict";
 
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.CronExpression = void 0;
-var cron_expression_enum_1 = __webpack_require__(4261);
+var cron_expression_enum_1 = __webpack_require__(4268);
 Object.defineProperty(exports, "CronExpression", ({ enumerable: true, get: function () { return cron_expression_enum_1.CronExpression; } }));
 
 
 /***/ }),
-/* 4261 */
+/* 4268 */
 /***/ ((__unused_webpack_module, exports) => {
 
 "use strict";
@@ -502585,7 +504848,7 @@ var CronExpression;
 
 
 /***/ }),
-/* 4262 */
+/* 4269 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 "use strict";
@@ -502605,13 +504868,13 @@ var __exportStar = (this && this.__exportStar) || function(m, exports) {
     for (var p in m) if (p !== "default" && !Object.prototype.hasOwnProperty.call(exports, p)) __createBinding(exports, m, p);
 };
 Object.defineProperty(exports, "__esModule", ({ value: true }));
-__exportStar(__webpack_require__(4263), exports);
-__exportStar(__webpack_require__(4266), exports);
-__exportStar(__webpack_require__(4267), exports);
+__exportStar(__webpack_require__(4270), exports);
+__exportStar(__webpack_require__(4273), exports);
+__exportStar(__webpack_require__(4274), exports);
 
 
 /***/ }),
-/* 4263 */
+/* 4270 */
 /***/ ((__unused_webpack_module, exports, __webpack_require__) => {
 
 "use strict";
@@ -502619,8 +504882,8 @@ __exportStar(__webpack_require__(4267), exports);
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.Cron = void 0;
 const common_1 = __webpack_require__(2);
-const scheduler_type_enum_1 = __webpack_require__(4264);
-const schedule_constants_1 = __webpack_require__(4265);
+const scheduler_type_enum_1 = __webpack_require__(4271);
+const schedule_constants_1 = __webpack_require__(4272);
 /**
  * Creates a scheduled job.
  * @param cronTime The time to fire off your job. This can be in the form of cron syntax, a JS ```Date``` object or a Luxon ```DateTime``` object.
@@ -502637,7 +504900,7 @@ exports.Cron = Cron;
 
 
 /***/ }),
-/* 4264 */
+/* 4271 */
 /***/ ((__unused_webpack_module, exports) => {
 
 "use strict";
@@ -502653,7 +504916,7 @@ var SchedulerType;
 
 
 /***/ }),
-/* 4265 */
+/* 4272 */
 /***/ ((__unused_webpack_module, exports) => {
 
 "use strict";
@@ -502669,7 +504932,7 @@ exports.SCHEDULE_MODULE_OPTIONS = 'SCHEDULE_MODULE_OPTIONS';
 
 
 /***/ }),
-/* 4266 */
+/* 4273 */
 /***/ ((__unused_webpack_module, exports, __webpack_require__) => {
 
 "use strict";
@@ -502677,8 +504940,8 @@ exports.SCHEDULE_MODULE_OPTIONS = 'SCHEDULE_MODULE_OPTIONS';
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.Interval = void 0;
 const common_1 = __webpack_require__(2);
-const scheduler_type_enum_1 = __webpack_require__(4264);
-const schedule_constants_1 = __webpack_require__(4265);
+const scheduler_type_enum_1 = __webpack_require__(4271);
+const schedule_constants_1 = __webpack_require__(4272);
 /**
  * Schedules an interval (`setInterval`).
  */
@@ -502692,7 +504955,7 @@ exports.Interval = Interval;
 
 
 /***/ }),
-/* 4267 */
+/* 4274 */
 /***/ ((__unused_webpack_module, exports, __webpack_require__) => {
 
 "use strict";
@@ -502700,8 +504963,8 @@ exports.Interval = Interval;
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.Timeout = void 0;
 const common_1 = __webpack_require__(2);
-const scheduler_type_enum_1 = __webpack_require__(4264);
-const schedule_constants_1 = __webpack_require__(4265);
+const scheduler_type_enum_1 = __webpack_require__(4271);
+const schedule_constants_1 = __webpack_require__(4272);
 /**
  * Schedules a timeout (`setTimeout`).
  */
@@ -502715,7 +504978,7 @@ exports.Timeout = Timeout;
 
 
 /***/ }),
-/* 4268 */
+/* 4275 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 "use strict";
@@ -502731,11 +504994,11 @@ Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.ScheduleModule = void 0;
 const common_1 = __webpack_require__(2);
 const core_1 = __webpack_require__(1944);
-const schedule_metadata_accessor_1 = __webpack_require__(4269);
-const schedule_explorer_1 = __webpack_require__(4270);
-const scheduler_orchestrator_1 = __webpack_require__(4271);
-const scheduler_registry_1 = __webpack_require__(4300);
-const schedule_constants_1 = __webpack_require__(4265);
+const schedule_metadata_accessor_1 = __webpack_require__(4276);
+const schedule_explorer_1 = __webpack_require__(4277);
+const scheduler_orchestrator_1 = __webpack_require__(4278);
+const scheduler_registry_1 = __webpack_require__(4307);
+const schedule_constants_1 = __webpack_require__(4272);
 let ScheduleModule = ScheduleModule_1 = class ScheduleModule {
     static forRoot(options) {
         const optionsWithDefaults = {
@@ -502769,7 +505032,7 @@ exports.ScheduleModule = ScheduleModule = ScheduleModule_1 = __decorate([
 
 
 /***/ }),
-/* 4269 */
+/* 4276 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 "use strict";
@@ -502787,7 +505050,7 @@ Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.SchedulerMetadataAccessor = void 0;
 const common_1 = __webpack_require__(2);
 const core_1 = __webpack_require__(1944);
-const schedule_constants_1 = __webpack_require__(4265);
+const schedule_constants_1 = __webpack_require__(4272);
 let SchedulerMetadataAccessor = class SchedulerMetadataAccessor {
     constructor(reflector) {
         this.reflector = reflector;
@@ -502822,7 +505085,7 @@ exports.SchedulerMetadataAccessor = SchedulerMetadataAccessor = __decorate([
 
 
 /***/ }),
-/* 4270 */
+/* 4277 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 "use strict";
@@ -502843,10 +505106,10 @@ Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.ScheduleExplorer = void 0;
 const common_1 = __webpack_require__(2);
 const core_1 = __webpack_require__(1944);
-const scheduler_type_enum_1 = __webpack_require__(4264);
-const schedule_metadata_accessor_1 = __webpack_require__(4269);
-const scheduler_orchestrator_1 = __webpack_require__(4271);
-const schedule_constants_1 = __webpack_require__(4265);
+const scheduler_type_enum_1 = __webpack_require__(4271);
+const schedule_metadata_accessor_1 = __webpack_require__(4276);
+const scheduler_orchestrator_1 = __webpack_require__(4278);
+const schedule_constants_1 = __webpack_require__(4272);
 let ScheduleExplorer = class ScheduleExplorer {
     constructor(moduleOptions, schedulerOrchestrator, discoveryService, metadataAccessor, metadataScanner) {
         this.moduleOptions = moduleOptions;
@@ -502964,7 +505227,7 @@ exports.ScheduleExplorer = ScheduleExplorer = __decorate([
 
 
 /***/ }),
-/* 4271 */
+/* 4278 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 "use strict";
@@ -502981,9 +505244,9 @@ var __metadata = (this && this.__metadata) || function (k, v) {
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.SchedulerOrchestrator = void 0;
 const common_1 = __webpack_require__(2);
-const cron_1 = __webpack_require__(4272);
-const uuid_1 = __webpack_require__(4279);
-const scheduler_registry_1 = __webpack_require__(4300);
+const cron_1 = __webpack_require__(4279);
+const uuid_1 = __webpack_require__(4286);
+const scheduler_registry_1 = __webpack_require__(4307);
 let SchedulerOrchestrator = class SchedulerOrchestrator {
     constructor(schedulerRegistry) {
         this.schedulerRegistry = schedulerRegistry;
@@ -503069,17 +505332,17 @@ exports.SchedulerOrchestrator = SchedulerOrchestrator = __decorate([
 
 
 /***/ }),
-/* 4272 */
+/* 4279 */
 /***/ ((__unused_webpack_module, exports, __webpack_require__) => {
 
 "use strict";
 
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.timeout = exports.sendAt = exports.CronTime = exports.CronJob = void 0;
-const time_1 = __webpack_require__(4273);
-var job_1 = __webpack_require__(4278);
+const time_1 = __webpack_require__(4280);
+var job_1 = __webpack_require__(4285);
 Object.defineProperty(exports, "CronJob", ({ enumerable: true, get: function () { return job_1.CronJob; } }));
-var time_2 = __webpack_require__(4273);
+var time_2 = __webpack_require__(4280);
 Object.defineProperty(exports, "CronTime", ({ enumerable: true, get: function () { return time_2.CronTime; } }));
 const sendAt = (cronTime) => new time_1.CronTime(cronTime).sendAt();
 exports.sendAt = sendAt;
@@ -503088,17 +505351,17 @@ exports.timeout = timeout;
 //# sourceMappingURL=index.js.map
 
 /***/ }),
-/* 4273 */
+/* 4280 */
 /***/ ((__unused_webpack_module, exports, __webpack_require__) => {
 
 "use strict";
 
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.CronTime = void 0;
-const luxon_1 = __webpack_require__(4274);
-const constants_1 = __webpack_require__(4275);
-const errors_1 = __webpack_require__(4276);
-const utils_1 = __webpack_require__(4277);
+const luxon_1 = __webpack_require__(4281);
+const constants_1 = __webpack_require__(4282);
+const errors_1 = __webpack_require__(4283);
+const utils_1 = __webpack_require__(4284);
 class CronTime {
     constructor(source, timeZone, utcOffset) {
         this.realDate = false;
@@ -503538,7 +505801,7 @@ exports.CronTime = CronTime;
 //# sourceMappingURL=time.js.map
 
 /***/ }),
-/* 4274 */
+/* 4281 */
 /***/ ((__unused_webpack_module, exports) => {
 
 "use strict";
@@ -511198,7 +513461,7 @@ exports.Zone = Zone;
 
 
 /***/ }),
-/* 4275 */
+/* 4282 */
 /***/ ((__unused_webpack_module, exports) => {
 
 "use strict";
@@ -511282,7 +513545,7 @@ exports.RE_RANGE = /^(\d+)(?:-(\d+))?(?:\/(\d+))?$/g;
 //# sourceMappingURL=constants.js.map
 
 /***/ }),
-/* 4276 */
+/* 4283 */
 /***/ ((__unused_webpack_module, exports) => {
 
 "use strict";
@@ -511301,7 +513564,7 @@ exports.ExclusiveParametersError = ExclusiveParametersError;
 //# sourceMappingURL=errors.js.map
 
 /***/ }),
-/* 4277 */
+/* 4284 */
 /***/ ((__unused_webpack_module, exports) => {
 
 "use strict";
@@ -511315,7 +513578,7 @@ exports.getRecordKeys = getRecordKeys;
 //# sourceMappingURL=utils.js.map
 
 /***/ }),
-/* 4278 */
+/* 4285 */
 /***/ ((__unused_webpack_module, exports, __webpack_require__) => {
 
 "use strict";
@@ -511323,8 +513586,8 @@ exports.getRecordKeys = getRecordKeys;
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.CronJob = void 0;
 const child_process_1 = __webpack_require__(2689);
-const errors_1 = __webpack_require__(4276);
-const time_1 = __webpack_require__(4273);
+const errors_1 = __webpack_require__(4283);
+const time_1 = __webpack_require__(4280);
 class CronJob {
     constructor(cronTime, onTick, onComplete, start, timeZone, context, runOnInit, utcOffset, unrefTimeout) {
         this.running = false;
@@ -511491,45 +513754,45 @@ exports.CronJob = CronJob;
 //# sourceMappingURL=job.js.map
 
 /***/ }),
-/* 4279 */
+/* 4286 */
 /***/ ((__unused_webpack_module, exports, __webpack_require__) => {
 
 "use strict";
 
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.version = exports.validate = exports.v7 = exports.v6ToV1 = exports.v6 = exports.v5 = exports.v4 = exports.v3 = exports.v1ToV6 = exports.v1 = exports.stringify = exports.parse = exports.NIL = exports.MAX = void 0;
-var max_js_1 = __webpack_require__(4280);
+var max_js_1 = __webpack_require__(4287);
 Object.defineProperty(exports, "MAX", ({ enumerable: true, get: function () { return max_js_1.default; } }));
-var nil_js_1 = __webpack_require__(4281);
+var nil_js_1 = __webpack_require__(4288);
 Object.defineProperty(exports, "NIL", ({ enumerable: true, get: function () { return nil_js_1.default; } }));
-var parse_js_1 = __webpack_require__(4282);
+var parse_js_1 = __webpack_require__(4289);
 Object.defineProperty(exports, "parse", ({ enumerable: true, get: function () { return parse_js_1.default; } }));
-var stringify_js_1 = __webpack_require__(4285);
+var stringify_js_1 = __webpack_require__(4292);
 Object.defineProperty(exports, "stringify", ({ enumerable: true, get: function () { return stringify_js_1.default; } }));
-var v1_js_1 = __webpack_require__(4286);
+var v1_js_1 = __webpack_require__(4293);
 Object.defineProperty(exports, "v1", ({ enumerable: true, get: function () { return v1_js_1.default; } }));
-var v1ToV6_js_1 = __webpack_require__(4288);
+var v1ToV6_js_1 = __webpack_require__(4295);
 Object.defineProperty(exports, "v1ToV6", ({ enumerable: true, get: function () { return v1ToV6_js_1.default; } }));
-var v3_js_1 = __webpack_require__(4289);
+var v3_js_1 = __webpack_require__(4296);
 Object.defineProperty(exports, "v3", ({ enumerable: true, get: function () { return v3_js_1.default; } }));
-var v4_js_1 = __webpack_require__(4292);
+var v4_js_1 = __webpack_require__(4299);
 Object.defineProperty(exports, "v4", ({ enumerable: true, get: function () { return v4_js_1.default; } }));
-var v5_js_1 = __webpack_require__(4294);
+var v5_js_1 = __webpack_require__(4301);
 Object.defineProperty(exports, "v5", ({ enumerable: true, get: function () { return v5_js_1.default; } }));
-var v6_js_1 = __webpack_require__(4296);
+var v6_js_1 = __webpack_require__(4303);
 Object.defineProperty(exports, "v6", ({ enumerable: true, get: function () { return v6_js_1.default; } }));
-var v6ToV1_js_1 = __webpack_require__(4297);
+var v6ToV1_js_1 = __webpack_require__(4304);
 Object.defineProperty(exports, "v6ToV1", ({ enumerable: true, get: function () { return v6ToV1_js_1.default; } }));
-var v7_js_1 = __webpack_require__(4298);
+var v7_js_1 = __webpack_require__(4305);
 Object.defineProperty(exports, "v7", ({ enumerable: true, get: function () { return v7_js_1.default; } }));
-var validate_js_1 = __webpack_require__(4283);
+var validate_js_1 = __webpack_require__(4290);
 Object.defineProperty(exports, "validate", ({ enumerable: true, get: function () { return validate_js_1.default; } }));
-var version_js_1 = __webpack_require__(4299);
+var version_js_1 = __webpack_require__(4306);
 Object.defineProperty(exports, "version", ({ enumerable: true, get: function () { return version_js_1.default; } }));
 
 
 /***/ }),
-/* 4280 */
+/* 4287 */
 /***/ ((__unused_webpack_module, exports) => {
 
 "use strict";
@@ -511539,7 +513802,7 @@ exports["default"] = 'ffffffff-ffff-ffff-ffff-ffffffffffff';
 
 
 /***/ }),
-/* 4281 */
+/* 4288 */
 /***/ ((__unused_webpack_module, exports) => {
 
 "use strict";
@@ -511549,13 +513812,13 @@ exports["default"] = '00000000-0000-0000-0000-000000000000';
 
 
 /***/ }),
-/* 4282 */
+/* 4289 */
 /***/ ((__unused_webpack_module, exports, __webpack_require__) => {
 
 "use strict";
 
 Object.defineProperty(exports, "__esModule", ({ value: true }));
-const validate_js_1 = __webpack_require__(4283);
+const validate_js_1 = __webpack_require__(4290);
 function parse(uuid) {
     if (!(0, validate_js_1.default)(uuid)) {
         throw TypeError('Invalid UUID');
@@ -511567,13 +513830,13 @@ exports["default"] = parse;
 
 
 /***/ }),
-/* 4283 */
+/* 4290 */
 /***/ ((__unused_webpack_module, exports, __webpack_require__) => {
 
 "use strict";
 
 Object.defineProperty(exports, "__esModule", ({ value: true }));
-const regex_js_1 = __webpack_require__(4284);
+const regex_js_1 = __webpack_require__(4291);
 function validate(uuid) {
     return typeof uuid === 'string' && regex_js_1.default.test(uuid);
 }
@@ -511581,7 +513844,7 @@ exports["default"] = validate;
 
 
 /***/ }),
-/* 4284 */
+/* 4291 */
 /***/ ((__unused_webpack_module, exports) => {
 
 "use strict";
@@ -511591,14 +513854,14 @@ exports["default"] = /^(?:[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f
 
 
 /***/ }),
-/* 4285 */
+/* 4292 */
 /***/ ((__unused_webpack_module, exports, __webpack_require__) => {
 
 "use strict";
 
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.unsafeStringify = unsafeStringify;
-const validate_js_1 = __webpack_require__(4283);
+const validate_js_1 = __webpack_require__(4290);
 const byteToHex = [];
 for (let i = 0; i < 256; ++i) {
     byteToHex.push((i + 0x100).toString(16).slice(1));
@@ -511636,15 +513899,15 @@ exports["default"] = stringify;
 
 
 /***/ }),
-/* 4286 */
+/* 4293 */
 /***/ ((__unused_webpack_module, exports, __webpack_require__) => {
 
 "use strict";
 
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.updateV1State = updateV1State;
-const rng_js_1 = __webpack_require__(4287);
-const stringify_js_1 = __webpack_require__(4285);
+const rng_js_1 = __webpack_require__(4294);
+const stringify_js_1 = __webpack_require__(4292);
 const _state = {};
 function v1(options, buf, offset) {
     let bytes;
@@ -511721,7 +513984,7 @@ exports["default"] = v1;
 
 
 /***/ }),
-/* 4287 */
+/* 4294 */
 /***/ ((__unused_webpack_module, exports, __webpack_require__) => {
 
 "use strict";
@@ -511741,15 +514004,15 @@ function rng() {
 
 
 /***/ }),
-/* 4288 */
+/* 4295 */
 /***/ ((__unused_webpack_module, exports, __webpack_require__) => {
 
 "use strict";
 
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports["default"] = v1ToV6;
-const parse_js_1 = __webpack_require__(4282);
-const stringify_js_1 = __webpack_require__(4285);
+const parse_js_1 = __webpack_require__(4289);
+const stringify_js_1 = __webpack_require__(4292);
 function v1ToV6(uuid) {
     const v1Bytes = typeof uuid === 'string' ? (0, parse_js_1.default)(uuid) : uuid;
     const v6Bytes = _v1ToV6(v1Bytes);
@@ -511761,16 +514024,16 @@ function _v1ToV6(v1Bytes) {
 
 
 /***/ }),
-/* 4289 */
+/* 4296 */
 /***/ ((__unused_webpack_module, exports, __webpack_require__) => {
 
 "use strict";
 
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.URL = exports.DNS = void 0;
-const md5_js_1 = __webpack_require__(4290);
-const v35_js_1 = __webpack_require__(4291);
-var v35_js_2 = __webpack_require__(4291);
+const md5_js_1 = __webpack_require__(4297);
+const v35_js_1 = __webpack_require__(4298);
+var v35_js_2 = __webpack_require__(4298);
 Object.defineProperty(exports, "DNS", ({ enumerable: true, get: function () { return v35_js_2.DNS; } }));
 Object.defineProperty(exports, "URL", ({ enumerable: true, get: function () { return v35_js_2.URL; } }));
 function v3(value, namespace, buf, offset) {
@@ -511782,7 +514045,7 @@ exports["default"] = v3;
 
 
 /***/ }),
-/* 4290 */
+/* 4297 */
 /***/ ((__unused_webpack_module, exports, __webpack_require__) => {
 
 "use strict";
@@ -511802,7 +514065,7 @@ exports["default"] = md5;
 
 
 /***/ }),
-/* 4291 */
+/* 4298 */
 /***/ ((__unused_webpack_module, exports, __webpack_require__) => {
 
 "use strict";
@@ -511811,8 +514074,8 @@ Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.URL = exports.DNS = void 0;
 exports.stringToBytes = stringToBytes;
 exports["default"] = v35;
-const parse_js_1 = __webpack_require__(4282);
-const stringify_js_1 = __webpack_require__(4285);
+const parse_js_1 = __webpack_require__(4289);
+const stringify_js_1 = __webpack_require__(4292);
 function stringToBytes(str) {
     str = unescape(encodeURIComponent(str));
     const bytes = new Uint8Array(str.length);
@@ -511850,15 +514113,15 @@ function v35(version, hash, value, namespace, buf, offset) {
 
 
 /***/ }),
-/* 4292 */
+/* 4299 */
 /***/ ((__unused_webpack_module, exports, __webpack_require__) => {
 
 "use strict";
 
 Object.defineProperty(exports, "__esModule", ({ value: true }));
-const native_js_1 = __webpack_require__(4293);
-const rng_js_1 = __webpack_require__(4287);
-const stringify_js_1 = __webpack_require__(4285);
+const native_js_1 = __webpack_require__(4300);
+const rng_js_1 = __webpack_require__(4294);
+const stringify_js_1 = __webpack_require__(4292);
 function v4(options, buf, offset) {
     if (native_js_1.default.randomUUID && !buf && !options) {
         return native_js_1.default.randomUUID();
@@ -511880,7 +514143,7 @@ exports["default"] = v4;
 
 
 /***/ }),
-/* 4293 */
+/* 4300 */
 /***/ ((__unused_webpack_module, exports, __webpack_require__) => {
 
 "use strict";
@@ -511891,16 +514154,16 @@ exports["default"] = { randomUUID: crypto_1.randomUUID };
 
 
 /***/ }),
-/* 4294 */
+/* 4301 */
 /***/ ((__unused_webpack_module, exports, __webpack_require__) => {
 
 "use strict";
 
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.URL = exports.DNS = void 0;
-const sha1_js_1 = __webpack_require__(4295);
-const v35_js_1 = __webpack_require__(4291);
-var v35_js_2 = __webpack_require__(4291);
+const sha1_js_1 = __webpack_require__(4302);
+const v35_js_1 = __webpack_require__(4298);
+var v35_js_2 = __webpack_require__(4298);
 Object.defineProperty(exports, "DNS", ({ enumerable: true, get: function () { return v35_js_2.DNS; } }));
 Object.defineProperty(exports, "URL", ({ enumerable: true, get: function () { return v35_js_2.URL; } }));
 function v5(value, namespace, buf, offset) {
@@ -511912,7 +514175,7 @@ exports["default"] = v5;
 
 
 /***/ }),
-/* 4295 */
+/* 4302 */
 /***/ ((__unused_webpack_module, exports, __webpack_require__) => {
 
 "use strict";
@@ -511932,15 +514195,15 @@ exports["default"] = sha1;
 
 
 /***/ }),
-/* 4296 */
+/* 4303 */
 /***/ ((__unused_webpack_module, exports, __webpack_require__) => {
 
 "use strict";
 
 Object.defineProperty(exports, "__esModule", ({ value: true }));
-const stringify_js_1 = __webpack_require__(4285);
-const v1_js_1 = __webpack_require__(4286);
-const v1ToV6_js_1 = __webpack_require__(4288);
+const stringify_js_1 = __webpack_require__(4292);
+const v1_js_1 = __webpack_require__(4293);
+const v1ToV6_js_1 = __webpack_require__(4295);
 function v6(options, buf, offset) {
     options ??= {};
     offset ??= 0;
@@ -511958,15 +514221,15 @@ exports["default"] = v6;
 
 
 /***/ }),
-/* 4297 */
+/* 4304 */
 /***/ ((__unused_webpack_module, exports, __webpack_require__) => {
 
 "use strict";
 
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports["default"] = v6ToV1;
-const parse_js_1 = __webpack_require__(4282);
-const stringify_js_1 = __webpack_require__(4285);
+const parse_js_1 = __webpack_require__(4289);
+const stringify_js_1 = __webpack_require__(4292);
 function v6ToV1(uuid) {
     const v6Bytes = typeof uuid === 'string' ? (0, parse_js_1.default)(uuid) : uuid;
     const v1Bytes = _v6ToV1(v6Bytes);
@@ -511978,15 +514241,15 @@ function _v6ToV1(v6Bytes) {
 
 
 /***/ }),
-/* 4298 */
+/* 4305 */
 /***/ ((__unused_webpack_module, exports, __webpack_require__) => {
 
 "use strict";
 
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.updateV7State = updateV7State;
-const rng_js_1 = __webpack_require__(4287);
-const stringify_js_1 = __webpack_require__(4285);
+const rng_js_1 = __webpack_require__(4294);
+const stringify_js_1 = __webpack_require__(4292);
 const _state = {};
 function v7(options, buf, offset) {
     let bytes;
@@ -512045,13 +514308,13 @@ exports["default"] = v7;
 
 
 /***/ }),
-/* 4299 */
+/* 4306 */
 /***/ ((__unused_webpack_module, exports, __webpack_require__) => {
 
 "use strict";
 
 Object.defineProperty(exports, "__esModule", ({ value: true }));
-const validate_js_1 = __webpack_require__(4283);
+const validate_js_1 = __webpack_require__(4290);
 function version(uuid) {
     if (!(0, validate_js_1.default)(uuid)) {
         throw TypeError('Invalid UUID');
@@ -512062,7 +514325,7 @@ exports["default"] = version;
 
 
 /***/ }),
-/* 4300 */
+/* 4307 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 "use strict";
@@ -512077,7 +514340,7 @@ var SchedulerRegistry_1;
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.SchedulerRegistry = void 0;
 const common_1 = __webpack_require__(2);
-const schedule_messages_1 = __webpack_require__(4301);
+const schedule_messages_1 = __webpack_require__(4308);
 let SchedulerRegistry = SchedulerRegistry_1 = class SchedulerRegistry {
     constructor() {
         this.logger = new common_1.Logger(SchedulerRegistry_1.name);
@@ -512182,7 +514445,7 @@ exports.SchedulerRegistry = SchedulerRegistry = SchedulerRegistry_1 = __decorate
 
 
 /***/ }),
-/* 4301 */
+/* 4308 */
 /***/ ((__unused_webpack_module, exports) => {
 
 "use strict";
@@ -512198,7 +514461,7 @@ exports.DUPLICATE_SCHEDULER = DUPLICATE_SCHEDULER;
 
 
 /***/ }),
-/* 4302 */
+/* 4309 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 "use strict";
@@ -512219,7 +514482,7 @@ var _a, _b, _c;
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.TaskService = void 0;
 const common_1 = __webpack_require__(2);
-const schedule_1 = __webpack_require__(4258);
+const schedule_1 = __webpack_require__(4265);
 const typeorm_1 = __webpack_require__(2436);
 const fs = __webpack_require__(673);
 const path = __webpack_require__(674);
@@ -512299,7 +514562,7 @@ exports.TaskService = TaskService = __decorate([
 
 
 /***/ }),
-/* 4303 */
+/* 4310 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 "use strict";
@@ -512314,7 +514577,7 @@ Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.TestModule = void 0;
 const common_1 = __webpack_require__(2);
 const voice_module_1 = __webpack_require__(4135);
-const test_controller_1 = __webpack_require__(4304);
+const test_controller_1 = __webpack_require__(4311);
 let TestModule = class TestModule {
 };
 exports.TestModule = TestModule;
@@ -512327,7 +514590,7 @@ exports.TestModule = TestModule = __decorate([
 
 
 /***/ }),
-/* 4304 */
+/* 4311 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 "use strict";
@@ -512477,7 +514740,7 @@ exports.TestController = TestController = TestController_1 = __decorate([
 
 
 /***/ }),
-/* 4305 */
+/* 4312 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 "use strict";
@@ -512511,7 +514774,7 @@ const verification_service_1 = __webpack_require__(2704);
 const accountLog_entity_1 = __webpack_require__(2698);
 const balance_entity_1 = __webpack_require__(2699);
 const fingerprint_entity_1 = __webpack_require__(2703);
-const userBalance_controller_1 = __webpack_require__(4306);
+const userBalance_controller_1 = __webpack_require__(4313);
 const userBalance_entity_1 = __webpack_require__(2700);
 const userBalance_service_1 = __webpack_require__(2696);
 let UserBalanceModule = class UserBalanceModule {
@@ -512549,7 +514812,7 @@ exports.UserBalanceModule = UserBalanceModule = __decorate([
 
 
 /***/ }),
-/* 4306 */
+/* 4313 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 "use strict";
@@ -512657,7 +514920,7 @@ exports.UserBalanceController = UserBalanceController = __decorate([
 
 
 /***/ }),
-/* 4307 */
+/* 4314 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 "use strict";
@@ -512687,7 +514950,7 @@ exports.VerificationModule = VerificationModule = __decorate([
 
 
 /***/ }),
-/* 4308 */
+/* 4315 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 "use strict";
@@ -512706,7 +514969,7 @@ const affection_module_1 = __webpack_require__(2435);
 const app_entity_1 = __webpack_require__(2769);
 const app_module_1 = __webpack_require__(2761);
 const chat_module_1 = __webpack_require__(2825);
-const voiceCall_service_1 = __webpack_require__(4309);
+const voiceCall_service_1 = __webpack_require__(4316);
 let VoiceCallModule = class VoiceCallModule {
 };
 exports.VoiceCallModule = VoiceCallModule;
@@ -512720,7 +514983,7 @@ exports.VoiceCallModule = VoiceCallModule = __decorate([
 
 
 /***/ }),
-/* 4309 */
+/* 4316 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 "use strict";
@@ -512747,7 +515010,7 @@ const affection_service_1 = __webpack_require__(2757);
 const chat_service_1 = __webpack_require__(2826);
 const app_entity_1 = __webpack_require__(2769);
 const app_service_1 = __webpack_require__(2768);
-const chat_service_2 = __webpack_require__(4184);
+const chat_service_2 = __webpack_require__(4191);
 let VoiceCallService = class VoiceCallService {
     appEntity;
     chatService;
@@ -512870,7 +515133,7 @@ exports.VoiceCallService = VoiceCallService = __decorate([
 
 
 /***/ }),
-/* 4310 */
+/* 4317 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 "use strict";
@@ -512921,7 +515184,7 @@ exports.AllExceptionsFilter = AllExceptionsFilter = __decorate([
 
 
 /***/ }),
-/* 4311 */
+/* 4318 */
 /***/ ((__unused_webpack_module, exports, __webpack_require__) => {
 
 "use strict";
@@ -512939,20 +515202,20 @@ const appVoice_entity_1 = __webpack_require__(2772);
 const roleEmotion_entity_1 = __webpack_require__(2773);
 const userApps_entity_1 = __webpack_require__(2774);
 const userAppSettings_entity_1 = __webpack_require__(2762);
-const conversationSummary_entity_1 = __webpack_require__(4181);
+const conversationSummary_entity_1 = __webpack_require__(4184);
 const autoReply_entity_1 = __webpack_require__(2810);
 const badWords_entity_1 = __webpack_require__(2818);
 const violationLog_entity_1 = __webpack_require__(2819);
 const chatGroup_entity_1 = __webpack_require__(2701);
 const chatLog_entity_1 = __webpack_require__(2540);
-const crami_entity_1 = __webpack_require__(4208);
+const crami_entity_1 = __webpack_require__(4215);
 const cramiPackage_entity_1 = __webpack_require__(2697);
 const config_entity_1 = __webpack_require__(2545);
 const models_entity_1 = __webpack_require__(2544);
-const order_entity_1 = __webpack_require__(4219);
+const order_entity_1 = __webpack_require__(4226);
 const plugin_entity_1 = __webpack_require__(4134);
-const share_entity_1 = __webpack_require__(4220);
-const signIn_entity_1 = __webpack_require__(4221);
+const share_entity_1 = __webpack_require__(4227);
+const signIn_entity_1 = __webpack_require__(4228);
 const user_entity_1 = __webpack_require__(2702);
 const accountLog_entity_1 = __webpack_require__(2698);
 const balance_entity_1 = __webpack_require__(2699);
@@ -513059,6 +515322,35 @@ async function migrateColumnType(tableName, columnName, targetType, conn) {
         return false;
     }
 }
+async function renameColumn(tableName, oldColumnName, newColumnName, columnDefinition, conn) {
+    try {
+        const [tables] = (await conn.execute(`SHOW TABLES LIKE '${tableName}'`));
+        if (tables.length === 0) {
+            common_1.Logger.log(`表 ${tableName} 不存在，跳过字段重命名`, 'Database');
+            return false;
+        }
+        const [oldColumns] = (await conn.execute(`SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS
+       WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ? AND COLUMN_NAME = ?`, [process.env.DB_DATABASE, tableName, oldColumnName]));
+        const [newColumns] = (await conn.execute(`SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS
+       WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ? AND COLUMN_NAME = ?`, [process.env.DB_DATABASE, tableName, newColumnName]));
+        if (newColumns.length > 0) {
+            common_1.Logger.log(`表 ${tableName} 中已存在 ${newColumnName} 列，跳过重命名`, 'Database');
+            return false;
+        }
+        if (oldColumns.length === 0) {
+            common_1.Logger.log(`表 ${tableName} 中不存在 ${oldColumnName} 列，跳过重命名`, 'Database');
+            return false;
+        }
+        common_1.Logger.log(`开始将 ${tableName} 表中的 ${oldColumnName} 列重命名为 ${newColumnName}`, 'Database');
+        await conn.execute(`ALTER TABLE ${tableName} CHANGE \`${oldColumnName}\` \`${newColumnName}\` ${columnDefinition}`);
+        common_1.Logger.log(`${tableName} 表中的列已成功从 ${oldColumnName} 重命名为 ${newColumnName}`, 'Database');
+        return true;
+    }
+    catch (error) {
+        common_1.Logger.error(`重命名 ${tableName}.${oldColumnName} 列时出错:`, error, 'Database');
+        return false;
+    }
+}
 async function runAllMigrations() {
     const conn = await mysql.createConnection({
         host: process.env.DB_HOST,
@@ -513106,6 +515398,12 @@ async function runAllMigrations() {
                 common_1.Logger.log(`迁移chatlog表${column}列时跳过: ${error.message}`, 'Database');
             }
         }
+        try {
+            await renameColumn('chat_group', 'characterRelationships', 'memberRelationships', 'LONGTEXT COMMENT "人物关系配置(JSON)" NULL', conn);
+        }
+        catch (error) {
+            common_1.Logger.log(`重命名chat_group表characterRelationships列时跳过: ${error.message}`, 'Database');
+        }
     }
     finally {
         await conn.end();
@@ -513146,368 +515444,6 @@ async function initDatabase() {
         }
     }
 }
-
-
-/***/ }),
-/* 4312 */,
-/* 4313 */,
-/* 4314 */,
-/* 4315 */,
-/* 4316 */,
-/* 4317 */,
-/* 4318 */,
-/* 4319 */,
-/* 4320 */,
-/* 4321 */,
-/* 4322 */,
-/* 4323 */,
-/* 4324 */,
-/* 4325 */,
-/* 4326 */,
-/* 4327 */,
-/* 4328 */,
-/* 4329 */,
-/* 4330 */,
-/* 4331 */,
-/* 4332 */,
-/* 4333 */,
-/* 4334 */,
-/* 4335 */,
-/* 4336 */,
-/* 4337 */,
-/* 4338 */,
-/* 4339 */,
-/* 4340 */,
-/* 4341 */,
-/* 4342 */,
-/* 4343 */,
-/* 4344 */,
-/* 4345 */,
-/* 4346 */,
-/* 4347 */,
-/* 4348 */,
-/* 4349 */,
-/* 4350 */,
-/* 4351 */,
-/* 4352 */,
-/* 4353 */,
-/* 4354 */,
-/* 4355 */,
-/* 4356 */,
-/* 4357 */,
-/* 4358 */,
-/* 4359 */,
-/* 4360 */,
-/* 4361 */,
-/* 4362 */,
-/* 4363 */,
-/* 4364 */,
-/* 4365 */,
-/* 4366 */,
-/* 4367 */,
-/* 4368 */,
-/* 4369 */,
-/* 4370 */,
-/* 4371 */,
-/* 4372 */,
-/* 4373 */,
-/* 4374 */,
-/* 4375 */,
-/* 4376 */,
-/* 4377 */,
-/* 4378 */,
-/* 4379 */,
-/* 4380 */,
-/* 4381 */,
-/* 4382 */,
-/* 4383 */,
-/* 4384 */,
-/* 4385 */,
-/* 4386 */,
-/* 4387 */,
-/* 4388 */,
-/* 4389 */,
-/* 4390 */,
-/* 4391 */,
-/* 4392 */,
-/* 4393 */,
-/* 4394 */,
-/* 4395 */,
-/* 4396 */,
-/* 4397 */,
-/* 4398 */,
-/* 4399 */,
-/* 4400 */,
-/* 4401 */,
-/* 4402 */,
-/* 4403 */,
-/* 4404 */,
-/* 4405 */,
-/* 4406 */,
-/* 4407 */,
-/* 4408 */,
-/* 4409 */,
-/* 4410 */,
-/* 4411 */,
-/* 4412 */,
-/* 4413 */,
-/* 4414 */,
-/* 4415 */,
-/* 4416 */,
-/* 4417 */,
-/* 4418 */,
-/* 4419 */,
-/* 4420 */,
-/* 4421 */,
-/* 4422 */,
-/* 4423 */,
-/* 4424 */,
-/* 4425 */
-/***/ (function(__unused_webpack_module, exports, __webpack_require__) {
-
-"use strict";
-
-var __decorate = (this && this.__decorate) || function (decorators, target, key, desc) {
-    var c = arguments.length, r = c < 3 ? target : desc === null ? desc = Object.getOwnPropertyDescriptor(target, key) : desc, d;
-    if (typeof Reflect === "object" && typeof Reflect.decorate === "function") r = Reflect.decorate(decorators, target, key, desc);
-    else for (var i = decorators.length - 1; i >= 0; i--) if (d = decorators[i]) r = (c < 3 ? d(r) : c > 3 ? d(target, key, r) : d(target, key)) || r;
-    return c > 3 && r && Object.defineProperty(target, key, r), r;
-};
-var __metadata = (this && this.__metadata) || function (k, v) {
-    if (typeof Reflect === "object" && typeof Reflect.metadata === "function") return Reflect.metadata(k, v);
-};
-var __param = (this && this.__param) || function (paramIndex, decorator) {
-    return function (target, key) { decorator(target, key, paramIndex); }
-};
-var _a;
-Object.defineProperty(exports, "__esModule", ({ value: true }));
-exports.VoiceCategoryController = void 0;
-const jwtAuth_guard_1 = __webpack_require__(2466);
-const common_1 = __webpack_require__(2);
-const swagger_1 = __webpack_require__(2281);
-const voiceCategory_service_1 = __webpack_require__(4426);
-let VoiceCategoryController = class VoiceCategoryController {
-    voiceCategoryService;
-    constructor(voiceCategoryService) {
-        this.voiceCategoryService = voiceCategoryService;
-    }
-    create(body) {
-        return this.voiceCategoryService.create(body);
-    }
-    list() {
-        return this.voiceCategoryService.list();
-    }
-    detail(id) {
-        return this.voiceCategoryService.detail(id);
-    }
-    update(id, body) {
-        return this.voiceCategoryService.update(id, body);
-    }
-    remove(id) {
-        return this.voiceCategoryService.remove(id);
-    }
-};
-exports.VoiceCategoryController = VoiceCategoryController;
-__decorate([
-    (0, common_1.Post)(),
-    (0, swagger_1.ApiOperation)({ summary: '创建音色分类' }),
-    (0, common_1.UseGuards)(jwtAuth_guard_1.JwtAuthGuard),
-    (0, swagger_1.ApiBearerAuth)(),
-    __param(0, (0, common_1.Body)()),
-    __metadata("design:type", Function),
-    __metadata("design:paramtypes", [Object]),
-    __metadata("design:returntype", void 0)
-], VoiceCategoryController.prototype, "create", null);
-__decorate([
-    (0, common_1.Get)(),
-    (0, swagger_1.ApiOperation)({ summary: '获取音色分类列表' }),
-    (0, common_1.UseGuards)(jwtAuth_guard_1.JwtAuthGuard),
-    (0, swagger_1.ApiBearerAuth)(),
-    __metadata("design:type", Function),
-    __metadata("design:paramtypes", []),
-    __metadata("design:returntype", void 0)
-], VoiceCategoryController.prototype, "list", null);
-__decorate([
-    (0, common_1.Get)(':id'),
-    (0, swagger_1.ApiOperation)({ summary: '获取音色分类详情' }),
-    (0, common_1.UseGuards)(jwtAuth_guard_1.JwtAuthGuard),
-    (0, swagger_1.ApiBearerAuth)(),
-    __param(0, (0, common_1.Param)('id')),
-    __metadata("design:type", Function),
-    __metadata("design:paramtypes", [Number]),
-    __metadata("design:returntype", void 0)
-], VoiceCategoryController.prototype, "detail", null);
-__decorate([
-    (0, common_1.Put)(':id'),
-    (0, swagger_1.ApiOperation)({ summary: '更新音色分类' }),
-    (0, common_1.UseGuards)(jwtAuth_guard_1.JwtAuthGuard),
-    (0, swagger_1.ApiBearerAuth)(),
-    __param(0, (0, common_1.Param)('id')),
-    __param(1, (0, common_1.Body)()),
-    __metadata("design:type", Function),
-    __metadata("design:paramtypes", [Number, Object]),
-    __metadata("design:returntype", void 0)
-], VoiceCategoryController.prototype, "update", null);
-__decorate([
-    (0, common_1.Delete)(':id'),
-    (0, swagger_1.ApiOperation)({ summary: '删除音色分类' }),
-    (0, common_1.UseGuards)(jwtAuth_guard_1.JwtAuthGuard),
-    (0, swagger_1.ApiBearerAuth)(),
-    __param(0, (0, common_1.Param)('id')),
-    __metadata("design:type", Function),
-    __metadata("design:paramtypes", [Number]),
-    __metadata("design:returntype", void 0)
-], VoiceCategoryController.prototype, "remove", null);
-exports.VoiceCategoryController = VoiceCategoryController = __decorate([
-    (0, swagger_1.ApiTags)('voice-category'),
-    (0, common_1.Controller)('voice-category'),
-    __metadata("design:paramtypes", [typeof (_a = typeof voiceCategory_service_1.VoiceCategoryService !== "undefined" && voiceCategory_service_1.VoiceCategoryService) === "function" ? _a : Object])
-], VoiceCategoryController);
-
-
-/***/ }),
-/* 4426 */
-/***/ (function(__unused_webpack_module, exports, __webpack_require__) {
-
-"use strict";
-
-var __decorate = (this && this.__decorate) || function (decorators, target, key, desc) {
-    var c = arguments.length, r = c < 3 ? target : desc === null ? desc = Object.getOwnPropertyDescriptor(target, key) : desc, d;
-    if (typeof Reflect === "object" && typeof Reflect.decorate === "function") r = Reflect.decorate(decorators, target, key, desc);
-    else for (var i = decorators.length - 1; i >= 0; i--) if (d = decorators[i]) r = (c < 3 ? d(r) : c > 3 ? d(target, key, r) : d(target, key)) || r;
-    return c > 3 && r && Object.defineProperty(target, key, r), r;
-};
-var __metadata = (this && this.__metadata) || function (k, v) {
-    if (typeof Reflect === "object" && typeof Reflect.metadata === "function") return Reflect.metadata(k, v);
-};
-var __param = (this && this.__param) || function (paramIndex, decorator) {
-    return function (target, key) { decorator(target, key, paramIndex); }
-};
-var _a;
-Object.defineProperty(exports, "__esModule", ({ value: true }));
-exports.VoiceCategoryService = void 0;
-const common_1 = __webpack_require__(2);
-const typeorm_1 = __webpack_require__(2436);
-const typeorm_2 = __webpack_require__(666);
-const voiceCategory_entity_1 = __webpack_require__(4427);
-let VoiceCategoryService = class VoiceCategoryService {
-    voiceCategoryRepo;
-    constructor(voiceCategoryRepo) {
-        this.voiceCategoryRepo = voiceCategoryRepo;
-    }
-    async create(data) {
-        if (!data.name || !data.name.trim()) {
-            throw new common_1.HttpException('分类名称不能为空', common_1.HttpStatus.BAD_REQUEST);
-        }
-        const existing = await this.voiceCategoryRepo.findOne({
-            where: { name: data.name.trim() },
-        });
-        if (existing) {
-            throw new common_1.HttpException('该分类名称已存在', common_1.HttpStatus.BAD_REQUEST);
-        }
-        const category = this.voiceCategoryRepo.create({
-            name: data.name.trim(),
-            description: data.description?.trim() || null,
-            sort: data.sort ?? 0,
-            isEnabled: data.isEnabled ?? true,
-        });
-        return await this.voiceCategoryRepo.save(category);
-    }
-    async list() {
-        return await this.voiceCategoryRepo.find({
-            order: { sort: 'DESC', createdAt: 'DESC' },
-        });
-    }
-    async detail(id) {
-        const category = await this.voiceCategoryRepo.findOne({ where: { id } });
-        if (!category) {
-            throw new common_1.HttpException('分类不存在', common_1.HttpStatus.NOT_FOUND);
-        }
-        return category;
-    }
-    async update(id, data) {
-        const category = await this.detail(id);
-        if (data.name && data.name.trim() !== category.name) {
-            const existing = await this.voiceCategoryRepo.findOne({
-                where: { name: data.name.trim() },
-            });
-            if (existing && existing.id !== id) {
-                throw new common_1.HttpException('该分类名称已存在', common_1.HttpStatus.BAD_REQUEST);
-            }
-            category.name = data.name.trim();
-        }
-        if (data.description !== undefined) {
-            category.description = data.description?.trim() || null;
-        }
-        if (data.sort !== undefined) {
-            category.sort = data.sort;
-        }
-        if (data.isEnabled !== undefined) {
-            category.isEnabled = data.isEnabled;
-        }
-        return await this.voiceCategoryRepo.save(category);
-    }
-    async remove(id) {
-        const category = await this.detail(id);
-        await this.voiceCategoryRepo.remove(category);
-        return { message: '删除成功' };
-    }
-};
-exports.VoiceCategoryService = VoiceCategoryService;
-exports.VoiceCategoryService = VoiceCategoryService = __decorate([
-    (0, common_1.Injectable)(),
-    __param(0, (0, typeorm_1.InjectRepository)(voiceCategory_entity_1.VoiceCategoryEntity)),
-    __metadata("design:paramtypes", [typeof (_a = typeof typeorm_2.Repository !== "undefined" && typeorm_2.Repository) === "function" ? _a : Object])
-], VoiceCategoryService);
-
-
-/***/ }),
-/* 4427 */
-/***/ (function(__unused_webpack_module, exports, __webpack_require__) {
-
-"use strict";
-
-var __decorate = (this && this.__decorate) || function (decorators, target, key, desc) {
-    var c = arguments.length, r = c < 3 ? target : desc === null ? desc = Object.getOwnPropertyDescriptor(target, key) : desc, d;
-    if (typeof Reflect === "object" && typeof Reflect.decorate === "function") r = Reflect.decorate(decorators, target, key, desc);
-    else for (var i = decorators.length - 1; i >= 0; i--) if (d = decorators[i]) r = (c < 3 ? d(r) : c > 3 ? d(target, key, r) : d(target, key)) || r;
-    return c > 3 && r && Object.defineProperty(target, key, r), r;
-};
-var __metadata = (this && this.__metadata) || function (k, v) {
-    if (typeof Reflect === "object" && typeof Reflect.metadata === "function") return Reflect.metadata(k, v);
-};
-Object.defineProperty(exports, "__esModule", ({ value: true }));
-exports.VoiceCategoryEntity = void 0;
-const baseEntity_1 = __webpack_require__(2541);
-const typeorm_1 = __webpack_require__(666);
-let VoiceCategoryEntity = class VoiceCategoryEntity extends baseEntity_1.BaseEntity {
-    name;
-    description;
-    sort;
-    isEnabled;
-};
-exports.VoiceCategoryEntity = VoiceCategoryEntity;
-__decorate([
-    (0, typeorm_1.Index)(),
-    (0, typeorm_1.Column)({ comment: '分类名称（如 男声、女声、童声等）' }),
-    __metadata("design:type", String)
-], VoiceCategoryEntity.prototype, "name", void 0);
-__decorate([
-    (0, typeorm_1.Column)({ comment: '分类描述', nullable: true }),
-    __metadata("design:type", String)
-], VoiceCategoryEntity.prototype, "description", void 0);
-__decorate([
-    (0, typeorm_1.Column)({ comment: '排序权重（数字越大越靠前）', type: 'int', default: 0 }),
-    __metadata("design:type", Number)
-], VoiceCategoryEntity.prototype, "sort", void 0);
-__decorate([
-    (0, typeorm_1.Index)(),
-    (0, typeorm_1.Column)({ comment: '是否启用', type: 'boolean', default: true }),
-    __metadata("design:type", Boolean)
-], VoiceCategoryEntity.prototype, "isEnabled", void 0);
-exports.VoiceCategoryEntity = VoiceCategoryEntity = __decorate([
-    (0, typeorm_1.Entity)({ name: 'voice_category' })
-], VoiceCategoryEntity);
 
 
 /***/ })

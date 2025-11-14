@@ -291,7 +291,11 @@
             </div>
             <div class="text-xs text-gray-500 leading-6">
               从服务器目录选择 GPT (*.ckpt) / SoVITS (*.pth) 以及参考音频文件。
-              <el-button type="primary" size="small" @click="loadServerFiles" :loading="loadingFiles"
+              <el-button
+                type="primary"
+                size="small"
+                @click="loadServerFiles"
+                :loading="loadingFiles"
                 >刷新文件列表</el-button
               >
               <div v-if="serverFiles.storageRoot" class="text-gray-400 mt-1">
@@ -668,7 +672,9 @@
   const total = ref(0);
   const computedTotal = computed(() => Number(total.value) || 0);
   const gptLibraryOptions = computed<GptSovitsLibraryEntry[]>(() => buildLibraryOptions('gpt'));
-  const sovitsLibraryOptions = computed<GptSovitsLibraryEntry[]>(() => buildLibraryOptions('sovits'));
+  const sovitsLibraryOptions = computed<GptSovitsLibraryEntry[]>(() =>
+    buildLibraryOptions('sovits'),
+  );
 
   function onSearch() {
     listQuery.page_index = 0;
@@ -911,7 +917,9 @@
     const normalizedPath = filePath.replace(/\\/g, '/');
     const normalizedRoot = serverFiles.storageRoot.replace(/\\/g, '/');
     if (normalizedRoot && normalizedPath.startsWith(normalizedRoot)) {
-      return normalizedPath.slice(normalizedRoot.length).replace(/^\/+/, '') || getFileName(filePath);
+      return (
+        normalizedPath.slice(normalizedRoot.length).replace(/^\/+/, '') || getFileName(filePath)
+      );
     }
     return getFileName(filePath);
   }
@@ -933,11 +941,11 @@
   function buildLibraryOptions(type: 'gpt' | 'sovits'): GptSovitsLibraryEntry[] {
     if (serverFiles.library.length) {
       return [...serverFiles.library]
-        .filter(entry => entry.type === type)
+        .filter((entry) => entry.type === type)
         .sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
     }
     const fallback = type === 'gpt' ? serverFiles.gptModels : serverFiles.sovitsModels;
-    return fallback.map(path => ({
+    return fallback.map((path) => ({
       type,
       filename: getFileName(path),
       path,
@@ -957,11 +965,11 @@
       serverFiles.library = Array.isArray(data.library) ? data.library : [];
       if (serverFiles.library.length) {
         serverFiles.gptModels = serverFiles.library
-          .filter(entry => entry.type === 'gpt')
-          .map(entry => entry.path);
+          .filter((entry) => entry.type === 'gpt')
+          .map((entry) => entry.path);
         serverFiles.sovitsModels = serverFiles.library
-          .filter(entry => entry.type === 'sovits')
-          .map(entry => entry.path);
+          .filter((entry) => entry.type === 'sovits')
+          .map((entry) => entry.path);
       } else {
         serverFiles.gptModels = data.gptModels || [];
         serverFiles.sovitsModels = data.sovitsModels || [];

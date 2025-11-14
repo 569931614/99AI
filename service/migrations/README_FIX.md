@@ -21,8 +21,8 @@ Unknown column 'AppEntity.maxReplyCount' in 'field list'
 |------|------|--------|------|
 | `maxReplyCount` | int | 1 | 最大连续回复次数（1-5） |
 | `allowEmoji` | tinyint | 0 | 是否允许发送表情包（1/0） |
-| `stickerIds` | text | NULL | 可用表情包ID列表（逗号分隔） |
-| `stickerProbability` | int | 30 | 表情包自动发送概率（0-100） |
+
+> 说明：`stickerIds` / `stickerProbability` 已在 2025-11 移除，全部表情包改为公共库智能挑选。
 
 ### chat_group 表（会话组个性化设置）
 这些字段作为**会话级别的覆盖设置**：
@@ -81,6 +81,16 @@ F:\aiCodeProject\20250911roleChat\99AI\service\migrations\add_app_expression_set
 F:\aiCodeProject\20250911roleChat\99AI\service\migrations\add_chat_group_settings_safe.sql
 ```
 
+### 方案3: 清理遗留的 sticker 字段
+```bash
+F:\aiCodeProject\20250911roleChat\99AI\service\migrations\remove_app_sticker_preferences.sql
+```
+
+**特点**：
+- ✅ 安全检测后删除 `app` / `chat_group` 的 `stickerIds`、`stickerProbability`
+- ✅ 避免与公共表情库策略冲突
+- ✅ 可单独执行，不影响其它字段
+
 ## 🚀 快速修复步骤
 
 ### 步骤1: 执行SQL
@@ -115,7 +125,7 @@ SELECT COLUMN_NAME, COLUMN_COMMENT
 FROM INFORMATION_SCHEMA.COLUMNS
 WHERE TABLE_SCHEMA = 'chatgpt'
   AND TABLE_NAME = 'app'
-  AND COLUMN_NAME IN ('maxReplyCount', 'allowEmoji', 'stickerIds', 'stickerProbability');
+  AND COLUMN_NAME IN ('maxReplyCount', 'allowEmoji');
 
 -- 验证 chat_group 表
 SELECT COLUMN_NAME, COLUMN_COMMENT
@@ -148,8 +158,8 @@ WHERE TABLE_SCHEMA = 'chatgpt'
 2. **权限检查**
    确保数据库用户有 ALTER TABLE 权限
 
-3. **字段冲突**
-   如果已经手动添加过某些字段，SQL会自动跳过
+3. **字段清理**
+   若数据库仍包含 `stickerIds` / `stickerProbability`，请执行 `remove_app_sticker_preferences.sql`
 
 4. **服务重启**
    执行SQL后记得重启 NestJS 服务
@@ -178,6 +188,7 @@ if (groupVoiceReplyMode === 'voice_only') {
 ## 🎉 完成检查清单
 
 - [ ] 执行 `update_all_tables.sql`
+- [ ] （如旧字段仍在）执行 `remove_app_sticker_preferences.sql`
 - [ ] 验证 app 表字段
 - [ ] 验证 chat_group 表字段
 - [ ] 重启 NestJS 服务

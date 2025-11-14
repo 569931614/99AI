@@ -387,7 +387,73 @@ export class AppService {
         delete item.preset;
       });
     }
+
+    // 如果有userId，附加最新会话组ID
+    if (userId) {
+      await this.attachLatestChatGroups(Number(userId), rows);
+    }
+
     return { rows, count };
+  }
+
+  /**
+   * 为角色列表附加最新会话组ID
+   * @param userId 用户ID
+   * @param roleList 角色列表
+   */
+  async attachLatestChatGroups(userId: number, roleList: any[]) {
+    if (!userId || !Array.isArray(roleList) || roleList.length === 0) {
+      return;
+    }
+
+    try {
+      const appIds = roleList.map(r => r.id).filter(id => id != null);
+      if (appIds.length === 0) {
+        return;
+      }
+
+      // 查询用户与这些角色的最新单聊会话组
+      // 使用子查询获取每个appId的最新会话组（按updatedAt排序）
+      const chatGroups = await this.chatGroupEntity
+        .createQueryBuilder('cg')
+        .select(['cg.id', 'cg.appId', 'cg.updatedAt'])
+        .where('cg.userId = :userId', { userId })
+        .andWhere('cg.appId IN (:...appIds)', { appIds })
+        .andWhere('cg.isDelete = :isDelete', { isDelete: false })
+        .andWhere('cg.isGroupChat = :isGroupChat', { isGroupChat: false })
+        .orderBy('cg.updatedAt', 'DESC')
+        .getMany();
+
+      // 构建appId到最新chatGroupId的映射
+      const appIdToGroupId = new Map<number, number>();
+      chatGroups.forEach(group => {
+        if (group.appId && !appIdToGroupId.has(group.appId)) {
+          appIdToGroupId.set(group.appId, group.id);
+        }
+      });
+
+      // 为每个角色添加latestChatGroupId字段
+      roleList.forEach(role => {
+        const groupId = appIdToGroupId.get(role.id) ?? null;
+        Object.defineProperty(role, 'latestChatGroupId', {
+          value: groupId,
+          enumerable: true,
+          configurable: true,
+          writable: true,
+        });
+      });
+    } catch (error) {
+      console.error('attachLatestChatGroups error:', error);
+      // 失败时为所有角色设置null，不影响主流程
+      roleList.forEach(role => {
+        Object.defineProperty(role, 'latestChatGroupId', {
+          value: null,
+          enumerable: true,
+          configurable: true,
+          writable: true,
+        });
+      });
+    }
   }
 
   async frontAppList(req: Request, query: QuerAppDto, orderKey = 'id') {

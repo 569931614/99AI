@@ -308,10 +308,7 @@ export class ChatGroupService {
           let lastMessage = '';
           let lastMessageTime = item.updatedAt;
           try {
-            const lastChat = await this.chatLogEntity.findOne({
-              where: { groupId: item.id, isDelete: false },
-              order: { createdAt: 'DESC' },
-            });
+            const lastChat = await this.findLastChatWithContent(item.id);
             if (lastChat) {
               lastMessage = lastChat.content || '';
               lastMessageTime = lastChat.createdAt;
@@ -411,10 +408,7 @@ export class ChatGroupService {
           let lastMessage = '';
           let lastMessageTime = item.updatedAt;
           try {
-            const lastChat = await this.chatLogEntity.findOne({
-              where: { groupId: item.id, isDelete: false },
-              order: { createdAt: 'DESC' },
-            });
+            const lastChat = await this.findLastChatWithContent(item.id);
             if (lastChat) {
               lastMessage = lastChat.content || '';
               lastMessageTime = lastChat.createdAt;
@@ -462,6 +456,16 @@ export class ChatGroupService {
       console.log('error: ', error);
       throw error;
     }
+  }
+
+  private findLastChatWithContent(groupId: number) {
+    return this.chatLogEntity
+      .createQueryBuilder('chatlog')
+      .where('chatlog.groupId = :groupId', { groupId })
+      .andWhere('chatlog.isDelete = :isDelete', { isDelete: false })
+      .andWhere("chatlog.content IS NOT NULL AND TRIM(chatlog.content) <> ''")
+      .orderBy('chatlog.createdAt', 'DESC')
+      .getOne();
   }
 
   async update(body: any, req: Request) {

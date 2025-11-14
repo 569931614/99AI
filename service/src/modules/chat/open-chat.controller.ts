@@ -208,6 +208,54 @@ export class OpenChatController {
     }
   }
 
+  @Post('sticker/pick')
+  @ApiOperation({ summary: '【开放】根据文本生成表情包（可选token鉴权）' })
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        token: {
+          type: 'string',
+          description: 'Maobing平台用户token（可选，传入则会验证并获取userId）',
+        },
+        userId: { type: 'number', description: '用户ID（可选，优先使用token验证获取的userId）' },
+        content: { type: 'string', description: '需要分析情绪的文本内容' },
+        appId: { type: 'number', description: '角色(App) ID（可选）' },
+        groupId: { type: 'number', description: '会话组ID（可选）' },
+      },
+      required: ['content'],
+    },
+  })
+  async pickSticker(@Body() body: any, @Req() req: Request) {
+    const { token, userId, content, appId, groupId } = body || {};
+    if (!content || content.trim().length === 0) {
+      throw new HttpException('content 不能为空', HttpStatus.BAD_REQUEST);
+    }
+
+    let finalUserId = userId ? Number(userId) : null;
+    if (token) {
+      const validatedUserId = await MaobingAuthUtil.validateTokenAndGetUserId(token);
+      if (!validatedUserId) {
+        throw new HttpException('token 无效或已过期', HttpStatus.UNAUTHORIZED);
+      }
+      finalUserId = validatedUserId;
+    }
+
+    if (!finalUserId) {
+      throw new HttpException('请提供 userId 或 token', HttpStatus.BAD_REQUEST);
+    }
+
+    const result = await this.chatService.createStickerMessageFromContent({
+      userId: Number(finalUserId),
+      content,
+      appId: appId ? Number(appId) : null,
+      groupId: groupId ? Number(groupId) : null,
+      req,
+    });
+
+    return { success: true, data: result };
+  }
+
   @Post('tts-process')
   @ApiOperation({ summary: '【开放】TTS 文字转语音（可选token鉴权）' })
   @ApiBody({
@@ -445,6 +493,7 @@ export class OpenChatController {
       let psychologicalDesc: string | null = null;
       let audioUrl: string | null = null;
       let voiceDuration: number | null = null;
+      let imageUrl: string | null = null;
 
       // 事件处理器存储
       const eventHandlers: Record<string, Function[]> = {};
@@ -476,6 +525,21 @@ export class OpenChatController {
                 (parsed.voiceReply ? parsed.voiceReply?.duration : undefined);
               if (resolvedVoiceDuration !== undefined) {
                 voiceDuration = Number(resolvedVoiceDuration) || null;
+              }
+              if (!imageUrl && parsed.imageUrl) {
+                imageUrl = parsed.imageUrl;
+              }
+              if (!imageUrl && Array.isArray(parsed.messages)) {
+                const stickerMessage = parsed.messages.find(
+                  (message: any) => message?.message_type === 'sticker',
+                );
+                const stickerImageUrl =
+                  stickerMessage?.content_image ||
+                  stickerMessage?.imageUrl ||
+                  stickerMessage?.image_url;
+                if (stickerImageUrl) {
+                  imageUrl = stickerImageUrl;
+                }
               }
             } catch (e) {
               // 如果不是JSON，可能是纯文本
@@ -525,6 +589,7 @@ export class OpenChatController {
           psychologicalDesc,
           audioUrl,
           voiceDuration,
+          imageUrl,
         },
       };
     } catch (e: any) {

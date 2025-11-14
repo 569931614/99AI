@@ -289,91 +289,88 @@ export class ChatLogService {
       });
     }
 
-    const rows = list
-      .map(item => {
-        const {
-          prompt,
-          role,
-          answer,
-          createdAt,
-          model,
-          modelName,
-          type,
-          status,
-          action,
-          drawId,
-          id,
-          imageUrl,
-          fileInfo,
-          fileUrl,
-          ttsUrl,
-          ttsDuration,
-          videoUrl,
-          audioUrl,
-          customId,
-          pluginParam,
-          progress,
-          modelAvatar,
-          taskData,
-          promptReference,
-          networkSearchResult,
-          fileVectorResult,
-          taskId,
-          reasoning_content,
-          tool_calls,
-          content,
-          promptTokens,
-          completionTokens,
-          totalTokens,
-        } = item;
+    const rows = list.map(item => {
+      const {
+        prompt,
+        role,
+        answer,
+        createdAt,
+        model,
+        modelName,
+        type,
+        status,
+        action,
+        drawId,
+        id,
+        imageUrl,
+        fileInfo,
+        fileUrl,
+        ttsUrl,
+        ttsDuration,
+        videoUrl,
+        audioUrl,
+        customId,
+        pluginParam,
+        progress,
+        modelAvatar,
+        taskData,
+        promptReference,
+        networkSearchResult,
+        fileVectorResult,
+        taskId,
+        reasoning_content,
+        tool_calls,
+        content,
+        promptTokens,
+        completionTokens,
+        totalTokens,
+        display_state,
+      } = item;
 
-        // 获取原始内容
-        let rawContent = content || (role === 'assistant' ? answer : prompt);
+      // 获取原始内容
+      let rawContent = content || (role === 'assistant' ? answer : prompt);
 
-        // 过滤掉 [图片内容:...] 这样的标记
-        if (rawContent && typeof rawContent === 'string') {
-          rawContent = rawContent.replace(/\[图片内容:[\s\S]*?\]/g, '').trim();
-        }
+      // 过滤掉 [图片内容:...] 这样的标记
+      if (rawContent && typeof rawContent === 'string') {
+        rawContent = rawContent.replace(/\[图片内容:[\s\S]*?\]/g, '').trim();
+      }
 
-        return {
-          chatId: id,
-          dateTime: formatDate(createdAt),
-          content: rawContent,
-          reasoningText: reasoning_content,
-          tool_calls: tool_calls,
-          modelType: type,
-          status: status,
-          action: action,
-          drawId: drawId,
-          customId: customId,
-          role: role,
-          error: false,
-          imageUrl: imageUrl || fileInfo || '',
-          fileUrl: fileUrl,
-          ttsUrl: ttsUrl,
-          videoUrl: videoUrl,
-          audioUrl: audioUrl,
-          audioDuration: ttsDuration || 0, // 添加audioDuration字段供cat_AI使用
-          ttsDuration: ttsDuration || 0, // 保留ttsDuration字段以兼容旧版本
-          progress,
-          model: model,
-          modelName: modelName,
-          pluginParam: pluginParam,
-          modelAvatar: modelAvatar,
-          taskData: taskData,
-          promptReference: promptReference,
-          networkSearchResult: networkSearchResult,
-          fileVectorResult: fileVectorResult,
-          taskId: taskId,
-          promptTokens: promptTokens,
-          completionTokens: completionTokens,
-          totalTokens: totalTokens,
-        };
-      })
-      .filter(item => {
-        // 过滤掉 content 为空的记录
-        return item.content && item.content.trim() !== '';
-      });
+      return {
+        chatId: id,
+        dateTime: formatDate(createdAt),
+        content: rawContent,
+        reasoningText: reasoning_content,
+        tool_calls: tool_calls,
+        modelType: type,
+        status: status,
+        action: action,
+        drawId: drawId,
+        customId: customId,
+        role: role,
+        error: false,
+        imageUrl: imageUrl || fileInfo || '',
+        fileUrl: fileUrl,
+        ttsUrl: ttsUrl,
+        videoUrl: videoUrl,
+        audioUrl: audioUrl,
+        audioDuration: ttsDuration || 0, // 添加audioDuration字段供cat_AI使用
+        ttsDuration: ttsDuration || 0, // 保留ttsDuration字段以兼容旧版本
+        progress,
+        model: model,
+        modelName: modelName,
+        pluginParam: pluginParam,
+        modelAvatar: modelAvatar,
+        taskData: taskData,
+        promptReference: promptReference,
+        networkSearchResult: networkSearchResult,
+        fileVectorResult: fileVectorResult,
+        taskId: taskId,
+        promptTokens: promptTokens,
+        completionTokens: completionTokens,
+        totalTokens: totalTokens,
+        display_state: display_state,
+      };
+    });
 
     // 如果是分页请求，返回包含 hasMore 的对象；否则返回数组（向后兼容）
     if (isPaginated) {

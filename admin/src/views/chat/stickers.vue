@@ -58,15 +58,15 @@ meta:
 
   const emotionLabelMap = computed(() => {
     const map = new Map<string, string>();
-    emotionOptions.forEach(item => map.set(item.value, item.label));
+    emotionOptions.forEach((item) => map.set(item.value, item.label));
     return map;
   });
 
   const tagOptions = computed(() => {
     const all = new Set<string>();
-    stickerList.value.forEach(item => item.tags?.forEach(tag => all.add(tag)));
-    form.tags.forEach(tag => all.add(tag));
-    filterForm.tags.forEach(tag => all.add(tag));
+    stickerList.value.forEach((item) => item.tags?.forEach((tag) => all.add(tag)));
+    form.tags.forEach((tag) => all.add(tag));
+    filterForm.tags.forEach((tag) => all.add(tag));
     return Array.from(all);
   });
 
@@ -146,7 +146,7 @@ meta:
   };
 
   const submitForm = () => {
-    formRef.value?.validate(async valid => {
+    formRef.value?.validate(async (valid) => {
       if (!valid) return;
       const payload: StickerPayload = {
         name: form.name.trim(),
@@ -174,11 +174,9 @@ meta:
 
   const confirmDelete = async (item: StickerRecord) => {
     try {
-      await ElMessageBox.confirm(
-        `确认删除表情包【${item.name}】吗？删除后无法恢复！`,
-        '删除确认',
-        { type: 'warning' },
-      );
+      await ElMessageBox.confirm(`确认删除表情包【${item.name}】吗？删除后无法恢复！`, '删除确认', {
+        type: 'warning',
+      });
     } catch {
       return;
     }
@@ -245,9 +243,7 @@ meta:
       <template #title>
         <div class="header-title">表情包管理</div>
       </template>
-      <template #content>
-        管理对话中可使用的表情包，提升交互体验和情感表达
-      </template>
+      <template #content> 管理对话中可使用的表情包，提升交互体验和情感表达 </template>
     </PageHeader>
 
     <page-main>
@@ -349,10 +345,20 @@ meta:
       </div>
     </page-main>
 
-    <el-dialog v-model="dialogVisible" :title="dialogTitle" width="620px" @close="handleDialogClose">
+    <el-dialog
+      v-model="dialogVisible"
+      :title="dialogTitle"
+      width="620px"
+      @close="handleDialogClose"
+    >
       <el-form ref="formRef" :model="form" :rules="rules" label-width="96px">
         <el-form-item label="表情包名称" prop="name">
-          <el-input v-model="form.name" placeholder="输入表情包名称" maxlength="40" show-word-limit />
+          <el-input
+            v-model="form.name"
+            placeholder="输入表情包名称"
+            maxlength="40"
+            show-word-limit
+          />
         </el-form-item>
         <el-form-item label="标签">
           <el-select
@@ -416,67 +422,67 @@ meta:
 </template>
 
 <style scoped>
-.sticker-page {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-}
+  .sticker-page {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
 
-.header-title {
-  font-size: 20px;
-  font-weight: 600;
-}
+  .header-title {
+    font-size: 20px;
+    font-weight: 600;
+  }
 
-.filter-form {
-  margin-bottom: 12px;
-}
+  .filter-form {
+    margin-bottom: 12px;
+  }
 
-.sticker-toolbar {
-  display: flex;
-  justify-content: flex-end;
-  margin-bottom: 12px;
-}
+  .sticker-toolbar {
+    display: flex;
+    justify-content: flex-end;
+    margin-bottom: 12px;
+  }
 
-.sticker-thumb {
-  width: 96px;
-  height: 96px;
-  border-radius: 8px;
-  border: 1px solid var(--el-border-color-light);
-}
+  .sticker-thumb {
+    width: 96px;
+    height: 96px;
+    border-radius: 8px;
+    border: 1px solid var(--el-border-color-light);
+  }
 
-.tag-list {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px;
-}
+  .tag-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+  }
 
-.text-muted {
-  color: var(--el-text-color-secondary);
-  font-size: 12px;
-}
+  .text-muted {
+    color: var(--el-text-color-secondary);
+    font-size: 12px;
+  }
 
-.pagination-wrapper {
-  display: flex;
-  justify-content: flex-end;
-  margin-top: 16px;
-}
+  .pagination-wrapper {
+    display: flex;
+    justify-content: flex-end;
+    margin-top: 16px;
+  }
 
-.upload-block {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
+  .upload-block {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
 
-.upload-tip {
-  font-size: 12px;
-  color: var(--el-text-color-secondary);
-}
+  .upload-tip {
+    font-size: 12px;
+    color: var(--el-text-color-secondary);
+  }
 
-.preview-thumb {
-  width: 140px;
-  height: 140px;
-  border-radius: 8px;
-  border: 1px solid var(--el-border-color);
-  object-fit: cover;
-}
+  .preview-thumb {
+    width: 140px;
+    height: 140px;
+    border-radius: 8px;
+    border: 1px solid var(--el-border-color);
+    object-fit: cover;
+  }
 </style>

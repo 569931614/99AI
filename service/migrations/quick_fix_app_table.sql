@@ -26,9 +26,9 @@ DEALLOCATE PREPARE stmt;
 
 SET @s = (SELECT IF(
     (SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS
-     WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='app' AND COLUMN_NAME='stickerIds') > 0,
-    "SELECT '字段 stickerIds 已存在' AS msg",
-    "ALTER TABLE app ADD COLUMN stickerIds text NULL COMMENT '可用表情包ID列表（逗号分隔）' AFTER allowEmoji"
+     WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='app' AND COLUMN_NAME='stickerIds') = 0,
+    "SELECT '字段 stickerIds 不存在或已移除' AS msg",
+    "ALTER TABLE app DROP COLUMN stickerIds"
 ));
 PREPARE stmt FROM @s;
 EXECUTE stmt;
@@ -36,9 +36,9 @@ DEALLOCATE PREPARE stmt;
 
 SET @s = (SELECT IF(
     (SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS
-     WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='app' AND COLUMN_NAME='stickerProbability') > 0,
-    "SELECT '字段 stickerProbability 已存在' AS msg",
-    "ALTER TABLE app ADD COLUMN stickerProbability int NOT NULL DEFAULT 30 COMMENT '表情包自动发送概率（0-100）' AFTER stickerIds"
+     WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='app' AND COLUMN_NAME='stickerProbability') = 0,
+    "SELECT '字段 stickerProbability 不存在或已移除' AS msg",
+    "ALTER TABLE app DROP COLUMN stickerProbability"
 ));
 PREPARE stmt FROM @s;
 EXECUTE stmt;
@@ -49,4 +49,4 @@ SELECT '✓ app 表字段更新完成' AS 结果;
 SELECT COLUMN_NAME, COLUMN_TYPE, COLUMN_DEFAULT, COLUMN_COMMENT
 FROM INFORMATION_SCHEMA.COLUMNS
 WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='app'
-AND COLUMN_NAME IN ('maxReplyCount', 'allowEmoji', 'stickerIds', 'stickerProbability');
+AND COLUMN_NAME IN ('maxReplyCount', 'allowEmoji');

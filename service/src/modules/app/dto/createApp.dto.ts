@@ -202,20 +202,4 @@ export class CreateAppDto {
   })
   @IsOptional()
   allowEmoji: number;
-
-  @ApiProperty({
-    example: '1,2,3',
-    description: '可选的表情包 ID 列表，多个值逗号分隔',
-    required: false,
-  })
-  @IsOptional()
-  stickerIds: string;
-
-  @ApiProperty({
-    example: 30,
-    description: '表情包自动发送概率（0-100）',
-    required: false,
-  })
-  @IsOptional()
-  stickerProbability: number;
 }

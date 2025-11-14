@@ -119,6 +119,46 @@ export class StickerService {
     return { success: true };
   }
 
+  async pickStickerByText(
+    text?: string | null,
+    preferredEmotion?: string | null,
+  ): Promise<StickerEntity | null> {
+    const normalizedText = text?.trim() ?? '';
+    const detectedEmotion =
+      preferredEmotion?.trim()?.toLowerCase() ||
+      (normalizedText ? this.detectEmotionFromText(normalizedText) : null);
+
+    let sticker = await this.pickRandomSticker(detectedEmotion);
+    if (!sticker && detectedEmotion) {
+      sticker = await this.pickRandomSticker();
+    }
+    return sticker;
+  }
+
+  private detectEmotionFromText(text: string): string | null {
+    if (!text) return null;
+    const lowered = text.toLowerCase();
+    for (const item of EMOTION_KEYWORDS) {
+      if (item?.keywords?.some(keyword => keyword && lowered.includes(keyword.toLowerCase()))) {
+        return item.emotion;
+      }
+    }
+    return null;
+  }
+
+  private async pickRandomSticker(emotion?: string | null): Promise<StickerEntity | null> {
+    const qb = this.stickerRepo.createQueryBuilder('sticker');
+    if (emotion) {
+      qb.where('sticker.emotion = :emotion', { emotion });
+    }
+    const total = await qb.clone().getCount();
+    if (total === 0) {
+      return null;
+    }
+    const offset = Math.floor(Math.random() * total);
+    return qb.skip(offset).take(1).getOne();
+  }
+
   private normalizeTags(tags?: string[] | null) {
     if (!tags || !tags.length) return null;
     const normalized = tags

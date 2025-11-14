@@ -33,6 +33,31 @@ BEGIN
     END IF;
 END$$
 
+DROP PROCEDURE IF EXISTS DropColumnIfExists$$
+CREATE PROCEDURE DropColumnIfExists(
+    IN tableName VARCHAR(128),
+    IN columnName VARCHAR(128)
+)
+BEGIN
+    DECLARE columnExists INT;
+
+    SELECT COUNT(*) INTO columnExists
+    FROM INFORMATION_SCHEMA.COLUMNS
+    WHERE TABLE_SCHEMA = DATABASE()
+      AND TABLE_NAME = tableName
+      AND COLUMN_NAME = columnName;
+
+    IF columnExists > 0 THEN
+        SET @sql = CONCAT('ALTER TABLE `', tableName, '` DROP COLUMN `', columnName, '`');
+        PREPARE stmt FROM @sql;
+        EXECUTE stmt;
+        DEALLOCATE PREPARE stmt;
+        SELECT CONCAT('✗ [', tableName, '.', columnName, '] 已移除（统一使用公共表情库）') AS Result;
+    ELSE
+        SELECT CONCAT('○ [', tableName, '.', columnName, '] 不存在，跳过') AS Result;
+    END IF;
+END$$
+
 DELIMITER ;
 
 -- ========================================
@@ -46,11 +71,8 @@ CALL AddColumnIfNotExists('app', 'maxReplyCount',
 CALL AddColumnIfNotExists('app', 'allowEmoji',
     "tinyint NOT NULL DEFAULT 0 COMMENT '是否允许发送表情包（1/0）' AFTER `maxReplyCount`");
 
-CALL AddColumnIfNotExists('app', 'stickerIds',
-    "text NULL COMMENT '可用表情包ID列表（逗号分隔）' AFTER `allowEmoji`");
-
-CALL AddColumnIfNotExists('app', 'stickerProbability',
-    "int NOT NULL DEFAULT 30 COMMENT '表情包自动发送概率（0-100）' AFTER `stickerIds`");
+CALL DropColumnIfExists('app', 'stickerIds');
+CALL DropColumnIfExists('app', 'stickerProbability');
 
 SELECT '========== app 表更新完成 ==========' AS '执行状态';
 
@@ -107,6 +129,9 @@ CALL AddColumnIfNotExists('chat_group', 'allowTap',
 CALL AddColumnIfNotExists('chat_group', 'maxReplyCount',
     "int NOT NULL DEFAULT 5 COMMENT '最多回复条数（1-5）' AFTER `allowTap`");
 
+CALL DropColumnIfExists('chat_group', 'stickerIds');
+CALL DropColumnIfExists('chat_group', 'stickerProbability');
+
 CALL AddColumnIfNotExists('chat_group', 'groupAvatar',
     "varchar(500) NULL COMMENT '群组头像URL' AFTER `maxReplyCount`");
 
@@ -117,6 +142,7 @@ SELECT '========== chat_group 表更新完成 ==========' AS '执行状态';
 
 -- 清理存储过程
 DROP PROCEDURE IF EXISTS AddColumnIfNotExists;
+DROP PROCEDURE IF EXISTS DropColumnIfExists;
 
 -- ========================================
 -- 验证结果
@@ -128,7 +154,7 @@ SELECT
 FROM INFORMATION_SCHEMA.COLUMNS
 WHERE TABLE_SCHEMA = 'chatgpt'
   AND TABLE_NAME = 'app'
-  AND COLUMN_NAME IN ('maxReplyCount', 'allowEmoji', 'stickerIds', 'stickerProbability')
+  AND COLUMN_NAME IN ('maxReplyCount', 'allowEmoji')
 ORDER BY ORDINAL_POSITION;
 
 SELECT '========== 验证 chat_group 表字段 ==========' AS '验证结果';
@@ -156,7 +182,7 @@ SELECT '
 ║  新增功能:                                 ║
 ║    • 语音回复模式 (voice_only 支持)       ║
 ║    • 对话记忆管理                         ║
-║    • 表情包设置                           ║
+║    • 表情包配置字段统一移除               ║
 ║    • 自动总结                             ║
 ║                                            ║
 ╚════════════════════════════════════════════╝

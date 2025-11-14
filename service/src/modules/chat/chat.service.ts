@@ -1680,7 +1680,7 @@ ${numberedOptions}
             completionTokens: 0,
             totalTokens: 0,
             model: useModel,
-            modelName: realUserName,
+            modelName: '我',
             role: 'user',
             groupId: groupId ? groupId : null,
           });
@@ -1746,8 +1746,8 @@ ${numberedOptions}
       }
     } else if (!isGroupChat && !skipPromptInHistory && !skipSave) {
       // 普通模式，正常保存（skipPromptInHistory 和 skipSave 模式不保存）
-      // 使用从body传来的modelName，如果没有则使用'我'
-      const userDisplayName = modelName || '我';
+      // 强制用户消息的展示名称为“我”，与角色名区分
+      const userDisplayName = '我';
       userSaveLog = await this.chatLogService.saveChatLog({
         appId: appId,
         curIp,
@@ -2623,16 +2623,17 @@ ${numberedOptions}
               }
             }
 
-            if (assistantLogBasePayload) {
-              const stickerMessage = await this.maybeCreateStickerMessage({
-                allowEmoji: groupAllowEmoji,
-                basePayload: assistantLogBasePayload,
-                referenceText: replyContent,
-              });
-              if (stickerMessage?.message) {
-                assistantMessagesPayload.push(stickerMessage.message);
-              }
-            }
+            // 移除99AI后端自动返回表情包的逻辑，改为cat_AI主动调用
+            // if (assistantLogBasePayload) {
+            //   const stickerMessage = await this.maybeCreateStickerMessage({
+            //     allowEmoji: groupAllowEmoji,
+            //     basePayload: assistantLogBasePayload,
+            //     referenceText: replyContent,
+            //   });
+            //   if (stickerMessage?.message) {
+            //     assistantMessagesPayload.push(stickerMessage.message);
+            //   }
+            // }
 
             if (!generatedVoiceUrl && textReplies.length > 0) {
               const updateTasks: Array<Promise<any>> = [
@@ -2655,19 +2656,20 @@ ${numberedOptions}
 
           response.messages = assistantMessagesPayload;
 
-          const stickerPayload = assistantMessagesPayload.find(
-            message => message?.message_type === 'sticker',
-          );
-          if (stickerPayload) {
-            const stickerImageUrl =
-              stickerPayload.content_image ||
-              stickerPayload.imageUrl ||
-              stickerPayload.image_url ||
-              null;
-            if (stickerImageUrl) {
-              response.imageUrl = stickerImageUrl;
-            }
-          }
+          // 移除sticker消息处理逻辑（已改为cat_AI主动调用）
+          // const stickerPayload = assistantMessagesPayload.find(
+          //   message => message?.message_type === 'sticker',
+          // );
+          // if (stickerPayload) {
+          //   const stickerImageUrl =
+          //     stickerPayload.content_image ||
+          //     stickerPayload.imageUrl ||
+          //     stickerPayload.image_url ||
+          //     null;
+          //   if (stickerImageUrl) {
+          //     response.imageUrl = stickerImageUrl;
+          //   }
+          // }
 
           try {
             if (isGeneratePromptReference === '1') {

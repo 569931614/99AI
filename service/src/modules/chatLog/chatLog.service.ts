@@ -4,7 +4,7 @@ import { HttpException, HttpStatus, Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import excel from 'exceljs';
 import { Request, Response } from 'express';
-import { In, Like, MoreThan, MoreThanOrEqual, Repository } from 'typeorm';
+import { In, LessThan, Like, MoreThan, MoreThanOrEqual, Repository } from 'typeorm';
 import { ChatGroupEntity } from '../chatGroup/chatGroup.entity';
 import { UserEntity } from '../user/user.entity';
 import { ChatLogEntity } from './chatLog.entity';
@@ -20,6 +20,8 @@ import { recDrawImgDto } from './dto/recDrawImg.dto';
 import { JwtPayload } from 'src/types/express';
 import { ModelsService } from '../models/models.service';
 import { QuerySingleChatDto } from './dto/querySingleChat.dto';
+
+const DEFAULT_CHAT_PAGE_SIZE = 20;
 
 @Injectable()
 export class ChatLogService {
@@ -604,6 +606,46 @@ export class ChatLogService {
         return '未找到该消息';
       }
 
+      let positionInfo:
+        | {
+            index: number;
+            total: number;
+            pageSize: number;
+            targetPage: number;
+            centeredPage: number;
+          }
+        | null = null;
+
+      if (chatLog.groupId) {
+        const [messagesBeforeCount, totalMessages] = await Promise.all([
+          this.chatLogEntity.count({
+            where: {
+              groupId: chatLog.groupId,
+              userId: chatLog.userId,
+              isDelete: false,
+              id: LessThan(chatLog.id),
+            },
+          }),
+          this.chatLogEntity.count({
+            where: { groupId: chatLog.groupId, userId: chatLog.userId, isDelete: false },
+          }),
+        ]);
+
+        const index = messagesBeforeCount;
+        const pageSize = DEFAULT_CHAT_PAGE_SIZE;
+        const targetPage = Math.floor(index / pageSize) + 1;
+        const centeredStartIndex = Math.max(index - Math.floor(pageSize / 2), 0);
+        const centeredPage = Math.floor(centeredStartIndex / pageSize) + 1;
+
+        positionInfo = {
+          index,
+          total: totalMessages,
+          pageSize,
+          targetPage,
+          centeredPage,
+        };
+      }
+
       // 格式化查询结果
       const formattedResult = {
         id: chatLog.id,
@@ -636,6 +678,17 @@ export class ChatLogService {
         fileVectorResult: chatLog.fileVectorResult || '',
         pluginParam: chatLog.pluginParam || '',
         modelAvatar: chatLog.modelAvatar || '',
+        groupId: chatLog.groupId || null,
+        appId: chatLog.appId || null,
+        messageIndex: positionInfo?.index ?? null,
+        totalMessagesInGroup: positionInfo?.total ?? null,
+        paginationHint: positionInfo
+          ? {
+              pageSize: positionInfo.pageSize,
+              targetPage: positionInfo.targetPage,
+              centeredPage: positionInfo.centeredPage,
+            }
+          : null,
       };
 
       // 返回成功结果

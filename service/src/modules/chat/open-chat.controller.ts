@@ -4,6 +4,7 @@ import {
   Get,
   HttpException,
   HttpStatus,
+  Logger,
   Post,
   Query,
   Req,
@@ -13,13 +14,31 @@ import { ApiBody, ApiOperation, ApiQuery, ApiTags } from '@nestjs/swagger';
 import axios from 'axios';
 import { Request, Response } from 'express';
 import { MaobingAuthUtil } from '@/common/utils/maobing-auth.util';
+import { MaobingCookieUtil } from '@/common/utils/maobing-cookie.util';
 import { AffectionService } from '../affection/affection.service';
 import { VoiceService } from '../voice/voice.service';
 import { ChatService } from './chat.service';
 
+type CookieMessageType = 'text' | 'voice' | 'image';
+
+const COOKIE_RULES: Record<CookieMessageType, { cost: number; remark: string }> = {
+  text: { cost: 1, remark: '开放接口文字聊天' },
+  voice: { cost: 2, remark: '开放接口语音聊天' },
+  image: { cost: 2, remark: '开放接口图片聊天' },
+};
+
+interface CookieChargeReceipt {
+  userId: number;
+  amount: number;
+  type: CookieMessageType;
+  maobingBaseUrl?: string;
+}
+
 @ApiTags('open-chat')
 @Controller('open/chat')
 export class OpenChatController {
+  private readonly logger = new Logger(OpenChatController.name);
+
   constructor(
     private readonly chatService: ChatService,
     private readonly voiceService: VoiceService,
@@ -35,6 +54,18 @@ export class OpenChatController {
         token: {
           type: 'string',
           description: 'Maobing平台用户token（可选，传入则会验证并获取userId）',
+        },
+        maobingBaseUrl: {
+          type: 'string',
+          description: 'Maobing基础域名（可选，默认 https://maobingai.lnkj5.com ）',
+        },
+        maobingBaseUrl: {
+          type: 'string',
+          description: 'Maobing基础域名（可选，默认 https://maobingai.lnkj5.com ）',
+        },
+        maobingBaseUrl: {
+          type: 'string',
+          description: 'Maobing基础域名（可选，默认 https://maobingai.lnkj5.com ）',
         },
         userId: { type: 'number', description: '用户ID（可选，优先使用token验证获取的userId）' },
         prompt: { type: 'string', description: '用户提问内容；若传 audioUrl 将自动识别为文本' },
@@ -142,20 +173,26 @@ export class OpenChatController {
     },
   })
   async chatProcess(@Body() body: any, @Req() _req: Request, @Res() res: Response) {
+    let chargeReceipt: CookieChargeReceipt | null = null;
     try {
-      const { token, userId: originalUserId } = body || {};
+      const { token, userId: originalUserId, maobingBaseUrl } = body || {};
 
       // 如果传了token，则验证并获取userId
-      let userId = originalUserId;
+      let userId = originalUserId ? Number(originalUserId) : null;
       if (token) {
-        const validatedUserId = await MaobingAuthUtil.validateTokenAndGetUserId(token);
+        const validatedUserId = await MaobingAuthUtil.validateTokenAndGetUserId(
+          token,
+          maobingBaseUrl,
+        );
         if (!validatedUserId) {
           throw new HttpException('token 无效或已过期', HttpStatus.UNAUTHORIZED);
         }
-        // 使用验证后的userId，覆盖body中的userId
         userId = validatedUserId;
-        body.userId = userId;
       }
+      if (!userId) {
+        throw new HttpException('请提供 token 或 userId', HttpStatus.BAD_REQUEST);
+      }
+      body.userId = userId;
 
       // 如果传入了音频链接，则优先进行ASR识别
       if (body?.audioUrl) {
@@ -191,6 +228,9 @@ export class OpenChatController {
         body.appId = body.speakerId;
       }
 
+      const messageType = this.resolveMessageType(body);
+      chargeReceipt = await this.chargeCookiesOrThrow(userId, messageType, maobingBaseUrl);
+
       // 构造伪造的 req 对象，使用 visitor 角色跳过用户验证
       const fakeReq: any = {
         user: { id: userId, role: 'visitor' },
@@ -200,8 +240,11 @@ export class OpenChatController {
         socket: _req.socket,
         ip: _req.ip,
       };
-      return this.chatService.chatProcess(body as any, fakeReq, res);
+      return await this.chatService.chatProcess(body as any, fakeReq, res);
     } catch (e: any) {
+      if (chargeReceipt) {
+        await this.refundCookiesSafe(chargeReceipt);
+      }
       const status = e instanceof HttpException ? e.getStatus() : HttpStatus.INTERNAL_SERVER_ERROR;
       const message = e?.message || '对话处理失败';
       return res.status(status).json({ code: status, message });
@@ -328,6 +371,7 @@ export class OpenChatController {
     body: {
       token?: string;
       userId?: number;
+      maobingBaseUrl?: string;
       audioUrl?: string;
       audioBase64?: string;
       model?: string;
@@ -342,20 +386,27 @@ export class OpenChatController {
     @Req() _req: Request,
     @Res() res: Response,
   ) {
+    let chargeReceipt: CookieChargeReceipt | null = null;
     try {
-      const { token, userId: originalUserId } = body || ({} as any);
+      const { token, userId: originalUserId, maobingBaseUrl } = body || ({} as any);
 
       // 如果传了token，则验证并获取userId
-      let userId = originalUserId;
+      let userId = originalUserId ? Number(originalUserId) : null;
       if (token) {
-        const validatedUserId = await MaobingAuthUtil.validateTokenAndGetUserId(token);
+        const validatedUserId = await MaobingAuthUtil.validateTokenAndGetUserId(
+          token,
+          maobingBaseUrl,
+        );
         if (!validatedUserId) {
           throw new HttpException('token 无效或已过期', HttpStatus.UNAUTHORIZED);
         }
         // 使用验证后的userId
         userId = validatedUserId;
-        (body as any).userId = userId;
       }
+      if (!userId) {
+        throw new HttpException('请提供 token 或 userId', HttpStatus.BAD_REQUEST);
+      }
+      (body as any).userId = userId;
 
       const { audioUrl, audioBase64 } = body;
       let base64 = audioBase64;
@@ -385,6 +436,8 @@ export class OpenChatController {
       }
 
       const payload: any = { ...body, prompt: text };
+      chargeReceipt = await this.chargeCookiesOrThrow(userId, 'voice', maobingBaseUrl);
+
       const fakeReq: any = {
         user: { id: userId, role: 'visitor' },
         header: (name: string) => _req.header(name),
@@ -393,8 +446,11 @@ export class OpenChatController {
         socket: _req.socket,
         ip: _req.ip,
       };
-      return this.chatService.chatProcess(payload, fakeReq, res);
+      return await this.chatService.chatProcess(payload, fakeReq, res);
     } catch (e: any) {
+      if (chargeReceipt) {
+        await this.refundCookiesSafe(chargeReceipt);
+      }
       const status = e instanceof HttpException ? e.getStatus() : HttpStatus.INTERNAL_SERVER_ERROR;
       const message = e?.message || '语音对话处理失败';
       return res.status(status).json({ code: status, message });
@@ -440,20 +496,27 @@ export class OpenChatController {
     },
   })
   async chatProcessSync(@Body() body: any, @Req() _req: Request) {
+    let chargeReceipt: CookieChargeReceipt | null = null;
     try {
-      const { token, userId: originalUserId } = body || {};
+      const { token, userId: originalUserId, maobingBaseUrl } = body || {};
 
       // 如果传了token，则验证并获取userId
-      let userId = originalUserId;
+      let userId = originalUserId ? Number(originalUserId) : null;
       if (token) {
-        const validatedUserId = await MaobingAuthUtil.validateTokenAndGetUserId(token);
+        const validatedUserId = await MaobingAuthUtil.validateTokenAndGetUserId(
+          token,
+          maobingBaseUrl,
+        );
         if (!validatedUserId) {
           throw new HttpException('token 无效或已过期', HttpStatus.UNAUTHORIZED);
         }
         // 使用验证后的userId
         userId = validatedUserId;
-        body.userId = userId;
       }
+      if (!userId) {
+        throw new HttpException('请提供 token 或 userId', HttpStatus.BAD_REQUEST);
+      }
+      body.userId = userId;
 
       // 如果传入了音频链接，则优先进行ASR识别
       if (body?.audioUrl) {
@@ -485,6 +548,8 @@ export class OpenChatController {
           throw new HttpException('提问信息不能为空！', HttpStatus.BAD_REQUEST);
         }
       }
+
+      const messageType = this.resolveMessageType(body);
 
       // 用于收集流式响应的完整内容
       let fullResponse = '';
@@ -577,6 +642,8 @@ export class OpenChatController {
       };
 
       // 调用流式接口，内部会写入到 mockRes
+      chargeReceipt = await this.chargeCookiesOrThrow(userId, messageType, maobingBaseUrl);
+
       await this.chatService.chatProcess(body as any, fakeReq, mockRes);
 
       // 返回完整结果
@@ -593,9 +660,68 @@ export class OpenChatController {
         },
       };
     } catch (e: any) {
+      if (chargeReceipt) {
+        await this.refundCookiesSafe(chargeReceipt);
+      }
       const status = e instanceof HttpException ? e.getStatus() : HttpStatus.INTERNAL_SERVER_ERROR;
       const message = e?.message || '对话处理失败';
       throw new HttpException(message, status);
+    }
+  }
+
+  private resolveMessageType(payload: any): CookieMessageType {
+    const explicitType = (
+      payload?.chatType ||
+      payload?.chat_type ||
+      payload?.messageType ||
+      ''
+    ).toLowerCase();
+    if (explicitType === 'voice') return 'voice';
+    if (explicitType === 'image') return 'image';
+    if (payload?.imageUrl) return 'image';
+    if (payload?.audioUrl || payload?.audioBase64) return 'voice';
+    return 'text';
+  }
+
+  private getCookieRule(type: CookieMessageType) {
+    return COOKIE_RULES[type] ?? COOKIE_RULES.text;
+  }
+
+  private async chargeCookiesOrThrow(
+    userId: number,
+    type: CookieMessageType,
+    maobingBaseUrl?: string,
+  ): Promise<CookieChargeReceipt> {
+    const rule = this.getCookieRule(type);
+    const response = await MaobingCookieUtil.deductCookies({
+      userId,
+      amount: rule.cost,
+      remark: rule.remark,
+      maobingBaseUrl,
+    });
+    if (!response.success) {
+      throw new HttpException(response.message || '饼干扣费失败', HttpStatus.BAD_REQUEST);
+    }
+    return {
+      userId,
+      amount: rule.cost,
+      type,
+      maobingBaseUrl,
+    };
+  }
+
+  private async refundCookiesSafe(receipt: CookieChargeReceipt | null) {
+    if (!receipt || receipt.amount <= 0) {
+      return;
+    }
+    const response = await MaobingCookieUtil.refundCookies({
+      userId: receipt.userId,
+      amount: receipt.amount,
+      maobingBaseUrl: receipt.maobingBaseUrl,
+      remark: `开放接口${receipt.type}聊天失败返还`,
+    });
+    if (!response.success) {
+      this.logger.warn(`Maobing cookie refund failed: ${response.message}`);
     }
   }
 

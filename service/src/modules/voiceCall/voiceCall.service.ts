@@ -154,9 +154,9 @@ export class VoiceCallService {
       'VoiceCallService',
     );
 
-    // 4. 调用星尘API
+    // 4. 调用Qwen角色模型（星尘逻辑保留在OpenAIChatService内备用）
     try {
-      const result = await this.openAIChatService.chatFree(
+      const result = await this.openAIChatService.chatQwenPlusCharacter(
         userInput,
         rolePrompt,
         options?.messagesHistory || [],

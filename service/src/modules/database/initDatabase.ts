@@ -31,6 +31,7 @@ import { FingerprintLogEntity } from '../userBalance/fingerprint.entity';
 import { UserBalanceEntity } from '../userBalance/userBalance.entity';
 import { VerificationEntity } from '../verification/verification.entity';
 import { VoiceEntity } from '../voice/voice.entity';
+import { VoiceCategoryEntity } from '../voice/voiceCategory.entity';
 
 loadEnv();
 
@@ -67,6 +68,7 @@ const dataSourceOptions: DataSourceOptions = {
     RoleEmotionEntity,
     AppEmotionVoiceEntity,
     VoiceEntity,
+    VoiceCategoryEntity,
     OrderEntity,
     UserAppSettingsEntity,
     ConversationSummaryEntity,

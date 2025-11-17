@@ -761,6 +761,122 @@ export class OpenAIChatService {
     throw lastError || new Error('星尘API请求失败');
   }
 
+  async chatQwenPlusCharacter(
+    prompt: string,
+    systemMessage?: string,
+    messagesHistory?: any[],
+    imageUrl?: any,
+    options?: { onProgress?: (textChunk: string) => void; abortSignal?: AbortSignal },
+    appConfig?: {
+      botName?: string;
+      userId?: number | string;
+      appId?: number | string;
+      enableRealTime?: boolean;
+      enableLongTermMemory?: boolean;
+      enableKnowledgeBase?: boolean;
+      knowledgeBaseIds?: string;
+      dialogueExamples?: string;
+      openingRemark?: string;
+    },
+  ): Promise<{
+    text: string;
+    usage?: { userTokens?: number; inputTokens?: number; outputTokens?: number };
+  }> {
+    const cfgKey: any = await this.globalConfigService.getConfigs(['dashscopeApiKey']);
+    const dashscopeApiKey = typeof cfgKey === 'string' ? cfgKey : cfgKey?.dashscopeApiKey;
+    const apiKey = dashscopeApiKey || process.env.DASHSCOPE_API_KEY || '';
+
+    if (!apiKey) {
+      Logger.error(
+        'DashScope API Key未配置！请在系统配置中设置 dashscopeApiKey，或在环境变量中设置 DASHSCOPE_API_KEY',
+        'OpenAIChatService',
+      );
+      throw new Error('DashScope API Key未配置');
+    }
+
+    const baseURL =
+      process.env.DASHSCOPE_BASE_URL || 'https://dashscope.aliyuncs.com/compatible-mode/v1';
+    const messages = await this.buildQwenPlusMessages(
+      prompt,
+      systemMessage,
+      messagesHistory,
+      appConfig,
+    );
+
+    const isStreaming = typeof options?.onProgress === 'function';
+    const openai = new OpenAI({
+      apiKey,
+      baseURL,
+    });
+
+    const requestConfig: any = {
+      model: 'qwen-plus-character',
+      messages,
+      stream: isStreaming,
+    };
+
+    const logPayload = this.sanitizeForLog({
+      baseURL,
+      model: requestConfig.model,
+      stream: requestConfig.stream,
+      messages,
+      appId: appConfig?.appId,
+      userId: appConfig?.userId,
+    });
+    Logger.debug(`QwenPlus请求 - body: ${JSON.stringify(logPayload)}`, 'OpenAIChatService');
+
+    try {
+      if (isStreaming) {
+        const stream = await openai.chat.completions.create(requestConfig, {
+          signal: options?.abortSignal,
+        });
+        let fullText = '';
+        let usage:
+          | {
+              userTokens?: number;
+              inputTokens?: number;
+              outputTokens?: number;
+            }
+          | undefined;
+
+        // @ts-ignore stream is iterable
+        for await (const chunk of stream) {
+          const delta = chunk?.choices?.[0]?.delta?.content;
+          const deltaText = this.extractDeltaText(delta);
+          if (deltaText) {
+            fullText += deltaText;
+            try {
+              options?.onProgress?.(deltaText);
+            } catch {}
+          }
+          if (chunk?.usage) {
+            usage = this.mapDashscopeUsage(chunk.usage);
+          }
+        }
+
+        return {
+          text: fullText,
+          usage,
+        };
+      }
+
+      const completion = await openai.chat.completions.create(requestConfig, {
+        signal: options?.abortSignal,
+      });
+
+      const text = completion?.choices?.[0]?.message?.content || '';
+      const usage = completion?.usage ? this.mapDashscopeUsage(completion.usage) : undefined;
+
+      return {
+        text,
+        usage,
+      };
+    } catch (error) {
+      Logger.error(`QwenPlus调用失败: ${handleError(error)}`, 'OpenAIChatService');
+      throw error;
+    }
+  }
+
   /**
    * chatFree的内部实现，不包含重试逻辑
    */
@@ -1184,6 +1300,140 @@ export class OpenAIChatService {
       Logger.error(`错误详情: ${JSON.stringify(error)}`, 'OpenAIChatService');
       throw error; // 抛出错误而不是返回undefined
     }
+  }
+
+  private async buildQwenPlusMessages(
+    prompt: string,
+    systemMessage?: string,
+    messagesHistory?: any[],
+    appConfig?: { openingRemark?: string },
+  ): Promise<any[]> {
+    let systemPrompt = systemMessage?.trim() || '';
+    const normalizedMessages: any[] = [];
+
+    if (messagesHistory && messagesHistory.length > 0) {
+      let firstSystemConsumed = false;
+      for (const message of messagesHistory) {
+        if (message?.role === 'system') {
+          if (!firstSystemConsumed && !systemPrompt && typeof message.content === 'string') {
+            systemPrompt = message.content;
+            firstSystemConsumed = true;
+            continue;
+          }
+          firstSystemConsumed = true;
+        }
+
+        normalizedMessages.push({
+          role: message.role || 'user',
+          content: this.normalizeQwenMessageContent(message?.content),
+        });
+      }
+    } else if (prompt) {
+      normalizedMessages.push({ role: 'user', content: prompt });
+    }
+
+    if (!systemPrompt) {
+      try {
+        const cfg: any = await this.globalConfigService.getConfigs(['systemPreMessage']);
+        const pre = typeof cfg === 'string' ? cfg : cfg?.systemPreMessage;
+        if (pre) {
+          systemPrompt = pre;
+        }
+      } catch {}
+    }
+
+    if (appConfig?.openingRemark && appConfig.openingRemark.trim()) {
+      systemPrompt = `${systemPrompt}\n\n【角色开场白】:\n"${appConfig.openingRemark}"`;
+    }
+
+    if (!systemPrompt) {
+      systemPrompt = '你是一个友好且乐于助人的AI助手，回答需要自然、具体、有温度。';
+    }
+
+    normalizedMessages.unshift({
+      role: 'system',
+      content: systemPrompt,
+    });
+
+    return normalizedMessages;
+  }
+
+  private normalizeQwenMessageContent(content: any): string {
+    if (!content) {
+      return '';
+    }
+
+    if (typeof content === 'string') {
+      return content;
+    }
+
+    if (Array.isArray(content)) {
+      return content
+        .map(part => {
+          if (!part) return '';
+          if (typeof part === 'string') return part;
+          if (part.type === 'image_url') {
+            const url = part.image_url?.url || part.url || '';
+            return url ? `[图片: ${url}]` : '';
+          }
+          if (typeof part.text === 'string') {
+            return part.text;
+          }
+          return '';
+        })
+        .join('');
+    }
+
+    if (typeof content === 'object') {
+      if (typeof (content as any).text === 'string') {
+        return (content as any).text;
+      }
+      return JSON.stringify(content);
+    }
+
+    return String(content);
+  }
+
+  private extractDeltaText(delta: any): string {
+    if (!delta) {
+      return '';
+    }
+    if (typeof delta === 'string') {
+      return delta;
+    }
+    if (Array.isArray(delta)) {
+      return delta
+        .map(part => {
+          if (!part) return '';
+          if (typeof part === 'string') return part;
+          if (typeof part.text === 'string') return part.text;
+          return '';
+        })
+        .join('');
+    }
+    if (typeof delta === 'object' && typeof delta.text === 'string') {
+      return delta.text;
+    }
+    return '';
+  }
+
+  private mapDashscopeUsage(rawUsage: any):
+    | {
+        userTokens?: number;
+        inputTokens?: number;
+        outputTokens?: number;
+      }
+    | undefined {
+    if (!rawUsage) {
+      return undefined;
+    }
+    const promptTokens = rawUsage.prompt_tokens ?? rawUsage.input_tokens;
+    const completionTokens = rawUsage.completion_tokens ?? rawUsage.output_tokens;
+    return {
+      userTokens: promptTokens,
+      inputTokens: promptTokens,
+      outputTokens: completionTokens,
+    };
   }
 
   /**

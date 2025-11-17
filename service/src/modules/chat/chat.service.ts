@@ -24,8 +24,8 @@ import { ConversationSummaryService } from '../conversationSummary/conversationS
 import { GlobalConfigService } from '../globalConfig/globalConfig.service';
 import { ModelsService } from '../models/models.service';
 import { PluginEntity } from '../plugin/plugin.entity';
-import { UploadService } from '../upload/upload.service';
 import { StickerService } from '../sticker/sticker.service';
+import { UploadService } from '../upload/upload.service';
 import { UserEntity } from '../user/user.entity';
 import { UserService } from '../user/user.service';
 import { UserAppSettingsService } from '../userAppSettings/userAppSettings.service';
@@ -70,12 +70,39 @@ export class ChatService {
   // Gate verbose chat logs to avoid flooding production unless explicitly enabled.
   private readonly enableVerboseChatLogs =
     process.env.CHAT_DEBUG_LOG_ENABLED === 'true' || process.env.NODE_ENV === 'development';
+  private readonly responsePreviewLimit = (() => {
+    const envLimit = Number(process.env.CHAT_RESPONSE_LOG_LIMIT);
+    if (Number.isFinite(envLimit) && envLimit >= 30) {
+      return Math.min(envLimit, 500);
+    }
+    return 180;
+  })();
 
   private logDebug(message: any, context = ChatService.name) {
     if (!this.enableVerboseChatLogs) {
       return;
     }
     Logger.debug(message, context);
+  }
+
+  private buildResponsePreview(content?: string | null): string {
+    if (!content) {
+      return '[empty]';
+    }
+    const compact = content.replace(/\s+/g, ' ').trim();
+    if (!compact) {
+      return '[empty]';
+    }
+    if (compact.length <= this.responsePreviewLimit) {
+      return compact;
+    }
+    return `${compact.slice(0, this.responsePreviewLimit)}...<truncated>`;
+  }
+
+  private logModelResponsePreview(modelLabel: string, content?: string | null) {
+    const preview = this.buildResponsePreview(content);
+    const label = modelLabel || 'LLM';
+    Logger.log(`[${label}] 模型返回: ${preview}`, ChatService.name);
   }
 
   /**
@@ -438,7 +465,7 @@ export class ChatService {
     try {
       const prompt = `请阅读以下用户内容，并从["happy","sad","angry","comfort","surprised","neutral"]中选择最匹配的一项情绪。只返回该英文单词，不要包含其他任何内容。\n\n内容：${trimmed}`;
       const systemMessage = 'You are an emotion classifier that only responds with one label.';
-      const result = await this.openAIChatService.chatFree(prompt, systemMessage);
+      const result = await this.openAIChatService.chatQwenPlusCharacter(prompt, systemMessage);
       const answer = (result?.text || '').toLowerCase();
       return STICKER_EMOTION_LABELS.find(label => answer.includes(label)) || null;
     } catch (error) {
@@ -2310,30 +2337,9 @@ ${numberedOptions}
 
               // 如果有群组信息，插入到messages副本的第一位作为system消息（背景信息）
               if (groupInfoParts.length > 0) {
-                // 添加行为约束（基于会话组配置）
-                const behaviorConstraints: string[] = [];
-
-                // 表情包控制
-                if (groupAllowEmoji) {
-                  behaviorConstraints.push('- 你可以在合适的时候发送emoji表情来增加趣味性');
-                } else {
-                  behaviorConstraints.push('- 请不要发送emoji表情');
-                }
-
-                // 拍一拍控制
-                if (groupAllowTap) {
-                  behaviorConstraints.push('- 你可以在合适的时候使用"拍一拍"进行亲密互动');
-                } else {
-                  behaviorConstraints.push('- 请不要使用"拍一拍"');
-                }
-
-                behaviorConstraints.push(
-                  `- 你一次最多连续回复${groupMaxReplyCount}条消息，每条之间用一个空行分隔，并且每条都要表达完整意思`,
-                );
-
                 const groupBasicInfo = `【群组背景信息】\n${groupInfoParts.join(
                   '\n',
-                )}\n\n【行为约束】\n${behaviorConstraints.join('\n')}`;
+                )}}`;
                 // 使用system角色，星尘API会将非第一条system消息保留在messages中
                 messagesForXingchen.unshift({ role: 'system', content: groupBasicInfo });
                 this.logDebug(
@@ -2353,29 +2359,6 @@ ${numberedOptions}
                 singleChatParts.push(`【用户信息】\n${userProfileText}`);
               }
 
-              // 添加行为约束（单聊也需要）
-              const behaviorConstraints: string[] = [];
-
-              // 表情包控制
-              if (groupAllowEmoji) {
-                behaviorConstraints.push('- 你可以在合适的时候发送emoji表情来增加趣味性');
-              } else {
-                behaviorConstraints.push('- 请不要发送emoji表情');
-              }
-
-              // 拍一拍控制
-              if (groupAllowTap) {
-                behaviorConstraints.push('- 你可以在合适的时候使用"拍一拍"进行亲密互动');
-              } else {
-                behaviorConstraints.push('- 请不要使用"拍一拍"');
-              }
-
-              behaviorConstraints.push(
-                `- 你一次最多连续回复${groupMaxReplyCount}条消息，消息之间使用空行，并保持语气自然`,
-              );
-
-              singleChatParts.push(`\n【行为约束】\n${behaviorConstraints.join('\n')}`);
-
               if (singleChatParts.length > 0) {
                 const userProfileInfo = singleChatParts.join('\n');
                 // 使用system角色，添加到messages第一位
@@ -2392,7 +2375,14 @@ ${numberedOptions}
             }
           }
 
-          const xingchenResult = await this.openAIChatService.chatFree(
+          Logger.log(
+            `[LLM请求] 心理描述开关: ${enablePsychologicalDesc ? '开启' : '关闭'} | appId=${
+              appId ?? 'null'
+            } | groupId=${groupId ?? 'null'} | userId=${req?.user?.id ?? 'anonymous'}`,
+            ChatService.name,
+          );
+
+          const qwenResult = await this.openAIChatService.chatQwenPlusCharacter(
             prompt || '',
             setSystemMessage, // 使用原始systemMessage作为botProfile
             messagesForXingchen, // 使用包含群组背景信息的副本
@@ -2420,17 +2410,17 @@ ${numberedOptions}
             appConfigForXingchen,
           );
 
-          const xingchenText = xingchenResult.text || '';
-          const xingchenUsage = xingchenResult.usage;
+          const qwenText = qwenResult.text || '';
+          const qwenUsage = qwenResult.usage;
 
           // 使用API返回的token数据，如果没有则使用计算值
           let promptTokens = 0;
           let completionTokens = 0;
-          if (xingchenUsage) {
-            promptTokens = xingchenUsage.inputTokens || xingchenUsage.userTokens || 0;
-            completionTokens = xingchenUsage.outputTokens || 0;
+          if (qwenUsage) {
+            promptTokens = qwenUsage.inputTokens || qwenUsage.userTokens || 0;
+            completionTokens = qwenUsage.outputTokens || 0;
             this.logDebug(
-              `使用星尘API返回的token数据 - promptTokens: ${promptTokens}, completionTokens: ${completionTokens}`,
+              `使用Qwen Character返回的token数据 - promptTokens: ${promptTokens}, completionTokens: ${completionTokens}`,
               'ChatService',
             );
           } else {
@@ -2440,9 +2430,9 @@ ${numberedOptions}
               totalText += msg.content + ' ';
             });
             promptTokens = await getTokenCount(totalText);
-            completionTokens = await getTokenCount(xingchenText);
+            completionTokens = await getTokenCount(qwenText);
             this.logDebug(
-              `星尘API未返回token数据，使用计算值 - promptTokens: ${promptTokens}, completionTokens: ${completionTokens}`,
+              `Qwen Character未返回token数据，使用计算值 - promptTokens: ${promptTokens}, completionTokens: ${completionTokens}`,
               'ChatService',
             );
           }
@@ -2453,7 +2443,7 @@ ${numberedOptions}
             modelAvatar: '',
             model: useModel,
             status: 2,
-            full_content: xingchenText || '',
+            full_content: qwenText || '',
             full_reasoning_content: '',
             networkSearchResult: '',
             fileVectorResult: '',
@@ -2527,6 +2517,7 @@ ${numberedOptions}
           const normalizedFullContent =
             splitReplies.length > 0 ? splitReplies.join('\n\n') : sanitizedAnswer;
           response.full_content = normalizedFullContent;
+          this.logModelResponsePreview(useModeName || useModel, normalizedFullContent);
 
           const assistantMessagesPayload: any[] = [];
           let extraAssistantLogs: Array<{ chatId: number; content: string }> = [];
@@ -2673,7 +2664,7 @@ ${numberedOptions}
 
           try {
             if (isGeneratePromptReference === '1') {
-              const promptRefResult = await this.openAIChatService.chatFree(
+              const promptRefResult = await this.openAIChatService.chatQwenPlusCharacter(
                 `根据用户提问{${prompt}}以及AI的回答{${response.full_content}}，生成三个更进入一步的问题来向AI提问，用{}包裹每个问题，不需要分行，不需要其他任何内容，单个提问不超过30个字`,
                 setSystemMessage,
                 messagesHistory,
@@ -3655,4 +3646,3 @@ ${numberedOptions}
     return res.status(400).send({ message: '请先为角色配置音色后再进行语音合成' });
   }
 }
-

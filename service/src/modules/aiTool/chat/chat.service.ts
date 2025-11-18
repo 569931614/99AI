@@ -1310,17 +1310,24 @@ export class OpenAIChatService {
   ): Promise<any[]> {
     let systemPrompt = systemMessage?.trim() || '';
     const normalizedMessages: any[] = [];
+    const additionalSystemMessages: string[] = []; // 收集额外的system消息
 
     if (messagesHistory && messagesHistory.length > 0) {
       let firstSystemConsumed = false;
       for (const message of messagesHistory) {
         if (message?.role === 'system') {
           if (!firstSystemConsumed && !systemPrompt && typeof message.content === 'string') {
+            // 第一个system消息作为主system prompt
             systemPrompt = message.content;
             firstSystemConsumed = true;
             continue;
           }
+          // 后续的system消息收集起来，稍后合并
+          if (typeof message.content === 'string' && message.content.trim()) {
+            additionalSystemMessages.push(message.content.trim());
+          }
           firstSystemConsumed = true;
+          continue; // 跳过system消息，不加入normalizedMessages
         }
 
         normalizedMessages.push({
@@ -1330,6 +1337,11 @@ export class OpenAIChatService {
       }
     } else if (prompt) {
       normalizedMessages.push({ role: 'user', content: prompt });
+    }
+
+    // 合并额外的system消息到主systemPrompt
+    if (additionalSystemMessages.length > 0) {
+      systemPrompt = systemPrompt + '\n\n' + additionalSystemMessages.join('\n\n');
     }
 
     if (!systemPrompt) {
@@ -1349,6 +1361,63 @@ export class OpenAIChatService {
     if (!systemPrompt) {
       systemPrompt = '你是一个友好且乐于助人的AI助手，回答需要自然、具体、有温度。';
     }
+
+    // 添加当前时间到系统消息（如果还没有的话）
+    if (!systemPrompt.includes('【当前时间】')) {
+      const now = new Date();
+      const timeOptions = {
+        timeZone: 'Asia/Shanghai',
+        year: 'numeric' as const,
+        month: '2-digit' as const,
+        day: '2-digit' as const,
+        hour: '2-digit' as const,
+        minute: '2-digit' as const,
+        hour12: false,
+      };
+      const currentDate = new Intl.DateTimeFormat('zh-CN', timeOptions).format(now);
+
+      // 获取当前小时数用于生成时间相关的行为提示
+      const hour = now.getHours();
+
+      // 根据时间段生成行为提示
+      let timeBehaviorHint = '';
+      if (hour >= 0 && hour < 6) {
+        // 凌晨 0:00-6:00
+        timeBehaviorHint = '\n【时间情境提示】：现在是深夜/凌晨时段，如果用户还在聊天，可以适当关心用户的睡眠和健康，温柔地提醒用户早点休息。';
+      } else if (hour >= 6 && hour < 9) {
+        // 早晨 6:00-9:00
+        timeBehaviorHint = '\n【时间情境提示】：现在是清晨时段，可以问候用户早安，关心用户的早餐和一天的计划。';
+      } else if (hour >= 9 && hour < 12) {
+        // 上午 9:00-12:00
+        timeBehaviorHint = '\n【时间情境提示】：现在是上午时段，适合谈论工作、学习等日常话题。';
+      } else if (hour >= 12 && hour < 14) {
+        // 午餐 12:00-14:00
+        timeBehaviorHint = '\n【时间情境提示】：现在是午餐时段，可以关心用户是否用餐，适当提醒注意休息。';
+      } else if (hour >= 14 && hour < 18) {
+        // 下午 14:00-18:00
+        timeBehaviorHint = '\n【时间情境提示】：现在是下午时段，可以关心用户的工作/学习进展，适当鼓励加油。';
+      } else if (hour >= 18 && hour < 20) {
+        // 傍晚 18:00-20:00
+        timeBehaviorHint = '\n【时间情境提示】：现在是傍晚时段，可以关心用户的晚餐，分享一天的收获。';
+      } else if (hour >= 20 && hour < 23) {
+        // 晚上 20:00-23:00
+        timeBehaviorHint = '\n【时间情境提示】：现在是晚上时段，适合轻松的聊天，可以关心用户今天过得如何。';
+      } else {
+        // 深夜 23:00-24:00
+        timeBehaviorHint = '\n【时间情境提示】：现在已经很晚了，如果用户还在聊天，请温柔地关心用户的睡眠，适当提醒早点休息对身体好。';
+      }
+
+      systemPrompt += `\n【当前时间】: ${currentDate}${timeBehaviorHint}`;
+    }
+
+    // 添加回复格式要求（在最后）
+    systemPrompt += `\n\n【回复格式】\n请回复两条消息，并用空行隔开。`;
+
+    // 打印完整的system消息内容，用于排查问题
+    Logger.debug(
+      `[QwenPlus] 完整System消息内容:\n${systemPrompt}`,
+      'OpenAIChatService',
+    );
 
     normalizedMessages.unshift({
       role: 'system',

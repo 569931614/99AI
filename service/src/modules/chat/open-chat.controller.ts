@@ -32,6 +32,7 @@ interface CookieChargeReceipt {
   amount: number;
   type: CookieMessageType;
   maobingBaseUrl?: string;
+  token?: string;
 }
 
 @ApiTags('open-chat')
@@ -54,14 +55,6 @@ export class OpenChatController {
         token: {
           type: 'string',
           description: 'Maobing平台用户token（可选，传入则会验证并获取userId）',
-        },
-        maobingBaseUrl: {
-          type: 'string',
-          description: 'Maobing基础域名（可选，默认 https://maobingai.lnkj5.com ）',
-        },
-        maobingBaseUrl: {
-          type: 'string',
-          description: 'Maobing基础域名（可选，默认 https://maobingai.lnkj5.com ）',
         },
         maobingBaseUrl: {
           type: 'string',
@@ -229,7 +222,7 @@ export class OpenChatController {
       }
 
       const messageType = this.resolveMessageType(body);
-      chargeReceipt = await this.chargeCookiesOrThrow(userId, messageType, maobingBaseUrl);
+      chargeReceipt = await this.chargeCookiesOrThrow(userId, messageType, maobingBaseUrl, token);
 
       // 构造伪造的 req 对象，使用 visitor 角色跳过用户验证
       const fakeReq: any = {
@@ -436,7 +429,7 @@ export class OpenChatController {
       }
 
       const payload: any = { ...body, prompt: text };
-      chargeReceipt = await this.chargeCookiesOrThrow(userId, 'voice', maobingBaseUrl);
+      chargeReceipt = await this.chargeCookiesOrThrow(userId, 'voice', maobingBaseUrl, token);
 
       const fakeReq: any = {
         user: { id: userId, role: 'visitor' },
@@ -642,7 +635,7 @@ export class OpenChatController {
       };
 
       // 调用流式接口，内部会写入到 mockRes
-      chargeReceipt = await this.chargeCookiesOrThrow(userId, messageType, maobingBaseUrl);
+      chargeReceipt = await this.chargeCookiesOrThrow(userId, messageType, maobingBaseUrl, token);
 
       await this.chatService.chatProcess(body as any, fakeReq, mockRes);
 
@@ -691,6 +684,7 @@ export class OpenChatController {
     userId: number,
     type: CookieMessageType,
     maobingBaseUrl?: string,
+    token?: string,
   ): Promise<CookieChargeReceipt> {
     const rule = this.getCookieRule(type);
     const response = await MaobingCookieUtil.deductCookies({
@@ -698,15 +692,17 @@ export class OpenChatController {
       amount: rule.cost,
       remark: rule.remark,
       maobingBaseUrl,
+      token,
     });
     if (!response.success) {
-      throw new HttpException(response.message || '饼干扣费失败', HttpStatus.BAD_REQUEST);
+      this.logger.warn(`饼干扣费失败，但不影响正常聊天: ${response.message}`);
     }
     return {
       userId,
       amount: rule.cost,
       type,
       maobingBaseUrl,
+      token,
     };
   }
 
@@ -718,6 +714,7 @@ export class OpenChatController {
       userId: receipt.userId,
       amount: receipt.amount,
       maobingBaseUrl: receipt.maobingBaseUrl,
+      token: receipt.token,
       remark: `开放接口${receipt.type}聊天失败返还`,
     });
     if (!response.success) {

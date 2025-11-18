@@ -60,6 +60,12 @@ export class OpenAppController {
     required: false,
     description: 'Maobing平台基础URL（可选，用于token验证）',
   })
+  @ApiQuery({
+    name: 'isSystem',
+    type: Boolean,
+    required: false,
+    description: '是否只查询系统角色（true：只查系统角色，false：只查自创角色，不传：根据userId自动判断）',
+  })
   async list(
     @Query()
     query: {
@@ -73,6 +79,7 @@ export class OpenAppController {
       excludeIds?: string;
       excludeAdded?: boolean;
       maobingBaseUrl?: string;
+      isSystem?: boolean;
     },
   ) {
     // 如果传了token，则验证并获取userId

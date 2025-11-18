@@ -9,6 +9,7 @@ interface CookieAdjustParams {
   remark?: string;
   maobingBaseUrl?: string;
   timeoutMs?: number;
+  token?: string;
 }
 
 interface CookieAdjustResult {
@@ -26,7 +27,7 @@ export class MaobingCookieUtil {
 
   private static buildEndpoint(baseUrl?: string) {
     const root = (baseUrl || this.DEFAULT_BASE_URL).replace(/\/$/, '');
-    return `${root}/api/open/user/cookie`;
+    return `${root}/api/user/updateCookie`;
   }
 
   private static async adjustCookie(params: CookieAdjustParams, type: CookieAction) {
@@ -35,10 +36,10 @@ export class MaobingCookieUtil {
       const response = await axios.post(
         url,
         {
-          userId: params.userId,
-          type,
-          num: params.amount,
-          remark: params.remark,
+          token: params.token,
+          type: String(type),
+          num: String(params.amount),
+          remark: params.remark || '',
         },
         {
           timeout: params.timeoutMs ?? 5000,

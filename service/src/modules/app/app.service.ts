@@ -222,6 +222,10 @@ export class AppService {
     const pageNum = Math.max(1, Number(page) || 1);
     const sizeNum = Math.max(1, Number(size) || 10);
 
+    // 调试日志
+    console.log('[appList] 原始 query.isSystem:', query.isSystem, 'type:', typeof query.isSystem);
+    console.log('[appList] 原始 query.userId:', query.userId, 'type:', typeof query.userId);
+
     // 正确解析 excludeAdded 参数（处理字符串 "false"）
     let excludeAdded: any = query.excludeAdded;
     if (excludeAdded === undefined || excludeAdded === null) {
@@ -232,14 +236,44 @@ export class AppService {
       excludeAdded = Boolean(excludeAdded); // 其他类型转为布尔值
     }
 
+    // 正确解析 isSystem 参数（处理字符串 "true"/"false"）
+    let isSystem: boolean | undefined;
+    const rawIsSystem = query.isSystem as any;
+    if (rawIsSystem !== undefined && rawIsSystem !== null) {
+      if (typeof rawIsSystem === 'string') {
+        isSystem = rawIsSystem.toLowerCase() === 'true'; // 字符串 "true" 转为 true，其他转为 false
+      } else {
+        isSystem = Boolean(rawIsSystem); // 其他类型转为布尔值
+      }
+    }
+
+    console.log('[appList] 解析后 isSystem:', isSystem, 'type:', typeof isSystem);
+    console.log('[appList] 解析后 userId:', userId, 'type:', typeof userId);
+
     // 构建基础查询条件数组（支持OR查询）
     let baseWhere: any[] = [];
 
-    // 如果传入了 onlyOwn=true，则只返回该 userId 创建的角色
-    if (onlyOwn && userId) {
+    // 优先使用 isSystem 参数控制查询逻辑
+    if (isSystem === true) {
+      console.log('[appList] 分支: isSystem === true, 只查询系统角色');
+      // 只查询系统角色（userId 为 null）
+      baseWhere = [{ userId: IsNull() }];
+    } else if (isSystem === false) {
+      console.log('[appList] 分支: isSystem === false, 只查询当前用户自创的角色');
+      // 只查询当前用户自创的角色
+      if (userId) {
+        baseWhere = [{ userId: Number(userId) }];
+        console.log('[appList] baseWhere:', JSON.stringify(baseWhere));
+      } else {
+        console.log('[appList] 没有userId，返回空结果');
+        // 如果没有userId，无法查询自创角色
+        return { rows: [], count: 0 };
+      }
+    }
+    // 如果没有传 isSystem，使用原有逻辑
+    else if (onlyOwn && userId) {
       baseWhere = [{ userId: Number(userId) }];
     }
-    // 如果传入了 userId 但 onlyOwn 不为 true，限制只查询系统角色或该用户创建的角色
     else if (userId) {
       baseWhere = [
         { userId: IsNull() }, // 系统角色
@@ -250,7 +284,6 @@ export class AppService {
       baseWhere = [{ userId: IsNull() }];
     }
 
-    let addedAppIds: number[] = [];
     let excludeAppIds: number[] = [];
     let filteredByCategory: number[] = null;
 
@@ -262,22 +295,11 @@ export class AppService {
         .filter(id => !isNaN(id) && id > 0);
     }
 
-    // 如果传入了 userId 且 excludeAdded=true，查询该用户已添加的角色ID列表（用于排除）
-    // 但如果 onlyOwn=true，则不过滤聊天列表中的角色，因为用户想看到所有自己创建的角色
-    if (userId && !onlyOwn && excludeAdded !== false) {
-      const userGroups = await this.chatGroupEntity.find({
-        where: {
-          userId: Number(userId),
-          isDelete: false,
-          isGroupChat: false, // 只查询单聊会话组
-        },
-        select: ['appId'],
-      });
-      addedAppIds = userGroups.map(g => g.appId).filter(id => id != null && id > 0);
-    }
+    // 已移除：排除已对话角色的逻辑，现在所有角色都会显示，无论是否已对话
 
-    // 合并需要排除的ID列表
-    const allExcludeIds = [...new Set([...addedAppIds, ...excludeAppIds])];
+    // 需要排除的ID列表（只有手动传入的 excludeIds）
+    const allExcludeIds = [...new Set([...excludeAppIds])];
+
 
     // 如果指定了分类ID，则查找包含该分类ID的App
     if (catId) {

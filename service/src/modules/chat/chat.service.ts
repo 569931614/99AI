@@ -1394,6 +1394,20 @@ ${numberedOptions}
       } else {
         this.logDebug(`[角色任务] 跳过任务获取，groupId=${groupId}, appId=${appId}`, 'ChatService');
       }
+
+      // 为应用预设添加【当前时间】
+      const now = new Date();
+      const timeOptions = {
+        timeZone: 'Asia/Shanghai',
+        year: 'numeric' as const,
+        month: '2-digit' as const,
+        day: '2-digit' as const,
+        hour: '2-digit' as const,
+        minute: '2-digit' as const,
+        hour12: false,
+      };
+      const currentDate = new Intl.DateTimeFormat('zh-CN', timeOptions).format(now);
+      setSystemMessage = `${setSystemMessage}\n【当前时间】: ${currentDate}`;
     } else {
       if (usingPlugin?.parameters === 'mermaid') {
         setSystemMessage = `
@@ -1507,11 +1521,11 @@ ${numberedOptions}
           setSystemMessage =
             systemPreMessage +
             currentRequestModelKey.systemPrompt +
-            `\n 现在时间是: ${currentDate}`;
+            `\n【当前时间】: ${currentDate}`;
         } else if (currentRequestModelKey.systemPromptType === 2) {
-          setSystemMessage = currentRequestModelKey.systemPrompt + `\n 现在时间是: ${currentDate}`;
+          setSystemMessage = currentRequestModelKey.systemPrompt + `\n【当前时间】: ${currentDate}`;
         } else {
-          setSystemMessage = systemPreMessage + `\n 现在时间是: ${currentDate}`;
+          setSystemMessage = systemPreMessage + `\n【当前时间】: ${currentDate}`;
         }
 
         this.logDebug(`使用默认系统预设`, 'ChatService');
@@ -1954,6 +1968,23 @@ ${numberedOptions}
       }
     }
 
+    // 在所有system消息内容设置完成后，统一添加【对话历史总结】和【回复格式】
+    // 1. 添加对话历史总结（如果有）
+    if (groupId) {
+      try {
+        const historySummary = await this.conversationSummaryService.getSummary(groupId);
+        if (historySummary) {
+          setSystemMessage = `${setSystemMessage}\n\n【对话历史总结】\n${historySummary}`;
+          this.logDebug(
+            `[对话总结] 已添加历史总结到system message，长度=${historySummary.length}字`,
+            'ChatService',
+          );
+        }
+      } catch (error: any) {
+        Logger.warn(`[对话总结] 获取历史总结失败: ${error?.message || error}`, 'ChatService');
+      }
+    }
+
     // 心理描述开关逻辑
     // 优先使用会话组的 describingMental 配置，如果没有则使用用户级别配置
     let enablePsychologicalDesc = false; // 声明在外层，用于后续响应过滤
@@ -2066,22 +2097,6 @@ ${numberedOptions}
         );
       } catch (error) {
         Logger.warn(`获取心理描述开关失败: ${error?.message || error}`, 'ChatService');
-      }
-    }
-
-    // 对话总结：获取历史总结并添加到system message（角色预设之后）
-    if (groupId) {
-      try {
-        const historySummary = await this.conversationSummaryService.getSummary(groupId);
-        if (historySummary) {
-          setSystemMessage = `${setSystemMessage}\n\n【对话历史总结】\n${historySummary}`;
-          this.logDebug(
-            `[对话总结] 已添加历史总结到system message，长度=${historySummary.length}字`,
-            'ChatService',
-          );
-        }
-      } catch (error: any) {
-        Logger.warn(`[对话总结] 获取历史总结失败: ${error?.message || error}`, 'ChatService');
       }
     }
 
@@ -2905,15 +2920,6 @@ ${numberedOptions}
       }
     }
 
-    // 确保 systemMessage 不超过 maxModelTokens
-    // if (systemMessage.length > maxModelTokens) {
-    //   this.logDebug(
-    //     `系统消息过长(${systemMessage.length} > ${maxModelTokens})，进行截断处理`,
-    //     'ChatService',
-    //   );
-    //   systemMessage = systemMessage.slice(0, maxModelTokens);
-    // }
-
     const messages = [];
     // 查询历史对话列表
     if (groupId) {
@@ -3181,19 +3187,17 @@ ${numberedOptions}
 
           this.logDebug(`[群聊历史构建] 最终消息数组长度=${messages.length}`, 'ChatService');
         } else {
-          // 普通对话模式：保持原有逻辑
-          const pairCount = Math.min(userMessages.length, assistantMessages.length);
+          // 单聊模式：按时间顺序添加所有消息，不强制配对
+          // 因为星尘API支持连续的assistant消息
+          const allMessages = [...userMessages, ...assistantMessages].sort(
+            (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime(),
+          );
 
-          // 按user-assistant对添加消息
-          for (let i = 0; i < pairCount; i++) {
-            messages.push({ role: 'user', content: userMessages[i].content });
-            messages.push({ role: 'assistant', content: assistantMessages[i].content });
+          for (const msg of allMessages) {
+            messages.push({ role: msg.role, content: msg.content });
           }
 
-          // 如果用户消息比助手消息多，添加最后一条用户消息
-          if (userMessages.length > pairCount) {
-            messages.push({ role: 'user', content: userMessages[userMessages.length - 1].content });
-          }
+          this.logDebug(`[单聊历史构建] 最终消息数组长度=${messages.length}`, 'ChatService');
         }
       } catch (error) {
         Logger.error(`获取聊天历史记录失败: ${error.message}`, 'ChatService');
@@ -3263,60 +3267,17 @@ ${numberedOptions}
       }
     }
 
-    // 修正消息顺序问题：确保消息是一个user一个assistant交替出现
-    // 遍历所有非系统消息，如果发现连续相同角色的消息，则进行调整
-    if (messages.length > 1) {
-      const fixedMessages = [];
-      // 保留系统消息
-      if (messages[0].role === 'system') {
-        fixedMessages.push(messages[0]);
-        messages.shift();
-      }
-
-      // 按照严格的user-assistant交替顺序重新构建消息
-      // 确保最后一条消息是user
-      const userMessages = messages
-        .filter(msg => msg.role === 'user')
-        .sort(
-          (a, b) => new Date(a.createdAt || 0).getTime() - new Date(b.createdAt || 0).getTime(),
-        );
-
-      const assistantMessages = messages
-        .filter(msg => msg.role === 'assistant')
-        .sort(
-          (a, b) => new Date(a.createdAt || 0).getTime() - new Date(b.createdAt || 0).getTime(),
-        );
-
-      // 保证最多使用较少的那一组消息的数量
-      const pairCount = Math.min(userMessages.length, assistantMessages.length);
-
-      // 构建交替的消息对
-      for (let i = 0; i < pairCount; i++) {
-        fixedMessages.push(userMessages[i]);
-        fixedMessages.push(assistantMessages[i]);
-      }
-
-      // 如果还有剩余的user消息，添加最后一条
-      if (userMessages.length > pairCount) {
-        fixedMessages.push(userMessages[userMessages.length - 1]);
-      }
-
-      // 替换原消息数组
-      messages.length = 0;
-      messages.push(...fixedMessages);
-    }
-
     // 添加当前用户提问到消息历史
     // 如果 skipPromptInHistory 为 true（用于群聊自动对话），则跳过添加
-    if (prompt && !options?.skipPromptInHistory) {
+    if (!options?.skipPromptInHistory) {
       // 检查最后一条消息是否已经是当前用户的提问
       const lastMessage = messages[messages.length - 1];
       const isLastMessageCurrentPrompt =
-        lastMessage && lastMessage.role === 'user' && lastMessage.content === prompt;
+        lastMessage && lastMessage.role === 'user' && lastMessage.content === (prompt || '');
 
       if (!isLastMessageCurrentPrompt) {
         // 群聊模式下，真实用户的消息也需要添加用户名前缀（根据星尘API文档）
-        let userPrompt = prompt;
+        let userPrompt = prompt || ''; // 确保prompt至少为空字符串
 
         // 如果是群聊模式，添加用户名前缀
         if (isGroupChat) {

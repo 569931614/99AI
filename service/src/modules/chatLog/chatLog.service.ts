@@ -385,15 +385,11 @@ export class ChatLogService {
 
   /* 查询历史对话的列表 */
   async chatHistory(groupId: number, rounds: number) {
-    // Logger.debug(`查询历史对话的列表, groupId: ${groupId}, rounds: ${rounds}`);
-
     if (rounds === 0) {
-      // Logger.debug('轮次为0，返回空数组');
       return [];
     }
 
     const where = { isDelete: false, groupId: groupId };
-    // Logger.debug('查询条件:', JSON.stringify(where, null, 2));
 
     const list = await this.chatLogEntity.find({
       where,
@@ -402,8 +398,6 @@ export class ChatLogService {
       },
       take: rounds * 2, // 只取最新的rounds条记录
     });
-
-    // Logger.debug('查询结果:', JSON.stringify(list, null, 2));
 
     const result = list
       .map(item => {
@@ -442,12 +436,9 @@ export class ChatLogService {
           createdAt: createdAt, // 添加 createdAt 字段，用于消息排序
           isOpeningRemark: isOpeningRemark, // 添加 isOpeningRemark 字段，用于识别开场白
         };
-        // Logger.debug('处理记录:', JSON.stringify(record, null, 2));
         return record;
       })
       .reverse(); // 添加.reverse()来反转数组，使结果按时间从旧到新排列
-
-    // Logger.debug('处理后的结果:', JSON.stringify(result, null, 2));
 
     return result;
   }

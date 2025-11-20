@@ -345,7 +345,7 @@ export class OpenVoiceController {
       },
     },
   })
-  preview(
+  async preview(
     @Body()
     body: {
       voice_id: string;
@@ -360,6 +360,11 @@ export class OpenVoiceController {
       cut_punc?: string;
     },
   ) {
-    return this.voiceService.preview(body);
+    try {
+      return await this.voiceService.preview(body);
+    } catch (error) {
+      console.error('[OpenVoiceController.preview] Error:', error);
+      throw error;
+    }
   }
 }

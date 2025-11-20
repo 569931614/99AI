@@ -27,6 +27,8 @@ const COOKIE_RULES: Record<CookieMessageType, { cost: number; remark: string }> 
   image: { cost: 2, remark: '开放接口图片聊天' },
 };
 
+type AsrAudioFormat = 'wav' | 'pcm' | 'mp3' | 'opus' | 'speex' | 'aac' | 'amr';
+
 interface CookieChargeReceipt {
   userId: number;
   amount: number;
@@ -189,21 +191,8 @@ export class OpenChatController {
 
       // 如果传入了音频链接，则优先进行ASR识别
       if (body?.audioUrl) {
-        const url = body.audioUrl;
-        const resp = await axios.get(url, { responseType: 'arraybuffer' });
-        const buf: Buffer = Buffer.from(resp.data);
-        const lower = url.toLowerCase();
-        const mime = lower.endsWith('.mp3')
-          ? 'audio/mpeg'
-          : lower.endsWith('.aac')
-          ? 'audio/aac'
-          : lower.endsWith('.amr')
-          ? 'audio/amr'
-          : lower.endsWith('.ogg') || lower.endsWith('.opus')
-          ? 'audio/ogg'
-          : 'audio/wav';
-        const audioBase64 = `data:${mime};base64,${buf.toString('base64')}`;
-        const asr = await this.voiceService.asr({ audioBase64 } as any);
+        const { base64, format } = await this.downloadAudioAsBase64(body.audioUrl);
+        const asr = await this.voiceService.asr({ audioBase64: base64, format } as any);
         const text = (asr?.text || '').trim();
         if (text) body.prompt = text;
       }
@@ -403,32 +392,49 @@ export class OpenChatController {
 
       const { audioUrl, audioBase64 } = body;
       let base64 = audioBase64;
+      let format = this.detectAudioFormat(audioBase64);
+
       if (!base64 && audioUrl) {
-        const url = audioUrl;
-        const resp = await axios.get(url, { responseType: 'arraybuffer' });
-        const buf: Buffer = Buffer.from(resp.data);
-        const lower = url.toLowerCase();
-        const mime = lower.endsWith('.mp3')
-          ? 'audio/mpeg'
-          : lower.endsWith('.aac')
-          ? 'audio/aac'
-          : lower.endsWith('.amr')
-          ? 'audio/amr'
-          : lower.endsWith('.ogg') || lower.endsWith('.opus')
-          ? 'audio/ogg'
-          : 'audio/wav';
-        base64 = `data:${mime};base64,${buf.toString('base64')}`;
+        const result = await this.downloadAudioAsBase64(audioUrl);
+        base64 = result.base64;
+        format = result.format;
       }
       if (!base64)
         throw new HttpException('请提供 audioUrl 或 audioBase64', HttpStatus.BAD_REQUEST);
 
-      const asr = await this.voiceService.asr({ audioBase64: base64 } as any);
+      // ASR 识别
+      const asr = await this.voiceService.asr({ audioBase64: base64, format } as any);
       const text = (asr?.text || '').trim();
       if (!text) {
         throw new HttpException('未识别到有效语音内容', HttpStatus.BAD_REQUEST);
       }
 
-      const payload: any = { ...body, prompt: text };
+      // 将 PCM 音频转换为 MP3 并上传，用于聊天记录
+      let uploadedAudioUrl = '';
+      try {
+        const base64Data = base64.includes(',') ? base64.split(',')[1] : base64;
+        const audioBuffer = Buffer.from(base64Data, 'base64');
+
+        const mp3Buffer = await this.voiceService.convertPcmToMp3(audioBuffer, 16000, 1);
+
+        const UploadService = require('../upload/upload.service').UploadService;
+        const uploadService = new UploadService(null, null, null);
+        const fileName = `voice_${Date.now()}.mp3`;
+        uploadedAudioUrl = await uploadService.uploadFileFromBuffer(
+          mp3Buffer,
+          fileName,
+          'audio/mp3',
+          'voice',
+        );
+      } catch (uploadError) {
+        Logger.warn(`音频上传失败: ${uploadError.message}`, 'OpenChatController');
+      }
+
+      const payload: any = {
+        ...body,
+        prompt: text,
+        audioUrl: uploadedAudioUrl || audioUrl,
+      };
       chargeReceipt = await this.chargeCookiesOrThrow(userId, 'voice', maobingBaseUrl, token);
 
       const fakeReq: any = {
@@ -513,21 +519,8 @@ export class OpenChatController {
 
       // 如果传入了音频链接，则优先进行ASR识别
       if (body?.audioUrl) {
-        const url = body.audioUrl;
-        const resp = await axios.get(url, { responseType: 'arraybuffer' });
-        const buf: Buffer = Buffer.from(resp.data);
-        const lower = url.toLowerCase();
-        const mime = lower.endsWith('.mp3')
-          ? 'audio/mpeg'
-          : lower.endsWith('.aac')
-          ? 'audio/aac'
-          : lower.endsWith('.amr')
-          ? 'audio/amr'
-          : lower.endsWith('.ogg') || lower.endsWith('.opus')
-          ? 'audio/ogg'
-          : 'audio/wav';
-        const audioBase64 = `data:${mime};base64,${buf.toString('base64')}`;
-        const asr = await this.voiceService.asr({ audioBase64 } as any);
+        const { base64, format } = await this.downloadAudioAsBase64(body.audioUrl);
+        const asr = await this.voiceService.asr({ audioBase64: base64, format } as any);
         const text = (asr?.text || '').trim();
         if (text) body.prompt = text;
       }
@@ -674,6 +667,89 @@ export class OpenChatController {
     if (payload?.imageUrl) return 'image';
     if (payload?.audioUrl || payload?.audioBase64) return 'voice';
     return 'text';
+  }
+
+  private async downloadAudioAsBase64(
+    audioUrl: string,
+  ): Promise<{ base64: string; format: AsrAudioFormat }> {
+    // 🔥 检测是否为 Base64 Data URL 格式
+    if (audioUrl.startsWith('data:audio/')) {
+      const format = this.detectAudioFormat(audioUrl);
+      return { base64: audioUrl, format };
+    }
+
+    // 下载远程音频文件
+    const resp = await axios.get(audioUrl, { responseType: 'arraybuffer' });
+    const buf: Buffer = Buffer.from(resp.data);
+    const format = this.detectAudioFormat(audioUrl);
+    const mime = this.getMimeTypeByFormat(format);
+    const base64 = `data:${mime};base64,${buf.toString('base64')}`;
+    return { base64, format };
+  }
+
+  private detectAudioFormat(source?: string | null): AsrAudioFormat {
+    if (!source) return 'wav';
+    const lower = source.toLowerCase();
+
+    const mappings: Record<string, AsrAudioFormat> = {
+      wav: 'wav',
+      wave: 'wav',
+      pcm: 'pcm',
+      mp3: 'mp3',
+      mpeg: 'mp3',
+      ogg: 'opus',
+      opus: 'opus',
+      oga: 'opus',
+      webm: 'opus',
+      spx: 'speex',
+      speex: 'speex',
+      aac: 'aac',
+      m4a: 'aac',
+      mp4: 'aac',
+      amr: 'amr',
+      '3gp': 'amr',
+      '3gpp': 'amr',
+    };
+
+    const dataUrlMatch = lower.match(/^data:audio\/([^;]+);/);
+    if (dataUrlMatch?.[1]) {
+      const mime = dataUrlMatch[1];
+      for (const key of Object.keys(mappings)) {
+        if (mime.includes(key)) {
+          return mappings[key];
+        }
+      }
+    }
+
+    const extMatch = lower.match(/\.([a-z0-9]+)(?:\?|$)/);
+    if (extMatch?.[1]) {
+      const ext = extMatch[1];
+      if (mappings[ext]) {
+        return mappings[ext];
+      }
+    }
+
+    return 'wav';
+  }
+
+  private getMimeTypeByFormat(format: AsrAudioFormat): string {
+    switch (format) {
+      case 'mp3':
+        return 'audio/mpeg';
+      case 'aac':
+        return 'audio/aac';
+      case 'amr':
+        return 'audio/amr';
+      case 'opus':
+        return 'audio/ogg';
+      case 'speex':
+        return 'audio/speex';
+      case 'pcm':
+        return 'audio/wav';
+      case 'wav':
+      default:
+        return 'audio/wav';
+    }
   }
 
   private getCookieRule(type: CookieMessageType) {

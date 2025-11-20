@@ -70,7 +70,13 @@ async function bootstrap() {
   const app = await NestFactory.create(AppModule, {
     bufferLogs: true,
     logger: ['log', 'error', 'warn', 'debug', 'verbose'],
+    bodyParser: true,
+    rawBody: true,
   });
+
+  // 🔥 增加请求体大小限制，支持语音 Base64 数据
+  app.use(require('express').json({ limit: '50mb' }));
+  app.use(require('express').urlencoded({ limit: '50mb', extended: true }));
 
   // 在应用配置后，但在监听端口前初始化数据库表结构
   try {

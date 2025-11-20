@@ -1271,6 +1271,118 @@ export class VoiceService implements OnModuleInit {
   }
 
   /**
+   * 将 PCM 音频转换为 MP3 格式
+   * @param pcmBuffer PCM 音频 Buffer
+   * @param sampleRate 采样率（默认 16000Hz）
+   * @param channels 声道数（默认 1）
+   * @returns MP3 音频 Buffer
+   */
+  async convertPcmToMp3(
+    pcmBuffer: Buffer,
+    sampleRate: number = 16000,
+    channels: number = 1,
+  ): Promise<Buffer> {
+    return new Promise(async (resolve, reject) => {
+      const tempDir = os.tmpdir();
+      const inputFile = path.join(tempDir, `pcm-input-${Date.now()}.pcm`);
+      const outputFile = path.join(tempDir, `mp3-output-${Date.now()}.mp3`);
+
+      try {
+        // 保存 PCM 为临时文件
+        fs.writeFileSync(inputFile, pcmBuffer);
+
+        // 动态导入 fluent-ffmpeg
+        let ffmpeg: any;
+        try {
+          const mod: any = await import('fluent-ffmpeg');
+          ffmpeg = mod?.default || mod;
+        } catch (e: any) {
+          Logger.error(
+            `[convertPcmToMp3] 未安装 fluent-ffmpeg: ${e?.message || e}`,
+            'VoiceService',
+          );
+          throw new HttpException(
+            '服务器未安装 fluent-ffmpeg 依赖，无法转换音频格式',
+            HttpStatus.NOT_IMPLEMENTED,
+          );
+        }
+
+        // 使用 ffmpeg 转换：PCM -> MP3
+        ffmpeg()
+          .input(inputFile)
+          .inputFormat('s16le') // PCM 16-bit little-endian
+          .inputOptions([
+            `-ar ${sampleRate}`, // 采样率
+            `-ac ${channels}`, // 声道数
+          ])
+          .audioCodec('libmp3lame')
+          .audioBitrate('128k')
+          .format('mp3')
+          .on('start', (commandLine) => {
+            Logger.debug(`[convertPcmToMp3] FFmpeg 命令: ${commandLine}`, 'VoiceService');
+          })
+          .on('end', () => {
+            try {
+              // 读取转换后的文件
+              const mp3Buffer = fs.readFileSync(outputFile);
+
+              // 清理临时文件
+              try {
+                fs.unlinkSync(inputFile);
+                fs.unlinkSync(outputFile);
+              } catch (cleanupError) {
+                Logger.warn(
+                  `[convertPcmToMp3] 清理临时文件失败: ${cleanupError.message}`,
+                  'VoiceService',
+                );
+              }
+
+              resolve(mp3Buffer);
+            } catch (error) {
+              Logger.error(
+                `[convertPcmToMp3] 读取转换后文件失败: ${error.message}`,
+                'VoiceService',
+              );
+              reject(error);
+            }
+          })
+          .on('error', (err) => {
+            Logger.error(`[convertPcmToMp3] FFmpeg 转换失败: ${err.message}`, 'VoiceService');
+
+            // 清理临时文件
+            try {
+              if (fs.existsSync(inputFile)) fs.unlinkSync(inputFile);
+              if (fs.existsSync(outputFile)) fs.unlinkSync(outputFile);
+            } catch (cleanupError) {
+              Logger.warn(
+                `[convertPcmToMp3] 清理临时文件失败: ${cleanupError.message}`,
+                'VoiceService',
+              );
+            }
+
+            reject(err);
+          })
+          .save(outputFile);
+      } catch (error) {
+        Logger.error(`[convertPcmToMp3] 处理失败: ${error.message}`, 'VoiceService');
+
+        // 清理临时文件
+        try {
+          if (fs.existsSync(inputFile)) fs.unlinkSync(inputFile);
+          if (fs.existsSync(outputFile)) fs.unlinkSync(outputFile);
+        } catch (cleanupError) {
+          Logger.warn(
+            `[convertPcmToMp3] 清理临时文件失败: ${cleanupError.message}`,
+            'VoiceService',
+          );
+        }
+
+        reject(error);
+      }
+    });
+  }
+
+  /**
    * 语音识别（ASR）：接收 base64 音频或音频URL（建议 WAV PCM 单声道 16kHz），调用 DashScope Paraformer 实时识别（WebSocket）
    * 返回聚合后的文本与句子列表
    */
@@ -1342,44 +1454,57 @@ export class VoiceService implements OnModuleInit {
       const sentences: Array<{ begin_time: number; end_time: number | null; text: string }> = [];
 
       const sendRunTask = () => {
-        const payload: any = {
-          header: { action: 'run-task', task_id: taskId, streaming: 'duplex' },
+        const message = {
+          header: {
+            action: 'run-task',
+            task_id: taskId,
+            streaming: 'duplex'
+          },
           payload: {
             task_group: 'audio',
             task: 'asr',
             function: 'recognition',
             model: modelName,
             parameters: {
-              // DashScope 实时识别参数：使用原始 PCM 流，请设置 format=pcm
               format: fmt === 'wav' || fmt === 'pcm' ? 'pcm' : fmt,
               sample_rate: sampleRate,
               disfluency_removal_enabled: disfluency,
+              language_hints: undefined as string[] | undefined,
             },
             input: {},
           },
         };
+
         if (languageHints && Array.isArray(languageHints) && languageHints.length) {
-          payload.payload.parameters.language_hints = languageHints;
+          message.payload.parameters.language_hints = languageHints;
         }
-        Logger.debug(
-          `发送 run-task: model=${modelName}, sampleRate=${sampleRate}, format=${payload.payload.parameters.format}`,
-          'VoiceService',
-        );
-        ws.send(JSON.stringify(payload));
+
+        ws.send(JSON.stringify(message));
       };
 
       const chunkAndSendAudio = async () => {
-        // 若是WAV容器，去掉44字节头；其余保持原样（仅支持PCM类）
         let sendBuf = audioBuf;
-        if (fmt === 'wav' && audioBuf.length >= 44 && audioBuf.toString('ascii', 0, 4) === 'RIFF') {
-          sendBuf = audioBuf.subarray(44);
+
+        // 只对 WAV 格式去掉文件头，PCM 格式直接发送
+        if (fmt === 'wav' && audioBuf.length >= 44) {
+          const header = audioBuf.toString('ascii', 0, 4);
+          if (header === 'RIFF') {
+            sendBuf = audioBuf.subarray(44);
+          }
+        }
+
+        if (sendBuf.length === 0) {
+          Logger.error('[ASR] 音频数据为空', 'VoiceService');
+          return;
         }
 
         // 以100ms一帧推送：16kHz * 0.1s * 2bytes = 3200字节
-        const chunkSize = Math.max(3200, 3200); // 明确3200字节
+        const chunkSize = 3200;
         let offset = 0;
+
         const sendNext = () => {
           if (finished) return;
+
           if (offset >= sendBuf.length) {
             const finishMsg = {
               header: { action: 'finish-task', task_id: taskId, streaming: 'duplex' },
@@ -1388,11 +1513,11 @@ export class VoiceService implements OnModuleInit {
             ws.send(JSON.stringify(finishMsg));
             return;
           }
+
           const end = Math.min(offset + chunkSize, sendBuf.length);
           const buf = sendBuf.subarray(offset, end);
           ws.send(buf);
           offset = end;
-          // 尽快送完以减少延迟，但避免阻塞事件循环
           setImmediate(sendNext);
         };
         sendNext();
@@ -1410,15 +1535,11 @@ export class VoiceService implements OnModuleInit {
             const msg = JSON.parse(data.toString());
             const event = msg?.header?.event;
 
-            // 详细日志：打印所有收到的消息
-            Logger.debug(`收到 WebSocket 消息: event=${event}`, 'VoiceService');
             if (event === 'task-failed') {
-              Logger.error(`完整错误消息: ${JSON.stringify(msg, null, 2)}`, 'VoiceService');
+              Logger.error(`ASR 任务失败: ${JSON.stringify(msg)}`, 'VoiceService');
             }
 
             if (event === 'task-started') {
-              Logger.debug('任务已启动，开始发送音频', 'VoiceService');
-              // 服务端已就绪，开始送音频
               chunkAndSendAudio();
               return;
             }

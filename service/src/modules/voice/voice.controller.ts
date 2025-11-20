@@ -14,7 +14,13 @@ import {
 import { FileFieldsInterceptor, FileInterceptor } from '@nestjs/platform-express';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import type { Express } from 'express';
+import * as path from 'path';
+import * as fs from 'fs';
 import { VoiceService } from './voice.service';
+
+// Multer diskStorage 配置
+const multer = require('multer');
+const diskStorage = multer.diskStorage;
 
 @ApiTags('voice')
 @Controller('voice')
@@ -74,6 +80,19 @@ export class VoiceController {
   @ApiBearerAuth()
   @UseInterceptors(
     FileInterceptor('file', {
+      storage: diskStorage({
+        destination: (req, file, cb) => {
+          const tempDir = path.join(process.cwd(), 'storage', 'temp');
+          if (!fs.existsSync(tempDir)) {
+            fs.mkdirSync(tempDir, { recursive: true });
+          }
+          cb(null, tempDir);
+        },
+        filename: (req, file, cb) => {
+          const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
+          cb(null, uniqueSuffix + '-' + file.originalname);
+        },
+      }),
       limits: { fileSize: 1024 * 1024 * 1024 }, // 1GB
     }),
   )

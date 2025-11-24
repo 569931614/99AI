@@ -68,7 +68,8 @@ export class QuerAppDto {
 
   @ApiProperty({
     example: true,
-    description: '是否只查询系统角色（true：只查系统角色，false：只查自创角色，不传：根据userId自动判断）',
+    description:
+      '是否只查询系统角色（true：只查系统角色，false：只查自创角色，不传：根据userId自动判断）',
     required: false,
   })
   @IsOptional()

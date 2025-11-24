@@ -188,6 +188,7 @@ export class ChatGroupService {
           const appInfo = appInfos.find(t => t.id === item.appId);
           item.appLogo = appInfo?.coverImg;
           item.appUserId = appInfo?.userId;
+          item.gender = appInfo?.gender;
           return item;
         });
       }
@@ -218,6 +219,7 @@ export class ChatGroupService {
           (chatGroup as any).appUserId = appInfo.userId;
           (chatGroup as any).des = appInfo.des;
           (chatGroup as any).preset = appInfo.preset;
+          (chatGroup as any).gender = appInfo.gender;
         }
       }
 
@@ -277,6 +279,7 @@ export class ChatGroupService {
           item.appLogo = appInfo?.coverImg;
           item.appName = appInfo?.name; // 添加角色名
           item.appUserId = appInfo?.userId;
+          item.gender = appInfo?.gender; // 添加性别
           return item;
         });
       }
@@ -388,6 +391,7 @@ export class ChatGroupService {
           item.appLogo = appInfo?.coverImg;
           item.appName = appInfo?.name; // 添加角色名
           item.appUserId = appInfo?.userId;
+          item.gender = appInfo?.gender; // 添加性别
           return item;
         });
       }
@@ -1340,8 +1344,8 @@ export class ChatGroupService {
     body: {
       groupId: number;
       relationships: Array<{
-        memberA: number;
-        memberB: number;
+        memberA: string;
+        memberB: string;
         type: string;
         description?: string;
       }>;
@@ -1354,20 +1358,20 @@ export class ChatGroupService {
     // 验证群组所有权
     const g = await this.ensureGroupOwned(groupId, req);
 
-    // 验证成员是否都在群组中
-    const members = this.parseMembers(g.members);
-    const memberAppIds = new Set(members.map(m => m.appId));
-
+    // 验证关系数据格式
     for (const rel of relationships) {
-      if (!memberAppIds.has(rel.memberA) || !memberAppIds.has(rel.memberB)) {
+      if (!rel.memberA || !rel.memberB || !rel.type) {
         throw new HttpException(
-          `成员 ${rel.memberA} 或 ${rel.memberB} 不在群组中`,
+          '人物关系数据格式不完整，需要 memberA、memberB 和 type',
           HttpStatus.BAD_REQUEST,
         );
       }
+      if (typeof rel.memberA !== 'string' || typeof rel.memberB !== 'string') {
+        throw new HttpException('人物关系中的成员必须是名称字符串', HttpStatus.BAD_REQUEST);
+      }
     }
 
-    // 保存关系配置
+    // 保存关系配置（memberA 和 memberB 现在是名称而不是 ID）
     const relationshipsData = {
       relationships: relationships,
     };

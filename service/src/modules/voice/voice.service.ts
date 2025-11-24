@@ -1318,7 +1318,7 @@ export class VoiceService implements OnModuleInit {
           .audioCodec('libmp3lame')
           .audioBitrate('128k')
           .format('mp3')
-          .on('start', (commandLine) => {
+          .on('start', commandLine => {
             Logger.debug(`[convertPcmToMp3] FFmpeg 命令: ${commandLine}`, 'VoiceService');
           })
           .on('end', () => {
@@ -1346,7 +1346,7 @@ export class VoiceService implements OnModuleInit {
               reject(error);
             }
           })
-          .on('error', (err) => {
+          .on('error', err => {
             Logger.error(`[convertPcmToMp3] FFmpeg 转换失败: ${err.message}`, 'VoiceService');
 
             // 清理临时文件
@@ -1458,7 +1458,7 @@ export class VoiceService implements OnModuleInit {
           header: {
             action: 'run-task',
             task_id: taskId,
-            streaming: 'duplex'
+            streaming: 'duplex',
           },
           payload: {
             task_group: 'audio',

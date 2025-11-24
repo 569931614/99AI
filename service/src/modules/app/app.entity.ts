@@ -103,4 +103,7 @@ export class AppEntity extends BaseEntity {
 
   @Column({ comment: '开场白', type: 'text', nullable: true })
   openingRemark: string;
+
+  @Column({ comment: '性别：0 未设置，1 男性，2 女性', default: 0 })
+  gender: number;
 }

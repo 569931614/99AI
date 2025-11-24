@@ -106,13 +106,26 @@ export class ConversationSummaryService {
       const conversationText = messages.map(m => `${m.role}: ${m.content}`).join('\n');
 
       // 构建消息：分离指令和数据
-      const systemMessage = previousSummary
-        ? '你是专业的对话总结助手。基于之前的总结和新对话，生成更新后的总结。要求：保留重要信息、整合新内容、简洁连贯、300字以内、直接返回总结内容。'
-        : '你是专业的对话总结助手。总结对话的主要内容和关键信息。要求：简洁准确、突出重点、300字以内、直接返回总结内容。';
+      const systemMessage = `你是一个**聊天记录概括助手**。你的任务是：
+将两个人很长的聊天对话内容，尽可能压缩到最短。
+
+## 要求
+1. **长度**：不超过 400 字。
+2. **整合**：将旧总结的核心信息 + 新对话中的重点，融合成一份连贯的内容。
+3. **关注点**：
+   - 事件的发生时间、顺序
+   - 人物关系与情绪的变化
+   - 关键事件的发展、转折
+   - 重要信息的交换、决策
+4. **风格**：客观、中立、简洁，保证信息完整。
+5. **目标**：保留对话双方身份，双方后续能基于这份内容继续对话，关键信息都包含其中。
+
+## 输出格式
+直接输出一段合并后的文本，无需任何额外说明，无需评价。`;
 
       const userMessage = previousSummary
-        ? `之前的总结：\n${previousSummary}\n\n新的对话：\n${conversationText}\n\n请生成更新后的总结：`
-        : `对话内容：\n${conversationText}\n\n请生成总结：`;
+        ? `之前的总结：\n${previousSummary}\n\n新的对话：\n${conversationText}`
+        : `对话内容：\n${conversationText}`;
 
       const axios = require('axios');
       const response = await axios.post(
@@ -132,7 +145,7 @@ export class ConversationSummaryService {
             ],
           },
           parameters: {
-            max_tokens: 500,
+            max_tokens: 600,
             temperature: 0.3,
           },
         },

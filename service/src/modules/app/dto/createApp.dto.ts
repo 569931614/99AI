@@ -202,4 +202,14 @@ export class CreateAppDto {
   })
   @IsOptional()
   allowEmoji: number;
+
+  @ApiProperty({
+    example: 1,
+    description: '性别：0 未设置，1 男性，2 女性',
+    required: false,
+  })
+  @IsOptional()
+  @IsNumber({}, { message: '性别必须是 Number' })
+  @IsIn([0, 1, 2], { message: '性别值错误，只能是0、1或2' })
+  gender: number;
 }

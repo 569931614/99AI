@@ -12,3 +12,8 @@ nul
 NUL
 package-lock.json
 *.log
+
+# GPT-SoVITS模型文件
+service/storage/gpt-sovits/gpt-models/*.ckpt
+service/storage/gpt-sovits/sovits-models/*.pth
+service/storage/temp/*.pth

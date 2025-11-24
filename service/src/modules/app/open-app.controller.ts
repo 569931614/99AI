@@ -64,7 +64,8 @@ export class OpenAppController {
     name: 'isSystem',
     type: Boolean,
     required: false,
-    description: '是否只查询系统角色（true：只查系统角色，false：只查自创角色，不传：根据userId自动判断）',
+    description:
+      '是否只查询系统角色（true：只查系统角色，false：只查自创角色，不传：根据userId自动判断）',
   })
   async list(
     @Query()
@@ -296,6 +297,10 @@ export class OpenAppController {
             '对话示例，JSON数组格式（星尘API，可选），例如：[{"role":"user","content":"你好"},{"role":"assistant","content":"你好！"}]',
         },
         openingRemark: { type: 'string', description: '开场白（角色初始问候语，可选）' },
+        gender: {
+          type: 'number',
+          description: '性别：0 未设置，1 男性，2 女性（可选）',
+        },
       },
       required: ['name', 'catId'],
     },
@@ -367,6 +372,10 @@ export class OpenAppController {
             '对话示例，JSON数组格式（星尘API，可选），例如：[{"role":"user","content":"你好"},{"role":"assistant","content":"你好！"}]',
         },
         openingRemark: { type: 'string', description: '开场白（角色初始问候语，可选）' },
+        gender: {
+          type: 'number',
+          description: '性别：0 未设置，1 男性，2 女性（可选）',
+        },
       },
       required: ['id'],
     },

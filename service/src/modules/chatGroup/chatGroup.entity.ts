@@ -107,7 +107,7 @@ export class ChatGroupEntity extends BaseEntity {
   @Column({ comment: '是否允许拍一拍：0-否，1-是', type: 'tinyint', default: 0 })
   allowTap: number;
 
-  @Column({ comment: '最多回复条数（1-5）', type: 'int', default: 5 })
+  @Column({ comment: '最多回复条数（1-5）', type: 'int', default: 1 })
   maxReplyCount: number;
 
   @Column({ comment: '群组头像URL', nullable: true })

@@ -174,71 +174,6 @@
                 <el-input v-model="gptSovitsForm.voiceId" placeholder="可选，不填自动生成" />
               </el-form-item>
             </div>
-            <el-form-item label="Prompt 文本">
-              <el-input
-                type="textarea"
-                v-model="gptSovitsForm.promptText"
-                placeholder="训练时的参考文本（必填）"
-                :rows="2"
-              />
-            </el-form-item>
-            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <el-form-item label="Prompt 语言">
-                <el-select v-model="gptSovitsForm.promptLanguage">
-                  <el-option
-                    v-for="lang in gptSovitsLanguages"
-                    :key="lang"
-                    :label="lang"
-                    :value="lang"
-                  />
-                </el-select>
-              </el-form-item>
-              <el-form-item label="输出语言">
-                <el-select v-model="gptSovitsForm.textLanguage">
-                  <el-option
-                    v-for="lang in gptSovitsLanguages"
-                    :key="lang"
-                    :label="lang"
-                    :value="lang"
-                  />
-                </el-select>
-              </el-form-item>
-              <el-form-item label="切分符号">
-                <el-input v-model="gptSovitsForm.cutPunc" placeholder="如 ，。" />
-              </el-form-item>
-            </div>
-            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <el-form-item label="采样率">
-                <el-input-number
-                  v-model="gptSovitsForm.sampleRate"
-                  :min="16000"
-                  :max="48000"
-                  :step="1000"
-                />
-              </el-form-item>
-              <el-form-item label="Top K">
-                <el-input-number v-model="gptSovitsForm.topK" :min="0" :step="1" />
-              </el-form-item>
-              <el-form-item label="Top P">
-                <el-input-number v-model="gptSovitsForm.topP" :min="0" :max="1" :step="0.1" />
-              </el-form-item>
-            </div>
-            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <el-form-item label="Temperature">
-                <el-input-number
-                  v-model="gptSovitsForm.temperature"
-                  :min="0"
-                  :max="2"
-                  :step="0.1"
-                />
-              </el-form-item>
-              <el-form-item label="Speed">
-                <el-input-number v-model="gptSovitsForm.speed" :min="0.5" :max="2" :step="0.1" />
-              </el-form-item>
-              <el-form-item label="Sample Steps">
-                <el-input-number v-model="gptSovitsForm.sampleSteps" :min="1" :max="128" />
-              </el-form-item>
-            </div>
             <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
               <el-form-item label="GPT 模型">
                 <el-select
@@ -273,24 +208,107 @@
                 </el-select>
               </el-form-item>
               <el-form-item label="Prompt 音频">
-                <el-select
-                  v-model="gptSovitsForm.promptAudioPath"
-                  placeholder="选择音频文件"
-                  filterable
-                  style="width: 100%"
-                  @change="onPromptAudioChange"
-                >
+                <div class="flex flex-col gap-2 w-full">
+                  <el-upload
+                    :auto-upload="false"
+                    :show-file-list="false"
+                    accept=".wav,.mp3,.m4a,.flac,.ogg"
+                    @change="onPromptAudioFileChange"
+                  >
+                    <el-button>{{
+                      gptSovitsForm.promptAudioFile ? '重新选择音频' : '上传音频文件'
+                    }}</el-button>
+                  </el-upload>
+                  <div
+                    v-if="gptSovitsForm.promptAudioFileName"
+                    class="text-xs text-gray-500 flex items-center gap-2"
+                  >
+                    <span>
+                      {{ gptSovitsForm.promptAudioFileName }}
+                      <template v-if="gptSovitsForm.promptAudioFileSize">
+                        （{{ formatFileSize(gptSovitsForm.promptAudioFileSize) }}）
+                      </template>
+                    </span>
+                    <el-button link type="danger" @click="clearPromptAudioFile">清除</el-button>
+                  </div>
+                </div>
+              </el-form-item>
+            </div>
+            <el-form-item label="Prompt 文本">
+              <el-input
+                type="textarea"
+                v-model="gptSovitsForm.promptText"
+                placeholder="训练时的参考文本（必填）"
+                :rows="2"
+              />
+            </el-form-item>
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <el-form-item label="Prompt 语言">
+                <el-select v-model="gptSovitsForm.promptLanguage">
                   <el-option
-                    v-for="file in serverFiles.promptAudios"
-                    :key="file"
-                    :label="getFileName(file)"
-                    :value="file"
+                    v-for="lang in gptSovitsLanguages"
+                    :key="lang"
+                    :label="lang"
+                    :value="lang"
                   />
                 </el-select>
               </el-form-item>
+              <el-form-item label="输出语言">
+                <el-select v-model="gptSovitsForm.textLanguage">
+                  <el-option
+                    v-for="lang in gptSovitsLanguages"
+                    :key="lang"
+                    :label="lang"
+                    :value="lang"
+                  />
+                </el-select>
+              </el-form-item>
+              <el-form-item label="文本分割方式">
+                <el-select v-model="gptSovitsForm.cutPunc" placeholder="选择分割方式">
+                  <el-option label="cut0 - 不分割（推荐）" value="cut0" />
+                  <el-option label="cut1 - 每4句分割" value="cut1" />
+                  <el-option label="cut2 - 每50字分割" value="cut2" />
+                  <el-option label="cut3 - 按句号分割" value="cut3" />
+                  <el-option label="cut4 - 按英文句号分割" value="cut4" />
+                  <el-option label="cut5 - 按所有标点分割（易截断）" value="cut5" />
+                </el-select>
+              </el-form-item>
+            </div>
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <el-form-item label="采样率">
+                <el-input-number
+                  v-model="gptSovitsForm.sampleRate"
+                  :min="16000"
+                  :max="48000"
+                  :step="1000"
+                />
+              </el-form-item>
+              <el-form-item label="Top K">
+                <el-input-number v-model="gptSovitsForm.topK" :min="0" :step="1" />
+              </el-form-item>
+              <el-form-item label="Top P">
+                <el-input-number v-model="gptSovitsForm.topP" :min="0" :max="1" :step="0.1" />
+              </el-form-item>
+            </div>
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <el-form-item label="Temperature">
+                <el-input-number
+                  v-model="gptSovitsForm.temperature"
+                  :min="0"
+                  :max="2"
+                  :step="0.1"
+                />
+              </el-form-item>
+              <el-form-item label="Speed">
+                <el-input-number v-model="gptSovitsForm.speed" :min="0.5" :max="2" :step="0.1" />
+              </el-form-item>
+              <el-form-item label="Sample Steps">
+                <el-input-number v-model="gptSovitsForm.sampleSteps" :min="1" :max="128" />
+              </el-form-item>
             </div>
             <div class="text-xs text-gray-500 leading-6">
-              从服务器目录选择 GPT (*.ckpt) / SoVITS (*.pth) 以及参考音频文件。
+              从服务器目录选择 GPT (*.ckpt) / SoVITS (*.pth) 模型文件。Prompt 音频支持直接上传本地
+              wav/mp3/m4a/flac/ogg 文件。
               <el-button
                 type="primary"
                 size="small"
@@ -621,7 +639,7 @@
   import voiceCategoryApi from '@/api/modules/voiceCategory';
   import { ElMessage } from 'element-plus';
   import type { UploadFile } from 'element-plus';
-  import { computed, onMounted, onUnmounted, reactive, ref } from 'vue';
+  import { computed, onMounted, onUnmounted, reactive, ref, watch } from 'vue';
   import { useRouter } from 'vue-router';
 
   type VoicePreviewPayload = Parameters<(typeof voiceApi)['preview']>[0];
@@ -639,6 +657,7 @@
   const enrolling = ref(false);
   const syncing = ref(false);
   const loadingFiles = ref(false);
+  const hasLoadedGptLibrary = ref(false);
 
   const voices = ref<any[]>([]);
   const categories = ref<any[]>([]);
@@ -647,13 +666,11 @@
   const serverFiles = reactive<{
     gptModels: string[];
     sovitsModels: string[];
-    promptAudios: string[];
     library: GptSovitsLibraryEntry[];
     storageRoot: string;
   }>({
     gptModels: [],
     sovitsModels: [],
-    promptAudios: [],
     library: [],
     storageRoot: '',
   });
@@ -713,6 +730,15 @@
     active: 'api',
   });
 
+  watch(
+    () => createVoiceDialog.active,
+    (activeTab) => {
+      if (activeTab === 'gpt' && !hasLoadedGptLibrary.value) {
+        loadServerFiles();
+      }
+    },
+  );
+
   const enrollForm = reactive<{ prefix: string; url: string; name?: string }>({
     prefix: '',
     url: '',
@@ -722,28 +748,20 @@
     return !!enrollForm.prefix && !!enrollForm.url;
   });
 
-  const gptSovitsLanguages = ['zh', 'en', 'ja', 'ko', 'yue'];
+  const gptSovitsLanguages = [
+    'auto',
+    'zh',
+    'en',
+    'ja',
+    'ko',
+    'yue',
+    'all_zh',
+    'all_ja',
+    'all_ko',
+    'all_yue',
+  ];
 
-  const defaultGptSovits = {
-    name: '',
-    voiceId: '',
-    promptText: '',
-    promptLanguage: 'zh',
-    textLanguage: 'zh',
-    cutPunc: '',
-    sampleRate: 32000,
-    topK: 15,
-    topP: 0.7,
-    temperature: 0.7,
-    speed: 1,
-    sampleSteps: 32,
-    gptModelPath: '',
-    sovitsModelPath: '',
-    promptAudioPath: '',
-    uploading: false,
-  };
-
-  const gptSovitsForm = reactive<{
+  interface GptSovitsFormState {
     name: string;
     voiceId: string;
     promptText: string;
@@ -758,9 +776,34 @@
     sampleSteps?: number;
     gptModelPath: string;
     sovitsModelPath: string;
-    promptAudioPath: string;
+    promptAudioFile: File | null;
+    promptAudioFileName: string;
+    promptAudioFileSize: number;
     uploading: boolean;
-  }>({ ...defaultGptSovits });
+  }
+
+  const defaultGptSovits: GptSovitsFormState = {
+    name: '',
+    voiceId: '',
+    promptText: '',
+    promptLanguage: 'auto',
+    textLanguage: 'auto', // 改为 auto 支持多语种
+    cutPunc: 'cut0', // 默认使用 cut0 不分割
+    sampleRate: 32000,
+    topK: 15,
+    topP: 0.7,
+    temperature: 0.7,
+    speed: 1,
+    sampleSteps: 32,
+    gptModelPath: '',
+    sovitsModelPath: '',
+    promptAudioFile: null,
+    promptAudioFileName: '',
+    promptAudioFileSize: 0,
+    uploading: false,
+  };
+
+  const gptSovitsForm = reactive<GptSovitsFormState>({ ...defaultGptSovits });
 
   async function fetchList() {
     loading.value = true;
@@ -961,7 +1004,6 @@
       const res = await fetcher();
       const data = res?.data || res;
       serverFiles.storageRoot = data.storageRoot || '';
-      serverFiles.promptAudios = data.promptAudios || [];
       serverFiles.library = Array.isArray(data.library) ? data.library : [];
       if (serverFiles.library.length) {
         serverFiles.gptModels = serverFiles.library
@@ -974,6 +1016,7 @@
         serverFiles.gptModels = data.gptModels || [];
         serverFiles.sovitsModels = data.sovitsModels || [];
       }
+      hasLoadedGptLibrary.value = true;
       ElMessage.success('文件列表已刷新');
     } catch (e: any) {
       ElMessage.error(e?.message || '获取文件列表失败');
@@ -982,12 +1025,20 @@
     }
   }
 
-  // Prompt 音频改变时自动填充文本
-  function onPromptAudioChange(filePath: string) {
-    if (!filePath || gptSovitsForm.promptText.trim()) return;
-    const fileName = getFileName(filePath);
-    const fileNameWithoutExt = fileName.replace(/\.[^.]+$/, '');
-    gptSovitsForm.promptText = fileNameWithoutExt;
+  function onPromptAudioFileChange(uploadFile: UploadFile) {
+    const rawFile = uploadFile?.raw || null;
+    gptSovitsForm.promptAudioFile = rawFile;
+    gptSovitsForm.promptAudioFileName = rawFile?.name || uploadFile?.name || '';
+    gptSovitsForm.promptAudioFileSize = rawFile?.size || uploadFile?.size || 0;
+    if (!gptSovitsForm.promptText.trim() && gptSovitsForm.promptAudioFileName) {
+      gptSovitsForm.promptText = gptSovitsForm.promptAudioFileName.replace(/\.[^.]+$/, '');
+    }
+  }
+
+  function clearPromptAudioFile() {
+    gptSovitsForm.promptAudioFile = null;
+    gptSovitsForm.promptAudioFileName = '';
+    gptSovitsForm.promptAudioFileSize = 0;
   }
 
   async function onSubmitGptSovits() {
@@ -995,12 +1046,12 @@
       ElMessage.warning('Prompt 文本不能为空');
       return;
     }
-    if (
-      !gptSovitsForm.gptModelPath ||
-      !gptSovitsForm.sovitsModelPath ||
-      !gptSovitsForm.promptAudioPath
-    ) {
-      ElMessage.warning('请选择 GPT 模型、SoVITS 模型和参考音频');
+    if (!gptSovitsForm.gptModelPath || !gptSovitsForm.sovitsModelPath) {
+      ElMessage.warning('请选择 GPT 模型和 SoVITS 模型');
+      return;
+    }
+    if (!gptSovitsForm.promptAudioFile) {
+      ElMessage.warning('请上传 Prompt 音频');
       return;
     }
     gptSovitsForm.uploading = true;
@@ -1023,7 +1074,11 @@
         fd.append('sampleSteps', String(gptSovitsForm.sampleSteps));
       fd.append('gptModelPath', gptSovitsForm.gptModelPath);
       fd.append('sovitsModelPath', gptSovitsForm.sovitsModelPath);
-      fd.append('promptAudioPath', gptSovitsForm.promptAudioPath);
+      fd.append(
+        'promptAudio',
+        gptSovitsForm.promptAudioFile,
+        gptSovitsForm.promptAudioFile.name || 'prompt-audio.wav',
+      );
       await voiceApi.importGptSovits(fd);
       ElMessage.success('导入成功');
       resetGptSovitsForm();

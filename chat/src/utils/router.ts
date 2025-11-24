@@ -7,6 +7,11 @@ const routes: Array<RouteRecordRaw> = [
     component: () => import('@/views/chat/chat.vue'),
   },
   {
+    path: '/touchChat',
+    name: 'TouchChat',
+    component: () => import('@/views/touchChat/index.vue'),
+  },
+  {
     path: '/:catchAll(.*)',
     redirect: '/',
   },

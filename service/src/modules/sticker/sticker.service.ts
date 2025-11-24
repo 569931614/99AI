@@ -152,7 +152,9 @@ export class StickerService {
         return null;
       }
 
-      const numberedOptions = STICKER_EMOTION_LABELS.map((opt, idx) => `${idx + 1}. ${opt}`).join('\n');
+      const numberedOptions = STICKER_EMOTION_LABELS.map((opt, idx) => `${idx + 1}. ${opt}`).join(
+        '\n',
+      );
       const prompt = `你是一个专业的情绪分析专家。请分析以下文本内容表达的情绪，从给定的候选情绪中选择最合适的一个。
 
 文本内容：
@@ -221,7 +223,10 @@ ${numberedOptions}
         const index = parseInt(numberMatch[1]) - 1;
         if (index >= 0 && index < STICKER_EMOTION_LABELS.length) {
           const matchedEmotion = STICKER_EMOTION_LABELS[index];
-          Logger.debug(`[Sticker AI情绪识别] ✓ 通过编号匹配成功: ${matchedEmotion}`, 'StickerService');
+          Logger.debug(
+            `[Sticker AI情绪识别] ✓ 通过编号匹配成功: ${matchedEmotion}`,
+            'StickerService',
+          );
           return matchedEmotion;
         }
       }
@@ -235,7 +240,9 @@ ${numberedOptions}
       }
 
       Logger.warn(
-        `[Sticker AI情绪识别] ✗ 未能匹配 - AI返回: "${result}", 候选: [${STICKER_EMOTION_LABELS.join(' | ')}]`,
+        `[Sticker AI情绪识别] ✗ 未能匹配 - AI返回: "${result}", 候选: [${STICKER_EMOTION_LABELS.join(
+          ' | ',
+        )}]`,
         'StickerService',
       );
       return null;

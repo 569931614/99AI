@@ -159,8 +159,8 @@ export class ChatGroupController {
     body: {
       groupId: number;
       relationships: Array<{
-        memberA: number;
-        memberB: number;
+        memberA: string;
+        memberB: string;
         type: string;
         description?: string;
       }>;

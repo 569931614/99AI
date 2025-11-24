@@ -38,7 +38,7 @@ if %ERRORLEVEL% NEQ 0 (
 echo admin build completed successfully
 echo.
 
-echo [2/3] Building chat project...
+echo [2/4] Building chat project...
 cd /d "%ROOT%chat"
 if not exist "package.json" (
     echo ERROR: chat/package.json not found

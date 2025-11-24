@@ -417,6 +417,8 @@ export class ChatLogService {
           tool_calls,
           progress,
           appId,
+          userId,
+          modelName,
           createdAt,
           isOpeningRemark,
         } = item;
@@ -433,6 +435,8 @@ export class ChatLogService {
           tool_calls: tool_calls,
           progress,
           appId: appId, // 添加 appId 字段，用于群聊模式识别角色
+          userId: userId, // 添加 userId 字段，用于获取真实用户名
+          modelName: modelName, // 添加 modelName 字段，包含保存时的用户名或角色名
           createdAt: createdAt, // 添加 createdAt 字段，用于消息排序
           isOpeningRemark: isOpeningRemark, // 添加 isOpeningRemark 字段，用于识别开场白
         };
@@ -597,15 +601,13 @@ export class ChatLogService {
         return '未找到该消息';
       }
 
-      let positionInfo:
-        | {
-            index: number;
-            total: number;
-            pageSize: number;
-            targetPage: number;
-            centeredPage: number;
-          }
-        | null = null;
+      let positionInfo: {
+        index: number;
+        total: number;
+        pageSize: number;
+        targetPage: number;
+        centeredPage: number;
+      } | null = null;
 
       if (chatLog.groupId) {
         const [messagesBeforeCount, totalMessages] = await Promise.all([

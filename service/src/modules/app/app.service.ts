@@ -273,8 +273,7 @@ export class AppService {
     // 如果没有传 isSystem，使用原有逻辑
     else if (onlyOwn && userId) {
       baseWhere = [{ userId: Number(userId) }];
-    }
-    else if (userId) {
+    } else if (userId) {
       baseWhere = [
         { userId: IsNull() }, // 系统角色
         { userId: Number(userId) }, // 用户自己创建的角色
@@ -299,7 +298,6 @@ export class AppService {
 
     // 需要排除的ID列表（只有手动传入的 excludeIds）
     const allExcludeIds = [...new Set([...excludeAppIds])];
-
 
     // 如果指定了分类ID，则查找包含该分类ID的App
     if (catId) {

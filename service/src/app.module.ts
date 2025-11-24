@@ -2,6 +2,7 @@ import { AbortInterceptor } from '@/common/interceptors/abort.interceptor';
 import { CustomLoggerService } from '@/common/logger/custom-logger.service';
 // import { LicenseValidatorMiddleware } from '@/common/middleware/license-validator.middleware';
 import { RateLimitModule } from '@/modules/rateLimit/rate-limit.module';
+import { BullModule } from '@nestjs/bull';
 import { Global, MiddlewareConsumer, Module, NestModule } from '@nestjs/common';
 import { APP_INTERCEPTOR } from '@nestjs/core';
 import { ServeStaticModule } from '@nestjs/serve-static';
@@ -15,6 +16,7 @@ import { BadWordsModule } from './modules/badWords/badWords.module';
 import { ChatModule } from './modules/chat/chat.module';
 import { ChatGroupModule } from './modules/chatGroup/chatGroup.module';
 import { ChatLogModule } from './modules/chatLog/chatLog.module';
+import { ChatQueueModule } from './modules/chatQueue/chatQueue.module';
 import { ConversationSummaryModule } from './modules/conversationSummary/conversationSummary.module';
 import { CramiModule } from './modules/crami/crami.module';
 import { DatabaseModule } from './modules/database/database.module';
@@ -46,6 +48,15 @@ import { VoiceCallModule } from './modules/voiceCall/voiceCall.module';
   imports: [
     DatabaseModule,
     RateLimitModule,
+    // Bull 队列配置
+    BullModule.forRoot({
+      redis: {
+        host: process.env.REDIS_HOST || '127.0.0.1',
+        port: parseInt(process.env.REDIS_PORT || '6379', 10),
+        password: process.env.REDIS_PASSWORD || undefined,
+        db: parseInt(process.env.REDIS_DB || '0', 10),
+      },
+    }),
     // 优先注册 /open-docs（优先工作目录 cwd），避免被 SPA 拦截
     ServeStaticModule.forRoot({
       rootPath: join(process.cwd(), 'public/open-docs'),
@@ -135,6 +146,7 @@ import { VoiceCallModule } from './modules/voiceCall/voiceCall.module';
     AffectionModule,
     StickerModule,
     TestModule,
+    ChatQueueModule,
 
     ShareModule,
     SpaModule,

@@ -14,6 +14,7 @@ export default {
     fd.append('file', file);
     return api.post('voice/gpt-sovits/models/upload', fd, {
       headers: { 'Content-Type': 'multipart/form-data' },
+      timeout: 600000, // 10分钟超时（模型文件可能很大）
     });
   },
   // 获取 GPT-SoVITS 模型库（包含文件元信息）
@@ -45,7 +46,7 @@ export default {
     pitch?: number;
     text_language?: string;
     cut_punc?: string;
-  }) => api.post('voice/preview', data),
+  }) => api.post('open/voice/preview', data),
 
   // 获取/设置 音色默认参数
   getParams: (voiceId: string) => api.get(`voice/params/${encodeURIComponent(voiceId)}`),

@@ -1215,8 +1215,8 @@ export class OpenChatGroupController {
           items: {
             type: 'object',
             properties: {
-              memberA: { type: 'number', description: '成员A的appId' },
-              memberB: { type: 'number', description: '成员B的appId' },
+              memberA: { type: 'string', description: '成员A的名称' },
+              memberB: { type: 'string', description: '成员B的名称' },
               type: { type: 'string', description: '关系类型（如：朋友、同事、恋人、家人等）' },
               description: { type: 'string', description: '关系描述（可选）' },
             },
@@ -1234,14 +1234,14 @@ export class OpenChatGroupController {
           groupId: 123,
           relationships: [
             {
-              memberA: 456,
-              memberB: 457,
+              memberA: '张三',
+              memberB: '李四',
               type: '朋友',
               description: '多年好友',
             },
             {
-              memberA: 456,
-              memberB: 458,
+              memberA: '张三',
+              memberB: '王五',
               type: '同事',
               description: '同公司同事',
             },

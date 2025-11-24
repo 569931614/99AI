@@ -248,3 +248,31 @@ export function fetchSendEmailCode<T>(data: {
 }): Promise<T> {
   return post<T>({ url: '/auth/sendEmailCode', data }) as Promise<T>
 }
+
+/* touchChat 相关接口 */
+// 获取设备角色信息（调用外部API）
+export function fetchDeviceRolesHtml<T>(data: { bracelet_id: string }): Promise<T> {
+  return fetch('https://admin.maobingai.com/api/user/getDeviceRolesHtml', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(data),
+  }).then(res => res.json()) as Promise<T>
+}
+
+// touchChat专用的同步聊天接口（调用本地service）
+export function fetchTouchChatProcess<T>(data: { prompt: string; appId: number }): Promise<T> {
+  return post<T>({
+    url: '/open/chat/chat-process-sync',
+    data,
+  }) as Promise<T>
+}
+
+// touchChat专用的TTS接口（调用本地service）
+export function fetchTouchTtsProcess<T>(data: { prompt: string }): Promise<T> {
+  return post<T>({
+    url: '/open/chat/tts-process',
+    data,
+  }) as Promise<T>
+}

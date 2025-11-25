@@ -45,19 +45,8 @@ export class ChatGroupService {
       proactivelySend,
       describingMental,
       realTime,
+      maxReplyCount,
     } = body; // 从请求体中提取参数
-
-    // 添加日志：检查openingRemark是否被接收
-    console.log('=== chatGroup.create 接收到的参数 ===');
-    console.log('userId:', id);
-    console.log('appId:', appId);
-    console.log('openingRemark:', openingRemark);
-    console.log('openingRemark类型:', typeof openingRemark);
-    console.log('openingRemark是否为空:', !openingRemark);
-    console.log('proactivelySend:', proactivelySend);
-    console.log('describingMental:', describingMental);
-    console.log('realTime:', realTime);
-    console.log('完整body:', JSON.stringify(body));
 
     // 尝试使用从请求体中提供的 modelConfig，否则获取默认配置
     let modelConfig = bodyModelConfig || (await this.modelsService.getBaseConfig());
@@ -96,6 +85,7 @@ export class ChatGroupService {
       proactivelySend: proactivelySend ?? 0, // 是否主动发消息，默认0
       describingMental: describingMental ?? 0, // 是否开启心理动作描述，默认0
       realTime: realTime ?? 0, // 是否开启真实时间，默认0
+      maxReplyCount: maxReplyCount ?? 1, // 最多回复条数，默认1
     };
     // const params = { title: 'New chat', userId: id };
 
@@ -104,9 +94,6 @@ export class ChatGroupService {
       ...groupParams,
       config: JSON.stringify(modelConfig), // 将 modelConfig 对象转换为 JSON 字符串进行保存
     });
-
-    console.log('=== 群组创建完成 ===');
-    console.log('新群组ID:', newGroup.id);
 
     // 如果有角色ID（appId），初始化亲密度数据
     if (appId) {
@@ -120,15 +107,8 @@ export class ChatGroupService {
       }
     }
 
-    console.log('准备保存开场白到chatLog...');
-    console.log('检查条件: openingRemark && openingRemark.trim()');
-    console.log('openingRemark:', openingRemark);
-    console.log('openingRemark.trim():', openingRemark ? openingRemark.trim() : 'null/undefined');
-    console.log('条件结果:', openingRemark && openingRemark.trim());
-
     // 如果有开场白，保存为第一条聊天记录
     if (openingRemark && openingRemark.trim()) {
-      console.log('✅ 开始保存开场白到chatLog');
       const openingChatLog = {
         userId: id,
         groupId: newGroup.id,
@@ -144,10 +124,7 @@ export class ChatGroupService {
         isDelete: false,
         isOpeningRemark: true, // 标记为开场白
       };
-      const savedLog = await this.chatLogEntity.save(openingChatLog);
-      console.log('✅ 开场白已保存到chatLog, ID:', savedLog.id);
-    } else {
-      console.log('❌ 开场白未保存：条件不满足');
+      await this.chatLogEntity.save(openingChatLog);
     }
 
     // 如果是群聊且有成员，生成群组拼图头像
@@ -371,14 +348,6 @@ export class ChatGroupService {
         where: params,
         order: { isSticky: 'DESC', updatedAt: 'DESC' },
       });
-
-      // 调试：打印第一条记录的 groupAvatar
-      if (res.length > 0) {
-        console.log('=== 群聊查询调试 ===');
-        console.log('第一条记录 ID:', res[0].id);
-        console.log('groupAvatar 值:', res[0].groupAvatar);
-        console.log('所有字段:', Object.keys(res[0]));
-      }
 
       const appIds = res.filter(t => t.appId).map(t => t.appId);
       let mapped = res as any[];

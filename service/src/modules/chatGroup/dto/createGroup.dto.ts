@@ -83,4 +83,12 @@ export class CreateGroupDto {
   })
   @IsOptional()
   realTime?: number;
+
+  @ApiProperty({
+    example: 1,
+    description: '最多回复条数（默认1）',
+    required: false,
+  })
+  @IsOptional()
+  maxReplyCount?: number;
 }

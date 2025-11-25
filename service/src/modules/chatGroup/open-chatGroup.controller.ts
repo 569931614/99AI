@@ -68,18 +68,8 @@ export class OpenChatGroupController {
         proactivelySend,
         describingMental,
         realTime,
+        maxReplyCount,
       } = body || {};
-
-      // 添加日志：检查接收到的参数
-      console.log('=== open-chatGroup.controller.create 接收参数 ===');
-      console.log('完整body:', JSON.stringify(body));
-      console.log('userId:', userId);
-      console.log('userAvatarUrl:', userAvatarUrl);
-      console.log('appId:', appId);
-      console.log('openingRemark:', openingRemark);
-      console.log('proactivelySend:', proactivelySend);
-      console.log('describingMental:', describingMental);
-      console.log('realTime:', realTime);
 
       if (!userId) throw new HttpException('userId 必填', HttpStatus.BAD_REQUEST);
 
@@ -94,19 +84,6 @@ export class OpenChatGroupController {
         ip: _req.ip,
       };
 
-      console.log('=== 调用 chatGroupService.create ===');
-      console.log('传递参数:', {
-        title,
-        description,
-        ownerNickname,
-        appId,
-        openingRemark,
-        userAvatarUrl,
-        proactivelySend,
-        describingMental,
-        realTime,
-      });
-
       const result = await this.chatGroupService.create(
         {
           modelConfig,
@@ -120,18 +97,13 @@ export class OpenChatGroupController {
           proactivelySend,
           describingMental,
           realTime,
+          maxReplyCount,
         },
         fakeReq,
       );
 
-      console.log('=== chatGroupService.create 完成 ===');
-      console.log('返回结果:', JSON.stringify(result));
-
       return res.status(200).json({ success: true, data: result });
     } catch (e: any) {
-      console.error('=== open-chatGroup.controller.create 错误 ===');
-      console.error('错误信息:', e.message);
-      console.error('错误堆栈:', e.stack);
       const status = e instanceof HttpException ? e.getStatus() : HttpStatus.INTERNAL_SERVER_ERROR;
       const message = e?.message || '创建对话组失败';
       return res.status(status).json({ success: false, message });

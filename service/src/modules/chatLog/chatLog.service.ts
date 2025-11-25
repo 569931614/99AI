@@ -332,9 +332,14 @@ export class ChatLogService {
       // 获取原始内容
       let rawContent = content || (role === 'assistant' ? answer : prompt);
 
-      // 过滤掉 [图片内容:...] 这样的标记
+      // 过滤掉图片识别相关的内容标记
       if (rawContent && typeof rawContent === 'string') {
+        // 过滤 [图片内容:...] 格式
         rawContent = rawContent.replace(/\[图片内容:[\s\S]*?\]/g, '').trim();
+        // 过滤 [这是一张图片，内容如下]\n描述内容\n\n请根据图片内容进行回复。 格式
+        rawContent = rawContent
+          .replace(/\[这是一张图片，内容如下\][\s\S]*?请根据图片内容进行回复。/g, '')
+          .trim();
       }
 
       return {

@@ -174,6 +174,38 @@
                 <el-input v-model="gptSovitsForm.voiceId" placeholder="可选，不填自动生成" />
               </el-form-item>
             </div>
+            <el-divider content-position="left">🎭 使用角色（推荐）</el-divider>
+            <el-form-item label="选择角色">
+              <el-select
+                v-model="gptSovitsForm.characterName"
+                placeholder="选择预置角色（自动加载模型）"
+                filterable
+                clearable
+                style="width: 100%"
+                :loading="charactersLoading"
+              >
+                <el-option
+                  v-for="char in characters"
+                  :key="char"
+                  :label="char"
+                  :value="char"
+                />
+              </el-select>
+              <template #extra>
+                <div class="text-xs text-gray-500 mt-1">
+                  选择角色后，系统会自动加载对应的GPT和SoVITS模型，无需手动选择模型文件
+                  <el-button
+                    type="text"
+                    size="small"
+                    @click="fetchCharacters"
+                    :loading="charactersLoading"
+                  >
+                    刷新角色列表
+                  </el-button>
+                </div>
+              </template>
+            </el-form-item>
+            <el-divider content-position="left">📁 或手动选择模型文件</el-divider>
             <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
               <el-form-item label="GPT 模型">
                 <el-select
@@ -715,9 +747,12 @@
   function openCreateVoice(mode: 'api' | 'gpt' = 'api') {
     createVoiceDialog.active = mode;
     createVoiceDialog.visible = true;
-    // 如果是 GPT-SoVITS 模式，自动加载文件列表
+    // 如果是 GPT-SoVITS 模式，自动加载文件列表和角色列表
     if (mode === 'gpt') {
       loadServerFiles();
+      if (!characters.value.length) {
+        fetchCharacters();
+      }
     }
   }
 
@@ -735,6 +770,9 @@
     (activeTab) => {
       if (activeTab === 'gpt' && !hasLoadedGptLibrary.value) {
         loadServerFiles();
+      }
+      if (activeTab === 'gpt' && !characters.value.length) {
+        fetchCharacters();
       }
     },
   );
@@ -764,6 +802,7 @@
   interface GptSovitsFormState {
     name: string;
     voiceId: string;
+    characterName: string; // 新增角色名称
     promptText: string;
     promptLanguage: string;
     textLanguage: string;
@@ -785,6 +824,7 @@
   const defaultGptSovits: GptSovitsFormState = {
     name: '',
     voiceId: '',
+    characterName: '', // 初始化角色名称
     promptText: '',
     promptLanguage: 'auto',
     textLanguage: 'auto', // 改为 auto 支持多语种
@@ -804,6 +844,25 @@
   };
 
   const gptSovitsForm = reactive<GptSovitsFormState>({ ...defaultGptSovits });
+
+  // 角色列表
+  const charactersLoading = ref(false);
+  const characters = ref<string[]>([]);
+
+  async function fetchCharacters() {
+    try {
+      charactersLoading.value = true;
+      const res = await voiceApi.listGptSovitsCharacters();
+      characters.value = res?.characters || res?.data?.characters || [];
+      ElMessage.success(`加载了 ${characters.value.length} 个角色`);
+    } catch (e: any) {
+      console.error('获取角色列表失败:', e);
+      ElMessage.warning('无法获取角色列表，请检查 GPT-SoVITS 服务');
+      characters.value = [];
+    } finally {
+      charactersLoading.value = false;
+    }
+  }
 
   async function fetchList() {
     loading.value = true;
@@ -1042,24 +1101,48 @@
   }
 
   async function onSubmitGptSovits() {
-    if (!gptSovitsForm.promptText.trim()) {
-      ElMessage.warning('Prompt 文本不能为空');
-      return;
+    // 如果选择了角色，只需要角色名和Prompt文本
+    if (gptSovitsForm.characterName) {
+      if (!gptSovitsForm.promptText.trim()) {
+        ElMessage.warning('Prompt 文本不能为空');
+        return;
+      }
+      if (!gptSovitsForm.promptAudioFile) {
+        ElMessage.warning('请上传 Prompt 音频');
+        return;
+      }
+    } else {
+      // 未选择角色，需要手动选择模型
+      if (!gptSovitsForm.promptText.trim()) {
+        ElMessage.warning('Prompt 文本不能为空');
+        return;
+      }
+      if (!gptSovitsForm.gptModelPath || !gptSovitsForm.sovitsModelPath) {
+        ElMessage.warning('请选择 GPT 模型和 SoVITS 模型，或选择一个角色');
+        return;
+      }
+      if (!gptSovitsForm.promptAudioFile) {
+        ElMessage.warning('请上传 Prompt 音频');
+        return;
+      }
     }
-    if (!gptSovitsForm.gptModelPath || !gptSovitsForm.sovitsModelPath) {
-      ElMessage.warning('请选择 GPT 模型和 SoVITS 模型');
-      return;
-    }
-    if (!gptSovitsForm.promptAudioFile) {
-      ElMessage.warning('请上传 Prompt 音频');
-      return;
-    }
+
     gptSovitsForm.uploading = true;
     try {
       const fd = new FormData();
       fd.append('useServerFiles', 'true');
       if (gptSovitsForm.name) fd.append('name', gptSovitsForm.name);
       if (gptSovitsForm.voiceId) fd.append('voiceId', gptSovitsForm.voiceId);
+
+      // 如果选择了角色，传递角色名
+      if (gptSovitsForm.characterName) {
+        fd.append('characterName', gptSovitsForm.characterName);
+      } else {
+        // 否则传递模型路径
+        fd.append('gptModelPath', gptSovitsForm.gptModelPath);
+        fd.append('sovitsModelPath', gptSovitsForm.sovitsModelPath);
+      }
+
       fd.append('promptText', gptSovitsForm.promptText);
       fd.append('promptLanguage', gptSovitsForm.promptLanguage);
       fd.append('textLanguage', gptSovitsForm.textLanguage);
@@ -1072,8 +1155,6 @@
       if (gptSovitsForm.speed !== undefined) fd.append('speed', String(gptSovitsForm.speed));
       if (gptSovitsForm.sampleSteps !== undefined)
         fd.append('sampleSteps', String(gptSovitsForm.sampleSteps));
-      fd.append('gptModelPath', gptSovitsForm.gptModelPath);
-      fd.append('sovitsModelPath', gptSovitsForm.sovitsModelPath);
       fd.append(
         'promptAudio',
         gptSovitsForm.promptAudioFile,

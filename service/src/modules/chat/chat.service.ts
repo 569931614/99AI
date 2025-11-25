@@ -1466,9 +1466,7 @@ ${numberedOptions}
       const { currentDate, timeContextPrompt } = this.getTimeContextPrompt();
 
       // 构建角色扮演系统提示词
-      const rolePlayPrompt = `你将扮演一个人物角色${
-        appName ? `"${appName}"` : ''
-      }，以下是关于这个角色的详细设定，请根据这些信息来构建你的回答。
+      const rolePlayPrompt = `你将扮演一个人物角色${appName ? `"${appName}"` : ''}，以下是关于这个角色的详细设定，请根据这些信息来构建你的回答。
 
 **人物基本信息：**
 ${setSystemMessage}
@@ -1481,8 +1479,8 @@ ${setSystemMessage}
       setSystemMessage = `${rolePlayPrompt}
       限制：
       - 当前时间 ${currentDate}\n${timeContextPrompt}
-      - 回复内容必须回复1个句子，并且用空行隔开，每个句子内容20字以内（如需添加心理描述，心理描述的括号内容不计入字数）。
       - 当你的输出内容是非中文时（如英语、日语等），需要使用【】来显示对应的中文翻译或注释，以帮助用户理解。例如：Hello【你好】、ありがとう【谢谢】`;
+      // - 回复内容必须回复1个句子，并且用空行隔开，每个句子内容20字以内（如需添加心理描述，心理描述的括号内容不计入字数）。
     } else {
       if (usingPlugin?.parameters === 'mermaid') {
         setSystemMessage = `
@@ -1810,10 +1808,7 @@ ${setSystemMessage}
             groupId: groupId ? groupId : null,
           });
           userLogId = userSaveLog.id;
-          this.logDebug(
-            `[群聊] 保存新的用户消息，id=${userLogId}, appId=${appId}, userName=${realUserName}`,
-            'ChatService',
-          );
+          this.logDebug(`[群聊] 保存新的用户消息，id=${userLogId}, appId=${appId}, userName=${realUserName}`, 'ChatService');
         }
       } else {
         // 非第一个成员，查询已保存的用户消息（应该由第一个成员保存了）
@@ -2549,10 +2544,7 @@ ${setSystemMessage}
           if (isGroupChat && qwenText) {
             processedQwenText = this.removeRoleNamePrefix(qwenText);
             this.logDebug(
-              `[群聊] 移除角色名前缀 - 原文: "${qwenText.substring(
-                0,
-                50,
-              )}..." -> 处理后: "${processedQwenText.substring(0, 50)}..."`,
+              `[群聊] 移除角色名前缀 - 原文: "${qwenText.substring(0, 50)}..." -> 处理后: "${processedQwenText.substring(0, 50)}..."`,
               'ChatService',
             );
           }
@@ -3066,9 +3058,7 @@ ${setSystemMessage}
         // 打印历史记录的详细信息
         history.forEach((record, index) => {
           this.logDebug(
-            `[群聊历史] 记录${index}: role=${record.role}, appId=${record.appId}, userId=${
-              record.userId
-            }, modelName=${record.modelName}, content=${
+            `[群聊历史] 记录${index}: role=${record.role}, appId=${record.appId}, userId=${record.userId}, modelName=${record.modelName}, content=${
               typeof record.content === 'string' ? record.content.substring(0, 30) : '[复杂内容]'
             }`,
             'ChatService',

@@ -28,6 +28,11 @@ export default {
       categoryId?: number;
     } = {},
   ) => api.get('voice/list', { params }),
+  // 获取 GPT-SoVITS 角色列表
+  listGptSovitsCharacters: () => api.get('voice/gpt-sovits/characters'),
+  // 获取指定角色信息
+  getGptSovitsCharacterInfo: (characterName: string) =>
+    api.get(`voice/gpt-sovits/character/${encodeURIComponent(characterName)}`),
   // 查询指定音色详情
   detail: (voiceId: string) => api.get(`voice/detail/${encodeURIComponent(voiceId)}`),
   // 更新（训练）音色

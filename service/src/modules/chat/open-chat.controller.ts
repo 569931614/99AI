@@ -468,6 +468,10 @@ export class OpenChatController {
         },
         userId: { type: 'number', description: '用户ID（可选，优先使用token验证获取的userId）' },
         prompt: { type: 'string', description: '用户提问内容' },
+        isCalendarMessage: {
+          type: 'boolean',
+          description: '是否是备忘录消息（true时会根据备忘录内容智能生成提醒、记忆或查岗消息）',
+        },
         options: {
           type: 'object',
           description: '对话附加选项（可选）',
@@ -499,9 +503,10 @@ export class OpenChatController {
     try {
       const { token, userId: originalUserId, maobingBaseUrl } = body || {};
 
-      // 如果传了token，则验证并获取userId
+      // 如果传了userId，直接使用，不校验token
       let userId = originalUserId ? Number(originalUserId) : null;
-      if (token) {
+      if (!userId && token) {
+        // 只有在没有userId时，才验证token
         const validatedUserId = await MaobingAuthUtil.validateTokenAndGetUserId(
           token,
           maobingBaseUrl,
@@ -509,7 +514,6 @@ export class OpenChatController {
         if (!validatedUserId) {
           throw new HttpException('token 无效或已过期', HttpStatus.UNAUTHORIZED);
         }
-        // 使用验证后的userId
         userId = validatedUserId;
       }
       if (!userId) {
@@ -533,6 +537,11 @@ export class OpenChatController {
         if (!hasImage && !isSequentialReply) {
           throw new HttpException('提问信息不能为空！', HttpStatus.BAD_REQUEST);
         }
+      }
+
+      // 处理备忘录消息
+      if (body?.isCalendarMessage === true) {
+        body.prompt = await this.buildCalendarMessagePrompt(body.prompt, userId, body.appId);
       }
 
       const messageType = this.resolveMessageType(body);
@@ -840,5 +849,175 @@ export class OpenChatController {
 
     const data = await this.affectionService.getUserAffection(finalUserId as any, Number(appId));
     return { success: true, data };
+  }
+
+  /**
+   * 构建备忘录消息的智能Prompt
+   * 根据备忘录内容和三种规则随机生成对应的提示词
+   * @param originalPrompt 原始prompt（包含备忘录信息）
+   * @param userId 用户ID
+   * @param appId 角色ID（可选）
+   * @returns 增强后的prompt
+   */
+  private async buildCalendarMessagePrompt(
+    originalPrompt: string,
+    userId: number,
+    appId?: number,
+  ): Promise<string> {
+    // 随机选择三种规则之一
+    const rules = ['calendar_reminder', 'chat_memory', 'check_in'];
+    const selectedRule = rules[Math.floor(Math.random() * rules.length)];
+
+    this.logger.log(`备忘录消息规则选择: ${selectedRule} (userId: ${userId}, appId: ${appId})`);
+
+    switch (selectedRule) {
+      case 'calendar_reminder':
+        return await this.buildCalendarReminderPrompt(originalPrompt, userId);
+      case 'chat_memory':
+        return await this.buildChatMemoryPrompt(originalPrompt, userId, appId);
+      case 'check_in':
+        return this.buildCheckInPrompt(originalPrompt);
+      default:
+        return originalPrompt;
+    }
+  }
+
+  /**
+   * 规则1: 备忘录提醒（包含天气信息）
+   */
+  private async buildCalendarReminderPrompt(
+    originalPrompt: string,
+    userId: number,
+  ): Promise<string> {
+    // 获取天气信息（可选）
+    let weatherInfo = '';
+    try {
+      // 这里可以集成真实的天气API
+      // 暂时使用随机天气作为示例
+      const weatherConditions = [
+        '今天天气晴朗，阳光明媚',
+        '今天可能会下雨，记得带伞',
+        '今天有点冷，多穿点衣服',
+        '今天天气不错，适合外出',
+        '今天雾霾较重，出门记得戴口罩',
+      ];
+      weatherInfo = weatherConditions[Math.floor(Math.random() * weatherConditions.length)];
+    } catch (error) {
+      this.logger.warn(`获取天气信息失败: ${error.message}`);
+    }
+
+    const prompt = `${originalPrompt}
+
+你是一个贴心的AI助手，现在需要根据用户的备忘录内容向用户发送提醒消息。
+
+天气信息：${weatherInfo || '天气信息暂时无法获取'}
+
+要求：
+1. 仔细阅读用户备忘录中记录的重要事情（如考试、会议、姨妈期等）
+2. 结合当前的天气信息，用温柔关心的语气提醒用户
+3. 如果备忘录中有今天的重要安排，要重点提醒
+4. 如果天气不好（下雨/冷/雾霾），要提醒用户做好准备
+5. 语气要亲切自然，像朋友或恋人之间的关心
+
+示例：
+- "今天好像要下雨，记得带伞哦。对了，你上午十点有考试，东西都准备好了么？"
+- "天气有点冷呢，多穿点别感冒了。你备忘录说这几天是特殊时期，要多注意保暖，多喝热水~"
+
+请现在生成一条贴心的提醒消息：`;
+
+    return prompt;
+  }
+
+  /**
+   * 规则2: 聊天上下文记忆
+   */
+  private async buildChatMemoryPrompt(
+    originalPrompt: string,
+    userId: number,
+    appId?: number,
+  ): Promise<string> {
+    // 获取最近的聊天记录
+    let recentChats = '';
+    try {
+      // 这里应该调用chatLogService获取最近的聊天记录
+      // 暂时使用示例数据
+      const memoryExamples = [
+        '昨天你说你肚子不舒服',
+        '前天你提到工作压力很大',
+        '你说最近睡眠不太好',
+        '你之前说想学一门新技能',
+        '你提到过想去旅游放松一下',
+      ];
+      recentChats = memoryExamples[Math.floor(Math.random() * memoryExamples.length)];
+    } catch (error) {
+      this.logger.warn(`获取聊天记录失败: ${error.message}`);
+    }
+
+    const prompt = `${originalPrompt}
+
+你是一个善解人意、记忆力很好的AI助手，需要基于之前的聊天记忆主动关心用户。
+
+最近的聊天记忆：${recentChats || '暂无最近的聊天记录'}
+
+要求：
+1. 根据聊天记忆中的内容，主动询问用户的近况
+2. 表现出真诚的关心和体贴
+3. 语气要温柔亲切，像恋人或好友之间的问候
+4. 可以提出具体的关心建议（如买药、陪伴等）
+5. 让用户感受到被记住、被关心的温暖
+
+示例：
+- "昨天你说肚子不舒服，现在好点了吗？要不要我去给你买药？"
+- "你前天说工作压力大，这两天有好一点吗？累了就休息一下，别太勉强自己~"
+- "记得你说最近睡不好，有试着调整作息吗？要照顾好自己哦"
+
+请现在生成一条基于记忆的关心消息：`;
+
+    return prompt;
+  }
+
+  /**
+   * 规则3: 查岗和报备
+   */
+  private buildCheckInPrompt(originalPrompt: string): Promise<string> {
+    const checkInTypes = [
+      {
+        type: 'check_user',
+        examples: [
+          '我刚刚吃完了饭，你乖乖吃饭了没有？让我看看你吃的什么？',
+          '我在外面逛街呢，你在干嘛？有没有好好休息？',
+          '我刚忙完，你那边怎么样？有没有按时吃饭？',
+        ],
+      },
+      {
+        type: 'report_activity',
+        examples: [
+          '你今天说要去同学聚会，都有哪些人啊？男生女生都有吗？',
+          '听说你要加班，现在忙完了吗？同事对你好不好？',
+          '你说要出去玩，现在到哪里了？和谁一起去的？',
+        ],
+      },
+    ];
+
+    const selectedType = checkInTypes[Math.floor(Math.random() * checkInTypes.length)];
+    const example = selectedType.examples[Math.floor(Math.random() * selectedType.examples.length)];
+
+    const prompt = `${originalPrompt}
+
+你是一个活泼、略带醋意但很可爱的AI助手，需要向用户"查岗"或"报备"。
+
+要求：
+1. 用撒娇、略带醋意但不过分的语气
+2. 既要表现出关心，又要有一点点"掌控欲"（但不能让人反感）
+3. 可以询问用户的活动细节（吃了什么、和谁在一起、在做什么）
+4. 也可以主动报备自己在做什么，然后反问用户
+5. 语气要俏皮可爱，让人觉得sweet而不是controlling
+
+参考示例：
+${example}
+
+请现在生成一条查岗或报备的消息：`;
+
+    return Promise.resolve(prompt);
   }
 }

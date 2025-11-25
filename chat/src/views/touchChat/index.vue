@@ -153,7 +153,8 @@ const fetchChatSuggestion = () => {
       options: {
         skipSaveToDatabase: true,
       },
-      prompt: `备忘录：${markdownContent}，基于我备忘录的内容，向我打招呼`,
+      prompt: `备忘录：${markdownContent}`,
+      isCalendarMessage: true,
       userId: pageData.value.id,
     }),
   })

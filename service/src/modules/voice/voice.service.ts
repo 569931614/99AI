@@ -217,8 +217,113 @@ export class VoiceService implements OnModuleInit {
     }
   }
 
+  async listGptSovitsCharacters() {
+    try {
+      const url = this.normalizeGptSovitsUrl('/characters/list');
+      Logger.log(`[listGptSovitsCharacters] 获取角色列表: ${url}`, 'VoiceService');
+      const response = await axios.get(url, { timeout: 5000 });
+      return response.data;
+    } catch (error) {
+      Logger.error(
+        `[listGptSovitsCharacters] 获取角色列表失败: ${error?.message || error}`,
+        'VoiceService',
+      );
+      throw new HttpException(
+        `获取GPT-SoVITS角色列表失败: ${error?.message || error}`,
+        HttpStatus.BAD_GATEWAY,
+      );
+    }
+  }
+
+  async getGptSovitsCharacterInfo(characterName: string) {
+    try {
+      const url = this.normalizeGptSovitsUrl(
+        `/characters/info?character_name=${encodeURIComponent(characterName)}`,
+      );
+      Logger.log(`[getGptSovitsCharacterInfo] 获取角色信息: ${characterName}`, 'VoiceService');
+      const response = await axios.get(url, { timeout: 5000 });
+      return response.data;
+    } catch (error) {
+      Logger.error(
+        `[getGptSovitsCharacterInfo] 获取角色信息失败: ${error?.message || error}`,
+        'VoiceService',
+      );
+      throw new HttpException(
+        `获取角色信息失败: ${error?.message || error}`,
+        HttpStatus.BAD_GATEWAY,
+      );
+    }
+  }
+
   async listGptSovitsFiles() {
     try {
+      // 优先从远程 GPT-SoVITS 服务获取模型列表
+      try {
+        const remoteUrl = this.normalizeGptSovitsUrl('/models/list');
+        Logger.log(`[listGptSovitsFiles] 尝试从远程服务获取模型列表: ${remoteUrl}`, 'VoiceService');
+
+        const response = await axios.get(remoteUrl, { timeout: 5000 });
+        const remoteData = response.data;
+
+        const gptModels: string[] = [];
+        const sovitsModels: string[] = [];
+        const library: GptSovitsLibraryEntry[] = [];
+
+        // 处理 GPT 模型
+        if (Array.isArray(remoteData?.gpt_models)) {
+          for (const model of remoteData.gpt_models) {
+            const modelPath = model.path || model.name;
+            gptModels.push(modelPath);
+            library.push({
+              type: 'gpt',
+              filename: model.name,
+              path: modelPath,
+              relativePath: modelPath,
+              size: model.size || 0,
+              updatedAt: model.modified ? new Date(model.modified).getTime() : Date.now(),
+            });
+          }
+        }
+
+        // 处理 SoVITS 模型
+        if (Array.isArray(remoteData?.sovits_models)) {
+          for (const model of remoteData.sovits_models) {
+            const modelPath = model.path || model.name;
+            sovitsModels.push(modelPath);
+            library.push({
+              type: 'sovits',
+              filename: model.name,
+              path: modelPath,
+              relativePath: modelPath,
+              size: model.size || 0,
+              updatedAt: model.modified ? new Date(model.modified).getTime() : Date.now(),
+            });
+          }
+        }
+
+        Logger.log(
+          `[listGptSovitsFiles] 从远程服务获取成功: ${gptModels.length} GPT模型, ${sovitsModels.length} SoVITS模型`,
+          'VoiceService',
+        );
+
+        return {
+          gptModels,
+          sovitsModels,
+          promptAudios: [],
+          storageRoot: this.gptSovitsStorageRoot,
+          library,
+        };
+      } catch (remoteError) {
+        Logger.warn(
+          `[listGptSovitsFiles] 远程服务获取失败，回退到本地文件系统: ${
+            remoteError?.message || remoteError
+          }`,
+          'VoiceService',
+        );
+        // 回退到原有的本地文件系统扫描逻辑
+      }
+
+      // 回退：扫描本地文件系统
       await fsp.mkdir(this.gptSovitsStorageRoot, { recursive: true });
       const entries = await fsp.readdir(this.gptSovitsStorageRoot, { withFileTypes: true });
 
@@ -334,8 +439,9 @@ export class VoiceService implements OnModuleInit {
     },
     body: Record<string, any>,
   ) {
-    // 支持两种模式：1. 上传文件 2. 从服务器路径选择
+    // 支持三种模式：1. 使用角色名 2. 上传文件 3. 从服务器路径选择
     const useServerFiles = body?.useServerFiles === 'true' || body?.useServerFiles === true;
+    const characterName = String(body?.characterName || body?.character_name || '').trim();
 
     let gptModelFile = files?.gptModel?.[0];
     let sovitsModelFile = files?.sovitsModel?.[0];
@@ -357,46 +463,171 @@ export class VoiceService implements OnModuleInit {
     const voiceId = this.generateGptSovitsVoiceId(body?.voiceId || body?.voice_id);
     await this.assertVoiceIdAvailable(voiceId);
 
-    if (useServerFiles) {
-      // 模式2：从服务器路径选择文件
-      const gptModelServerPath = String(body?.gptModelPath || '').trim();
-      const sovitsModelServerPath = String(body?.sovitsModelPath || '').trim();
-      const promptAudioServerPath = String(body?.promptAudioPath || '').trim();
+    // 如果使用角色名，从角色信息获取模型路径
+    if (characterName) {
+      Logger.log(`[importGptSovitsVoice] 使用角色名: ${characterName}`, 'VoiceService');
+      const characterInfo = await this.getGptSovitsCharacterInfo(characterName);
+      const gptModelServerPath = characterInfo.gpt_model_path;
+      const sovitsModelServerPath = characterInfo.sovits_model_path;
 
-      if (!gptModelServerPath || !sovitsModelServerPath || !promptAudioServerPath) {
+      if (!gptModelServerPath || !sovitsModelServerPath) {
         throw new HttpException(
-          '使用服务器文件时，gptModelPath、sovitsModelPath、promptAudioPath 均为必填',
+          `角色 ${characterName} 的模型路径未找到`,
           HttpStatus.BAD_REQUEST,
         );
       }
 
-      // 验证文件是否存在
-      try {
-        await fsp.access(gptModelServerPath);
-        await fsp.access(sovitsModelServerPath);
-        await fsp.access(promptAudioServerPath);
-      } catch (error) {
-        throw new HttpException('指定的服务器文件路径不存在或无法访问', HttpStatus.BAD_REQUEST);
+      // 处理音频
+      let promptAudioPath: string;
+      const promptAudioServerPath = String(body?.promptAudioPath || '').trim();
+
+      if (promptAudioServerPath) {
+        promptAudioPath = promptAudioServerPath;
+      } else if (files?.promptAudio?.[0]) {
+        const voiceDir = await this.ensureGptSovitsDir(voiceId);
+        // 使用时间戳生成唯一文件名
+        const timestamp = Date.now();
+        promptAudioPath = await this.persistGptSovitsFile(
+          files.promptAudio[0],
+          voiceDir,
+          `prompt-audio-${timestamp}`,
+          GPT_SOVITS_AUDIO_EXT,
+          '.wav',
+        );
+      } else {
+        throw new HttpException(
+          '请提供 promptAudioPath 或上传 promptAudio 文件',
+          HttpStatus.BAD_REQUEST,
+        );
       }
 
-      // 验证文件在允许的存储目录下（安全检查）
-      const normalizedGptPath = path.resolve(gptModelServerPath);
-      const normalizedSovitsPath = path.resolve(sovitsModelServerPath);
-      const normalizedPromptPath = path.resolve(promptAudioServerPath);
+      // 上传音频到 GPT-SoVITS 服务器
+      const serverPromptAudioPath = await this.uploadAudioToGptSovits(promptAudioPath);
+
+      const config: VoiceGptSovitsConfig = {
+        gptModelPath: gptModelServerPath,
+        sovitsModelPath: sovitsModelServerPath,
+        promptAudioPath: serverPromptAudioPath,
+        promptText,
+        promptLanguage,
+        textLanguage,
+        cutPunc: (body?.cutPunc || body?.cut_punc || '').trim() || undefined,
+        topK: this.parseOptionalNumber(body?.topK ?? body?.top_k),
+        topP: this.parseOptionalNumber(body?.topP ?? body?.top_p),
+        temperature: this.parseOptionalNumber(body?.temperature),
+        speed: this.parseOptionalNumber(body?.speed),
+        sampleSteps: this.parseOptionalNumber(body?.sampleSteps ?? body?.sample_steps),
+        sampleRate: this.parseOptionalNumber(body?.sampleRate ?? body?.sample_rate),
+      };
+
+      const name = String(body?.name || '').trim() || characterName; // 默认使用角色名
+      await this.upsertVoice({
+        voiceId,
+        name,
+        provider: 'gpt-sovits',
+        status: 'SUCCEEDED',
+        prefix: 'gptsovits',
+        model: characterName, // 保存角色名到 model 字段
+        format: 'wav',
+        sampleRate: config.sampleRate ?? 32000,
+        config: { ...config, characterName }, // 在 config 中也保存角色名
+      });
+      this.gptSovitsModelCache.delete(voiceId);
+
+      Logger.log(`[importGptSovitsVoice] 新增 GPT-SoVITS 音色 ${voiceId} (角色: ${characterName})`, 'VoiceService');
+      return { voice_id: voiceId, provider: 'gpt-sovits', status: 'SUCCEEDED', character_name: characterName };
+    }
+
+    if (useServerFiles) {
+      // 模式2：模型从服务器路径选择，音频可选择上传或从服务器选择
+      const gptModelServerPath = String(body?.gptModelPath || '').trim();
+      const sovitsModelServerPath = String(body?.sovitsModelPath || '').trim();
+      const promptAudioServerPath = String(body?.promptAudioPath || '').trim();
+
+      if (!gptModelServerPath || !sovitsModelServerPath) {
+        throw new HttpException(
+          '使用服务器文件时，gptModelPath、sovitsModelPath 为必填',
+          HttpStatus.BAD_REQUEST,
+        );
+      }
+
+      // 分别判断每个路径类型：绝对路径（本地文件）或相对路径（远程 GPT-SoVITS 服务）
       const normalizedStorageRoot = path.resolve(this.gptSovitsStorageRoot);
 
-      if (
-        !normalizedGptPath.startsWith(normalizedStorageRoot) ||
-        !normalizedSovitsPath.startsWith(normalizedStorageRoot) ||
-        !normalizedPromptPath.startsWith(normalizedStorageRoot)
-      ) {
-        throw new HttpException('文件路径必须在存储目录范围内', HttpStatus.BAD_REQUEST);
+      // 处理 GPT 模型路径
+      if (path.isAbsolute(gptModelServerPath)) {
+        // 本地文件模式：验证文件存在性和安全性
+        const normalizedGptPath = path.resolve(gptModelServerPath);
+        try {
+          await fsp.access(normalizedGptPath);
+        } catch (error) {
+          throw new HttpException('指定的 GPT 模型文件路径不存在或无法访问', HttpStatus.BAD_REQUEST);
+        }
+        if (!normalizedGptPath.startsWith(normalizedStorageRoot)) {
+          throw new HttpException('GPT 模型文件路径必须在存储目录范围内', HttpStatus.BAD_REQUEST);
+        }
+        gptModelPath = normalizedGptPath;
+      } else {
+        // 远程路径：直接使用
+        gptModelPath = gptModelServerPath;
       }
 
-      // 直接使用服务器路径
-      gptModelPath = normalizedGptPath;
-      sovitsModelPath = normalizedSovitsPath;
-      promptAudioPath = normalizedPromptPath;
+      // 处理 SoVITS 模型路径
+      if (path.isAbsolute(sovitsModelServerPath)) {
+        // 本地文件模式：验证文件存在性和安全性
+        const normalizedSovitsPath = path.resolve(sovitsModelServerPath);
+        try {
+          await fsp.access(normalizedSovitsPath);
+        } catch (error) {
+          throw new HttpException('指定的 SoVITS 模型文件路径不存在或无法访问', HttpStatus.BAD_REQUEST);
+        }
+        if (!normalizedSovitsPath.startsWith(normalizedStorageRoot)) {
+          throw new HttpException('SoVITS 模型文件路径必须在存储目录范围内', HttpStatus.BAD_REQUEST);
+        }
+        sovitsModelPath = normalizedSovitsPath;
+      } else {
+        // 远程路径：直接使用
+        sovitsModelPath = sovitsModelServerPath;
+      }
+
+      // Prompt 音频处理：支持从服务器选择或上传文件
+      if (promptAudioServerPath) {
+        // 从服务器路径选择音频
+        try {
+          await fsp.access(promptAudioServerPath);
+        } catch (error) {
+          throw new HttpException(
+            '指定的 Prompt 音频文件路径不存在或无法访问',
+            HttpStatus.BAD_REQUEST,
+          );
+        }
+
+        const normalizedPromptPath = path.resolve(promptAudioServerPath);
+        const normalizedStorageRoot = path.resolve(this.gptSovitsStorageRoot);
+        if (!normalizedPromptPath.startsWith(normalizedStorageRoot)) {
+          throw new HttpException(
+            'Prompt 音频文件路径必须在存储目录范围内',
+            HttpStatus.BAD_REQUEST,
+          );
+        }
+        promptAudioPath = normalizedPromptPath;
+      } else if (promptAudioFile) {
+        // 上传音频文件，使用时间戳生成唯一文件名
+        const voiceDir = await this.ensureGptSovitsDir(voiceId);
+        const timestamp = Date.now();
+        promptAudioPath = await this.persistGptSovitsFile(
+          promptAudioFile,
+          voiceDir,
+          `prompt-audio-${timestamp}`,
+          GPT_SOVITS_AUDIO_EXT,
+          '.wav',
+        );
+      } else {
+        throw new HttpException(
+          '请提供 promptAudioPath 或上传 promptAudio 文件',
+          HttpStatus.BAD_REQUEST,
+        );
+      }
     } else {
       // 模式1：上传文件
       if (!gptModelFile || !sovitsModelFile || !promptAudioFile) {
@@ -421,19 +652,32 @@ export class VoiceService implements OnModuleInit {
         GPT_SOVITS_MODEL_EXT,
         '.pth',
       );
+      // 使用时间戳生成唯一文件名
+      const timestamp = Date.now();
       promptAudioPath = await this.persistGptSovitsFile(
         promptAudioFile,
         voiceDir,
-        'prompt-audio',
+        `prompt-audio-${timestamp}`,
         GPT_SOVITS_AUDIO_EXT,
         '.wav',
       );
     }
 
+    // 上传音频文件到 GPT-SoVITS 服务器（如果是本地绝对路径）
+    Logger.log(
+      `[importGptSovitsVoice] 准备上传音频到 GPT-SoVITS 服务器: ${promptAudioPath}`,
+      'VoiceService',
+    );
+    const serverPromptAudioPath = await this.uploadAudioToGptSovits(promptAudioPath);
+    Logger.log(
+      `[importGptSovitsVoice] 音频路径已处理: ${serverPromptAudioPath}`,
+      'VoiceService',
+    );
+
     const config: VoiceGptSovitsConfig = {
       gptModelPath,
       sovitsModelPath,
-      promptAudioPath,
+      promptAudioPath: serverPromptAudioPath, // 使用服务器路径
       promptText,
       promptLanguage,
       textLanguage,
@@ -2051,7 +2295,12 @@ export class VoiceService implements OnModuleInit {
   }
 
   private normalizeGptSovitsUrl(pathname = '/'): string {
-    const base = this.gptSovitsBaseUrl?.replace(/\/+$/, '') || 'http://127.0.0.1:9880';
+    // 运行时动态读取环境变量，确保能获取到最新配置
+    const envBaseUrl = process.env.GPT_SOVITS_BASE_URL;
+    const base = (envBaseUrl || this.gptSovitsBaseUrl || 'http://127.0.0.1:9880').replace(
+      /\/+$/,
+      '',
+    );
     const path = pathname.startsWith('/') ? pathname : `/${pathname}`;
     return `${base}${path}`;
   }
@@ -2102,12 +2351,16 @@ export class VoiceService implements OnModuleInit {
       cutPunc?: string;
     },
   ) {
+    // 语言处理：保持 "auto" 不变，让服务器自动检测
+    const promptLang = config.promptLanguage || 'auto';
+    const textLang = options.textLanguage || config.textLanguage || 'auto';
+
     const payload: any = {
+      text: options.text,
+      text_lang: textLang,
       ref_audio_path: config.promptAudioPath,
       prompt_text: config.promptText,
-      prompt_lang: config.promptLanguage,
-      text: options.text,
-      text_lang: options.textLanguage || config.textLanguage || DEFAULT_GPT_SOVITS_TEXT_LANGUAGE,
+      prompt_lang: promptLang,
       text_split_method: options.cutPunc || config.cutPunc || 'cut5',
       top_k: config.topK,
       top_p: config.topP,
@@ -2116,12 +2369,94 @@ export class VoiceService implements OnModuleInit {
       media_type: 'wav',
       streaming_mode: false,
     };
+
+    // 如果 config 中包含 characterName，优先使用 character_name
+    if ((config as any).characterName) {
+      payload.character_name = (config as any).characterName;
+      // 有 character_name 时，不需要传 gpt_model_path 和 sovits_model_path
+      // 因为服务器会根据角色名自动加载模型
+    } else {
+      // 没有 characterName 时，使用模型路径
+      payload.gpt_model_path = config.gptModelPath;
+      payload.sovits_model_path = config.sovitsModelPath;
+    }
+
     Object.keys(payload).forEach(key => {
       if (payload[key] === undefined || payload[key] === null || payload[key] === '') {
         delete payload[key];
       }
     });
     return payload;
+  }
+
+  /**
+   * 上传音频文件到 GPT-SoVITS 服务器
+   * 如果路径是本地绝对路径，则上传文件并返回服务器路径
+   * 如果路径是相对路径，则假定文件已在服务器上，直接返回
+   */
+  private async uploadAudioToGptSovits(audioPath: string): Promise<string> {
+    // 如果是相对路径，直接返回（假定文件已在服务器上）
+    if (!path.isAbsolute(audioPath)) {
+      Logger.debug(
+        `[uploadAudioToGptSovits] 使用服务器路径: ${audioPath}`,
+        'VoiceService',
+      );
+      return audioPath;
+    }
+
+    // 如果是本地绝对路径，需要上传到服务器
+    Logger.log(
+      `[uploadAudioToGptSovits] 上传本地音频文件到 GPT-SoVITS 服务器: ${audioPath}`,
+      'VoiceService',
+    );
+
+    try {
+      // 读取本地文件
+      const audioBuffer = await fsp.readFile(audioPath);
+      const fileName = path.basename(audioPath);
+
+      // 使用 FormData 上传
+      const FormData = require('form-data');
+      const formData = new FormData();
+      formData.append('file', audioBuffer, {
+        filename: fileName,
+        contentType: 'audio/wav',
+      });
+
+      const uploadUrl = this.normalizeGptSovitsUrl('/audio/upload');
+      Logger.debug(`[uploadAudioToGptSovits] 上传到: ${uploadUrl}`, 'VoiceService');
+
+      const response = await axios.post(uploadUrl, formData, {
+        headers: formData.getHeaders(),
+        timeout: 30000,
+        maxContentLength: 100 * 1024 * 1024, // 100MB
+        maxBodyLength: 100 * 1024 * 1024,
+      });
+
+      if (response.status !== 200) {
+        throw new Error(`上传失败: ${response.statusText}`);
+      }
+
+      const serverPath = response.data?.path;
+      if (!serverPath) {
+        throw new Error('服务器未返回音频路径');
+      }
+
+      Logger.log(
+        `[uploadAudioToGptSovits] 上传成功，服务器路径: ${serverPath}`,
+        'VoiceService',
+      );
+      return serverPath;
+    } catch (error: any) {
+      Logger.error(
+        `[uploadAudioToGptSovits] 上传音频失败: ${error?.message || error}`,
+        'VoiceService',
+      );
+      throw new HttpException(
+        `上传音频到 GPT-SoVITS 服务器失败: ${error?.message || error}`,
+        HttpStatus.BAD_GATEWAY,
+      );
+    }
   }
 
   private async requestGptSovitsAudio(options: {
@@ -2138,6 +2473,7 @@ export class VoiceService implements OnModuleInit {
     const config = this.getGptSovitsConfig(options.voice);
     const sampleRate = Number(options.sampleRate ?? config.sampleRate ?? 32000);
 
+    // 直接使用配置中的路径（创建音色时已处理）
     const payload = this.buildGptSovitsPayload(config, {
       text: options.text,
       textLanguage: options.textLanguage,
@@ -2146,6 +2482,11 @@ export class VoiceService implements OnModuleInit {
 
     // GPT-SoVITS-v2 使用 /tts 端点
     const url = this.normalizeGptSovitsUrl('/tts');
+
+    // Log request details for debugging
+    Logger.log(`[requestGptSovitsAudio] Calling GPT-SoVITS at ${url}`, 'VoiceService');
+    Logger.debug(`[requestGptSovitsAudio] Payload: ${JSON.stringify(payload)}`, 'VoiceService');
+
     if (options.stream) {
       const response = await axios.post(url, payload, {
         responseType: 'stream',
@@ -2153,10 +2494,9 @@ export class VoiceService implements OnModuleInit {
         validateStatus: () => true,
       });
       if (response.status >= 400) {
-        throw new HttpException(
-          response.data?.message || 'GPT-SoVITS 合成失败',
-          HttpStatus.BAD_GATEWAY,
-        );
+        const errorMsg = `GPT-SoVITS 合成失败 (status ${response.status}): ${response.data?.message || response.data?.detail || JSON.stringify(response.data)}`;
+        Logger.error(`[requestGptSovitsAudio] ${errorMsg}`, 'VoiceService');
+        throw new HttpException(errorMsg, HttpStatus.BAD_GATEWAY);
       }
       const stream = response.data as Readable;
       options.onStart?.({ sampleRate });
@@ -2190,10 +2530,20 @@ export class VoiceService implements OnModuleInit {
       validateStatus: () => true,
     });
     if (response.status >= 400) {
-      throw new HttpException(
-        response.data?.message || 'GPT-SoVITS 合成失败',
-        HttpStatus.BAD_GATEWAY,
-      );
+      // Try to parse error response as JSON
+      let errorDetail = 'Unknown error';
+      try {
+        const errorText = Buffer.from(response.data).toString('utf-8');
+        const errorJson = JSON.parse(errorText);
+        errorDetail = errorJson.message || errorJson.detail || JSON.stringify(errorJson);
+      } catch {
+        // If not JSON, use as string
+        errorDetail = Buffer.from(response.data).toString('utf-8').substring(0, 500);
+      }
+      const errorMsg = `GPT-SoVITS 合成失败 (status ${response.status}): ${errorDetail}`;
+      Logger.error(`[requestGptSovitsAudio] ${errorMsg}`, 'VoiceService');
+      Logger.error(`[requestGptSovitsAudio] Payload was: ${JSON.stringify(payload)}`, 'VoiceService');
+      throw new HttpException(errorMsg, HttpStatus.BAD_GATEWAY);
     }
     const buffer = Buffer.from(response.data);
     return { buffer, sampleRate };

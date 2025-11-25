@@ -52,6 +52,22 @@ export class VoiceController {
     return this.voiceService.listGptSovitsFiles();
   }
 
+  @Get('gpt-sovits/characters')
+  @ApiOperation({ summary: '获取 GPT-SoVITS 角色列表' })
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  listGptSovitsCharacters() {
+    return this.voiceService.listGptSovitsCharacters();
+  }
+
+  @Get('gpt-sovits/character/:characterName')
+  @ApiOperation({ summary: '获取指定角色信息' })
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  getGptSovitsCharacterInfo(@Param('characterName') characterName: string) {
+    return this.voiceService.getGptSovitsCharacterInfo(characterName);
+  }
+
   @Post('gpt-sovits/import')
   @ApiOperation({ summary: '导入 GPT-SoVITS 模型' })
   @UseGuards(JwtAuthGuard)

@@ -3,14 +3,14 @@ exports.id = 8;
 exports.ids = [8];
 exports.modules = {
 
-/***/ 4372:
+/***/ 4468:
 /***/ ((__unused_webpack_module, __webpack_exports__, __webpack_require__) => {
 
 __webpack_require__.r(__webpack_exports__);
 /* harmony export */ __webpack_require__.d(__webpack_exports__, {
 /* harmony export */   checkUrl: () => (/* binding */ checkUrl)
 /* harmony export */ });
-/* harmony import */ var _smithy_property_provider__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(3032);
+/* harmony import */ var _smithy_property_provider__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(3139);
 
 const LOOPBACK_CIDR_IPv4 = "127.0.0.0/8";
 const LOOPBACK_CIDR_IPv6 = "::1/128";
@@ -57,21 +57,21 @@ const checkUrl = (url, logger) => {
 
 /***/ }),
 
-/***/ 4371:
+/***/ 4467:
 /***/ ((__unused_webpack_module, __webpack_exports__, __webpack_require__) => {
 
 __webpack_require__.r(__webpack_exports__);
 /* harmony export */ __webpack_require__.d(__webpack_exports__, {
 /* harmony export */   fromHttp: () => (/* binding */ fromHttp)
 /* harmony export */ });
-/* harmony import */ var _aws_sdk_core_client__WEBPACK_IMPORTED_MODULE_6__ = __webpack_require__(3069);
-/* harmony import */ var _smithy_node_http_handler__WEBPACK_IMPORTED_MODULE_3__ = __webpack_require__(3218);
-/* harmony import */ var _smithy_property_provider__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(3032);
+/* harmony import */ var _aws_sdk_core_client__WEBPACK_IMPORTED_MODULE_6__ = __webpack_require__(3176);
+/* harmony import */ var _smithy_node_http_handler__WEBPACK_IMPORTED_MODULE_3__ = __webpack_require__(3325);
+/* harmony import */ var _smithy_property_provider__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(3139);
 /* harmony import */ var fs_promises__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(1497);
 /* harmony import */ var fs_promises__WEBPACK_IMPORTED_MODULE_0___default = /*#__PURE__*/__webpack_require__.n(fs_promises__WEBPACK_IMPORTED_MODULE_0__);
-/* harmony import */ var _checkUrl__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(4372);
-/* harmony import */ var _requestHelpers__WEBPACK_IMPORTED_MODULE_5__ = __webpack_require__(4373);
-/* harmony import */ var _retry_wrapper__WEBPACK_IMPORTED_MODULE_4__ = __webpack_require__(4374);
+/* harmony import */ var _checkUrl__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(4468);
+/* harmony import */ var _requestHelpers__WEBPACK_IMPORTED_MODULE_5__ = __webpack_require__(4469);
+/* harmony import */ var _retry_wrapper__WEBPACK_IMPORTED_MODULE_4__ = __webpack_require__(4470);
 
 
 
@@ -141,7 +141,7 @@ Set AWS_CONTAINER_CREDENTIALS_FULL_URI or AWS_CONTAINER_CREDENTIALS_RELATIVE_URI
 
 /***/ }),
 
-/***/ 4373:
+/***/ 4469:
 /***/ ((__unused_webpack_module, __webpack_exports__, __webpack_require__) => {
 
 __webpack_require__.r(__webpack_exports__);
@@ -149,10 +149,10 @@ __webpack_require__.r(__webpack_exports__);
 /* harmony export */   createGetRequest: () => (/* binding */ createGetRequest),
 /* harmony export */   getCredentials: () => (/* binding */ getCredentials)
 /* harmony export */ });
-/* harmony import */ var _smithy_property_provider__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(3032);
-/* harmony import */ var _smithy_protocol_http__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(2958);
-/* harmony import */ var _smithy_smithy_client__WEBPACK_IMPORTED_MODULE_3__ = __webpack_require__(3086);
-/* harmony import */ var _smithy_util_stream__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(3156);
+/* harmony import */ var _smithy_property_provider__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(3139);
+/* harmony import */ var _smithy_protocol_http__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(3065);
+/* harmony import */ var _smithy_smithy_client__WEBPACK_IMPORTED_MODULE_3__ = __webpack_require__(3193);
+/* harmony import */ var _smithy_util_stream__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(3263);
 
 
 
@@ -206,7 +206,7 @@ async function getCredentials(response, logger) {
 
 /***/ }),
 
-/***/ 4374:
+/***/ 4470:
 /***/ ((__unused_webpack_module, __webpack_exports__, __webpack_require__) => {
 
 __webpack_require__.r(__webpack_exports__);
@@ -230,14 +230,14 @@ const retryWrapper = (toRetry, maxRetries, delayMs) => {
 
 /***/ }),
 
-/***/ 4370:
+/***/ 4466:
 /***/ ((__unused_webpack_module, __webpack_exports__, __webpack_require__) => {
 
 __webpack_require__.r(__webpack_exports__);
 /* harmony export */ __webpack_require__.d(__webpack_exports__, {
 /* harmony export */   fromHttp: () => (/* reexport safe */ _fromHttp_fromHttp__WEBPACK_IMPORTED_MODULE_0__.fromHttp)
 /* harmony export */ });
-/* harmony import */ var _fromHttp_fromHttp__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(4371);
+/* harmony import */ var _fromHttp_fromHttp__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(4467);
 
 
 

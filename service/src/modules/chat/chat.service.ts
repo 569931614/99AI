@@ -1466,15 +1466,16 @@ ${numberedOptions}
       const { currentDate, timeContextPrompt } = this.getTimeContextPrompt();
 
       // 构建角色扮演系统提示词
-      const rolePlayPrompt = `你将扮演一个人物角色${appName ? `"${appName}"` : ''}，以下是关于这个角色的详细设定，请根据这些信息来构建你的回答。
+      const rolePlayPrompt = `你将扮演一个人物角色${
+        appName ? `"${appName}"` : ''
+      }，以下是关于这个角色的详细设定，请根据这些信息来构建你的回答。
 
 **人物基本信息：**
 ${setSystemMessage}
 
 要求：
 - 根据上述提供的角色设定，以第一人称视角进行表达。
-- 在回答时，尽可能地融入该角色的性格特点、语言风格以及其特有的口头禅或经典台词。
-- 如果适用的话，在适当的地方加入（）内的补充信息，如动作、神情等，以增强对话的真实感和生动性。`;
+- 在回答时，尽可能地融入该角色的性格特点、语言风格以及其特有的口头禅或经典台词。`;
 
       setSystemMessage = `${rolePlayPrompt}
       限制：
@@ -1808,7 +1809,10 @@ ${setSystemMessage}
             groupId: groupId ? groupId : null,
           });
           userLogId = userSaveLog.id;
-          this.logDebug(`[群聊] 保存新的用户消息，id=${userLogId}, appId=${appId}, userName=${realUserName}`, 'ChatService');
+          this.logDebug(
+            `[群聊] 保存新的用户消息，id=${userLogId}, appId=${appId}, userName=${realUserName}`,
+            'ChatService',
+          );
         }
       } else {
         // 非第一个成员，查询已保存的用户消息（应该由第一个成员保存了）
@@ -2544,7 +2548,10 @@ ${setSystemMessage}
           if (isGroupChat && qwenText) {
             processedQwenText = this.removeRoleNamePrefix(qwenText);
             this.logDebug(
-              `[群聊] 移除角色名前缀 - 原文: "${qwenText.substring(0, 50)}..." -> 处理后: "${processedQwenText.substring(0, 50)}..."`,
+              `[群聊] 移除角色名前缀 - 原文: "${qwenText.substring(
+                0,
+                50,
+              )}..." -> 处理后: "${processedQwenText.substring(0, 50)}..."`,
               'ChatService',
             );
           }
@@ -3058,7 +3065,9 @@ ${setSystemMessage}
         // 打印历史记录的详细信息
         history.forEach((record, index) => {
           this.logDebug(
-            `[群聊历史] 记录${index}: role=${record.role}, appId=${record.appId}, userId=${record.userId}, modelName=${record.modelName}, content=${
+            `[群聊历史] 记录${index}: role=${record.role}, appId=${record.appId}, userId=${
+              record.userId
+            }, modelName=${record.modelName}, content=${
               typeof record.content === 'string' ? record.content.substring(0, 30) : '[复杂内容]'
             }`,
             'ChatService',

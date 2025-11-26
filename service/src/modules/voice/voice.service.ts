@@ -471,10 +471,7 @@ export class VoiceService implements OnModuleInit {
       const sovitsModelServerPath = characterInfo.sovits_model_path;
 
       if (!gptModelServerPath || !sovitsModelServerPath) {
-        throw new HttpException(
-          `角色 ${characterName} 的模型路径未找到`,
-          HttpStatus.BAD_REQUEST,
-        );
+        throw new HttpException(`角色 ${characterName} 的模型路径未找到`, HttpStatus.BAD_REQUEST);
       }
 
       // 处理音频
@@ -534,8 +531,16 @@ export class VoiceService implements OnModuleInit {
       });
       this.gptSovitsModelCache.delete(voiceId);
 
-      Logger.log(`[importGptSovitsVoice] 新增 GPT-SoVITS 音色 ${voiceId} (角色: ${characterName})`, 'VoiceService');
-      return { voice_id: voiceId, provider: 'gpt-sovits', status: 'SUCCEEDED', character_name: characterName };
+      Logger.log(
+        `[importGptSovitsVoice] 新增 GPT-SoVITS 音色 ${voiceId} (角色: ${characterName})`,
+        'VoiceService',
+      );
+      return {
+        voice_id: voiceId,
+        provider: 'gpt-sovits',
+        status: 'SUCCEEDED',
+        character_name: characterName,
+      };
     }
 
     if (useServerFiles) {
@@ -561,7 +566,10 @@ export class VoiceService implements OnModuleInit {
         try {
           await fsp.access(normalizedGptPath);
         } catch (error) {
-          throw new HttpException('指定的 GPT 模型文件路径不存在或无法访问', HttpStatus.BAD_REQUEST);
+          throw new HttpException(
+            '指定的 GPT 模型文件路径不存在或无法访问',
+            HttpStatus.BAD_REQUEST,
+          );
         }
         if (!normalizedGptPath.startsWith(normalizedStorageRoot)) {
           throw new HttpException('GPT 模型文件路径必须在存储目录范围内', HttpStatus.BAD_REQUEST);
@@ -579,10 +587,16 @@ export class VoiceService implements OnModuleInit {
         try {
           await fsp.access(normalizedSovitsPath);
         } catch (error) {
-          throw new HttpException('指定的 SoVITS 模型文件路径不存在或无法访问', HttpStatus.BAD_REQUEST);
+          throw new HttpException(
+            '指定的 SoVITS 模型文件路径不存在或无法访问',
+            HttpStatus.BAD_REQUEST,
+          );
         }
         if (!normalizedSovitsPath.startsWith(normalizedStorageRoot)) {
-          throw new HttpException('SoVITS 模型文件路径必须在存储目录范围内', HttpStatus.BAD_REQUEST);
+          throw new HttpException(
+            'SoVITS 模型文件路径必须在存储目录范围内',
+            HttpStatus.BAD_REQUEST,
+          );
         }
         sovitsModelPath = normalizedSovitsPath;
       } else {
@@ -669,10 +683,7 @@ export class VoiceService implements OnModuleInit {
       'VoiceService',
     );
     const serverPromptAudioPath = await this.uploadAudioToGptSovits(promptAudioPath);
-    Logger.log(
-      `[importGptSovitsVoice] 音频路径已处理: ${serverPromptAudioPath}`,
-      'VoiceService',
-    );
+    Logger.log(`[importGptSovitsVoice] 音频路径已处理: ${serverPromptAudioPath}`, 'VoiceService');
 
     const config: VoiceGptSovitsConfig = {
       gptModelPath,
@@ -2397,10 +2408,7 @@ export class VoiceService implements OnModuleInit {
   private async uploadAudioToGptSovits(audioPath: string): Promise<string> {
     // 如果是相对路径，直接返回（假定文件已在服务器上）
     if (!path.isAbsolute(audioPath)) {
-      Logger.debug(
-        `[uploadAudioToGptSovits] 使用服务器路径: ${audioPath}`,
-        'VoiceService',
-      );
+      Logger.debug(`[uploadAudioToGptSovits] 使用服务器路径: ${audioPath}`, 'VoiceService');
       return audioPath;
     }
 
@@ -2442,10 +2450,7 @@ export class VoiceService implements OnModuleInit {
         throw new Error('服务器未返回音频路径');
       }
 
-      Logger.log(
-        `[uploadAudioToGptSovits] 上传成功，服务器路径: ${serverPath}`,
-        'VoiceService',
-      );
+      Logger.log(`[uploadAudioToGptSovits] 上传成功，服务器路径: ${serverPath}`, 'VoiceService');
       return serverPath;
     } catch (error: any) {
       Logger.error(
@@ -2494,7 +2499,9 @@ export class VoiceService implements OnModuleInit {
         validateStatus: () => true,
       });
       if (response.status >= 400) {
-        const errorMsg = `GPT-SoVITS 合成失败 (status ${response.status}): ${response.data?.message || response.data?.detail || JSON.stringify(response.data)}`;
+        const errorMsg = `GPT-SoVITS 合成失败 (status ${response.status}): ${
+          response.data?.message || response.data?.detail || JSON.stringify(response.data)
+        }`;
         Logger.error(`[requestGptSovitsAudio] ${errorMsg}`, 'VoiceService');
         throw new HttpException(errorMsg, HttpStatus.BAD_GATEWAY);
       }
@@ -2542,7 +2549,10 @@ export class VoiceService implements OnModuleInit {
       }
       const errorMsg = `GPT-SoVITS 合成失败 (status ${response.status}): ${errorDetail}`;
       Logger.error(`[requestGptSovitsAudio] ${errorMsg}`, 'VoiceService');
-      Logger.error(`[requestGptSovitsAudio] Payload was: ${JSON.stringify(payload)}`, 'VoiceService');
+      Logger.error(
+        `[requestGptSovitsAudio] Payload was: ${JSON.stringify(payload)}`,
+        'VoiceService',
+      );
       throw new HttpException(errorMsg, HttpStatus.BAD_GATEWAY);
     }
     const buffer = Buffer.from(response.data);

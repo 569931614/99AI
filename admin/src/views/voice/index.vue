@@ -184,12 +184,7 @@
                 style="width: 100%"
                 :loading="charactersLoading"
               >
-                <el-option
-                  v-for="char in characters"
-                  :key="char"
-                  :label="char"
-                  :value="char"
-                />
+                <el-option v-for="char in characters" :key="char" :label="char" :value="char" />
               </el-select>
               <template #extra>
                 <div class="text-xs text-gray-500 mt-1">
@@ -853,7 +848,7 @@
     try {
       charactersLoading.value = true;
       const res = await voiceApi.listGptSovitsCharacters();
-      characters.value = res?.characters || res?.data?.characters || [];
+      characters.value = res?.data?.characters || [];
       ElMessage.success(`加载了 ${characters.value.length} 个角色`);
     } catch (e: any) {
       console.error('获取角色列表失败:', e);

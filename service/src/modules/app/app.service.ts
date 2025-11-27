@@ -106,6 +106,21 @@ export class AppService {
     }
 
     const appData = app as any;
+    // 解析分类
+    const catIds = (app.catId || '')
+      .split(',')
+      .map(id => Number(id.trim()))
+      .filter(id => !isNaN(id) && id > 0);
+    let categories: { id: number; name: string }[] = [];
+    let primaryCategoryName = '';
+    if (catIds.length > 0) {
+      const catEntities = await this.appCatsEntity.find({ where: { id: In(catIds) } });
+      categories = catEntities.map(cat => ({ id: cat.id, name: cat.name }));
+      const firstCatId = catIds[0];
+      const firstMatch = catEntities.find(cat => cat.id === firstCatId);
+      primaryCategoryName = (firstMatch || catEntities[0])?.name || '';
+    }
+
     // 关联默认音色（如果存在）
     let voiceId: string | null = null;
     try {
@@ -154,6 +169,9 @@ export class AppService {
       gender: appData.gender,
       enableRealTime: appData.enableRealTime,
       enableLongTermMemory: appData.enableLongTermMemory,
+      catIds,
+      categories,
+      categoryName: primaryCategoryName,
     };
   }
 

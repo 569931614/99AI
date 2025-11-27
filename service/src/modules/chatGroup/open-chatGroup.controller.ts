@@ -26,6 +26,7 @@ export class OpenChatGroupController {
         proactivelySend: { type: 'number', description: '是否主动发消息（0否 1是，可选）' },
         describingMental: { type: 'number', description: '是否开启心理动作描述（0否 1是，可选）' },
         realTime: { type: 'number', description: '是否开启真实时间（0否 1是，可选）' },
+        enableTranslation: { type: 'number', description: '是否开启翻译（0否 1是，可选）' },
         modelConfig: {
           type: 'object',
           description: '对话模型配置项（可选，不传则使用默认配置）',
@@ -69,6 +70,7 @@ export class OpenChatGroupController {
         describingMental,
         realTime,
         maxReplyCount,
+        enableTranslation,
       } = body || {};
 
       if (!userId) throw new HttpException('userId 必填', HttpStatus.BAD_REQUEST);
@@ -98,6 +100,7 @@ export class OpenChatGroupController {
           describingMental,
           realTime,
           maxReplyCount,
+          enableTranslation,
         },
         fakeReq,
       );
@@ -353,6 +356,7 @@ export class OpenChatGroupController {
         allowEmoji: { type: 'boolean', description: '是否允许发送表情包（可选）' },
         allowTap: { type: 'boolean', description: '是否允许拍一拍（可选）' },
         maxReplyCount: { type: 'number', description: '最多回复条数（1-5，可选，默认5）' },
+        enableTranslation: { type: 'number', description: '是否开启翻译（0否 1是，可选）' },
         members: {
           type: 'array',
           description: '成员列表（可选，传入则完整替换现有成员列表）',
@@ -460,6 +464,7 @@ export class OpenChatGroupController {
         allowEmoji,
         allowTap,
         maxReplyCount,
+        enableTranslation,
         members,
         backgroundImage,
       } = body || {};
@@ -498,6 +503,7 @@ export class OpenChatGroupController {
           allowEmoji,
           allowTap,
           maxReplyCount,
+          enableTranslation,
           members,
           backgroundImage,
         },

@@ -194,7 +194,7 @@ export class ChatService {
       if (found) {
         // 提取括号内的内容（去除括号本身）
         found.forEach(match => {
-          const content = match.replace(/^[(\（\[【\{]/, '').replace(/[)\）\]】\}]$/, '');
+          const content = match.replace(/^[(\（\[\{]/, '').replace(/[)\）\]\}]$/, '');
           if (content.trim()) {
             matches.push(content.trim());
           }
@@ -227,21 +227,28 @@ export class ChatService {
 
   /**
    * 移除文本中的括号及其内容
-   * 用于TTS时只朗读实际对话内容
-   * 注：不移除「」和『』，因为它们主要用作引号，移除后会破坏对话内容
+   * 用于在心理描述关闭时过滤心理描述，但保留翻译内容
+   * @param text 原始文本
+   * @param removeTranslation 是否也移除翻译内容【】，默认false（用于TTS时设为true）
    */
-  removeBracketedContent(text?: string | null): string {
+  removeBracketedContent(text?: string | null, removeTranslation = false): string {
     if (!text) return '';
     let result = text;
 
-    // 移除各种括号及其内容
+    // 移除圆括号内的心理描述内容
     const bracketPatterns = [
       /\([^)]*\)/g, // 英文圆括号
       /（[^）]*）/g, // 中文圆括号
-      /\[[^\]]*\]/g, // 英文方括号
-      /【[^】]*】/g, // 中文方括号
       /\{[^}]*\}/g, // 英文花括号
     ];
+
+    // 如果是 TTS 场景，也移除翻译括号
+    if (removeTranslation) {
+      bracketPatterns.push(
+        /\[[^\]]*\]/g, // 英文方括号
+        /【[^】]*】/g, // 中文方括号【】用于翻译
+      );
+    }
 
     for (const pattern of bracketPatterns) {
       result = result.replace(pattern, '');
@@ -257,6 +264,15 @@ export class ChatService {
   }
 
   /**
+   * 移除翻译括号内容（【】）
+   * @param text 原始文本
+   */
+  private removeTranslationContent(text?: string | null): string {
+    if (!text) return '';
+    return text.replace(/【[^】]*】/g, '');
+  }
+
+  /**
    * 为TTS优化文本内容，清理会导致朗读不顺畅的内容
    * 包括：Markdown语法、代码块、特殊符号、emoji等
    */
@@ -264,8 +280,8 @@ export class ChatService {
     if (!text) return '';
     let result = text;
 
-    // 1. 先移除括号内容（心理活动、动作描写等）
-    result = this.removeBracketedContent(result);
+    // 1. 先移除所有括号内容（心理活动、动作描写、翻译等），TTS 不朗读这些内容
+    result = this.removeBracketedContent(result, true); // true 表示也移除翻译【】
 
     // 2. 清理Markdown语法
     // 2.1 移除代码块（三个反引号）
@@ -1478,9 +1494,7 @@ ${setSystemMessage}
 - 在回答时，尽可能地融入该角色的性格特点、语言风格以及其特有的口头禅或经典台词。`;
 
       setSystemMessage = `${rolePlayPrompt}
-      限制：
-      - 当前时间 ${currentDate}\n${timeContextPrompt}
-      - 当你的输出内容是非中文时（如英语、日语等），需要使用【】来显示对应的中文翻译或注释，以帮助用户理解。例如：Hello【你好】、ありがとう【谢谢】`;
+- 当前时间:${currentDate}\n${timeContextPrompt}`;
       // - 回复内容必须回复1个句子，并且用空行隔开，每个句子内容20字以内（如需添加心理描述，心理描述的括号内容不计入字数）。
     } else {
       if (usingPlugin?.parameters === 'mermaid') {
@@ -1584,18 +1598,14 @@ ${setSystemMessage}
           setSystemMessage =
             `【当前时间】${currentDate}\n${timeContextPrompt}\n\n` +
             systemPreMessage +
-            currentRequestModelKey.systemPrompt +
-            `\n\n【重要提示】当你的输出内容是非中文时（如英语、日语等），需要使用【】来显示对应的中文翻译或注释，以帮助用户理解。例如：Hello【你好】、ありがとう【谢谢】`;
+            currentRequestModelKey.systemPrompt;
         } else if (currentRequestModelKey.systemPromptType === 2) {
           setSystemMessage =
             `【当前时间】${currentDate}\n${timeContextPrompt}\n\n` +
-            currentRequestModelKey.systemPrompt +
-            `\n\n【重要提示】当你的输出内容是非中文时（如英语、日语等），需要使用【】来显示对应的中文翻译或注释，以帮助用户理解。例如：Hello【你好】、ありがとう【谢谢】`;
+            currentRequestModelKey.systemPrompt;
         } else {
           setSystemMessage =
-            `【当前时间】${currentDate}\n${timeContextPrompt}\n\n` +
-            systemPreMessage +
-            `\n\n【重要提示】当你的输出内容是非中文时（如英语、日语等），需要使用【】来显示对应的中文翻译或注释，以帮助用户理解。例如：Hello【你好】、ありがとう【谢谢】`;
+            `【当前时间】${currentDate}\n${timeContextPrompt}\n\n` + systemPreMessage;
         }
 
         this.logDebug(`使用默认系统预设`, 'ChatService');
@@ -2081,6 +2091,7 @@ ${setSystemMessage}
     let groupAllowEmoji = false; // 默认不允许表情包
     let groupAllowTap = false; // 默认不允许拍一拍
     let groupMaxReplyCount = 5; // 默认最多回复5条
+    let groupEnableTranslation = false; // 默认不开启翻译
 
     if (appId && setSystemMessage && this.userAppSettingsService) {
       try {
@@ -2144,6 +2155,15 @@ ${setSystemMessage}
                   'ChatService',
                 );
               }
+
+              // 翻译开关
+              if (typeof groupInfo.enableTranslation === 'number') {
+                groupEnableTranslation = groupInfo.enableTranslation === 1;
+                this.logDebug(
+                  `[翻译] 使用会话组配置: groupId=${groupId}, enableTranslation=${groupEnableTranslation}`,
+                  'ChatService',
+                );
+              }
             }
 
             // 如果会话组没有配置心理描述，使用用户级别配置
@@ -2199,6 +2219,22 @@ ${setSystemMessage}
         Logger.warn(`获取心理描述开关失败: ${error?.message || error}`, 'ChatService');
       }
     }
+
+    const translationPrompt = `当回复的是非中文时，必须在每次回复中加上中文翻译，使用中文中括号【】括起来。无论之前的对话中是否有加。\n`;
+
+    const rolePresetMarker = '要求：';
+    if (setSystemMessage.includes(rolePresetMarker)) {
+      setSystemMessage = setSystemMessage.replace(
+        rolePresetMarker,
+        `${translationPrompt}\n${rolePresetMarker}`,
+      );
+    } else {
+      setSystemMessage += `\n\n${translationPrompt}`;
+    }
+    this.logDebug(
+      `[翻译] 已添加翻译提示词到系统消息: groupId=${groupId}, enableTranslation=${groupEnableTranslation}`,
+      'ChatService',
+    );
 
     /* 获取历史消息 */
     const { messagesHistory } = await this.buildMessageFromParentMessageId(
@@ -2529,6 +2565,11 @@ ${setSystemMessage}
                     textToSend = this.removeBracketedContent(textToSend);
                   }
 
+                  // 翻译关闭时移除中文括号内容
+                  if (!groupEnableTranslation) {
+                    textToSend = this.removeTranslationContent(textToSend);
+                  }
+
                   const payload = { content: [{ type: 'text', text: textToSend }] };
                   try {
                     res.write(`\n${JSON.stringify(payload)}`);
@@ -2651,6 +2692,18 @@ ${setSystemMessage}
             if (sanitizedAnswer.length < originalLength) {
               this.logDebug(
                 `[心理描述过滤] 已移除心理描述内容，原长度=${originalLength}，过滤后长度=${sanitizedAnswer.length}`,
+                'ChatService',
+              );
+            }
+          }
+
+          // 翻译关闭时移除翻译内容
+          if (!groupEnableTranslation && sanitizedAnswer) {
+            const originalLength = sanitizedAnswer.length;
+            sanitizedAnswer = this.removeTranslationContent(sanitizedAnswer);
+            if (sanitizedAnswer.length < originalLength) {
+              this.logDebug(
+                `[翻译过滤] 已移除翻译内容，原长度=${originalLength}，过滤后长度=${sanitizedAnswer.length}`,
                 'ChatService',
               );
             }

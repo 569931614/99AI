@@ -33,7 +33,80 @@ const GPT_SOVITS_LIBRARY_DIR = {
 };
 const fsp = fs.promises;
 
+// GPT-SoVITS 重试配置
+const GPT_SOVITS_MAX_RETRIES = Number(process.env.GPT_SOVITS_MAX_RETRIES) || 3;
+const GPT_SOVITS_RETRY_DELAY = Number(process.env.GPT_SOVITS_RETRY_DELAY) || 1000; // 毫秒
+const GPT_SOVITS_RETRY_BACKOFF = Number(process.env.GPT_SOVITS_RETRY_BACKOFF) || 2; // 指数退避倍数
+
 type VoiceProvider = 'dashscope' | 'gpt-sovits';
+
+/**
+ * 通用重试工具函数
+ * @param fn 需要重试的异步函数
+ * @param options 重试配置
+ * @returns 函数执行结果
+ */
+async function retryWithBackoff<T>(
+  fn: () => Promise<T>,
+  options: {
+    maxRetries?: number;
+    initialDelay?: number;
+    backoffFactor?: number;
+    retryableErrors?: (error: any) => boolean;
+    onRetry?: (error: any, attempt: number, nextDelay: number) => void;
+  } = {},
+): Promise<T> {
+  const {
+    maxRetries = GPT_SOVITS_MAX_RETRIES,
+    initialDelay = GPT_SOVITS_RETRY_DELAY,
+    backoffFactor = GPT_SOVITS_RETRY_BACKOFF,
+    retryableErrors = (error: any) => {
+      // 默认可重试的错误：网络错误、超时、5xx服务器错误
+      if (
+        error.code === 'ECONNREFUSED' ||
+        error.code === 'ETIMEDOUT' ||
+        error.code === 'ENOTFOUND'
+      ) {
+        return true;
+      }
+      if (error.response?.status >= 500 && error.response?.status < 600) {
+        return true;
+      }
+      // 503 Service Unavailable 也重试
+      if (error.response?.status === 503) {
+        return true;
+      }
+      return false;
+    },
+    onRetry,
+  } = options;
+
+  let lastError: any;
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      return await fn();
+    } catch (error) {
+      lastError = error;
+
+      // 如果已达到最大重试次数或错误不可重试，直接抛出
+      if (attempt >= maxRetries || !retryableErrors(error)) {
+        throw error;
+      }
+
+      // 计算延迟时间（指数退避）
+      const delay = initialDelay * Math.pow(backoffFactor, attempt);
+
+      // 调用重试回调
+      if (onRetry) {
+        onRetry(error, attempt + 1, delay);
+      }
+
+      // 等待后重试
+      await new Promise(resolve => setTimeout(resolve, delay));
+    }
+  }
+  throw lastError;
+}
 
 interface VoiceGptSovitsConfig {
   gptModelPath: string;
@@ -218,12 +291,23 @@ export class VoiceService implements OnModuleInit {
   }
 
   async listGptSovitsCharacters() {
-    try {
-      const url = this.normalizeGptSovitsUrl('/characters/list');
-      Logger.log(`[listGptSovitsCharacters] 获取角色列表: ${url}`, 'VoiceService');
-      const response = await axios.get(url, { timeout: 5000 });
-      return response.data;
-    } catch (error) {
+    return await retryWithBackoff(
+      async () => {
+        const url = this.normalizeGptSovitsUrl('/characters/list');
+        Logger.log(`[listGptSovitsCharacters] 获取角色列表: ${url}`, 'VoiceService');
+        const response = await axios.get(url, { timeout: 5000 });
+        return response.data;
+      },
+      {
+        onRetry: (error, attempt, delay) => {
+          Logger.warn(
+            `[listGptSovitsCharacters] 获取角色列表失败，正在重试 (${attempt}/${GPT_SOVITS_MAX_RETRIES})，` +
+              `延迟 ${delay}ms。错误: ${error?.message || error}`,
+            'VoiceService',
+          );
+        },
+      },
+    ).catch(error => {
       Logger.error(
         `[listGptSovitsCharacters] 获取角色列表失败: ${error?.message || error}`,
         'VoiceService',
@@ -232,18 +316,29 @@ export class VoiceService implements OnModuleInit {
         `获取GPT-SoVITS角色列表失败: ${error?.message || error}`,
         HttpStatus.BAD_GATEWAY,
       );
-    }
+    });
   }
 
   async getGptSovitsCharacterInfo(characterName: string) {
-    try {
-      const url = this.normalizeGptSovitsUrl(
-        `/characters/info?character_name=${encodeURIComponent(characterName)}`,
-      );
-      Logger.log(`[getGptSovitsCharacterInfo] 获取角色信息: ${characterName}`, 'VoiceService');
-      const response = await axios.get(url, { timeout: 5000 });
-      return response.data;
-    } catch (error) {
+    return await retryWithBackoff(
+      async () => {
+        const url = this.normalizeGptSovitsUrl(
+          `/characters/info?character_name=${encodeURIComponent(characterName)}`,
+        );
+        Logger.log(`[getGptSovitsCharacterInfo] 获取角色信息: ${characterName}`, 'VoiceService');
+        const response = await axios.get(url, { timeout: 5000 });
+        return response.data;
+      },
+      {
+        onRetry: (error, attempt, delay) => {
+          Logger.warn(
+            `[getGptSovitsCharacterInfo] 获取角色信息失败，正在重试 (${attempt}/${GPT_SOVITS_MAX_RETRIES})，` +
+              `延迟 ${delay}ms。错误: ${error?.message || error}`,
+            'VoiceService',
+          );
+        },
+      },
+    ).catch(error => {
       Logger.error(
         `[getGptSovitsCharacterInfo] 获取角色信息失败: ${error?.message || error}`,
         'VoiceService',
@@ -252,7 +347,7 @@ export class VoiceService implements OnModuleInit {
         `获取角色信息失败: ${error?.message || error}`,
         HttpStatus.BAD_GATEWAY,
       );
-    }
+    });
   }
 
   async listGptSovitsFiles() {
@@ -1946,13 +2041,27 @@ export class VoiceService implements OnModuleInit {
       if ((voice.provider as VoiceProvider) === 'gpt-sovits') {
         const cfg = this.getGptSovitsConfig(voice);
 
-        data.text_language = cfg.textLanguage;
+        data.textLanguage = cfg.textLanguage;
+        data.text_language = cfg.textLanguage; // 兼容下划线命名
 
-        data.prompt_language = cfg.promptLanguage;
+        data.promptLanguage = cfg.promptLanguage;
+        data.prompt_language = cfg.promptLanguage; // 兼容下划线命名
 
-        data.prompt_text = cfg.promptText;
+        data.promptText = cfg.promptText;
+        data.prompt_text = cfg.promptText; // 兼容下划线命名
 
-        data.sample_rate = cfg.sampleRate ?? voice.sampleRate ?? 32000;
+        data.cutPunc = cfg.cutPunc;
+        data.cut_punc = cfg.cutPunc; // 兼容下划线命名
+
+        data.topK = cfg.topK;
+        data.topP = cfg.topP;
+        data.temperature = cfg.temperature;
+        data.speed = cfg.speed;
+        data.sampleSteps = cfg.sampleSteps;
+        data.sample_steps = cfg.sampleSteps; // 兼容下划线命名
+
+        data.sampleRate = cfg.sampleRate ?? voice.sampleRate ?? 32000;
+        data.sample_rate = cfg.sampleRate ?? voice.sampleRate ?? 32000; // 兼容下划线命名
 
         data.format = 'wav';
       }
@@ -1987,7 +2096,13 @@ export class VoiceService implements OnModuleInit {
         textLanguage: params.text_language || params.textLanguage || cfg.textLanguage,
         promptLanguage: params.prompt_language || params.promptLanguage || cfg.promptLanguage,
         promptText: params.prompt_text || params.promptText || cfg.promptText,
-        sampleRate: params.sample_rate ? Number(params.sample_rate) : cfg.sampleRate,
+        sampleRate: params.sample_rate || params.sampleRate ? Number(params.sample_rate || params.sampleRate) : cfg.sampleRate,
+        cutPunc: params.cut_punc || params.cutPunc || cfg.cutPunc,
+        topK: params.topK !== undefined ? Number(params.topK) : cfg.topK,
+        topP: params.topP !== undefined ? Number(params.topP) : cfg.topP,
+        temperature: params.temperature !== undefined ? Number(params.temperature) : cfg.temperature,
+        speed: params.speed !== undefined ? Number(params.speed) : cfg.speed,
+        sampleSteps: params.sampleSteps || params.sample_steps !== undefined ? Number(params.sampleSteps || params.sample_steps) : cfg.sampleSteps,
       };
       updateData.config = nextCfg;
     }
@@ -2328,21 +2443,32 @@ export class VoiceService implements OnModuleInit {
     ) {
       return;
     }
-    try {
-      await axios.post(
-        this.normalizeGptSovitsUrl('/set_model'),
-        {
-          gpt_model_path: config.gptModelPath,
-          sovits_model_path: config.sovitsModelPath,
+    await retryWithBackoff(
+      async () => {
+        await axios.post(
+          this.normalizeGptSovitsUrl('/set_model'),
+          {
+            gpt_model_path: config.gptModelPath,
+            sovits_model_path: config.sovitsModelPath,
+          },
+          { timeout: 120000 },
+        );
+        this.gptSovitsModelCache.set(voiceId, {
+          gptModelPath: config.gptModelPath,
+          sovitsModelPath: config.sovitsModelPath,
+          loadedAt: Date.now(),
+        });
+      },
+      {
+        onRetry: (error, attempt, delay) => {
+          Logger.warn(
+            `[ensureGptSovitsModelLoaded] 加载模型失败，正在重试 (${attempt}/${GPT_SOVITS_MAX_RETRIES})，` +
+              `延迟 ${delay}ms。错误: ${error?.message || error}`,
+            'VoiceService',
+          );
         },
-        { timeout: 120000 },
-      );
-      this.gptSovitsModelCache.set(voiceId, {
-        gptModelPath: config.gptModelPath,
-        sovitsModelPath: config.sovitsModelPath,
-        loadedAt: Date.now(),
-      });
-    } catch (error: any) {
+      },
+    ).catch((error: any) => {
       Logger.error(
         `[ensureGptSovitsModelLoaded] 加载模型失败: ${error?.message || error}`,
         'VoiceService',
@@ -2351,7 +2477,7 @@ export class VoiceService implements OnModuleInit {
         error?.response?.data?.message || '加载 GPT-SoVITS 模型失败',
         HttpStatus.BAD_GATEWAY,
       );
-    }
+    });
   }
 
   private buildGptSovitsPayload(
@@ -2366,8 +2492,14 @@ export class VoiceService implements OnModuleInit {
     const promptLang = config.promptLanguage || 'auto';
     const textLang = options.textLanguage || config.textLanguage || 'auto';
 
+    // 清理文本：
+    // 1. 移除开头的标点符号
+    // 2. 将句号替换成省略号（已注释）
+    let cleanedText = options.text.replace(/^[。！？\.\!\?\,，、；;]+/, '');
+    // cleanedText = cleanedText.replace(/。/g, '…').replace(/\./g, '…');
+
     const payload: any = {
-      text: options.text,
+      text: cleanedText,
       text_lang: textLang,
       ref_audio_path: config.promptAudioPath,
       prompt_text: config.promptText,
@@ -2418,41 +2550,54 @@ export class VoiceService implements OnModuleInit {
       'VoiceService',
     );
 
-    try {
-      // 读取本地文件
-      const audioBuffer = await fsp.readFile(audioPath);
-      const fileName = path.basename(audioPath);
+    return await retryWithBackoff(
+      async () => {
+        // 读取本地文件
+        const audioBuffer = await fsp.readFile(audioPath);
+        const fileName = path.basename(audioPath);
 
-      // 使用 FormData 上传
-      const FormData = require('form-data');
-      const formData = new FormData();
-      formData.append('file', audioBuffer, {
-        filename: fileName,
-        contentType: 'audio/wav',
-      });
+        // 使用 FormData 上传
+        const FormData = require('form-data');
+        const formData = new FormData();
+        formData.append('file', audioBuffer, {
+          filename: fileName,
+          contentType: 'audio/wav',
+        });
 
-      const uploadUrl = this.normalizeGptSovitsUrl('/audio/upload');
-      Logger.debug(`[uploadAudioToGptSovits] 上传到: ${uploadUrl}`, 'VoiceService');
+        const uploadUrl = this.normalizeGptSovitsUrl('/audio/upload');
+        Logger.debug(`[uploadAudioToGptSovits] 上传到: ${uploadUrl}`, 'VoiceService');
 
-      const response = await axios.post(uploadUrl, formData, {
-        headers: formData.getHeaders(),
-        timeout: 30000,
-        maxContentLength: 100 * 1024 * 1024, // 100MB
-        maxBodyLength: 100 * 1024 * 1024,
-      });
+        const response = await axios.post(uploadUrl, formData, {
+          headers: formData.getHeaders(),
+          timeout: 30000,
+          maxContentLength: 100 * 1024 * 1024, // 100MB
+          maxBodyLength: 100 * 1024 * 1024,
+        });
 
-      if (response.status !== 200) {
-        throw new Error(`上传失败: ${response.statusText}`);
-      }
+        if (response.status !== 200) {
+          const error: any = new Error(`上传失败: ${response.statusText}`);
+          error.response = response;
+          throw error;
+        }
 
-      const serverPath = response.data?.path;
-      if (!serverPath) {
-        throw new Error('服务器未返回音频路径');
-      }
+        const serverPath = response.data?.path;
+        if (!serverPath) {
+          throw new Error('服务器未返回音频路径');
+        }
 
-      Logger.log(`[uploadAudioToGptSovits] 上传成功，服务器路径: ${serverPath}`, 'VoiceService');
-      return serverPath;
-    } catch (error: any) {
+        Logger.log(`[uploadAudioToGptSovits] 上传成功，服务器路径: ${serverPath}`, 'VoiceService');
+        return serverPath;
+      },
+      {
+        onRetry: (error, attempt, delay) => {
+          Logger.warn(
+            `[uploadAudioToGptSovits] 上传音频失败，正在重试 (${attempt}/${GPT_SOVITS_MAX_RETRIES})，` +
+              `延迟 ${delay}ms。错误: ${error?.message || error}`,
+            'VoiceService',
+          );
+        },
+      },
+    ).catch((error: any) => {
       Logger.error(
         `[uploadAudioToGptSovits] 上传音频失败: ${error?.message || error}`,
         'VoiceService',
@@ -2461,9 +2606,13 @@ export class VoiceService implements OnModuleInit {
         `上传音频到 GPT-SoVITS 服务器失败: ${error?.message || error}`,
         HttpStatus.BAD_GATEWAY,
       );
-    }
+    });
   }
 
+  /**
+   * 使用 GPT-SoVITS 异步接口请求音频
+   * 流程：1. 提交任务 -> 2. 轮询状态 -> 3. 下载音频
+   */
   private async requestGptSovitsAudio(options: {
     voice: VoiceEntity;
     text: string;
@@ -2485,78 +2634,165 @@ export class VoiceService implements OnModuleInit {
       cutPunc: options.cutPunc,
     });
 
-    // GPT-SoVITS-v2 使用 /tts 端点
-    const url = this.normalizeGptSovitsUrl('/tts');
-
-    // Log request details for debugging
-    Logger.log(`[requestGptSovitsAudio] Calling GPT-SoVITS at ${url}`, 'VoiceService');
+    // 使用异步接口
+    const asyncUrl = this.normalizeGptSovitsUrl('/tts/async');
+    Logger.log(`[requestGptSovitsAudio] 使用异步模式调用 GPT-SoVITS: ${asyncUrl}`, 'VoiceService');
     Logger.debug(`[requestGptSovitsAudio] Payload: ${JSON.stringify(payload)}`, 'VoiceService');
 
+    // 1. 提交异步任务
+    const taskId = await this.submitGptSovitsAsyncTask(asyncUrl, payload);
+    Logger.log(`[requestGptSovitsAudio] 任务已提交，task_id: ${taskId}`, 'VoiceService');
+
+    // 2. 轮询查询任务状态
+    const audioUrl = await this.pollGptSovitsTaskStatus(taskId);
+    Logger.log(`[requestGptSovitsAudio] 任务完成，音频URL: ${audioUrl}`, 'VoiceService');
+
+    // 3. 下载音频
+    const buffer = await this.downloadGptSovitsAudio(audioUrl);
+    Logger.log(`[requestGptSovitsAudio] 音频下载完成，大小: ${buffer.length} bytes`, 'VoiceService');
+
+    // 如果是流式模式，通过回调返回数据
     if (options.stream) {
-      const response = await axios.post(url, payload, {
-        responseType: 'stream',
-        timeout: 120000,
-        validateStatus: () => true,
-      });
-      if (response.status >= 400) {
-        const errorMsg = `GPT-SoVITS 合成失败 (status ${response.status}): ${
-          response.data?.message || response.data?.detail || JSON.stringify(response.data)
-        }`;
-        Logger.error(`[requestGptSovitsAudio] ${errorMsg}`, 'VoiceService');
-        throw new HttpException(errorMsg, HttpStatus.BAD_GATEWAY);
+      try {
+        options.onStart?.({ sampleRate });
+        options.onData?.(buffer);
+        options.onEnd?.();
+      } catch (err) {
+        Logger.warn(`[requestGptSovitsAudio] 回调异常: ${err}`, 'VoiceService');
       }
-      const stream = response.data as Readable;
-      options.onStart?.({ sampleRate });
-      await new Promise<void>((resolve, reject) => {
-        stream.on('data', chunk => {
-          try {
-            const buf = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
-            options.onData?.(buf);
-          } catch (err) {
-            Logger.warn(`[requestGptSovitsAudio] onData 回调异常: ${err}`, 'VoiceService');
-          }
-        });
-        stream.on('end', () => {
-          try {
-            options.onEnd?.();
-          } catch {}
-          resolve();
-        });
-        stream.on('error', err => {
-          reject(err);
-        });
-      }).catch(err => {
-        throw new HttpException(err?.message || 'GPT-SoVITS 流式输出失败', HttpStatus.BAD_GATEWAY);
-      });
       return { sampleRate };
     }
 
-    const response = await axios.post(url, payload, {
-      responseType: 'arraybuffer',
-      timeout: 120000,
-      validateStatus: () => true,
-    });
-    if (response.status >= 400) {
-      // Try to parse error response as JSON
-      let errorDetail = 'Unknown error';
-      try {
-        const errorText = Buffer.from(response.data).toString('utf-8');
-        const errorJson = JSON.parse(errorText);
-        errorDetail = errorJson.message || errorJson.detail || JSON.stringify(errorJson);
-      } catch {
-        // If not JSON, use as string
-        errorDetail = Buffer.from(response.data).toString('utf-8').substring(0, 500);
-      }
-      const errorMsg = `GPT-SoVITS 合成失败 (status ${response.status}): ${errorDetail}`;
-      Logger.error(`[requestGptSovitsAudio] ${errorMsg}`, 'VoiceService');
-      Logger.error(
-        `[requestGptSovitsAudio] Payload was: ${JSON.stringify(payload)}`,
-        'VoiceService',
-      );
-      throw new HttpException(errorMsg, HttpStatus.BAD_GATEWAY);
-    }
-    const buffer = Buffer.from(response.data);
+    // 非流式模式，直接返回 buffer
     return { buffer, sampleRate };
+  }
+
+  /**
+   * 提交 GPT-SoVITS 异步任务
+   */
+  private async submitGptSovitsAsyncTask(url: string, payload: any): Promise<string> {
+    return await retryWithBackoff(
+      async () => {
+        const response = await axios.post(url, payload, {
+          timeout: 30000,
+          validateStatus: () => true,
+        });
+
+        if (response.status >= 400) {
+          const errorMsg = `提交 GPT-SoVITS 异步任务失败 (status ${response.status}): ${
+            response.data?.message || response.data?.detail || JSON.stringify(response.data)
+          }`;
+          Logger.error(`[submitGptSovitsAsyncTask] ${errorMsg}`, 'VoiceService');
+          const error: any = new HttpException(errorMsg, HttpStatus.BAD_GATEWAY);
+          error.response = response;
+          throw error;
+        }
+
+        const taskId = response.data?.task_id;
+        if (!taskId) {
+          throw new HttpException(
+            'GPT-SoVITS 未返回 task_id',
+            HttpStatus.BAD_GATEWAY,
+          );
+        }
+
+        return taskId;
+      },
+      {
+        onRetry: (error, attempt, delay) => {
+          Logger.warn(
+            `[submitGptSovitsAsyncTask] 提交任务失败，正在重试 (${attempt}/${GPT_SOVITS_MAX_RETRIES})，` +
+              `延迟 ${delay}ms。错误: ${error?.message || error}`,
+            'VoiceService',
+          );
+        },
+      },
+    );
+  }
+
+  /**
+   * 轮询查询 GPT-SoVITS 任务状态
+   */
+  private async pollGptSovitsTaskStatus(taskId: string): Promise<string> {
+    const maxPolls = 60; // 最多轮询60次
+    const pollInterval = 1000; // 每次间隔1秒
+    const taskUrl = this.normalizeGptSovitsUrl(`/task/${taskId}`);
+
+    for (let i = 0; i < maxPolls; i++) {
+      try {
+        const response = await axios.get(taskUrl, { timeout: 10000 });
+        const status = response.data?.status;
+
+        Logger.debug(
+          `[pollGptSovitsTaskStatus] 轮询 ${i + 1}/${maxPolls}，状态: ${status}`,
+          'VoiceService',
+        );
+
+        if (status === 'completed') {
+          // 任务完成，返回音频下载URL
+          const audioUrl = this.normalizeGptSovitsUrl(`/task/${taskId}/audio`);
+          return audioUrl;
+        } else if (status === 'failed') {
+          const errorMsg = response.data?.error || '任务失败';
+          throw new HttpException(
+            `GPT-SoVITS 任务失败: ${errorMsg}`,
+            HttpStatus.BAD_GATEWAY,
+          );
+        }
+
+        // 状态为 pending 或 processing，继续等待
+        await new Promise(resolve => setTimeout(resolve, pollInterval));
+      } catch (error) {
+        if (error instanceof HttpException) {
+          throw error;
+        }
+        Logger.warn(
+          `[pollGptSovitsTaskStatus] 查询任务状态失败: ${error?.message || error}`,
+          'VoiceService',
+        );
+        // 网络错误，继续重试
+        await new Promise(resolve => setTimeout(resolve, pollInterval));
+      }
+    }
+
+    // 超时
+    throw new HttpException(
+      `GPT-SoVITS 任务超时（${maxPolls}秒）`,
+      HttpStatus.GATEWAY_TIMEOUT,
+    );
+  }
+
+  /**
+   * 下载 GPT-SoVITS 生成的音频
+   */
+  private async downloadGptSovitsAudio(audioUrl: string): Promise<Buffer> {
+    return await retryWithBackoff(
+      async () => {
+        const response = await axios.get(audioUrl, {
+          responseType: 'arraybuffer',
+          timeout: 60000,
+          validateStatus: () => true,
+        });
+
+        if (response.status >= 400) {
+          throw new HttpException(
+            `下载 GPT-SoVITS 音频失败 (status ${response.status})`,
+            HttpStatus.BAD_GATEWAY,
+          );
+        }
+
+        return Buffer.from(response.data);
+      },
+      {
+        onRetry: (error, attempt, delay) => {
+          Logger.warn(
+            `[downloadGptSovitsAudio] 下载音频失败，正在重试 (${attempt}/${GPT_SOVITS_MAX_RETRIES})，` +
+              `延迟 ${delay}ms。错误: ${error?.message || error}`,
+            'VoiceService',
+          );
+        },
+      },
+    );
   }
 
   private async deleteVoiceAssociations(voiceId: string) {

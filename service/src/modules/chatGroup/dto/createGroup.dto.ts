@@ -91,4 +91,12 @@ export class CreateGroupDto {
   })
   @IsOptional()
   maxReplyCount?: number;
+
+  @ApiProperty({
+    example: 0,
+    description: '是否开启翻译（0否 1是）',
+    required: false,
+  })
+  @IsOptional()
+  enableTranslation?: number;
 }

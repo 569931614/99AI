@@ -46,6 +46,7 @@ export class ChatGroupService {
       describingMental,
       realTime,
       maxReplyCount,
+      enableTranslation,
     } = body; // 从请求体中提取参数
 
     // 尝试使用从请求体中提供的 modelConfig，否则获取默认配置
@@ -86,6 +87,7 @@ export class ChatGroupService {
       describingMental: describingMental ?? 0, // 是否开启心理动作描述，默认0
       realTime: realTime ?? 0, // 是否开启真实时间，默认0
       maxReplyCount: maxReplyCount ?? 1, // 最多回复条数，默认1
+      enableTranslation: enableTranslation ?? 0, // 是否开启翻译，默认0
     };
     // const params = { title: 'New chat', userId: id };
 
@@ -463,6 +465,7 @@ export class ChatGroupService {
       allowEmoji,
       allowTap,
       maxReplyCount,
+      enableTranslation,
       members,
       backgroundImage,
     } = body;
@@ -509,6 +512,8 @@ export class ChatGroupService {
     typeof allowEmoji !== 'undefined' && (data['allowEmoji'] = allowEmoji ? 1 : 0);
     typeof allowTap !== 'undefined' && (data['allowTap'] = allowTap ? 1 : 0);
     typeof maxReplyCount !== 'undefined' && (data['maxReplyCount'] = maxReplyCount);
+    typeof enableTranslation !== 'undefined' &&
+      (data['enableTranslation'] = enableTranslation ? 1 : 0);
     typeof backgroundImage !== 'undefined' && (data['backgroundImage'] = backgroundImage);
 
     // 处理 members 参数 - 如果传入则完整替换

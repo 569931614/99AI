@@ -641,6 +641,23 @@ export class OpenChatController {
 
       await this.chatService.chatProcess(body as any, fakeReq, mockRes);
 
+      // 记录大模型完整回复
+      this.logger.log(
+        `[chat-process-sync] 大模型完整回复 (userId: ${userId}, appId: ${
+          body.appId || 'N/A'
+        }): ${fullResponse}`,
+      );
+      if (chatId) {
+        this.logger.log(`[chat-process-sync] chatId: ${chatId}`);
+      }
+      if (emotion || psychologicalDesc) {
+        this.logger.log(
+          `[chat-process-sync] 情绪信息 - emotion: ${emotion || 'N/A'}, psychologicalDesc: ${
+            psychologicalDesc || 'N/A'
+          }`,
+        );
+      }
+
       // 返回完整结果
       return {
         success: true,

@@ -538,7 +538,7 @@
     </el-dialog>
 
     <!-- 单独设置默认参数（不走批量调试） -->
-    <el-dialog v-model="paramDialog.visible" title="设置默认参数" width="560px">
+    <el-dialog v-model="paramDialog.visible" title="设置默认参数" width="780px">
       <el-form label-width="100px">
         <el-form-item label="文本">
           <el-input
@@ -548,37 +548,107 @@
             placeholder="可选：保存一个常用的合成默认文本"
           />
         </el-form-item>
-        <div class="flex gap-2">
-          <el-form-item label="语速">
-            <el-input-number
-              v-model="paramDialog.rate"
-              :min="-100"
-              :max="100"
-              :step="0.1"
-              :precision="1"
-            />
-          </el-form-item>
-          <el-form-item label="语调">
-            <el-input-number
-              v-model="paramDialog.pitch"
-              :min="-12"
-              :max="12"
-              :step="0.1"
-              :precision="1"
-            />
-          </el-form-item>
-        </div>
-        <div class="flex gap-2">
-          <el-form-item label="音量">
-            <el-input-number v-model="paramDialog.volume" :min="0" :max="100" />
-          </el-form-item>
-          <el-form-item label="格式">
-            <el-select v-model="paramDialog.format" style="width: 160px">
-              <el-option label="mp3" value="mp3" />
-              <el-option label="wav" value="wav" />
-            </el-select>
-          </el-form-item>
-        </div>
+
+        <!-- DashScope 参数 -->
+        <template v-if="paramDialog.provider !== 'gpt-sovits'">
+          <div class="flex gap-2">
+            <el-form-item label="语速">
+              <el-input-number
+                v-model="paramDialog.rate"
+                :min="-100"
+                :max="100"
+                :step="0.1"
+                :precision="1"
+              />
+            </el-form-item>
+            <el-form-item label="语调">
+              <el-input-number
+                v-model="paramDialog.pitch"
+                :min="-12"
+                :max="12"
+                :step="0.1"
+                :precision="1"
+              />
+            </el-form-item>
+          </div>
+          <div class="flex gap-2">
+            <el-form-item label="音量">
+              <el-input-number v-model="paramDialog.volume" :min="0" :max="100" />
+            </el-form-item>
+            <el-form-item label="格式">
+              <el-select v-model="paramDialog.format" style="width: 160px">
+                <el-option label="mp3" value="mp3" />
+                <el-option label="wav" value="wav" />
+              </el-select>
+            </el-form-item>
+          </div>
+        </template>
+
+        <!-- GPT-SoVITS 参数 -->
+        <template v-else>
+          <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <el-form-item label="文本语言">
+              <el-select v-model="paramDialog.textLanguage">
+                <el-option
+                  v-for="lang in gptSovitsLanguages"
+                  :key="lang"
+                  :label="lang"
+                  :value="lang"
+                />
+              </el-select>
+            </el-form-item>
+            <el-form-item label="Prompt语言">
+              <el-select v-model="paramDialog.promptLanguage">
+                <el-option
+                  v-for="lang in gptSovitsLanguages"
+                  :key="lang"
+                  :label="lang"
+                  :value="lang"
+                />
+              </el-select>
+            </el-form-item>
+            <el-form-item label="文本分割">
+              <el-select v-model="paramDialog.cutPunc">
+                <el-option label="cut0 - 不分割" value="cut0" />
+                <el-option label="cut1 - 每4句" value="cut1" />
+                <el-option label="cut2 - 每50字" value="cut2" />
+                <el-option label="cut3 - 按句号" value="cut3" />
+                <el-option label="cut4 - 按英文句号" value="cut4" />
+                <el-option label="cut5 - 按所有标点" value="cut5" />
+              </el-select>
+            </el-form-item>
+          </div>
+          <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <el-form-item label="Top K">
+              <el-input-number v-model="paramDialog.topK" :min="0" :step="1" />
+            </el-form-item>
+            <el-form-item label="Top P">
+              <el-input-number v-model="paramDialog.topP" :min="0" :max="1" :step="0.1" />
+            </el-form-item>
+            <el-form-item label="Temperature">
+              <el-input-number
+                v-model="paramDialog.temperature"
+                :min="0"
+                :max="2"
+                :step="0.1"
+              />
+            </el-form-item>
+          </div>
+          <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <el-form-item label="Speed">
+              <el-input-number v-model="paramDialog.speed" :min="0.5" :max="2" :step="0.1" />
+            </el-form-item>
+            <el-form-item label="Sample Steps">
+              <el-input-number v-model="paramDialog.sampleSteps" :min="1" :max="128" />
+            </el-form-item>
+            <el-form-item label="格式">
+              <el-select v-model="paramDialog.format" style="width: 160px">
+                <el-option label="mp3" value="mp3" />
+                <el-option label="wav" value="wav" />
+              </el-select>
+            </el-form-item>
+          </div>
+        </template>
       </el-form>
       <template #footer>
         <div class="flex items-center justify-between w-full">
@@ -1464,22 +1534,40 @@
   const paramDialog = reactive<{
     visible: boolean;
     voice_id: string;
+    provider?: string;
     text: string;
     format: 'mp3' | 'wav';
     volume: number;
     rate: number;
     pitch: number;
+    topK?: number;
+    topP?: number;
+    temperature?: number;
+    speed?: number;
+    sampleSteps?: number;
+    textLanguage?: string;
+    promptLanguage?: string;
+    cutPunc?: string;
     url?: string;
     previewing: boolean;
     saving: boolean;
   }>({
     visible: false,
     voice_id: '',
+    provider: undefined,
     text: '',
     format: 'mp3',
     volume: 100,
     rate: 1,
     pitch: 1,
+    topK: undefined,
+    topP: undefined,
+    temperature: undefined,
+    speed: undefined,
+    sampleSteps: undefined,
+    textLanguage: undefined,
+    promptLanguage: undefined,
+    cutPunc: undefined,
     url: undefined,
     previewing: false,
     saving: false,
@@ -1488,6 +1576,7 @@
   async function openSetParams(row: any) {
     paramDialog.visible = true;
     paramDialog.voice_id = row.voice_id || row.id;
+    paramDialog.provider = row.provider || 'dashscope';
     // 读取已保存的参数用于回显
     try {
       const res = await voiceApi.getParams(paramDialog.voice_id);
@@ -1498,6 +1587,15 @@
         if (typeof data.volume === 'number') paramDialog.volume = data.volume;
         if (typeof data.rate === 'number') paramDialog.rate = data.rate;
         if (typeof data.pitch === 'number') paramDialog.pitch = data.pitch;
+        // 回显 GPT-SoVITS 模型参数
+        if (typeof data.topK === 'number') paramDialog.topK = data.topK;
+        if (typeof data.topP === 'number') paramDialog.topP = data.topP;
+        if (typeof data.temperature === 'number') paramDialog.temperature = data.temperature;
+        if (typeof data.speed === 'number') paramDialog.speed = data.speed;
+        if (typeof data.sampleSteps === 'number') paramDialog.sampleSteps = data.sampleSteps;
+        if (typeof data.textLanguage === 'string') paramDialog.textLanguage = data.textLanguage;
+        if (typeof data.promptLanguage === 'string') paramDialog.promptLanguage = data.promptLanguage;
+        if (typeof data.cutPunc === 'string') paramDialog.cutPunc = data.cutPunc;
       }
     } catch {}
   }
@@ -1506,15 +1604,32 @@
     if (!paramDialog.voice_id) return;
     paramDialog.saving = true;
     try {
+      const params: any = {
+        text: paramDialog.text,
+        format: paramDialog.format,
+      };
+
+      // 根据 provider 类型保存不同的参数
+      if (paramDialog.provider === 'gpt-sovits') {
+        // GPT-SoVITS 模型参数
+        if (paramDialog.topK !== undefined) params.topK = paramDialog.topK;
+        if (paramDialog.topP !== undefined) params.topP = paramDialog.topP;
+        if (paramDialog.temperature !== undefined) params.temperature = paramDialog.temperature;
+        if (paramDialog.speed !== undefined) params.speed = paramDialog.speed;
+        if (paramDialog.sampleSteps !== undefined) params.sampleSteps = paramDialog.sampleSteps;
+        if (paramDialog.textLanguage) params.textLanguage = paramDialog.textLanguage;
+        if (paramDialog.promptLanguage) params.promptLanguage = paramDialog.promptLanguage;
+        if (paramDialog.cutPunc) params.cutPunc = paramDialog.cutPunc;
+      } else {
+        // DashScope 参数
+        params.volume = paramDialog.volume;
+        params.rate = paramDialog.rate;
+        params.pitch = paramDialog.pitch;
+      }
+
       await voiceApi.setParams({
         voice_id: paramDialog.voice_id,
-        params: {
-          text: paramDialog.text,
-          format: paramDialog.format,
-          volume: paramDialog.volume,
-          rate: paramDialog.rate,
-          pitch: paramDialog.pitch,
-        },
+        params,
       });
       ElMessage.success('已保存默认参数');
       paramDialog.visible = false;

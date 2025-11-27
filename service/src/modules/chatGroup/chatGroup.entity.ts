@@ -110,6 +110,9 @@ export class ChatGroupEntity extends BaseEntity {
   @Column({ comment: '最多回复条数（1-5）', type: 'int', default: 1 })
   maxReplyCount: number;
 
+  @Column({ comment: '是否开启翻译：0-否，1-是', type: 'tinyint', default: 0 })
+  enableTranslation: number;
+
   @Column({ comment: '群组头像URL', nullable: true })
   groupAvatar: string;
 

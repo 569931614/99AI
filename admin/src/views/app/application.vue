@@ -62,6 +62,14 @@ meta:
     size: 10,
   });
 
+  type GenderValue = 0 | 1 | 2;
+
+  const genderOptions: Array<{ label: string; value: GenderValue }> = [
+    { label: '未设置', value: 0 },
+    { label: '男性', value: 1 },
+    { label: '女性', value: 2 },
+  ];
+
   const formPackageRef = ref<FormInstance>();
   const activeAppCatId = ref(0);
   const isUserApp = ref(false);
@@ -94,7 +102,54 @@ meta:
     knowledgeBaseIds: '',
     dialogueExamples: '',
     openingRemark: '',
+    gender: 0 as GenderValue,
   });
+
+  const genderSaving = reactive<Record<number, boolean>>({});
+
+  function normalizeGender(value: any): GenderValue {
+    const parsed = Number(value);
+    return parsed === 1 || parsed === 2 ? (parsed as GenderValue) : 0;
+  }
+
+  function handleGenderDropdown(row: any, visible: boolean) {
+    if (visible && row) {
+      row.__genderSnapshot = normalizeGender(row.gender);
+    }
+  }
+
+  async function handleGenderChange(row: any, value: number) {
+    if (!row || !row.id) return;
+    const next = normalizeGender(value);
+    const previous = normalizeGender(row.__genderSnapshot ?? next);
+    if (next === previous) {
+      row.gender = next;
+      return;
+    }
+    genderSaving[row.id] = true;
+    row.gender = next;
+    try {
+      const payload: Record<string, any> = {
+        id: row.id,
+        gender: next,
+        name: row.name,
+        catId: Array.isArray(row.catId) ? row.catId.join(',') : String(row.catId || ''),
+      };
+      if (!payload.name || !payload.catId) {
+        throw new Error('缺少必要的角色信息，无法更新性别');
+      }
+      await ApiApp.updateApp(payload);
+      row.__genderSnapshot = next;
+      ElMessage.success('角色性别已更新');
+    } catch (error) {
+      console.error('更新角色性别失败:', error);
+      row.gender = previous;
+      row.__genderSnapshot = previous;
+      ElMessage.error('更新角色性别失败，请稍后重试');
+    } finally {
+      genderSaving[row.id] = false;
+    }
+  }
 
   // 添加特殊模型类型
   const specialModelType = ref('none'); // none, gpts, flowith
@@ -118,7 +173,7 @@ meta:
     preset: [{ required: false, message: '请填写角色设定', trigger: 'blur' }],
   });
 
-  const tableData = ref([]);
+  const tableData = ref<any[]>([]);
 
   interface CatItem {
     id: number;
@@ -330,7 +385,11 @@ meta:
       const { rows, count } = res.data;
       loading.value = false;
       total.value = count;
-      tableData.value = rows.sort(
+      const normalizedRows = (Array.isArray(rows) ? rows : []).map((item: any) => ({
+        ...item,
+        gender: normalizeGender(item.gender),
+      }));
+      tableData.value = normalizedRows.sort(
         (a: { order: number }, b: { order: number }) => b.order - a.order,
       );
     } catch (error) {
@@ -443,6 +502,7 @@ meta:
         backgroundImg,
         prompt,
         voiceId,
+        gender: normalizeGender(row.gender),
         enableRealTime: enableRealTime ?? false,
         enableLongTermMemory: enableLongTermMemory ?? false,
         enableKnowledgeBase: enableKnowledgeBase ?? false,
@@ -767,6 +827,7 @@ meta:
             knowledgeBaseIds: finalKnowledgeBaseIds,
             id: activeAppCatId.value,
           };
+          params.gender = normalizeGender(params.gender);
           ensureDefaults(params);
           params.catId = (Array.isArray(params.catId) ? params.catId : [params.catId]).join(
             ',',
@@ -788,6 +849,7 @@ meta:
             dialogueExamples: finalDialogueExamples,
             knowledgeBaseIds: finalKnowledgeBaseIds,
           };
+          newApp.gender = normalizeGender(newApp.gender);
           ensureDefaults(newApp);
           newApp.catId = (Array.isArray(newApp.catId) ? newApp.catId : [newApp.catId]).join(
             ',',
@@ -1147,6 +1209,29 @@ meta:
             </el-tag>
           </template>
         </el-table-column>
+        <el-table-column prop="gender" label="性别" width="160">
+          <template #default="scope">
+            <el-select
+              v-model="scope.row.gender"
+              size="small"
+              style="width: 120px"
+              :loading="genderSaving[scope.row.id]"
+              :disabled="
+                !(scope.row.role === 'system' || scope.row.public) || genderSaving[scope.row.id]
+              "
+              placeholder="请选择"
+              @visible-change="(visible) => handleGenderDropdown(scope.row, visible)"
+              @change="(value) => handleGenderChange(scope.row, value)"
+            >
+              <el-option
+                v-for="option in genderOptions"
+                :key="option.value"
+                :label="option.label"
+                :value="option.value"
+              />
+            </el-select>
+          </template>
+        </el-table-column>
         <!-- <el-table-column prop="public" label="是否共享" width="100">
           <template #default="scope">
             <el-tag :type="scope.row.public ? 'success' : 'info'">
@@ -1345,6 +1430,23 @@ meta:
                     placeholder="请填写App介绍信息..."
                     :rows="3"
                   />
+                </el-form-item>
+              </el-col>
+              <el-col :span="12">
+                <el-form-item label="角色性别" prop="gender">
+                  <el-radio-group v-model="formPackage.gender" size="small">
+                    <el-radio-button
+                      v-for="option in genderOptions"
+                      :key="option.value"
+                      :label="option.value"
+                    >
+                      {{ option.label }}
+                    </el-radio-button>
+                  </el-radio-group>
+                  <div class="form-item-tip">
+                    <el-icon><InfoFilled /></el-icon>
+                    性别信息主要用于语音风格和角色展示，未设置则按中性处理
+                  </div>
                 </el-form-item>
               </el-col>
               <el-col :span="12">

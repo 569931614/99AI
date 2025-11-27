@@ -1,0 +1,8 @@
+
+/**
+ * 由 Fantastic-admin 提供技术支持
+ * Powered by Fantastic-admin
+ * https://fantastic-admin.github.io
+ */
+
+import e from"./HDropdown-3XJFCykk.js";import{_ as o}from"./HTabList.vue_vue_type_script_setup_true_lang-BqYeFs_3.js";import{d as t,a as n,s as i,e as r,w as a,f as s,_ as c,i as l}from"./index-CrnlGNw_.js";const m=t({name:"ColorScheme",__name:"index",setup(t){const m=n();function d(e){var o;const{startViewTransition:t}=(n=()=>{m.currentColorScheme&&m.setColorScheme("dark"===m.currentColorScheme?"light":"dark")},{startViewTransition:function(){if(document.startViewTransition&&!window.matchMedia("(prefers-reduced-motion: reduce)").matches)return document.startViewTransition(async()=>{await Promise.resolve(n())});n()}});var n;null==(o=t())||o.ready.then(()=>{const o=e.clientX,t=e.clientY,n=[`circle(0px at ${o}px ${t}px)`,`circle(${Math.hypot(Math.max(o,innerWidth-o),Math.max(t,innerHeight-t))}px at ${o}px ${t}px)`];document.documentElement.animate({clipPath:"dark"!==m.settings.app.colorScheme?n:n.reverse()},{duration:300,easing:"ease-out",pseudoElement:"dark"!==m.settings.app.colorScheme?"::view-transition-new(root)":"::view-transition-old(root)"})})}return(t,n)=>{const p=c,u=o,h=e;return r(),i(h,{class:"flex-center cursor-pointer px-2 py-1"},{dropdown:a(()=>[s(u,{modelValue:l(m).settings.app.colorScheme,"onUpdate:modelValue":n[0]||(n[0]=e=>l(m).settings.app.colorScheme=e),options:[{icon:"i-ri:sun-line",label:"",value:"light"},{icon:"i-ri:moon-line",label:"",value:"dark"},{icon:"i-codicon:color-mode",label:"",value:""}],class:"m-3"},null,8,["modelValue"])]),default:a(()=>[s(p,{name:{"":"i-codicon:color-mode",light:"i-ri:sun-line",dark:"i-ri:moon-line"}[l(m).settings.app.colorScheme],onClick:d},null,8,["name"])]),_:1})}}});export{m as _};

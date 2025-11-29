@@ -176,7 +176,7 @@ export class AppService {
   }
 
   async appCatsList(query: QuerCatsDto, req?: Request) {
-    const { page = 1, size = 10, name, status } = query;
+    const { page = 1, size = 10, name, status, maobingBaseUrl } = query as any;
     const pageNum = Math.max(1, Number(page) || 1);
     const sizeNum = Math.max(1, Number(size) || 10);
     const where: any = {};
@@ -207,6 +207,11 @@ export class AppService {
         // 只过滤掉设置了hideFromNonMember的分类，不考虑isMember属性
         return cat.hideFromNonMember !== 1;
       });
+    }
+
+    // 如果请求来自cat_ai小程序（通过maobingBaseUrl参数识别），过滤掉"自创角色"分类
+    if (maobingBaseUrl) {
+      filteredRows = filteredRows.filter(cat => cat.name !== '自创角色');
     }
 
     // 查出所有分类下对应的App数量

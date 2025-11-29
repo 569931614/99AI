@@ -6,7 +6,6 @@ import axios from 'axios';
  */
 export class MaobingAuthUtil {
   private static readonly logger = new Logger('MaobingAuth');
-  private static readonly DEFAULT_MAOBING_API_URL = 'https://maobingai.lnkj5.com/api/user/index';
 
   // Token缓存，避免频繁请求
   // 格式：{ token: { userId: number, expireTime: number } }
@@ -37,9 +36,12 @@ export class MaobingAuthUtil {
     }
 
     // 构建API URL（支持自定义域名）
-    const apiUrl = maobingBaseUrl
-      ? `${maobingBaseUrl}/api/user/index`
-      : this.DEFAULT_MAOBING_API_URL;
+    const baseUrl = maobingBaseUrl || process.env.MAOBING_BASE_URL;
+    if (!baseUrl) {
+      this.logger.error('MAOBING_BASE_URL 未配置');
+      return null;
+    }
+    const apiUrl = `${baseUrl}/api/user/index`;
 
     // 缓存无效，向Maobing平台验证
     try {

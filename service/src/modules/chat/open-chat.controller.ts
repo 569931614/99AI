@@ -1,3 +1,5 @@
+import { MaobingAuthUtil } from '@/common/utils/maobing-auth.util';
+import { MaobingCookieUtil } from '@/common/utils/maobing-cookie.util';
 import {
   Body,
   Controller,
@@ -13,8 +15,6 @@ import {
 import { ApiBody, ApiOperation, ApiQuery, ApiTags } from '@nestjs/swagger';
 import axios from 'axios';
 import { Request, Response } from 'express';
-import { MaobingAuthUtil } from '@/common/utils/maobing-auth.util';
-import { MaobingCookieUtil } from '@/common/utils/maobing-cookie.util';
 import { AffectionService } from '../affection/affection.service';
 import { VoiceService } from '../voice/voice.service';
 import { ChatService } from './chat.service';
@@ -60,7 +60,7 @@ export class OpenChatController {
         },
         maobingBaseUrl: {
           type: 'string',
-          description: 'Maobing基础域名（可选，默认 https://maobingai.lnkj5.com ）',
+          description: 'Maobing基础域名（可选，默认 https://admin.maobingai.com ）',
         },
         userId: { type: 'number', description: '用户ID（可选，优先使用token验证获取的userId）' },
         prompt: { type: 'string', description: '用户提问内容；若传 audioUrl 将自动识别为文本' },
@@ -494,6 +494,10 @@ export class OpenChatController {
         fileUrl: { type: 'string', description: '文件URL（可选）' },
         appId: { type: 'number', description: '角色ID（可选）' },
         model: { type: 'string', description: '模型标识（可选）' },
+        generateTts: {
+          type: 'boolean',
+          description: '是否生成TTS语音（默认true，会进行情绪识别并生成语音；设为false可跳过）',
+        },
       },
       required: ['prompt'],
     },
@@ -501,7 +505,7 @@ export class OpenChatController {
   async chatProcessSync(@Body() body: any, @Req() _req: Request) {
     let chargeReceipt: CookieChargeReceipt | null = null;
     try {
-      const { token, userId: originalUserId, maobingBaseUrl } = body || {};
+      const { token, userId: originalUserId, maobingBaseUrl, generateTts } = body || {};
 
       // 如果传了userId，直接使用，不校验token
       let userId = originalUserId ? Number(originalUserId) : null;
@@ -656,6 +660,39 @@ export class OpenChatController {
             psychologicalDesc || 'N/A'
           }`,
         );
+      }
+
+      // 默认生成TTS（除非明确设置 generateTts=false）
+      const shouldGenerateTts = generateTts !== false; // 默认为 true
+
+      // 如果需要生成TTS且尚未生成语音，则主动调用TTS生成（包含情绪识别）
+      if (shouldGenerateTts && !audioUrl && fullResponse && chatId) {
+        this.logger.log(
+          `[chat-process-sync] 开始情绪识别和TTS生成（generateTts=${generateTts ?? 'default(true)'}）`,
+        );
+        try {
+          const ttsResult = await this.chatService.generateTtsWithEmotion({
+            text: fullResponse,
+            chatId,
+            appId: body.appId || null,
+            userId,
+          });
+          if (ttsResult) {
+            audioUrl = ttsResult.ttsUrl;
+            voiceDuration = ttsResult.duration;
+            emotion = ttsResult.emotion || emotion;
+            this.logger.log(
+              `[chat-process-sync] TTS生成成功 - emotion: ${emotion}, duration: ${voiceDuration}s`,
+            );
+          }
+        } catch (ttsError: any) {
+          this.logger.warn(
+            `[chat-process-sync] TTS生成失败: ${ttsError?.message || ttsError}`,
+          );
+          // TTS失败不影响主流程，继续返回文本结果
+        }
+      } else if (!shouldGenerateTts) {
+        this.logger.log(`[chat-process-sync] generateTts=false，跳过TTS生成`);
       }
 
       // 返回完整结果

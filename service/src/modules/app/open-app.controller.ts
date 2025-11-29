@@ -207,7 +207,22 @@ export class OpenAppController {
     required: false,
     description: '状态过滤：1 启用，0 禁用',
   })
-  async cats(@Query() query: { page?: number; size?: number; name?: string; status?: number }) {
+  @ApiQuery({
+    name: 'maobingBaseUrl',
+    type: String,
+    required: false,
+    description: 'Maobing平台基础URL（可选，用于识别来源）',
+  })
+  async cats(
+    @Query()
+    query: {
+      page?: number;
+      size?: number;
+      name?: string;
+      status?: number;
+      maobingBaseUrl?: string;
+    },
+  ) {
     return this.appService.appCatsList(query as any);
   }
 

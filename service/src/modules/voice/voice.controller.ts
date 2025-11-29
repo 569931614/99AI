@@ -123,6 +123,7 @@ export class VoiceController {
   async list(
     @Query()
     query: {
+      name?: string;
       prefix?: string;
       page_index?: number;
       page_size?: number;

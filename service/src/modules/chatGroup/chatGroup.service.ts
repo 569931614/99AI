@@ -238,14 +238,24 @@ export class ChatGroupService {
   }
 
   /* 查询单聊会话组列表 */
-  async querySingleChats(req: Request, keyword?: string) {
+  async querySingleChats(req: Request, keyword?: string, page?: number, size?: number) {
     try {
       const { id } = req.user;
       const params = { userId: id, isDelete: false, isGroupChat: false };
-      const res = await this.chatGroupEntity.find({
+
+      // 构建查询选项
+      const queryOptions: any = {
         where: params,
         order: { isSticky: 'DESC', updatedAt: 'DESC' },
-      });
+      };
+
+      // 如果提供了分页参数，添加分页
+      if (page !== undefined && size !== undefined && size > 0) {
+        queryOptions.skip = (page - 1) * size;
+        queryOptions.take = size;
+      }
+
+      const res = await this.chatGroupEntity.find(queryOptions);
 
       const appIds = res.filter(t => t.appId).map(t => t.appId);
       let mapped = res as any[];
@@ -342,14 +352,24 @@ export class ChatGroupService {
   }
 
   /* 查询群聊会话组列表 */
-  async queryGroupChats(req: Request, keyword?: string) {
+  async queryGroupChats(req: Request, keyword?: string, page?: number, size?: number) {
     try {
       const { id } = req.user;
       const params = { userId: id, isDelete: false, isGroupChat: true };
-      const res = await this.chatGroupEntity.find({
+
+      // 构建查询选项
+      const queryOptions: any = {
         where: params,
         order: { isSticky: 'DESC', updatedAt: 'DESC' },
-      });
+      };
+
+      // 如果提供了分页参数，添加分页
+      if (page !== undefined && size !== undefined && size > 0) {
+        queryOptions.skip = (page - 1) * size;
+        queryOptions.take = size;
+      }
+
+      const res = await this.chatGroupEntity.find(queryOptions);
 
       const appIds = res.filter(t => t.appId).map(t => t.appId);
       let mapped = res as any[];

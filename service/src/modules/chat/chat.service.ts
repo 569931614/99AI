@@ -639,87 +639,57 @@ export class ChatService {
     req: Request;
   }): Promise<{ ttsUrl: string; duration: number } | null> {
     const { text, chatId, appId, req } = options;
+
+    Logger.log(
+      `[generateVoiceReplyForMessage] 🎤 开始生成语音回复 - appId=${appId}, chatId=${chatId}，复用 ttsProcess 逻辑`,
+      'ChatService',
+    );
+
+    // 构造 ttsProcess 需要的参数
+    const body = {
+      chatId,
+      prompt: text,
+      appId,
+    };
+
+    // 构造一个模拟的 res 对象来捕获结果
+    let ttsResult: { ttsUrl?: string; duration?: number } | null = null;
+
+    const mockRes: any = {
+      status: () => mockRes,
+      send: (data: any) => {
+        if (data?.ttsUrl) {
+          ttsResult = {
+            ttsUrl: data.ttsUrl,
+            duration: data.duration,
+          };
+        }
+        return mockRes;
+      },
+    };
+
     try {
-      const textToSpeak = this.cleanTextForTTS(text);
-      if (!textToSpeak) {
-        return null;
-      }
-      let selectedVoiceId: string | null = null;
-      let finalEmotion: string | null = null;
+      // 直接调用 ttsProcess，复用其完整的情绪识别逻辑
+      await this.ttsProcess(body, req, mockRes);
 
-      // 统一获取情绪配置
-      const { options: emotionOptions, pairs: emotionPairs } = await this.getAppEmotionConfig(
-        appId,
-      );
-      const psychologicalDesc = this.extractPsychologicalDescription(text);
-
-      if (emotionOptions.length) {
-        const chosen = await this.chooseEmotionFromOptions(psychologicalDesc, text, emotionOptions);
-        if (chosen?.emotion) {
-          finalEmotion = chosen.emotion;
-          selectedVoiceId =
-            emotionPairs.find(pair => pair.emotion === finalEmotion)?.voiceId || null;
-        }
-        if (!selectedVoiceId) {
-          finalEmotion = await this.getAppDefaultEmotion(appId, emotionOptions);
-          selectedVoiceId =
-            emotionPairs.find(pair => pair.emotion === finalEmotion)?.voiceId || null;
-        }
-      }
-
-      if (!selectedVoiceId && appId) {
-        const defaultVoice = await this.appVoiceRepo.findOne({
-          where: { appId: Number(appId), isDefault: 1 },
-        });
-        selectedVoiceId = defaultVoice?.voiceId || null;
-      }
-
-      if (!selectedVoiceId) {
-        this.logDebug('[TTSService] 未找到可用音色，跳过语音回复', 'ChatService');
-        return null;
-      }
-
-      const previewPayload: any = { voice_id: selectedVoiceId, text: textToSpeak };
-      const ttsParams = this.mapEmotionToTtsParams(finalEmotion);
-      if (ttsParams.rate !== undefined) previewPayload.rate = ttsParams.rate;
-      if (ttsParams.pitch !== undefined) previewPayload.pitch = ttsParams.pitch;
-      if (ttsParams.volume !== undefined) previewPayload.volume = ttsParams.volume;
-
-      const { url, duration } = await this.voiceService.preview(previewPayload);
-      const durationInt = Math.round(duration);
-
-      try {
-        const detailKeyInfo = await this.modelsService.getCurrentModelKeyInfo('tts-1');
-        if (detailKeyInfo) {
-          const { deduct, deductType } = detailKeyInfo;
-          await this.userBalanceService.validateBalance(req, deductType, deduct);
-          await this.userBalanceService.deductFromBalance(
-            req.user.id,
-            deductType,
-            deduct,
-            0,
-            req.user.role,
-          );
-        } else {
-          Logger.warn('[TTSService] 未找到tts-1模型配置，跳过扣费', 'ChatService');
-        }
-      } catch (chargeError: any) {
-        Logger.warn(
-          `[TTSService] 扣费失败或配置缺失，已跳过扣费: ${chargeError?.message || chargeError}`,
+      if (ttsResult?.ttsUrl) {
+        Logger.log(
+          `[generateVoiceReplyForMessage] ✓ TTS生成成功 - url=${ttsResult.ttsUrl}, duration=${ttsResult.duration}s`,
           'ChatService',
         );
+        return {
+          ttsUrl: ttsResult.ttsUrl,
+          duration: ttsResult.duration || 0,
+        };
+      } else {
+        Logger.warn('[generateVoiceReplyForMessage] ttsProcess 未返回有效结果', 'ChatService');
+        return null;
       }
-
-      if (chatId) {
-        await this.chatLogService.updateChatLog(chatId, {
-          ttsUrl: url,
-          ttsDuration: durationInt,
-        });
-      }
-
-      return { ttsUrl: url, duration: durationInt };
     } catch (error: any) {
-      Logger.warn(`[TTSService] 自动语音生成失败: ${error?.message || error}`, 'ChatService');
+      Logger.warn(
+        `[generateVoiceReplyForMessage] TTS生成失败: ${error?.message || error}`,
+        'ChatService',
+      );
       return null;
     }
   }
@@ -877,11 +847,11 @@ export class ChatService {
         ? `心理描述：${psychologicalDesc}\n对话内容：${text}`
         : text;
 
-      this.logDebug(
-        `[AI情绪识别] 开始分析 - 文本: ${text.substring(0, 50)}..., 候选数: ${options.length}`,
+      Logger.log(
+        `[AI情绪识别] 📝 开始分析 - 文本: ${text.substring(0, 50)}..., 候选数: ${options.length}`,
         'ChatService',
       );
-      this.logDebug(`[AI情绪识别] 候选情绪: ${options.join(' | ')}`, 'ChatService');
+      Logger.log(`[AI情绪识别] 候选情绪: ${options.join(' | ')}`, 'ChatService');
 
       const numberedOptions = options.map((opt, idx) => `${idx + 1}. ${opt}`).join('\n');
       const prompt = `你是一个专业的语音情绪分析专家。请分析角色说话时的语气情绪，从给定的候选情绪中选择最合适的音色。
@@ -941,7 +911,7 @@ ${numberedOptions}
       );
 
       const result = response.data?.output?.text?.trim() || '';
-      this.logDebug(`[AI情绪识别] AI原始返回: "${result}"`, 'ChatService');
+      Logger.log(`[AI情绪识别] 🤖 AI原始返回: "${result}"`, 'ChatService');
 
       // 检查是否为"无合适"
       if (
@@ -952,7 +922,7 @@ ${numberedOptions}
         result.toLowerCase().includes('none') ||
         result.toLowerCase().includes('no match')
       ) {
-        this.logDebug(`[AI情绪识别] ⚠ AI判断候选中无合适情绪，将使用默认音色`, 'ChatService');
+        Logger.log(`[AI情绪识别] ⚠ AI判断候选中无合适情绪，将使用默认音色`, 'ChatService');
         return null;
       }
 
@@ -962,7 +932,7 @@ ${numberedOptions}
         const index = parseInt(numberMatch[1]) - 1;
         if (index >= 0 && index < options.length) {
           const matchedEmotion = options[index];
-          this.logDebug(`[AI情绪识别] ✓ 通过编号匹配成功: ${matchedEmotion}`, 'ChatService');
+          Logger.log(`[AI情绪识别] ✓ 通过编号匹配成功: ${matchedEmotion}`, 'ChatService');
           return matchedEmotion;
         }
       }
@@ -970,7 +940,7 @@ ${numberedOptions}
       // 尝试直接匹配名称
       for (const opt of options) {
         if (result.includes(opt)) {
-          this.logDebug(`[AI情绪识别] ✓ 通过名称匹配成功: ${opt}`, 'ChatService');
+          Logger.log(`[AI情绪识别] ✓ 通过名称匹配成功: ${opt}`, 'ChatService');
           return opt;
         }
       }
@@ -1074,14 +1044,20 @@ ${numberedOptions}
       return null;
     }
 
-    this.logDebug(`[情绪选择] 开始AI识别 - 候选数: ${options.length}`, 'ChatService');
+    Logger.log(
+      `[情绪选择] 🤖 开始AI识别 - 候选数: ${options.length}, 候选: [${options.join(', ')}]`,
+      'ChatService',
+    );
+    if (psychologicalDesc) {
+      Logger.log(`[情绪选择] 心理描述: ${psychologicalDesc}`, 'ChatService');
+    }
 
     // 使用AI识别
     try {
       const aiEmotion = await this.detectEmotionByAI(fullText, options, psychologicalDesc);
 
       if (aiEmotion && options.includes(aiEmotion)) {
-        this.logDebug(`[情绪选择] ✓ AI识别成功: ${aiEmotion}`, 'ChatService');
+        Logger.log(`[情绪选择] ✓ AI识别成功: ${aiEmotion}`, 'ChatService');
         return { emotion: aiEmotion, method: 'ai' };
       } else if (aiEmotion) {
         Logger.warn(
@@ -1090,7 +1066,7 @@ ${numberedOptions}
         );
         return null;
       } else {
-        this.logDebug(`[情绪选择] ⚠ AI判断候选中无合适情绪，将使用默认音色`, 'ChatService');
+        Logger.log(`[情绪选择] ⚠ AI判断候选中无合适情绪，将使用默认音色`, 'ChatService');
         return null;
       }
     } catch (error: any) {
@@ -3626,6 +3602,81 @@ ${setSystemMessage}
     };
   }
 
+  /**
+   * 公开方法：为 chat-process-sync 生成带情绪识别的TTS
+   * 直接复用 ttsProcess 的核心逻辑
+   * @param options 包含 text, chatId, appId, userId
+   * @returns { ttsUrl, duration, emotion } 或 null
+   */
+  async generateTtsWithEmotion(options: {
+    text: string;
+    chatId: number;
+    appId: number | null;
+    userId: number;
+  }): Promise<{ ttsUrl: string; duration: number; emotion: string | null } | null> {
+    const { text, chatId, appId, userId } = options;
+
+    this.logDebug(
+      `[generateTtsWithEmotion] 开始处理: text=${text.substring(0, 50)}..., chatId=${chatId}, appId=${appId}`,
+      'TTSService',
+    );
+
+    // 构造 ttsProcess 需要的参数
+    const body = {
+      chatId,
+      prompt: text,
+      appId,
+    };
+
+    // 构造伪造的 req 对象
+    const fakeReq: any = {
+      user: { id: userId, role: 'visitor' },
+    };
+
+    // 构造一个模拟的 res 对象来捕获结果
+    let ttsResult: { ttsUrl?: string; duration?: number } | null = null;
+    let capturedEmotion: string | null = null;
+
+    const mockRes: any = {
+      status: () => mockRes,
+      send: (data: any) => {
+        if (data?.ttsUrl) {
+          ttsResult = {
+            ttsUrl: data.ttsUrl,
+            duration: data.duration,
+          };
+        }
+        return mockRes;
+      },
+    };
+
+    try {
+      // 直接调用 ttsProcess，复用其完整的情绪识别逻辑
+      await this.ttsProcess(body, fakeReq, mockRes);
+
+      if (ttsResult?.ttsUrl) {
+        this.logDebug(
+          `[generateTtsWithEmotion] TTS生成成功 - url=${ttsResult.ttsUrl}, duration=${ttsResult.duration}s`,
+          'TTSService',
+        );
+        return {
+          ttsUrl: ttsResult.ttsUrl,
+          duration: ttsResult.duration || 0,
+          emotion: capturedEmotion,
+        };
+      } else {
+        Logger.warn('[generateTtsWithEmotion] ttsProcess 未返回有效结果', 'TTSService');
+        return null;
+      }
+    } catch (error: any) {
+      Logger.error(
+        `[generateTtsWithEmotion] TTS生成失败: ${error?.message || error}`,
+        'TTSService',
+      );
+      return null;
+    }
+  }
+
   async ttsProcess(body: any, req: any, res?: any) {
     const { chatId, prompt, emotion, appId: bodyAppId } = body;
 
@@ -3657,6 +3708,8 @@ ${setSystemMessage}
     const doTtsWithVoice = async (
       voiceId: string,
       params?: { rate?: number; pitch?: number; volume?: number },
+      emotion?: string,
+      source?: string,
     ) => {
       // 使用移除括号后的文本进行TTS
       const previewPayload: any = { voice_id: voiceId, text: textToSpeak };
@@ -3665,6 +3718,15 @@ ${setSystemMessage}
         if (params.pitch !== undefined) previewPayload.pitch = params.pitch;
         if (params.volume !== undefined) previewPayload.volume = params.volume;
       }
+
+      // 记录使用的情绪和音色信息
+      Logger.log(
+        `[TTSService] 🎵 语音合成 - 情绪: ${emotion || 'N/A'}, 音色ID: ${voiceId}, 来源: ${
+          source || 'unknown'
+        }, 参数: ${JSON.stringify(params || {})}`,
+        'TTSService',
+      );
+
       const { url, duration } = await this.voiceService.preview(previewPayload);
       // 将时长四舍五入为整数（秒）
       const durationInt = Math.round(duration);
@@ -3704,82 +3766,83 @@ ${setSystemMessage}
 
       // 统一获取情绪配置
       const { options, pairs } = await this.getAppEmotionConfig(appId);
-      try {
-        this.logDebug(
-          `应用情绪选项(${appId ?? 'null'}): ${options.join(', ') || '[]'}`,
-          'TTSService',
-        );
-        this.logDebug(
-          `应用情绪-音色对(${appId ?? 'null'}): ${
-            pairs.map(p => p.emotion + '=>' + p.voiceId).join(', ') || '[]'
-          }`,
-          'TTSService',
-        );
-      } catch {}
 
-      // 使用AI从选项中选择情绪
+      // 获取角色默认音色，并将其作为"日常"情绪加入到选项和映射中
+      let defaultVoiceId: string | null = null;
+      if (appId) {
+        try {
+          const defaultVoiceMap = await this.appVoiceRepo.findOne({
+            where: { appId, isDefault: 1 },
+          });
+          defaultVoiceId = defaultVoiceMap?.voiceId || null;
+          if (defaultVoiceId && !pairs.find(p => p.emotion === '日常')) {
+            // 将默认音色作为"日常"情绪加入
+            options.push('日常');
+            pairs.push({ emotion: '日常', voiceId: defaultVoiceId });
+            this.logDebug(
+              `[TTSService] 已将角色默认音色(${defaultVoiceId})作为"日常"情绪加入候选`,
+              'TTSService',
+            );
+          }
+        } catch (e: any) {
+          Logger.warn(`[TTSService] 获取默认音色失败: ${e?.message}`, 'TTSService');
+        }
+      }
+
+      // 输出情绪配置信息（使用 Logger.log 确保在生产环境也能看到）
+      Logger.log(
+        `[TTSService] 应用情绪选项(appId=${appId ?? 'null'}): ${options.join(', ') || '无'}`,
+        'TTSService',
+      );
+      Logger.log(
+        `[TTSService] 应用情绪-音色对(appId=${appId ?? 'null'}): ${
+          pairs.map(p => `${p.emotion}=>${p.voiceId}`).join(', ') || '无'
+        }`,
+        'TTSService',
+      );
+
+      // 使用AI从选项中选择情绪（包含"日常"选项）
       let chosen = await this.chooseEmotionFromOptions(psychologicalDesc, prompt, options);
       if (!chosen) {
-        const fallback = await this.getAppDefaultEmotion(appId, options);
+        // AI未识别到合适情绪，使用应用默认情绪（优先"日常"）
+        const fallback = options.includes('日常')
+          ? '日常'
+          : await this.getAppDefaultEmotion(appId, options);
         chosen = { emotion: fallback, method: 'default' };
-        this.logDebug(`AI未识别到合适情绪，使用应用默认情绪: ${fallback}`, 'TTSService');
+        Logger.log(
+          `[TTSService] AI未识别到合适情绪，使用应用默认情绪: ${fallback}`,
+          'TTSService',
+        );
       }
 
       const finalEmotion = chosen.emotion;
-      try {
-        this.logDebug(
-          `最终情绪: ${finalEmotion}，识别方法: ${chosen.method || 'unknown'}`,
-          'TTSService',
-        );
-      } catch {}
+      Logger.log(
+        `[TTSService] 🎭 最终情绪: ${finalEmotion}，识别方法: ${chosen.method || 'unknown'}`,
+        'TTSService',
+      );
 
       if (finalEmotion) {
-        // 直接从 app_emotion_voices 的对中找 voiceId
+        // 从情绪-音色映射中查找 voiceId（包含"日常"映射）
         const mappedVoice = pairs.find(p => p.emotion === finalEmotion)?.voiceId || null;
         if (mappedVoice) {
-          this.logDebug(
-            `命中情绪映射: emotion=${finalEmotion}, voice=${mappedVoice} (appId=${
+          Logger.log(
+            `[TTSService] ✓ 命中情绪映射: emotion=${finalEmotion}, voice=${mappedVoice} (appId=${
               appId ?? 'global'
             })`,
             'TTSService',
           );
           const ttsParams = this.mapEmotionToTtsParams(finalEmotion);
-          try {
-            this.logDebug(`情绪合成参数: ${JSON.stringify(ttsParams)}`, 'TTSService');
-          } catch {}
-          return await doTtsWithVoice(mappedVoice, ttsParams);
+          Logger.log(
+            `[TTSService] 情绪合成参数: ${JSON.stringify(ttsParams)}`,
+            'TTSService',
+          );
+          const source = finalEmotion === '日常' ? '日常音色(默认)' : '情绪映射';
+          return await doTtsWithVoice(mappedVoice, ttsParams, finalEmotion, source);
         }
-        this.logDebug(
-          `未找到情绪映射: emotion=${finalEmotion}, appId=${appId ?? 'null'}，尝试应用默认音色`,
+        Logger.warn(
+          `[TTSService] ✗ 未找到情绪映射: emotion=${finalEmotion}, appId=${appId ?? 'null'}`,
           'TTSService',
         );
-      }
-
-      // 2) 若未命中情绪映射，则回退到应用绑定的默认音色
-      if (appId) {
-        try {
-          const map = await this.appVoiceRepo.findOne({ where: { appId, isDefault: 1 } });
-          const voiceId = map?.voiceId;
-          if (voiceId) {
-            this.logDebug(
-              `检测到应用(${appId})绑定默认音色: ${voiceId}，使用角色音色进行TTS`,
-              'TTSService',
-            );
-            const ttsParams = this.mapEmotionToTtsParams(finalEmotion);
-            try {
-              this.logDebug(`默认音色合成参数: ${JSON.stringify(ttsParams)}`, 'TTSService');
-            } catch {}
-            return await doTtsWithVoice(voiceId, ttsParams);
-          }
-        } catch (e: any) {
-          Logger.warn(`[TTSService] 音色合成失败: ${e?.message || e}`, 'TTSService');
-          // 音色合成失败，返回具体错误信息
-          const errorMsg = e?.message || '音色合成失败';
-          return res.status(500).send({
-            message: `语音合成失败: ${errorMsg}`,
-            detail: '请检查音色配置是否正确，或联系管理员',
-          });
-        }
       }
     } catch (e: any) {
       Logger.warn(`[TTSService] 情绪/角色音色路径检查失败: ${e?.message || e}`, 'TTSService');

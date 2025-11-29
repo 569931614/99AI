@@ -23,10 +23,12 @@ interface CookieAdjustResult {
  */
 export class MaobingCookieUtil {
   private static readonly logger = new Logger('MaobingCookie');
-  private static readonly DEFAULT_BASE_URL = 'https://maobingai.lnkj5.com';
 
   private static buildEndpoint(baseUrl?: string) {
-    const root = (baseUrl || this.DEFAULT_BASE_URL).replace(/\/$/, '');
+    const root = (baseUrl || process.env.MAOBING_BASE_URL || '').replace(/\/$/, '');
+    if (!root) {
+      throw new Error('MAOBING_BASE_URL 未配置');
+    }
     return `${root}/api/user/updateCookie`;
   }
 

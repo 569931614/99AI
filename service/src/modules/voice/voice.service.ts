@@ -815,6 +815,7 @@ export class VoiceService implements OnModuleInit {
   }
 
   async listFromDB(query: {
+    name?: string;
     prefix?: string;
     userId?: number;
     page_index?: number;
@@ -853,9 +854,10 @@ export class VoiceService implements OnModuleInit {
       categoryFilter = query.category;
     }
 
-    // 处理关键词搜索
-    if (query?.keyword) {
-      where.name = ILike(`%${query.keyword}%`);
+    // 处理关键词搜索（支持 name 和 keyword 参数）
+    const searchKeyword = query?.name || query?.keyword;
+    if (searchKeyword) {
+      where.name = ILike(`%${searchKeyword}%`);
     }
 
     // 如果有分类名称过滤，需要使用 QueryBuilder
@@ -2096,13 +2098,20 @@ export class VoiceService implements OnModuleInit {
         textLanguage: params.text_language || params.textLanguage || cfg.textLanguage,
         promptLanguage: params.prompt_language || params.promptLanguage || cfg.promptLanguage,
         promptText: params.prompt_text || params.promptText || cfg.promptText,
-        sampleRate: params.sample_rate || params.sampleRate ? Number(params.sample_rate || params.sampleRate) : cfg.sampleRate,
+        sampleRate:
+          params.sample_rate || params.sampleRate
+            ? Number(params.sample_rate || params.sampleRate)
+            : cfg.sampleRate,
         cutPunc: params.cut_punc || params.cutPunc || cfg.cutPunc,
         topK: params.topK !== undefined ? Number(params.topK) : cfg.topK,
         topP: params.topP !== undefined ? Number(params.topP) : cfg.topP,
-        temperature: params.temperature !== undefined ? Number(params.temperature) : cfg.temperature,
+        temperature:
+          params.temperature !== undefined ? Number(params.temperature) : cfg.temperature,
         speed: params.speed !== undefined ? Number(params.speed) : cfg.speed,
-        sampleSteps: params.sampleSteps || params.sample_steps !== undefined ? Number(params.sampleSteps || params.sample_steps) : cfg.sampleSteps,
+        sampleSteps:
+          params.sampleSteps || params.sample_steps !== undefined
+            ? Number(params.sampleSteps || params.sample_steps)
+            : cfg.sampleSteps,
       };
       updateData.config = nextCfg;
     }
@@ -2649,7 +2658,10 @@ export class VoiceService implements OnModuleInit {
 
     // 3. 下载音频
     const buffer = await this.downloadGptSovitsAudio(audioUrl);
-    Logger.log(`[requestGptSovitsAudio] 音频下载完成，大小: ${buffer.length} bytes`, 'VoiceService');
+    Logger.log(
+      `[requestGptSovitsAudio] 音频下载完成，大小: ${buffer.length} bytes`,
+      'VoiceService',
+    );
 
     // 如果是流式模式，通过回调返回数据
     if (options.stream) {
@@ -2690,10 +2702,7 @@ export class VoiceService implements OnModuleInit {
 
         const taskId = response.data?.task_id;
         if (!taskId) {
-          throw new HttpException(
-            'GPT-SoVITS 未返回 task_id',
-            HttpStatus.BAD_GATEWAY,
-          );
+          throw new HttpException('GPT-SoVITS 未返回 task_id', HttpStatus.BAD_GATEWAY);
         }
 
         return taskId;
@@ -2734,10 +2743,7 @@ export class VoiceService implements OnModuleInit {
           return audioUrl;
         } else if (status === 'failed') {
           const errorMsg = response.data?.error || '任务失败';
-          throw new HttpException(
-            `GPT-SoVITS 任务失败: ${errorMsg}`,
-            HttpStatus.BAD_GATEWAY,
-          );
+          throw new HttpException(`GPT-SoVITS 任务失败: ${errorMsg}`, HttpStatus.BAD_GATEWAY);
         }
 
         // 状态为 pending 或 processing，继续等待
@@ -2756,10 +2762,7 @@ export class VoiceService implements OnModuleInit {
     }
 
     // 超时
-    throw new HttpException(
-      `GPT-SoVITS 任务超时（${maxPolls}秒）`,
-      HttpStatus.GATEWAY_TIMEOUT,
-    );
+    throw new HttpException(`GPT-SoVITS 任务超时（${maxPolls}秒）`, HttpStatus.GATEWAY_TIMEOUT);
   }
 
   /**

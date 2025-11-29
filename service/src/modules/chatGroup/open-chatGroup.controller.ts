@@ -1027,6 +1027,8 @@ export class OpenChatGroupController {
         },
         userId: { type: 'number', description: '用户ID（可选，优先使用token验证获取的userId）' },
         keyword: { type: 'string', description: '搜索关键词，用于按角色名称搜索（可选）' },
+        page: { type: 'number', description: '页码（可选，从1开始）' },
+        size: { type: 'number', description: '每页数量（可选）' },
       },
     },
     examples: {
@@ -1035,6 +1037,8 @@ export class OpenChatGroupController {
         value: {
           token: 'your_maobing_token_here',
           keyword: '小助手',
+          page: 1,
+          size: 10,
         },
       },
       withUserId: {
@@ -1042,6 +1046,8 @@ export class OpenChatGroupController {
         value: {
           userId: 1001,
           keyword: '小助手',
+          page: 1,
+          size: 10,
         },
       },
     },
@@ -1051,7 +1057,7 @@ export class OpenChatGroupController {
       console.log('[querySingleChats] ===== 收到请求 =====');
       console.log('[querySingleChats] body:', JSON.stringify(body));
 
-      const { token, userId: originalUserId, keyword, maobingBaseUrl } = body || {};
+      const { token, userId: originalUserId, keyword, page, size, maobingBaseUrl } = body || {};
 
       // 如果传了token，则验证并获取userId
       let userId = originalUserId;
@@ -1085,7 +1091,8 @@ export class OpenChatGroupController {
       };
 
       console.log('[querySingleChats] 开始调用 chatGroupService.querySingleChats...');
-      const result = await this.chatGroupService.querySingleChats(fakeReq, keyword);
+      console.log('[querySingleChats] 分页参数 - page:', page, 'size:', size);
+      const result = await this.chatGroupService.querySingleChats(fakeReq, keyword, page, size);
       console.log('[querySingleChats] 查询成功，返回数据条数:', result?.length || 0);
       console.log('[querySingleChats] ===== 请求完成 =====');
 
@@ -1112,6 +1119,8 @@ export class OpenChatGroupController {
         },
         userId: { type: 'number', description: '用户ID（可选，优先使用token验证获取的userId）' },
         keyword: { type: 'string', description: '搜索关键词，用于按群组名称搜索（可选）' },
+        page: { type: 'number', description: '页码（可选，从1开始）' },
+        size: { type: 'number', description: '每页数量（可选）' },
       },
     },
     examples: {
@@ -1120,6 +1129,8 @@ export class OpenChatGroupController {
         value: {
           token: 'your_maobing_token_here',
           keyword: '工作群',
+          page: 1,
+          size: 10,
         },
       },
       withUserId: {
@@ -1127,6 +1138,8 @@ export class OpenChatGroupController {
         value: {
           userId: 1001,
           keyword: '工作群',
+          page: 1,
+          size: 10,
         },
       },
     },
@@ -1136,7 +1149,7 @@ export class OpenChatGroupController {
       console.log('[queryGroupChats] ===== 收到请求 =====');
       console.log('[queryGroupChats] body:', JSON.stringify(body));
 
-      const { token, userId: originalUserId, keyword, maobingBaseUrl } = body || {};
+      const { token, userId: originalUserId, keyword, page, size, maobingBaseUrl } = body || {};
 
       // 如果传了token，则验证并获取userId
       let userId = originalUserId;
@@ -1169,7 +1182,9 @@ export class OpenChatGroupController {
         ip: _req.ip,
       };
 
-      const result = await this.chatGroupService.queryGroupChats(fakeReq, keyword);
+      console.log('[queryGroupChats] 分页参数 - page:', page, 'size:', size);
+      const result = await this.chatGroupService.queryGroupChats(fakeReq, keyword, page, size);
+      console.log('[queryGroupChats] 查询成功，返回数据条数:', result?.length || 0);
       return res.status(200).json({ success: true, data: result });
     } catch (e: any) {
       const status = e instanceof HttpException ? e.getStatus() : HttpStatus.INTERNAL_SERVER_ERROR;

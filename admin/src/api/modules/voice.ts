@@ -22,6 +22,7 @@ export default {
   // 列出音色
   list: (
     params: {
+      name?: string;
       prefix?: string;
       page_index?: number;
       page_size?: number;

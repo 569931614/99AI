@@ -1,3 +1,5 @@
+import { getClientIp } from '@/common/utils';
+import { MaobingAuthUtil } from '@/common/utils/maobing-auth.util';
 import {
   Body,
   Controller,
@@ -11,8 +13,6 @@ import {
 } from '@nestjs/common';
 import { ApiBody, ApiOperation, ApiParam, ApiQuery, ApiTags } from '@nestjs/swagger';
 import { Request } from 'express';
-import { getClientIp } from '@/common/utils';
-import { MaobingAuthUtil } from '@/common/utils/maobing-auth.util';
 import { ChatQueueService } from './chatQueue.service';
 
 @ApiTags('chat-queue')
@@ -32,7 +32,7 @@ export class ChatQueueController {
         },
         maobingBaseUrl: {
           type: 'string',
-          description: 'Maobing基础域名（可选，默认 https://maobingai.lnkj5.com ）',
+          description: 'Maobing基础域名（可选，默认 https://admin.maobingai.com ）',
         },
         userId: { type: 'number', description: '用户ID（可选，优先使用token验证获取的userId）' },
         prompt: { type: 'string', description: '用户提问内容；若传 audioUrl 将自动识别为文本' },

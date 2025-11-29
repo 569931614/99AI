@@ -39,9 +39,9 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted } from 'vue'
-import { useRoute } from 'vue-router'
 import { fetchDeviceRolesHtml } from '@/api'
+import { onMounted, onUnmounted, ref } from 'vue'
+import { useRoute } from 'vue-router'
 
 const route = useRoute()
 
@@ -149,7 +149,7 @@ const fetchChatSuggestion = () => {
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({
-      maobingBaseUrl: 'https://maobingai.lnkj5.com',
+      maobingBaseUrl: 'https://admin.maobingai.com',
       options: {
         skipSaveToDatabase: true,
       },
@@ -184,7 +184,7 @@ const fetchChatTts = () => {
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({
-      maobingBaseUrl: 'https://maobingai.lnkj5.com',
+      maobingBaseUrl: 'https://admin.maobingai.com',
       prompt: aiText.value,
       userId: pageData.value.id,
     }),

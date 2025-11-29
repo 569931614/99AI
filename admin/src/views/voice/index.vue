@@ -38,6 +38,28 @@
           </div>
         </div>
       </template>
+      <div class="mb-3 flex items-center gap-2">
+        <el-input
+          v-model="listQuery.name"
+          placeholder="按名称搜索"
+          clearable
+          style="width: 200px"
+        />
+        <el-input v-model="listQuery.prefix" placeholder="按前缀过滤" style="width: 200px" />
+        <el-select
+          v-model="listQuery.categoryId"
+          placeholder="按分类过滤"
+          clearable
+          style="width: 160px"
+        >
+          <el-option label="全部" value="" />
+          <el-option label="未分类" :value="0" />
+          <template v-for="cat in categories" :key="cat?.id">
+            <el-option v-if="cat && cat.id" :label="cat.name" :value="cat.id" />
+          </template>
+        </el-select>
+        <el-button @click="onSearch">查询</el-button>
+      </div>
       <el-table :data="voices" v-loading="loading" size="small" style="width: 100%">
         <el-table-column label="名称" width="160">
           <template #default="scope">
@@ -111,22 +133,7 @@
         </el-table-column>
       </el-table>
 
-      <div class="mt-3 flex items-center gap-2">
-        <el-input v-model="listQuery.prefix" placeholder="按前缀过滤" style="width: 200px" />
-        <el-select
-          v-model="listQuery.categoryId"
-          placeholder="按分类过滤"
-          clearable
-          style="width: 160px"
-        >
-          <el-option label="全部" value="" />
-          <el-option label="未分类" :value="0" />
-          <template v-for="cat in categories" :key="cat?.id">
-            <el-option v-if="cat && cat.id" :label="cat.name" :value="cat.id" />
-          </template>
-        </el-select>
-        <el-button @click="onSearch">查询</el-button>
-        <div class="flex-1" />
+      <div class="mt-3 flex items-center justify-end">
         <el-pagination
           :current-page="uiPage"
           :page-size="listQuery.page_size"
@@ -626,12 +633,7 @@
               <el-input-number v-model="paramDialog.topP" :min="0" :max="1" :step="0.1" />
             </el-form-item>
             <el-form-item label="Temperature">
-              <el-input-number
-                v-model="paramDialog.temperature"
-                :min="0"
-                :max="2"
-                :step="0.1"
-              />
+              <el-input-number v-model="paramDialog.temperature" :min="0" :max="2" :step="0.1" />
             </el-form-item>
           </div>
           <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -773,6 +775,7 @@
   });
 
   const listQuery = reactive<{
+    name?: string;
     prefix?: string;
     page_index?: number;
     page_size?: number;
@@ -893,7 +896,7 @@
     promptText: '',
     promptLanguage: 'auto',
     textLanguage: 'auto', // 改为 auto 支持多语种
-    cutPunc: 'cut0', // 默认使用 cut0 不分割
+    cutPunc: 'cut5', // 默认使用 cut5 按所有标点分割
     sampleRate: 32000,
     topK: 15,
     topP: 0.7,
@@ -933,6 +936,7 @@
     loading.value = true;
     try {
       const res = await voiceApi.list({
+        name: listQuery.name,
         prefix: listQuery.prefix,
         page_index: listQuery.page_index,
         page_size: listQuery.page_size,
@@ -1594,7 +1598,8 @@
         if (typeof data.speed === 'number') paramDialog.speed = data.speed;
         if (typeof data.sampleSteps === 'number') paramDialog.sampleSteps = data.sampleSteps;
         if (typeof data.textLanguage === 'string') paramDialog.textLanguage = data.textLanguage;
-        if (typeof data.promptLanguage === 'string') paramDialog.promptLanguage = data.promptLanguage;
+        if (typeof data.promptLanguage === 'string')
+          paramDialog.promptLanguage = data.promptLanguage;
         if (typeof data.cutPunc === 'string') paramDialog.cutPunc = data.cutPunc;
       }
     } catch {}

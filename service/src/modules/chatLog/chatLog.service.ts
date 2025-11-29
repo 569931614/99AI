@@ -534,50 +534,8 @@ export class ChatLogService {
   }
 
   async checkModelLimits(userId: JwtPayload, model: string) {
-    const ONE_HOUR_IN_MS = 3600 * 1000;
-    const oneHourAgo = new Date(Date.now() - ONE_HOUR_IN_MS);
-
-    try {
-      // 计算一小时内模型的使用次数
-      const usageCount = await this.chatLogEntity.count({
-        where: {
-          userId: userId.id,
-          model,
-          createdAt: MoreThan(oneHourAgo),
-        },
-      });
-
-      const adjustedUsageCount = Math.ceil(usageCount / 2);
-
-      Logger.log(
-        `用户ID: ${userId.id} 一小时内调用 ${model} 模型 ${adjustedUsageCount + 1} 次`,
-        'ChatLogService',
-      );
-
-      // 获取模型的使用限制
-
-      let modelInfo;
-      if (model.startsWith('gpt-4-gizmo')) {
-        modelInfo = await this.modelsService.getCurrentModelKeyInfo('gpts');
-      } else {
-        modelInfo = await this.modelsService.getCurrentModelKeyInfo(model);
-      }
-      const modelLimits = Number(modelInfo.modelLimits);
-
-      Logger.log(`模型 ${model} 的使用次数限制为 ${modelLimits}`, 'ChatLogService');
-
-      // 检查是否超过使用限制
-      if (adjustedUsageCount > modelLimits) {
-        return true;
-      }
-      return false;
-    } catch (error) {
-      Logger.error(
-        `查询数据库出错 - 用户ID: ${userId.id}, 模型: ${model}, 错误信息: ${error.message}`,
-        error.stack,
-        'ChatLogService',
-      );
-    }
+    // 已禁用所有模型调用限制
+    return false;
   }
 
   /**

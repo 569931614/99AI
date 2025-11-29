@@ -31,6 +31,7 @@ import { PluginEntity } from '../plugin/plugin.entity';
 import { RedisCacheService } from '../redisCache/redisCache.service';
 import { UploadService } from '../upload/upload.service';
 import { UserEntity } from '../user/user.entity';
+import { UserApiConfigEntity } from '../user/userApiConfig.entity';
 import { UserService } from '../user/user.service';
 import { AccountLogEntity } from '../userBalance/accountLog.entity';
 import { BalanceEntity } from '../userBalance/balance.entity';
@@ -52,6 +53,7 @@ import { OpenChatController } from './open-chat.controller';
     TypeOrmModule.forFeature([
       BalanceEntity,
       UserEntity,
+      UserApiConfigEntity,
       PluginEntity,
       VerificationEntity,
       ChatLogEntity,

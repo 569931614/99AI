@@ -1,6 +1,14 @@
 import { RechargeType } from '@/common/constants/balance.constant';
 import { VerificationEnum } from '@/common/constants/verification.constant';
-import { createRandomUid, getClientIp, maskEmail, maskIpAddress } from '@/common/utils';
+import {
+  createRandomUid,
+  decryptApiKey,
+  encryptApiKey,
+  getClientIp,
+  maskApiKey,
+  maskEmail,
+  maskIpAddress,
+} from '@/common/utils';
 import { MailerService } from '../mailer/mailer.service';
 
 import { HttpException, HttpStatus, Injectable, Logger } from '@nestjs/common';
@@ -22,12 +30,16 @@ import { UpdateUserDto } from './dto/updateUser.dto';
 import { UpdateUserStatusDto } from './dto/updateUserStatus.dto';
 import { UserRechargeDto } from './dto/userRecharge.dto';
 import { UserEntity } from './user.entity';
+import { UserApiConfigEntity } from './userApiConfig.entity';
+import OpenAI from 'openai';
 
 @Injectable()
 export class UserService {
   constructor(
     @InjectRepository(UserEntity)
     private readonly userEntity: Repository<UserEntity>,
+    @InjectRepository(UserApiConfigEntity)
+    private readonly userApiConfigEntity: Repository<UserApiConfigEntity>,
     private readonly connection: Connection,
     private readonly verificationService: VerificationService,
     private readonly mailerService: MailerService,
@@ -759,5 +771,142 @@ export class UserService {
 
     Logger.log(`用户资料同步成功: userId=${userId}, username=${username}`, 'UserService');
     return { success: true, message: '用户资料同步成功' };
+  }
+
+  /* ============ 用户自定义API配置管理 ============ */
+
+  /**
+   * 获取用户的API配置
+   * @param userId 用户ID
+   * @returns 用户API配置（脱敏后）
+   */
+  async getUserApiConfig(userId: number) {
+    const config = await this.userApiConfigEntity.findOne({ where: { userId } });
+
+    if (!config) {
+      return null;
+    }
+
+    // 返回时脱敏API Key
+    return {
+      apiUrl: config.apiUrl,
+      apiKey: config.apiKey ? maskApiKey(config.apiKey) : null,
+      modelName: config.modelName,
+      enabled: config.enabled === 1,
+    };
+  }
+
+  /**
+   * 获取用户的API配置（原始数据，包含解密后的API Key）
+   * @param userId 用户ID
+   * @returns 用户API配置（用于内部使用）
+   */
+  async getUserApiConfigRaw(userId: number) {
+    const config = await this.userApiConfigEntity.findOne({ where: { userId } });
+
+    if (!config || config.enabled !== 1) {
+      return null;
+    }
+
+    // 解密API Key
+    return {
+      apiUrl: config.apiUrl,
+      apiKey: config.apiKey ? decryptApiKey(config.apiKey) : null,
+      modelName: config.modelName || 'gpt-3.5-turbo',
+      enabled: config.enabled === 1,
+    };
+  }
+
+  /**
+   * 更新用户的API配置
+   * @param userId 用户ID
+   * @param dto API配置DTO
+   */
+  async updateUserApiConfig(userId: number, dto: any) {
+    const { apiUrl, apiKey, modelName, enabled } = dto;
+
+    // 加密API Key
+    const encryptedApiKey = apiKey ? encryptApiKey(apiKey) : null;
+
+    // 查找是否已存在配置
+    let config = await this.userApiConfigEntity.findOne({ where: { userId } });
+
+    if (config) {
+      // 更新现有配置
+      await this.userApiConfigEntity.update(
+        { userId },
+        {
+          apiUrl: apiUrl || config.apiUrl,
+          apiKey: encryptedApiKey || config.apiKey,
+          modelName: modelName || config.modelName,
+          enabled: enabled ? 1 : 0,
+        },
+      );
+      Logger.log(`用户 ${userId} 更新API配置成功`, 'UserService');
+    } else {
+      // 创建新配置
+      await this.userApiConfigEntity.save({
+        userId,
+        apiUrl,
+        apiKey: encryptedApiKey,
+        modelName,
+        enabled: enabled ? 1 : 0,
+      });
+      Logger.log(`用户 ${userId} 创建API配置成功`, 'UserService');
+    }
+
+    return { success: true, message: 'API配置更新成功' };
+  }
+
+  /**
+   * 测试API配置的连通性
+   * @param apiUrl API URL
+   * @param apiKey API Key
+   * @param modelName 模型名称
+   * @returns 测试结果
+   */
+  async testApiConnection(apiUrl: string, apiKey: string, modelName?: string) {
+    try {
+      // 创建OpenAI客户端
+      const openai = new OpenAI({
+        baseURL: apiUrl,
+        apiKey: apiKey,
+        timeout: 10000, // 10秒超时
+      });
+
+      // 发送简单的测试请求
+      const response = await openai.chat.completions.create({
+        model: modelName || 'gpt-3.5-turbo',
+        messages: [{ role: 'user', content: 'Hi' }],
+        max_tokens: 10,
+      });
+
+      Logger.log('API连接测试成功', 'UserService');
+
+      return {
+        success: true,
+        message: 'API连接测试成功',
+        model: response.model,
+        response: response.choices[0]?.message?.content || '',
+      };
+    } catch (error) {
+      Logger.error(`API连接测试失败: ${error.message}`, 'UserService');
+
+      // 解析错误类型
+      let errorMessage = 'API连接失败';
+      if (error.message.includes('timeout')) {
+        errorMessage = 'API请求超时，请检查URL是否正确';
+      } else if (error.message.includes('401') || error.message.includes('Unauthorized')) {
+        errorMessage = 'API Key无效，请检查';
+      } else if (error.message.includes('404')) {
+        errorMessage = 'API URL不正确，请检查';
+      } else if (error.message.includes('model')) {
+        errorMessage = '模型名称不正确或不支持';
+      } else {
+        errorMessage = error.message;
+      }
+
+      throw new HttpException(errorMessage, HttpStatus.BAD_REQUEST);
+    }
   }
 }

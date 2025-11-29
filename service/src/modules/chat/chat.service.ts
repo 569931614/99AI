@@ -580,6 +580,8 @@ export class ChatService {
     imageUrl: string;
     stickerId: number;
     emotion: string | null;
+    scenario: string | null;
+    isScenarioSticker: boolean;
   }> {
     const { userId, content, appId, groupId, req } = options;
     const trimmedContent = content?.trim();
@@ -629,7 +631,184 @@ export class ChatService {
       imageUrl: sticker.imageUrl,
       stickerId: sticker.id,
       emotion: sticker.emotion || detectedEmotion || null,
+      scenario: sticker.scenario || null,
+      isScenarioSticker: !!sticker.scenario, // 标识是否为场景表情包（如转账表情包）
     };
+  }
+
+  /**
+   * 尝试自动发送表情包（AI主动发送，带去重检查）
+   * @returns 表情包信息或 null（不发送）
+   */
+  private async tryAutoSendSticker(options: {
+    userId: number;
+    content: string;
+    appId?: number | null;
+    groupId?: number | null;
+    req?: Request;
+  }): Promise<{
+    chatId: number;
+    imageUrl: string;
+    stickerId: number;
+    emotion: string | null;
+    scenario: string | null;
+    isScenarioSticker: boolean;
+  } | null> {
+    const { userId, content, appId, groupId, req } = options;
+
+    try {
+      // 1. 调用表情包服务获取匹配的表情包
+      const detectedEmotion = await this.detectEmotionWithAI(content);
+      const sticker = await this.stickerService.pickStickerByText(content, detectedEmotion);
+
+      if (!sticker) {
+        Logger.debug('[表情包] 未找到匹配的表情包', 'ChatService');
+        return null;
+      }
+
+      const isScenarioSticker = !!sticker.scenario;
+
+      // 2. 场景表情包：检查去重
+      if (isScenarioSticker) {
+        const hasSent = await this.checkIfScenarioStickerAlreadySent(
+          userId,
+          groupId || null,
+          sticker.scenario,
+          sticker.imageUrl,
+        );
+        if (hasSent) {
+          Logger.log(
+            `[表情包] 去重：最近已发送过场景"${sticker.scenario}"的表情包，跳过`,
+            'ChatService',
+          );
+          return null;
+        }
+        Logger.log(`[表情包] 场景表情包100%触发: ${sticker.scenario}`, 'ChatService');
+      } else {
+        // 3. 普通情绪表情包：30%概率
+        if (Math.random() >= 0.3) {
+          Logger.debug('[表情包] 普通情绪表情包，未通过30%概率检查', 'ChatService');
+          return null;
+        }
+        Logger.log(`[表情包] 普通情绪表情包触发: ${sticker.emotion}`, 'ChatService');
+      }
+
+      // 4. 创建表情包消息并保存到数据库
+      const curIp = req ? getClientIp(req) : null;
+      const extraParam = {
+        type: 'sticker',
+        stickerId: sticker.id,
+        emotion: sticker.emotion,
+        tags: sticker.tags,
+        scenario: sticker.scenario,
+        source: 'auto',
+        detectedEmotion: detectedEmotion,
+        originalContent: content,
+      };
+
+      const stickerLog = await this.chatLogService.saveChatLog({
+        appId: appId ?? null,
+        curIp,
+        userId,
+        type: 1,
+        progress: '100%',
+        model: 'sticker-generator',
+        modelName: 'Sticker',
+        role: 'assistant',
+        groupId: groupId ?? null,
+        status: 3,
+        content: '',
+        imageUrl: sticker.imageUrl,
+        extraParam: JSON.stringify(extraParam),
+        promptTokens: 0,
+        completionTokens: 0,
+        totalTokens: 0,
+      });
+
+      return {
+        chatId: stickerLog.id,
+        imageUrl: sticker.imageUrl,
+        stickerId: sticker.id,
+        emotion: sticker.emotion || detectedEmotion || null,
+        scenario: sticker.scenario || null,
+        isScenarioSticker: isScenarioSticker,
+      };
+    } catch (error: any) {
+      Logger.error(
+        `[表情包] tryAutoSendSticker 失败: ${error?.message || error}`,
+        error?.stack || '',
+        'ChatService',
+      );
+      return null;
+    }
+  }
+
+  /**
+   * 检查最近是否已发送过相同场景的表情包（去重）
+   * @param userId 用户ID
+   * @param groupId 会话组ID
+   * @param scenario 场景描述
+   * @param imageUrl 表情包图片URL
+   * @returns true=已发送过（应跳过），false=未发送过（可以发送）
+   */
+  private async checkIfScenarioStickerAlreadySent(
+    userId: number,
+    groupId: number | null,
+    scenario: string,
+    imageUrl: string,
+  ): Promise<boolean> {
+    if (!scenario) {
+      return false;
+    }
+
+    try {
+      // 查询最近10条消息
+      const recentMessages = await this.chatLogService.queryChatLogByGroup({
+        groupId: groupId,
+        userId: userId,
+        page: 1,
+        pageSize: 10,
+      });
+
+      if (!recentMessages || recentMessages.length === 0) {
+        return false;
+      }
+
+      // 检查是否有相同场景或相同图片的表情包
+      for (const msg of recentMessages) {
+        if (msg.imageUrl === imageUrl) {
+          Logger.debug(
+            `[表情包去重] 找到相同图片的表情包 - imageUrl=${imageUrl}`,
+            'ChatService',
+          );
+          return true;
+        }
+
+        // 检查 extraParam 中的 scenario
+        if (msg.extraParam) {
+          try {
+            const extra = JSON.parse(msg.extraParam);
+            if (extra.scenario === scenario) {
+              Logger.debug(
+                `[表情包去重] 找到相同场景的表情包 - scenario=${scenario}`,
+                'ChatService',
+              );
+              return true;
+            }
+          } catch (e) {
+            // JSON解析失败，忽略
+          }
+        }
+      }
+
+      return false;
+    } catch (error: any) {
+      Logger.warn(
+        `[表情包去重] 检查失败: ${error?.message || error}`,
+        'ChatService',
+      );
+      return false; // 失败时允许发送，避免影响用户体验
+    }
   }
 
   private async generateVoiceReplyForMessage(options: {
@@ -2934,6 +3113,45 @@ ${setSystemMessage}
             }
           } catch (e) {
             Logger.warn(`[好感度] 增加失败: ${e?.message || e}`, 'ChatService');
+          }
+
+          // 表情包自动发送逻辑：AI主动在合适场景下发送表情包
+          try {
+            // 只在单聊（非群聊）且有AI回复内容时触发
+            if (!isGroupChat && appId && response.full_content) {
+              const stickerResult = await this.tryAutoSendSticker({
+                userId: req.user.id,
+                content: response.full_content,
+                appId: appId,
+                groupId: groupId || null,
+                req,
+              });
+
+              if (stickerResult) {
+                Logger.log(
+                  `[表情包] ✓ AI主动发送表情包 - userId=${req.user.id}, scenario=${stickerResult.scenario || '情绪表情包'}`,
+                  'ChatService',
+                );
+                // 通过流式响应发送表情包事件
+                const stickerEvent = {
+                  event: 'sticker',
+                  data: {
+                    chatId: stickerResult.chatId,
+                    imageUrl: stickerResult.imageUrl,
+                    stickerId: stickerResult.stickerId,
+                    scenario: stickerResult.scenario,
+                    isScenarioSticker: stickerResult.isScenarioSticker,
+                  },
+                };
+                res.write(`\n${JSON.stringify(stickerEvent)}`);
+              }
+            }
+          } catch (stickerError) {
+            Logger.warn(
+              `[表情包] 自动发送表情包失败: ${stickerError?.message || stickerError}`,
+              'ChatService',
+            );
+            // 表情包发送失败不影响主流程
           }
 
           return res.write(`\n${JSON.stringify(response)}`);

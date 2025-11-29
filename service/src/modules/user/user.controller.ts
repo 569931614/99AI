@@ -1,14 +1,16 @@
 import { AdminAuthGuard } from '@/common/auth/adminAuth.guard';
 import { JwtAuthGuard } from '@/common/auth/jwtAuth.guard';
 import { SuperAuthGuard } from '@/common/auth/superAuth.guard';
-import { Body, Controller, Get, Post, Query, Req, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Post, Put, Query, Req, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { Request } from 'express';
 import { QueryAllUserDto } from './dto/queryAllUser.dto';
 import { ResetUserPassDto } from './dto/resetUserPass.dto';
 import { SyncProfileDto } from './dto/syncProfile.dto';
+import { TestApiConfigDto } from './dto/testApiConfig.dto';
 import { UpdateUserDto } from './dto/updateUser.dto';
 import { UpdateUserStatusDto } from './dto/updateUserStatus.dto';
+import { UserApiConfigDto } from './dto/userApiConfig.dto';
 import { UserRechargeDto } from './dto/userRecharge.dto';
 import { UserService } from './user.service';
 
@@ -72,5 +74,49 @@ export class UserController {
   async syncProfile(@Body() body: SyncProfileDto, @Req() req: Request) {
     const userId = req.user.id;
     return await this.userService.syncProfile(userId, body.username, body.bio);
+  }
+
+  /* ============ 用户自定义API配置端点 ============ */
+
+  @Get('api-config')
+  @ApiOperation({ summary: '获取当前用户的自定义API配置' })
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  async getApiConfig(@Req() req: Request) {
+    const userId = req.user.id;
+    const config = await this.userService.getUserApiConfig(userId);
+    return {
+      success: true,
+      data: config,
+    };
+  }
+
+  @Put('api-config')
+  @ApiOperation({ summary: '更新当前用户的自定义API配置' })
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  async updateApiConfig(@Body() body: UserApiConfigDto, @Req() req: Request) {
+    const userId = req.user.id;
+    return await this.userService.updateUserApiConfig(userId, body);
+  }
+
+  @Post('api-config/test')
+  @ApiOperation({ summary: '测试自定义API配置的连通性' })
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  async testApiConfig(@Body() body: TestApiConfigDto) {
+    try {
+      const result = await this.userService.testApiConnection(
+        body.apiUrl,
+        body.apiKey,
+        body.modelName,
+      );
+      return result;
+    } catch (error) {
+      return {
+        success: false,
+        message: error.message || 'API连接测试失败',
+      };
+    }
   }
 }

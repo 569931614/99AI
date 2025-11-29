@@ -18,6 +18,7 @@ import { VerificationService } from './../verification/verification.service';
 import { OpenUserController } from './open-user.controller';
 import { UserController } from './user.controller';
 import { UserEntity } from './user.entity';
+import { UserApiConfigEntity } from './userApiConfig.entity';
 import { UserService } from './user.service';
 
 @Global()
@@ -25,6 +26,7 @@ import { UserService } from './user.service';
   imports: [
     TypeOrmModule.forFeature([
       UserEntity,
+      UserApiConfigEntity,
       VerificationEntity,
       BalanceEntity,
       AccountLogEntity,

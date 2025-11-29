@@ -452,6 +452,36 @@ export class ChatLogService {
     return result;
   }
 
+  /* 查询群组中的聊天记录（支持分页） */
+  async queryChatLogByGroup(params: {
+    groupId: number | null;
+    userId?: number;
+    page: number;
+    pageSize: number;
+  }): Promise<any[]> {
+    const { groupId, userId, page, pageSize } = params;
+    const where: any = { isDelete: false };
+
+    if (groupId !== null) {
+      where.groupId = groupId;
+    }
+
+    if (userId !== undefined) {
+      where.userId = userId;
+    }
+
+    const list = await this.chatLogEntity.find({
+      where,
+      order: {
+        createdAt: 'DESC',
+      },
+      skip: (page - 1) * pageSize,
+      take: pageSize,
+    });
+
+    return list;
+  }
+
   /* 删除单条对话记录 */
   async deleteChatLog(req: Request, body: DelDto) {
     const { id: userId } = req.user;

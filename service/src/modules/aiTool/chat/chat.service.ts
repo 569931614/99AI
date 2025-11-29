@@ -1,10 +1,14 @@
 import { handleError } from '@/common/utils';
 import { correctApiBaseUrl } from '@/common/utils/correctApiBaseUrl';
+import { decryptApiKey } from '@/common/utils/apiKeyEncryption';
 import { Injectable, Logger } from '@nestjs/common';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository } from 'typeorm';
 import OpenAI from 'openai';
 import { ChatGroupService } from '../../chatGroup/chatGroup.service';
 import { GlobalConfigService } from '../../globalConfig/globalConfig.service';
 import { NetSearchService } from '../search/netSearch.service';
+import { UserApiConfigEntity } from '../../user/userApiConfig.entity';
 // 引入其他需要的模块或服务
 
 @Injectable()
@@ -13,6 +17,8 @@ export class OpenAIChatService {
     private readonly globalConfigService: GlobalConfigService,
     private readonly netSearchService: NetSearchService,
     private readonly chatGroupService: ChatGroupService,
+    @InjectRepository(UserApiConfigEntity)
+    private readonly userApiConfigEntity: Repository<UserApiConfigEntity>,
   ) {}
 
   /**
@@ -71,6 +77,176 @@ export class OpenAIChatService {
       return deepCopy(input);
     } catch {
       return '[Unserializable Payload]';
+    }
+  }
+
+  /**
+   * 获取有效的API配置（用户自定义配置优先，否则使用全局配置）
+   * @param userId 用户ID
+   * @returns API配置对象
+   */
+  private async getEffectiveApiConfig(userId?: number | string) {
+    // 如果没有提供userId，直接使用全局配置
+    if (!userId) {
+      Logger.debug('未提供userId，使用全局配置', 'OpenAIChatService');
+      return null;
+    }
+
+    try {
+      // 查询用户的自定义API配置
+      const userConfig = await this.userApiConfigEntity.findOne({
+        where: { userId: Number(userId) },
+      });
+
+      // 如果用户启用了自定义配置且配置完整，返回用户配置
+      if (userConfig && userConfig.enabled === 1 && userConfig.apiUrl && userConfig.apiKey) {
+        Logger.log(`用户 ${userId} 使用自定义API配置`, 'OpenAIChatService');
+
+        // 解密API Key
+        const decryptedKey = decryptApiKey(userConfig.apiKey);
+
+        return {
+          apiUrl: userConfig.apiUrl,
+          apiKey: decryptedKey,
+          modelName: userConfig.modelName || 'gpt-3.5-turbo',
+          source: 'user-custom',
+        };
+      }
+
+      // 用户配置不完整或未启用
+      if (userConfig && userConfig.enabled === 1) {
+        Logger.warn(
+          `用户 ${userId} 启用了自定义API但配置不完整，回退到全局配置`,
+          'OpenAIChatService',
+        );
+      }
+    } catch (error) {
+      Logger.error(`获取用户 ${userId} 的API配置失败: ${error.message}`, 'OpenAIChatService');
+    }
+
+    // 返回null表示使用全局配置
+    return null;
+  }
+
+  /**
+   * 使用用户自定义API发送聊天请求
+   * @param userConfig 用户API配置
+   * @param prompt 用户输入
+   * @param systemMessage 系统消息
+   * @param messagesHistory 消息历史
+   * @param options 选项
+   * @returns 聊天响应
+   */
+  private async chatWithCustomApi(
+    userConfig: any,
+    prompt: string,
+    systemMessage?: string,
+    messagesHistory?: any[],
+    options?: { onProgress?: (textChunk: string) => void; abortSignal?: AbortSignal },
+  ): Promise<{
+    text: string;
+    usage?: { userTokens?: number; inputTokens?: number; outputTokens?: number };
+  }> {
+    try {
+      // 创建OpenAI客户端
+      const openai = new OpenAI({
+        baseURL: userConfig.apiUrl,
+        apiKey: userConfig.apiKey,
+        timeout: 60000, // 60秒超时
+      });
+
+      // 构建消息
+      const messages: any[] = [];
+
+      if (systemMessage) {
+        messages.push({ role: 'system', content: systemMessage });
+      }
+
+      if (messagesHistory && messagesHistory.length > 0) {
+        messages.push(...messagesHistory);
+      } else if (prompt) {
+        messages.push({ role: 'user', content: prompt });
+      }
+
+      Logger.debug(
+        `使用自定义API发送请求: ${userConfig.apiUrl}, 模型: ${userConfig.modelName}`,
+        'OpenAIChatService',
+      );
+
+      // 发送请求
+      if (options?.onProgress) {
+        // 流式响应
+        const stream = await openai.chat.completions.create({
+          model: userConfig.modelName,
+          messages,
+          stream: true,
+        }, {
+          signal: options.abortSignal,
+        });
+
+        let fullText = '';
+        let inputTokens = 0;
+        let outputTokens = 0;
+
+        for await (const chunk of stream) {
+          const content = chunk.choices[0]?.delta?.content || '';
+          if (content) {
+            fullText += content;
+            options.onProgress(content);
+          }
+
+          // 尝试从chunk中获取usage信息
+          if ((chunk as any).usage) {
+            inputTokens = (chunk as any).usage.prompt_tokens || 0;
+            outputTokens = (chunk as any).usage.completion_tokens || 0;
+          }
+        }
+
+        Logger.log(`自定义API请求成功，返回文本长度: ${fullText.length}`, 'OpenAIChatService');
+
+        return {
+          text: fullText,
+          usage: inputTokens > 0 ? { inputTokens, outputTokens } : undefined,
+        };
+      } else {
+        // 非流式响应
+        const response = await openai.chat.completions.create({
+          model: userConfig.modelName,
+          messages,
+        }, {
+          signal: options?.abortSignal,
+        });
+
+        const text = response.choices[0]?.message?.content || '';
+
+        Logger.log(`自定义API请求成功，返回文本长度: ${text.length}`, 'OpenAIChatService');
+
+        return {
+          text,
+          usage: {
+            inputTokens: response.usage?.prompt_tokens || 0,
+            outputTokens: response.usage?.completion_tokens || 0,
+          },
+        };
+      }
+    } catch (error) {
+      Logger.error(`自定义API请求失败: ${error.message}`, 'OpenAIChatService');
+
+      // 解析错误并抛出友好的错误消息
+      let errorMessage = '自定义API请求失败';
+      if (error.message.includes('timeout')) {
+        errorMessage = '自定义API请求超时，请检查API URL是否正确';
+      } else if (error.message.includes('401') || error.message.includes('Unauthorized')) {
+        errorMessage = '自定义API Key无效，请检查配置';
+      } else if (error.message.includes('404')) {
+        errorMessage = '自定义API URL不正确，请检查配置';
+      } else if (error.message.includes('model')) {
+        errorMessage = '自定义API模型名称不正确或不支持';
+      } else {
+        errorMessage = `自定义API错误: ${error.message}`;
+      }
+
+      throw new Error(errorMessage);
     }
   }
 
@@ -715,6 +891,33 @@ export class OpenAIChatService {
     text: string;
     usage?: { userTokens?: number; inputTokens?: number; outputTokens?: number };
   }> {
+    // 检查用户是否配置了自定义API
+    const userConfig = await this.getEffectiveApiConfig(appConfig?.userId);
+
+    // 如果用户配置了自定义API，使用自定义API
+    if (userConfig) {
+      try {
+        Logger.log(
+          `用户 ${appConfig?.userId} 使用自定义API: ${userConfig.apiUrl}`,
+          'OpenAIChatService',
+        );
+        return await this.chatWithCustomApi(
+          userConfig,
+          prompt,
+          systemMessage,
+          messagesHistory,
+          options,
+        );
+      } catch (error) {
+        Logger.error(
+          `用户 ${appConfig?.userId} 的自定义API请求失败，回退到全局配置: ${error.message}`,
+          'OpenAIChatService',
+        );
+        // 继续使用全局配置（星尘API）
+      }
+    }
+
+    // 使用全局配置（星尘API）
     // 实现重试逻辑：如果返回内容为空，最多重试3次
     const maxRetries = 3;
     let lastError: Error | null = null;
@@ -782,6 +985,33 @@ export class OpenAIChatService {
     text: string;
     usage?: { userTokens?: number; inputTokens?: number; outputTokens?: number };
   }> {
+    // 检查用户是否配置了自定义API
+    const userConfig = await this.getEffectiveApiConfig(appConfig?.userId);
+
+    // 如果用户配置了自定义API，使用自定义API
+    if (userConfig) {
+      try {
+        Logger.log(
+          `用户 ${appConfig?.userId} 使用自定义API: ${userConfig.apiUrl}`,
+          'OpenAIChatService',
+        );
+        return await this.chatWithCustomApi(
+          userConfig,
+          prompt,
+          systemMessage,
+          messagesHistory,
+          options,
+        );
+      } catch (error) {
+        Logger.error(
+          `用户 ${appConfig?.userId} 的自定义API请求失败，回退到全局配置: ${error.message}`,
+          'OpenAIChatService',
+        );
+        // 继续使用全局配置（通义千问）
+      }
+    }
+
+    // 使用全局配置（通义千问）
     const cfgKey: any = await this.globalConfigService.getConfigs(['dashscopeApiKey']);
     const dashscopeApiKey = typeof cfgKey === 'string' ? cfgKey : cfgKey?.dashscopeApiKey;
     const apiKey = dashscopeApiKey || process.env.DASHSCOPE_API_KEY || '';

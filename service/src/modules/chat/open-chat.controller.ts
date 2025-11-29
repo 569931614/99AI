@@ -12,12 +12,15 @@ import {
   Req,
   Res,
 } from '@nestjs/common';
+import { InjectRepository } from '@nestjs/typeorm';
 import { ApiBody, ApiOperation, ApiQuery, ApiTags } from '@nestjs/swagger';
 import axios from 'axios';
 import { Request, Response } from 'express';
+import { Repository } from 'typeorm';
 import { AffectionService } from '../affection/affection.service';
 import { VoiceService } from '../voice/voice.service';
 import { ChatService } from './chat.service';
+import { ChatGroupEntity } from '../chatGroup/chatGroup.entity';
 
 type CookieMessageType = 'text' | 'voice' | 'image';
 
@@ -46,6 +49,8 @@ export class OpenChatController {
     private readonly chatService: ChatService,
     private readonly voiceService: VoiceService,
     private readonly affectionService: AffectionService,
+    @InjectRepository(ChatGroupEntity)
+    private readonly chatGroupEntity: Repository<ChatGroupEntity>,
   ) {}
 
   @Post('chat-process')
@@ -558,6 +563,7 @@ export class OpenChatController {
       let audioUrl: string | null = null;
       let voiceDuration: number | null = null;
       let imageUrl: string | null = null;
+      let stickerData: any = null; // 新增：保存表情包数据
 
       // 事件处理器存储
       const eventHandlers: Record<string, Function[]> = {};
@@ -590,6 +596,14 @@ export class OpenChatController {
               if (resolvedVoiceDuration !== undefined) {
                 voiceDuration = Number(resolvedVoiceDuration) || null;
               }
+              // 处理表情包事件（event: 'sticker'）
+              if (parsed.event === 'sticker' && parsed.data) {
+                this.logger.log(
+                  `[chat-process-sync] 捕获表情包事件: ${JSON.stringify(parsed.data)}`,
+                );
+                stickerData = parsed.data;
+              }
+              // 兼容旧的imageUrl字段
               if (!imageUrl && parsed.imageUrl) {
                 imageUrl = parsed.imageUrl;
               }
@@ -663,7 +677,30 @@ export class OpenChatController {
       }
 
       // 默认生成TTS（除非明确设置 generateTts=false）
-      const shouldGenerateTts = generateTts !== false; // 默认为 true
+      let shouldGenerateTts = generateTts !== false; // 默认为 true
+
+      // 检查会话组的语音回复模式配置
+      const groupId = body?.options?.groupId;
+      if (groupId) {
+        try {
+          const chatGroup = await this.chatGroupEntity.findOne({ where: { id: groupId } });
+          if (chatGroup && chatGroup.voiceReplyMode === 'text_only') {
+            this.logger.log(
+              `[chat-process-sync] 会话组 ${groupId} 设置为 text_only，跳过TTS生成`,
+            );
+            shouldGenerateTts = false;
+          } else if (chatGroup) {
+            this.logger.log(
+              `[chat-process-sync] 会话组 ${groupId} voiceReplyMode: ${chatGroup.voiceReplyMode}`,
+            );
+          }
+        } catch (error: any) {
+          this.logger.warn(
+            `[chat-process-sync] 获取会话组配置失败: ${error?.message || error}`,
+          );
+          // 获取配置失败不影响主流程，继续使用默认值
+        }
+      }
 
       // 如果需要生成TTS且尚未生成语音，则主动调用TTS生成（包含情绪识别）
       if (shouldGenerateTts && !audioUrl && fullResponse && chatId) {
@@ -706,6 +743,7 @@ export class OpenChatController {
           audioUrl,
           voiceDuration,
           imageUrl,
+          sticker: stickerData, // 新增：如果有表情包，包含在返回数据中
         },
       };
     } catch (e: any) {

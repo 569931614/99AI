@@ -24,3 +24,4 @@ export * from './removeThinkTags';
 export * from './tools';
 export * from './utcformatTime';
 export * from './correctApiBaseUrl';
+export * from './apiKeyEncryption';

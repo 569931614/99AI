@@ -646,6 +646,7 @@ export class ChatService {
     appId?: number | null;
     groupId?: number | null;
     req?: Request;
+    allowEmoji?: boolean; // 表情包开关，仅影响普通表情包
   }): Promise<{
     chatId: number;
     imageUrl: string;
@@ -655,22 +656,38 @@ export class ChatService {
     isScenarioSticker: boolean;
     transferText?: string; // 转账文本，如"转账188"
   } | null> {
-    const { userId, content, appId, groupId, req } = options;
+    const { userId, content, appId, groupId, req, allowEmoji } = options;
 
     try {
       // 1. 调用表情包服务获取匹配的表情包
+      Logger.log(
+        `[表情包] 🔍 开始匹配表情包 - userId: ${userId}, groupId: ${groupId}, allowEmoji: ${allowEmoji}, content: "${content.substring(0, 50)}${content.length > 50 ? '...' : ''}"`,
+        'ChatService',
+      );
       const detectedEmotion = await this.detectEmotionWithAI(content);
+      Logger.log(
+        `[表情包] 🧠 AI情绪识别结果: ${detectedEmotion || 'null'}`,
+        'ChatService',
+      );
       const sticker = await this.stickerService.pickStickerByText(content, detectedEmotion);
 
       if (!sticker) {
-        Logger.debug('[表情包] 未找到匹配的表情包', 'ChatService');
+        Logger.log('[表情包] ❌ 未找到匹配的表情包', 'ChatService');
         return null;
       }
+      Logger.log(
+        `[表情包] ✅ 找到匹配的表情包 - id: ${sticker.id}, emotion: ${sticker.emotion || 'null'}, scenario: ${sticker.scenario || 'null'}, name: ${sticker.name || 'null'}`,
+        'ChatService',
+      );
 
       const isScenarioSticker = !!sticker.scenario;
 
       // 2. 场景表情包：检查去重（10条消息内不重复转账）
       if (isScenarioSticker) {
+        Logger.log(
+          `[表情包] 🎯 检测到场景表情包 - scenario: ${sticker.scenario}, name: ${sticker.name}, imageUrl: ${sticker.imageUrl}`,
+          'ChatService',
+        );
         const hasSent = await this.checkIfScenarioStickerAlreadySent(
           userId,
           groupId || null,
@@ -679,19 +696,33 @@ export class ChatService {
         );
         if (hasSent) {
           Logger.log(
-            `[表情包] 去重：最近已发送过场景"${sticker.scenario}"的表情包，跳过`,
+            `[表情包] ⏭️ 去重检查：最近10条消息内已发送过场景"${sticker.scenario}"的表情包，跳过本次发送`,
             'ChatService',
           );
           return null;
         }
-        Logger.log(`[表情包] 场景表情包100%触发: ${sticker.scenario}`, 'ChatService');
+        Logger.log(
+          `[表情包] ✅ 场景表情包100%触发（不受概率限制） - scenario: ${sticker.scenario}, userId: ${userId}, groupId: ${groupId}`,
+          'ChatService',
+        );
       } else {
-        // 3. 普通情绪表情包：30%概率
-        if (Math.random() >= 0.3) {
-          Logger.debug('[表情包] 普通情绪表情包，未通过30%概率检查', 'ChatService');
+        // 3. 普通情绪表情包：受 allowEmoji 开关控制 + 30%概率
+        if (!allowEmoji) {
+          Logger.log(
+            `[表情包] ⏭️ 普通情绪表情包被开关拦截 - emotion: ${sticker.emotion}, allowEmoji: ${allowEmoji}`,
+            'ChatService',
+          );
           return null;
         }
-        Logger.log(`[表情包] 普通情绪表情包触发: ${sticker.emotion}`, 'ChatService');
+        const randomValue = Math.random();
+        const shouldSend = randomValue < 0.3;
+        Logger.log(
+          `[表情包] 🎲 普通情绪表情包概率判断 - emotion: ${sticker.emotion}, 随机值: ${randomValue.toFixed(4)}, 阈值: 0.3000, 结果: ${shouldSend ? '✅触发' : '❌未触发'}`,
+          'ChatService',
+        );
+        if (!shouldSend) {
+          return null;
+        }
       }
 
       // 4. 创建表情包消息并保存到数据库
@@ -3137,20 +3168,26 @@ ${setSystemMessage}
           // 表情包自动发送逻辑：AI主动在合适场景下发送表情包
           try {
             // 只在单聊（非群聊）且有AI回复内容时触发
+            // 注意：场景表情包（如转账）不受 allowEmoji 开关控制
             if (!isGroupChat && appId && response.full_content) {
+              this.logDebug(
+                `[表情包] 🔍 尝试自动发送表情包 - groupId: ${groupId}, allowEmoji: ${groupAllowEmoji}`,
+                'ChatService',
+              );
               const stickerResult = await this.tryAutoSendSticker({
                 userId: req.user.id,
                 content: response.full_content,
                 appId: appId,
                 groupId: groupId || null,
                 req,
+                allowEmoji: groupAllowEmoji, // 传递开关状态，用于普通表情包判断
               });
 
               if (stickerResult) {
                 Logger.log(
-                  `[表情包] ✓ AI主动发送表情包 - userId=${req.user.id}, scenario=${
+                  `[表情包] ✅ AI主动发送表情包成功 - userId=${req.user.id}, scenario=${
                     stickerResult.scenario || '情绪表情包'
-                  }`,
+                  }, isScenarioSticker=${stickerResult.isScenarioSticker}, imageUrl=${stickerResult.imageUrl}`,
                   'ChatService',
                 );
 
@@ -3171,6 +3208,8 @@ ${setSystemMessage}
                   },
                 };
                 res.write(`\n${JSON.stringify(stickerEvent)}`);
+              } else {
+                this.logDebug('[表情包] 未匹配到合适的表情包或未通过检查', 'ChatService');
               }
             }
           } catch (stickerError) {

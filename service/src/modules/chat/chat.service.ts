@@ -661,14 +661,14 @@ export class ChatService {
     try {
       // 1. 调用表情包服务获取匹配的表情包
       Logger.log(
-        `[表情包] 🔍 开始匹配表情包 - userId: ${userId}, groupId: ${groupId}, allowEmoji: ${allowEmoji}, content: "${content.substring(0, 50)}${content.length > 50 ? '...' : ''}"`,
+        `[表情包] 🔍 开始匹配表情包 - userId: ${userId}, groupId: ${groupId}, allowEmoji: ${allowEmoji}, content: "${content.substring(
+          0,
+          50,
+        )}${content.length > 50 ? '...' : ''}"`,
         'ChatService',
       );
       const detectedEmotion = await this.detectEmotionWithAI(content);
-      Logger.log(
-        `[表情包] 🧠 AI情绪识别结果: ${detectedEmotion || 'null'}`,
-        'ChatService',
-      );
+      Logger.log(`[表情包] 🧠 AI情绪识别结果: ${detectedEmotion || 'null'}`, 'ChatService');
       const sticker = await this.stickerService.pickStickerByText(content, detectedEmotion);
 
       if (!sticker) {
@@ -676,7 +676,9 @@ export class ChatService {
         return null;
       }
       Logger.log(
-        `[表情包] ✅ 找到匹配的表情包 - id: ${sticker.id}, emotion: ${sticker.emotion || 'null'}, scenario: ${sticker.scenario || 'null'}, name: ${sticker.name || 'null'}`,
+        `[表情包] ✅ 找到匹配的表情包 - id: ${sticker.id}, emotion: ${
+          sticker.emotion || 'null'
+        }, scenario: ${sticker.scenario || 'null'}, name: ${sticker.name || 'null'}`,
         'ChatService',
       );
 
@@ -717,7 +719,11 @@ export class ChatService {
         const randomValue = Math.random();
         const shouldSend = randomValue < 0.3;
         Logger.log(
-          `[表情包] 🎲 普通情绪表情包概率判断 - emotion: ${sticker.emotion}, 随机值: ${randomValue.toFixed(4)}, 阈值: 0.3000, 结果: ${shouldSend ? '✅触发' : '❌未触发'}`,
+          `[表情包] 🎲 普通情绪表情包概率判断 - emotion: ${
+            sticker.emotion
+          }, 随机值: ${randomValue.toFixed(4)}, 阈值: 0.3000, 结果: ${
+            shouldSend ? '✅触发' : '❌未触发'
+          }`,
           'ChatService',
         );
         if (!shouldSend) {
@@ -2305,9 +2311,9 @@ ${setSystemMessage}
           try {
             const groupInfo = await this.chatGroupService.getGroupInfoFromId(groupId);
             if (groupInfo) {
-              // 心理描述开关
-              if (typeof groupInfo.describingMental === 'number') {
-                enablePsychologicalDesc = groupInfo.describingMental === 1;
+              // 心理描述开关（兼容布尔值和数字）
+              if (typeof groupInfo.describingMental !== 'undefined') {
+                enablePsychologicalDesc = !!groupInfo.describingMental;
                 this.logDebug(
                   `[心理描述] 使用会话组配置: groupId=${groupId}, describingMental=${groupInfo.describingMental}`,
                   'ChatService',
@@ -2335,17 +2341,17 @@ ${setSystemMessage}
                 );
               }
 
-              // 表情包和拍一拍开关
-              if (typeof groupInfo.allowEmoji === 'number') {
-                groupAllowEmoji = groupInfo.allowEmoji === 1;
+              // 表情包和拍一拍开关（兼容布尔值和数字）
+              if (typeof groupInfo.allowEmoji !== 'undefined') {
+                groupAllowEmoji = !!groupInfo.allowEmoji;
                 this.logDebug(
                   `[表情包] 使用会话组配置: groupId=${groupId}, allowEmoji=${groupAllowEmoji}`,
                   'ChatService',
                 );
               }
 
-              if (typeof groupInfo.allowTap === 'number') {
-                groupAllowTap = groupInfo.allowTap === 1;
+              if (typeof groupInfo.allowTap !== 'undefined') {
+                groupAllowTap = !!groupInfo.allowTap;
                 this.logDebug(
                   `[拍一拍] 使用会话组配置: groupId=${groupId}, allowTap=${groupAllowTap}`,
                   'ChatService',
@@ -2361,9 +2367,9 @@ ${setSystemMessage}
                 );
               }
 
-              // 翻译开关
-              if (typeof groupInfo.enableTranslation === 'number') {
-                groupEnableTranslation = groupInfo.enableTranslation === 1;
+              // 翻译开关（兼容布尔值和数字）
+              if (typeof groupInfo.enableTranslation !== 'undefined') {
+                groupEnableTranslation = !!groupInfo.enableTranslation;
                 this.logDebug(
                   `[翻译] 使用会话组配置: groupId=${groupId}, enableTranslation=${groupEnableTranslation}`,
                   'ChatService',
@@ -2372,7 +2378,7 @@ ${setSystemMessage}
             }
 
             // 如果会话组没有配置心理描述，使用用户级别配置
-            if (!groupInfo || typeof groupInfo.describingMental !== 'number') {
+            if (!groupInfo || typeof groupInfo.describingMental === 'undefined') {
               enablePsychologicalDesc =
                 await this.userAppSettingsService.getEnablePsychologicalDesc(req.user.id, appId);
               this.logDebug(
@@ -3187,7 +3193,9 @@ ${setSystemMessage}
                 Logger.log(
                   `[表情包] ✅ AI主动发送表情包成功 - userId=${req.user.id}, scenario=${
                     stickerResult.scenario || '情绪表情包'
-                  }, isScenarioSticker=${stickerResult.isScenarioSticker}, imageUrl=${stickerResult.imageUrl}`,
+                  }, isScenarioSticker=${stickerResult.isScenarioSticker}, imageUrl=${
+                    stickerResult.imageUrl
+                  }`,
                   'ChatService',
                 );
 

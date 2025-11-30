@@ -333,7 +333,9 @@ ${numberedOptions}
       }
 
       Logger.log(
-        `[Sticker场景AI判断] 从数据库获取到 ${scenarios.length} 个转账场景: ${scenarios.join(', ')}`,
+        `[Sticker场景AI判断] 从数据库获取到 ${scenarios.length} 个转账场景: ${scenarios.join(
+          ', ',
+        )}`,
         'StickerService',
       );
 
@@ -421,10 +423,7 @@ C. 节日庆祝类场景：
         `[Sticker场景AI判断] 发送API请求 - model: qwen-turbo, prompt长度: ${prompt.length}`,
         'StickerService',
       );
-      Logger.debug(
-        `[Sticker场景AI判断] 完整Prompt:\n${prompt}`,
-        'StickerService',
-      );
+      Logger.debug(`[Sticker场景AI判断] 完整Prompt:\n${prompt}`, 'StickerService');
 
       const axios = require('axios');
       const response = await axios.post(
@@ -448,10 +447,7 @@ C. 节日庆祝类场景：
         return null;
       }
 
-      Logger.log(
-        `[Sticker场景AI判断] 开始场景验证 - AI返回: "${result}"`,
-        'StickerService',
-      );
+      Logger.log(`[Sticker场景AI判断] 开始场景验证 - AI返回: "${result}"`, 'StickerService');
 
       // 清理AI返回结果（移除可能的序号和前缀）
       let cleanedResult = result
@@ -459,10 +455,7 @@ C. 节日庆祝类场景：
         .replace(/^\d+\.\s*/, '')
         .trim();
 
-      Logger.debug(
-        `[Sticker场景AI判断] 清理后的返回: "${cleanedResult}"`,
-        'StickerService',
-      );
+      Logger.debug(`[Sticker场景AI判断] 清理后的返回: "${cleanedResult}"`, 'StickerService');
 
       // 模糊匹配：AI返回的场景只要包含有效场景的部分关键词即可
       for (const scenario of scenarios) {
@@ -479,7 +472,9 @@ C. 节日庆祝类场景：
           if (scenario.includes('买')) {
             const hasBuyKeyword = text.includes('买');
             Logger.log(
-              `[Sticker场景AI判断] → 验证"买"字: ${hasBuyKeyword ? '✓ 包含' : '✗ 缺失'} (原文: "${text}")`,
+              `[Sticker场景AI判断] → 验证"买"字: ${
+                hasBuyKeyword ? '✓ 包含' : '✗ 缺失'
+              } (原文: "${text}")`,
               'StickerService',
             );
 
@@ -517,7 +512,11 @@ C. 节日庆祝类场景：
           }
 
           // 关键词二次验证：场景描述中包含"奖励"或"爱意"或"生活费"的，必须验证文本中包含金钱关键词
-          if (scenario.includes('奖励') || scenario.includes('爱意') || scenario.includes('生活费')) {
+          if (
+            scenario.includes('奖励') ||
+            scenario.includes('爱意') ||
+            scenario.includes('生活费')
+          ) {
             const moneyPattern = /\d+元|\d+块|红包|转账|转你|发你\d+|给你\d+/;
             const hasMoneyKeywords =
               moneyPattern.test(text) || text.includes('红包') || text.includes('转账');
@@ -531,7 +530,9 @@ C. 节日庆祝类场景：
               text.includes('管钱');
 
             Logger.log(
-              `[Sticker场景AI判断] → 验证金钱关键词: ${hasMoneyKeywords ? '✓ 包含' : '✗ 缺失'} (匹配: ${matchedPattern ? matchedPattern[0] : '无'}, 原文: "${text}")`,
+              `[Sticker场景AI判断] → 验证金钱关键词: ${
+                hasMoneyKeywords ? '✓ 包含' : '✗ 缺失'
+              } (匹配: ${matchedPattern ? matchedPattern[0] : '无'}, 原文: "${text}")`,
               'StickerService',
             );
 
@@ -568,10 +569,7 @@ C. 节日庆祝类场景：
         error?.stack || '',
         'StickerService',
       );
-      Logger.error(
-        `[Sticker场景AI判断] ✗ 请求详情 - 待分析文本: "${text}"`,
-        'StickerService',
-      );
+      Logger.error(`[Sticker场景AI判断] ✗ 请求详情 - 待分析文本: "${text}"`, 'StickerService');
       return null;
     }
   }

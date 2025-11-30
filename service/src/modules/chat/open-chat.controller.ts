@@ -692,17 +692,19 @@ export class OpenChatController {
             const randomValue = Math.random();
             const shouldGenerate = randomValue < 0.286;
             this.logger.log(
-              `[chat-process-sync] ✅ 触发 mixed 模式概率判断 - groupId: ${groupId}, 随机值: ${randomValue.toFixed(4)}, 阈值: 0.286, 结果: ${shouldGenerate ? '✅生成语音' : '❌仅文字'}`,
+              `[chat-process-sync] ✅ 触发 mixed 模式概率判断 - groupId: ${groupId}, 随机值: ${randomValue.toFixed(
+                4,
+              )}, 阈值: 0.286, 结果: ${shouldGenerate ? '✅生成语音' : '❌仅文字'}`,
             );
             shouldGenerateTts = shouldGenerate;
           } else if (chatGroup && chatGroup.voiceReplyMode === 'voice_only') {
-            this.logger.log(
-              `[chat-process-sync] 会话组 ${groupId} 设置为 voice_only，生成语音`,
-            );
+            this.logger.log(`[chat-process-sync] 会话组 ${groupId} 设置为 voice_only，生成语音`);
             shouldGenerateTts = true;
           } else if (chatGroup) {
             this.logger.log(
-              `[chat-process-sync] 会话组 ${groupId} voiceReplyMode: ${chatGroup.voiceReplyMode || 'undefined'}`,
+              `[chat-process-sync] 会话组 ${groupId} voiceReplyMode: ${
+                chatGroup.voiceReplyMode || 'undefined'
+              }`,
             );
           }
         } catch (error: any) {
@@ -714,7 +716,9 @@ export class OpenChatController {
       // 如果需要生成TTS且尚未生成语音，则主动调用TTS生成（包含情绪识别）
       if (shouldGenerateTts && !audioUrl && fullResponse && chatId) {
         this.logger.log(
-          `[chat-process-sync] 🎤 开始TTS生成 - shouldGenerateTts: ${shouldGenerateTts}, audioUrl: ${audioUrl || 'null'}, chatId: ${chatId}, generateTts参数: ${generateTts ?? 'default(true)'}`,
+          `[chat-process-sync] 🎤 开始TTS生成 - shouldGenerateTts: ${shouldGenerateTts}, audioUrl: ${
+            audioUrl || 'null'
+          }, chatId: ${chatId}, generateTts参数: ${generateTts ?? 'default(true)'}`,
         );
         try {
           const ttsResult = await this.chatService.generateTtsWithEmotion({
@@ -739,7 +743,9 @@ export class OpenChatController {
         }
       } else {
         this.logger.log(
-          `[chat-process-sync] ⏭️ 跳过TTS生成 - shouldGenerateTts: ${shouldGenerateTts}, audioUrl: ${audioUrl || 'null'}, fullResponse: ${fullResponse ? 'exists' : 'null'}, chatId: ${chatId || 'null'}`,
+          `[chat-process-sync] ⏭️ 跳过TTS生成 - shouldGenerateTts: ${shouldGenerateTts}, audioUrl: ${
+            audioUrl || 'null'
+          }, fullResponse: ${fullResponse ? 'exists' : 'null'}, chatId: ${chatId || 'null'}`,
         );
       }
 

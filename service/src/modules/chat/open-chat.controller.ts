@@ -685,9 +685,7 @@ export class OpenChatController {
         try {
           const chatGroup = await this.chatGroupEntity.findOne({ where: { id: groupId } });
           if (chatGroup && chatGroup.voiceReplyMode === 'text_only') {
-            this.logger.log(
-              `[chat-process-sync] 会话组 ${groupId} 设置为 text_only，跳过TTS生成`,
-            );
+            this.logger.log(`[chat-process-sync] 会话组 ${groupId} 设置为 text_only，跳过TTS生成`);
             shouldGenerateTts = false;
           } else if (chatGroup) {
             this.logger.log(
@@ -695,9 +693,7 @@ export class OpenChatController {
             );
           }
         } catch (error: any) {
-          this.logger.warn(
-            `[chat-process-sync] 获取会话组配置失败: ${error?.message || error}`,
-          );
+          this.logger.warn(`[chat-process-sync] 获取会话组配置失败: ${error?.message || error}`);
           // 获取配置失败不影响主流程，继续使用默认值
         }
       }
@@ -705,7 +701,9 @@ export class OpenChatController {
       // 如果需要生成TTS且尚未生成语音，则主动调用TTS生成（包含情绪识别）
       if (shouldGenerateTts && !audioUrl && fullResponse && chatId) {
         this.logger.log(
-          `[chat-process-sync] 开始情绪识别和TTS生成（generateTts=${generateTts ?? 'default(true)'}）`,
+          `[chat-process-sync] 开始情绪识别和TTS生成（generateTts=${
+            generateTts ?? 'default(true)'
+          }）`,
         );
         try {
           const ttsResult = await this.chatService.generateTtsWithEmotion({
@@ -723,9 +721,7 @@ export class OpenChatController {
             );
           }
         } catch (ttsError: any) {
-          this.logger.warn(
-            `[chat-process-sync] TTS生成失败: ${ttsError?.message || ttsError}`,
-          );
+          this.logger.warn(`[chat-process-sync] TTS生成失败: ${ttsError?.message || ttsError}`);
           // TTS失败不影响主流程，继续返回文本结果
         }
       } else if (!shouldGenerateTts) {

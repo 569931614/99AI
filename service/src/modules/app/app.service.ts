@@ -3,6 +3,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Request } from 'express';
 import { DataSource, In, IsNull, Like, MoreThan, Not, Repository } from 'typeorm';
 import { ChatGroupEntity } from '../chatGroup/chatGroup.entity';
+import { ChatGroupService } from '../chatGroup/chatGroup.service';
 import { GlobalConfigService } from '../globalConfig/globalConfig.service';
 import { UserBalanceService } from '../userBalance/userBalance.service';
 import { AppEntity } from './app.entity';
@@ -41,6 +42,7 @@ export class AppService {
     private readonly chatGroupEntity: Repository<ChatGroupEntity>,
     private readonly userBalanceService: UserBalanceService,
     private readonly globalConfigService: GlobalConfigService,
+    private readonly chatGroupService: ChatGroupService,
     private readonly dataSource: DataSource,
   ) {}
 
@@ -1573,9 +1575,50 @@ export class AppService {
       throw new HttpException('无权删除此角色！', HttpStatus.FORBIDDEN);
     }
 
+    // 级联删除关联的会话组（最佳努力，失败不影响角色删除）
+    let deletedChatGroupsCount = 0;
+    try {
+      // 查询该用户所有关联该角色的会话组
+      const chatGroups = await this.chatGroupEntity.find({
+        where: {
+          userId: userId,
+          appId: id,
+          isDelete: false,
+        },
+      });
+
+      // 软删除所有会话组并清除好感度
+      for (const group of chatGroups) {
+        try {
+          await this.chatGroupEntity.update({ id: group.id }, { isDelete: true });
+          deletedChatGroupsCount++;
+        } catch (err) {
+          Logger.warn(
+            `删除会话组失败 groupId: ${group.id}, error: ${err.message}`,
+            'AppService.userDelRole',
+          );
+        }
+      }
+
+      Logger.log(
+        `删除角色 ${id} 时成功删除 ${deletedChatGroupsCount} 个会话组`,
+        'AppService.userDelRole',
+      );
+    } catch (error) {
+      Logger.error(
+        `删除角色 ${id} 的会话组时发生错误: ${error.message}，继续删除角色`,
+        'AppService.userDelRole',
+      );
+    }
+
+    // 删除角色
     try {
       await this.appEntity.delete(id);
-      return { success: true, message: '删除成功' };
+      return {
+        success: true,
+        message: '删除成功',
+        deletedChatGroupsCount,
+      };
     } catch (error) {
       throw new HttpException('删除角色失败', HttpStatus.BAD_REQUEST);
     }

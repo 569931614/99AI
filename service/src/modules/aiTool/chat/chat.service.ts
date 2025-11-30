@@ -176,13 +176,16 @@ export class OpenAIChatService {
       // 发送请求
       if (options?.onProgress) {
         // 流式响应
-        const stream = await openai.chat.completions.create({
-          model: userConfig.modelName,
-          messages,
-          stream: true,
-        }, {
-          signal: options.abortSignal,
-        });
+        const stream = await openai.chat.completions.create(
+          {
+            model: userConfig.modelName,
+            messages,
+            stream: true,
+          },
+          {
+            signal: options.abortSignal,
+          },
+        );
 
         let fullText = '';
         let inputTokens = 0;
@@ -210,12 +213,15 @@ export class OpenAIChatService {
         };
       } else {
         // 非流式响应
-        const response = await openai.chat.completions.create({
-          model: userConfig.modelName,
-          messages,
-        }, {
-          signal: options?.abortSignal,
-        });
+        const response = await openai.chat.completions.create(
+          {
+            model: userConfig.modelName,
+            messages,
+          },
+          {
+            signal: options?.abortSignal,
+          },
+        );
 
         const text = response.choices[0]?.message?.content || '';
 

@@ -653,6 +653,7 @@ export class ChatService {
     emotion: string | null;
     scenario: string | null;
     isScenarioSticker: boolean;
+    transferText?: string; // 转账文本，如"转账188"
   } | null> {
     const { userId, content, appId, groupId, req } = options;
 
@@ -668,7 +669,7 @@ export class ChatService {
 
       const isScenarioSticker = !!sticker.scenario;
 
-      // 2. 场景表情包：检查去重
+      // 2. 场景表情包：检查去重（10条消息内不重复转账）
       if (isScenarioSticker) {
         const hasSent = await this.checkIfScenarioStickerAlreadySent(
           userId,
@@ -695,6 +696,10 @@ export class ChatService {
 
       // 4. 创建表情包消息并保存到数据库
       const curIp = req ? getClientIp(req) : null;
+
+      // 场景表情包使用sticker.name作为转账文本（如"转账188"）
+      const transferText = isScenarioSticker ? sticker.name : '';
+
       const extraParam = {
         type: 'sticker',
         stickerId: sticker.id,
@@ -704,6 +709,7 @@ export class ChatService {
         source: 'auto',
         detectedEmotion: detectedEmotion,
         originalContent: content,
+        transferText: transferText, // 保存转账文本到extraParam
       };
 
       const stickerLog = await this.chatLogService.saveChatLog({
@@ -717,7 +723,7 @@ export class ChatService {
         role: 'assistant',
         groupId: groupId ?? null,
         status: 3,
-        content: '',
+        content: transferText, // 场景表情包的content保存转账文本
         imageUrl: sticker.imageUrl,
         extraParam: JSON.stringify(extraParam),
         promptTokens: 0,
@@ -732,6 +738,7 @@ export class ChatService {
         emotion: sticker.emotion || detectedEmotion || null,
         scenario: sticker.scenario || null,
         isScenarioSticker: isScenarioSticker,
+        transferText: transferText || undefined, // 返回转账文本
       };
     } catch (error: any) {
       Logger.error(
@@ -744,10 +751,10 @@ export class ChatService {
   }
 
   /**
-   * 检查最近是否已发送过相同场景的表情包（去重）
+   * 检查最近10条消息内是否已发送过转账表情包（去重）
    * @param userId 用户ID
    * @param groupId 会话组ID
-   * @param scenario 场景描述
+   * @param scenario 场景描述（暂时保留参数，但主要检查是否有转账记录）
    * @param imageUrl 表情包图片URL
    * @returns true=已发送过（应跳过），false=未发送过（可以发送）
    */
@@ -762,7 +769,7 @@ export class ChatService {
     }
 
     try {
-      // 查询最近10条消息
+      // 查询最近10条消息（改为10条）
       const recentMessages = await this.chatLogService.queryChatLogByGroup({
         groupId: groupId,
         userId: userId,
@@ -774,20 +781,35 @@ export class ChatService {
         return false;
       }
 
-      // 检查是否有相同场景或相同图片的表情包
+      // 检查是否有转账记录（通过content字段包含"转账"或extraParam中的transferText）
       for (const msg of recentMessages) {
-        if (msg.imageUrl === imageUrl) {
+        // 检查content字段是否包含"转账"
+        if (msg.content && typeof msg.content === 'string' && msg.content.includes('转账')) {
           Logger.debug(
-            `[表情包去重] 找到相同图片的表情包 - imageUrl=${imageUrl}`,
+            `[表情包去重] 最近10条消息中找到转账记录 - content="${msg.content}"`,
             'ChatService',
           );
           return true;
         }
 
-        // 检查 extraParam 中的 scenario
+        // 检查相同图片
+        if (msg.imageUrl === imageUrl) {
+          Logger.debug(`[表情包去重] 找到相同图片的表情包 - imageUrl=${imageUrl}`, 'ChatService');
+          return true;
+        }
+
+        // 检查 extraParam 中的 transferText
         if (msg.extraParam) {
           try {
             const extra = JSON.parse(msg.extraParam);
+            if (extra.transferText) {
+              Logger.debug(
+                `[表情包去重] 最近10条消息中找到转账记录 - transferText="${extra.transferText}"`,
+                'ChatService',
+              );
+              return true;
+            }
+            // 兼容检查scenario
             if (extra.scenario === scenario) {
               Logger.debug(
                 `[表情包去重] 找到相同场景的表情包 - scenario=${scenario}`,
@@ -803,10 +825,7 @@ export class ChatService {
 
       return false;
     } catch (error: any) {
-      Logger.warn(
-        `[表情包去重] 检查失败: ${error?.message || error}`,
-        'ChatService',
-      );
+      Logger.warn(`[表情包去重] 检查失败: ${error?.message || error}`, 'ChatService');
       return false; // 失败时允许发送，避免影响用户体验
     }
   }
@@ -3129,9 +3148,15 @@ ${setSystemMessage}
 
               if (stickerResult) {
                 Logger.log(
-                  `[表情包] ✓ AI主动发送表情包 - userId=${req.user.id}, scenario=${stickerResult.scenario || '情绪表情包'}`,
+                  `[表情包] ✓ AI主动发送表情包 - userId=${req.user.id}, scenario=${
+                    stickerResult.scenario || '情绪表情包'
+                  }`,
                   'ChatService',
                 );
+
+                // 转账文本不保存到消息content，只在构建上下文时动态添加
+                // 表情包消息本身的content="转账188"已保存在独立的chatLog记录中
+
                 // 通过流式响应发送表情包事件
                 const stickerEvent = {
                   event: 'sticker',
@@ -3141,6 +3166,8 @@ ${setSystemMessage}
                     stickerId: stickerResult.stickerId,
                     scenario: stickerResult.scenario,
                     isScenarioSticker: stickerResult.isScenarioSticker,
+                    transferText: stickerResult.transferText, // 添加转账文本到事件数据
+                    isStickerImage: true, // 标记为表情包图片，前端不显示content文字
                   },
                 };
                 res.write(`\n${JSON.stringify(stickerEvent)}`);
@@ -3391,6 +3418,43 @@ ${setSystemMessage}
                 continue;
               }
 
+              // 🔥 新增：跳过转账表情包消息（它们不应该出现在LLM上下文中）
+              let isTransferSticker = false;
+              if (record.extraParam) {
+                try {
+                  const extraParam = JSON.parse(record.extraParam);
+                  // 如果是表情包消息且有transferText，跳过
+                  if (extraParam.type === 'sticker' && extraParam.transferText) {
+                    isTransferSticker = true;
+                    this.logDebug(
+                      `[转账上下文] 检测到转账表情包消息 - id=${record.id}, transferText=${extraParam.transferText}`,
+                      'ChatService',
+                    );
+                  }
+                } catch (e) {
+                  // JSON解析失败，忽略
+                }
+              }
+
+              if (isTransferSticker) {
+                // 保存表情包消息到单独的数组，用于后续检测转账
+                assistantMessages.push({
+                  id: record.id,
+                  role: 'sticker', // 标记为sticker类型，后续过滤时跳过
+                  content: content,
+                  createdAt: record.createdAt,
+                  appId: record.appId,
+                  modelName: record.modelName,
+                  imageUrl: record.imageUrl,
+                  extraParam: record.extraParam,
+                });
+                this.logDebug(
+                  `[转账上下文] 将转账表情包标记为role=sticker - id=${record.id}`,
+                  'ChatService',
+                );
+                continue;
+              }
+
               assistantMessages.push({
                 id: record.id,
                 role: 'assistant',
@@ -3481,7 +3545,50 @@ ${setSystemMessage}
             'ChatService',
           );
 
+          // 🔥 新增：检测转账表情包，为assistant消息添加转账标记
+          this.logDebug(
+            `[转账检测-群聊] 开始检测转账表情包，总消息数=${allMessages.length}`,
+            'ChatService',
+          );
+          for (let i = 0; i < allMessages.length - 1; i++) {
+            const currentMsg = allMessages[i];
+            const nextMsg = allMessages[i + 1];
+
+            this.logDebug(
+              `[转账检测-群聊] 检查消息对 i=${i}: currentMsg.role=${currentMsg.role}, nextMsg.role=${nextMsg.role}`,
+              'ChatService',
+            );
+
+            // 如果当前消息是assistant，下一条消息是转账表情包（role为'sticker'）
+            if (currentMsg.role === 'assistant' && nextMsg.role === 'sticker') {
+              try {
+                // 检查下一条消息的extraParam是否包含transferText
+                if (nextMsg.extraParam) {
+                  const extraParam =
+                    typeof nextMsg.extraParam === 'string'
+                      ? JSON.parse(nextMsg.extraParam)
+                      : nextMsg.extraParam;
+                  if (extraParam.transferText) {
+                    // 标记当前assistant消息需要追加转账文本
+                    (currentMsg as any).transferText = extraParam.transferText;
+                    this.logDebug(
+                      `[转账上下文-群聊] 检测到转账表情包，为assistant消息添加标记: ${extraParam.transferText}`,
+                      'ChatService',
+                    );
+                  }
+                }
+              } catch (e) {
+                // JSON解析失败，忽略
+              }
+            }
+          }
+
           for (const msg of allMessages) {
+            // 跳过转账表情包消息（role为'sticker'）
+            if (msg.role === 'sticker') {
+              continue;
+            }
+
             if (msg.role === 'user') {
               // 当 skipPromptInHistory 为 true 时，跳过用户消息
               if (options?.skipPromptInHistory === true) {
@@ -3541,6 +3648,15 @@ ${setSystemMessage}
                 messageContent = `${speakerName}：${messageContent}`;
               }
 
+              // 🔥 新增：如果有转账标记，追加转账文本到上下文（拼接到同一条消息）
+              if ((msg as any).transferText) {
+                messageContent = `${messageContent}\n${(msg as any).transferText}`;
+                this.logDebug(
+                  `[转账上下文] 为assistant消息追加转账文本: ${(msg as any).transferText}`,
+                  'ChatService',
+                );
+              }
+
               messages.push({
                 role: finalRole,
                 content: messageContent,
@@ -3563,7 +3679,61 @@ ${setSystemMessage}
             (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime(),
           );
 
-          messages.push(...allMessages.map(m => ({ role: m.role, content: m.content })));
+          // 🔥 新增：检测转账表情包，为assistant消息添加转账标记
+          this.logDebug(
+            `[转账检测-单聊] 开始检测转账表情包，总消息数=${allMessages.length}`,
+            'ChatService',
+          );
+          for (let i = 0; i < allMessages.length - 1; i++) {
+            const currentMsg = allMessages[i];
+            const nextMsg = allMessages[i + 1];
+
+            this.logDebug(
+              `[转账检测-单聊] 检查消息对 i=${i}: currentMsg.role=${currentMsg.role}, nextMsg.role=${nextMsg.role}`,
+              'ChatService',
+            );
+
+            // 如果当前消息是assistant，下一条消息是转账表情包（role为'sticker'）
+            if (currentMsg.role === 'assistant' && nextMsg.role === 'sticker') {
+              try {
+                // 检查下一条消息的extraParam是否包含transferText
+                if (nextMsg.extraParam) {
+                  const extraParam =
+                    typeof nextMsg.extraParam === 'string'
+                      ? JSON.parse(nextMsg.extraParam)
+                      : nextMsg.extraParam;
+                  if (extraParam.transferText) {
+                    // 标记当前assistant消息需要追加转账文本
+                    (currentMsg as any).transferText = extraParam.transferText;
+                    this.logDebug(
+                      `[转账上下文-单聊] 检测到转账表情包，为assistant消息添加标记: ${extraParam.transferText}`,
+                      'ChatService',
+                    );
+                  }
+                }
+              } catch (e) {
+                // JSON解析失败，忽略
+              }
+            }
+          }
+
+          // 构建messages数组，过滤sticker消息并追加转账文本
+          messages.push(
+            ...allMessages
+              .filter(m => m.role !== 'sticker') // 过滤掉转账表情包消息
+              .map(m => {
+                let content = m.content;
+                // 如果是assistant消息且有转账标记，追加转账文本（拼接到同一条消息）
+                if (m.role === 'assistant' && (m as any).transferText) {
+                  content = `${content}\n${(m as any).transferText}`;
+                  this.logDebug(
+                    `[转账上下文] 为assistant消息追加转账文本: ${(m as any).transferText}`,
+                    'ChatService',
+                  );
+                }
+                return { role: m.role, content: content };
+              }),
+          );
         }
       } catch (error) {
         Logger.error(`获取聊天历史记录失败: ${error.message}`, 'ChatService');
@@ -3835,7 +4005,10 @@ ${setSystemMessage}
     const { text, chatId, appId, userId } = options;
 
     this.logDebug(
-      `[generateTtsWithEmotion] 开始处理: text=${text.substring(0, 50)}..., chatId=${chatId}, appId=${appId}`,
+      `[generateTtsWithEmotion] 开始处理: text=${text.substring(
+        0,
+        50,
+      )}..., chatId=${chatId}, appId=${appId}`,
       'TTSService',
     );
 
@@ -4027,10 +4200,7 @@ ${setSystemMessage}
           ? '日常'
           : await this.getAppDefaultEmotion(appId, options);
         chosen = { emotion: fallback, method: 'default' };
-        Logger.log(
-          `[TTSService] AI未识别到合适情绪，使用应用默认情绪: ${fallback}`,
-          'TTSService',
-        );
+        Logger.log(`[TTSService] AI未识别到合适情绪，使用应用默认情绪: ${fallback}`, 'TTSService');
       }
 
       const finalEmotion = chosen.emotion;
@@ -4050,10 +4220,7 @@ ${setSystemMessage}
             'TTSService',
           );
           const ttsParams = this.mapEmotionToTtsParams(finalEmotion);
-          Logger.log(
-            `[TTSService] 情绪合成参数: ${JSON.stringify(ttsParams)}`,
-            'TTSService',
-          );
+          Logger.log(`[TTSService] 情绪合成参数: ${JSON.stringify(ttsParams)}`, 'TTSService');
           const source = finalEmotion === '日常' ? '日常音色(默认)' : '情绪映射';
           return await doTtsWithVoice(mappedVoice, ttsParams, finalEmotion, source);
         }

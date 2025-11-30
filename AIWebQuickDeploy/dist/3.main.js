@@ -3,20 +3,20 @@ exports.id = 3;
 exports.ids = [3];
 exports.modules = {
 
-/***/ 4431:
+/***/ 4435:
 /***/ ((__unused_webpack_module, __webpack_exports__, __webpack_require__) => {
 
 __webpack_require__.r(__webpack_exports__);
 /* harmony export */ __webpack_require__.d(__webpack_exports__, {
 /* harmony export */   fromSSO: () => (/* binding */ fromSSO)
 /* harmony export */ });
-/* harmony import */ var _smithy_property_provider__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(3139);
-/* harmony import */ var _smithy_shared_ini_file_loader__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(3142);
-/* harmony import */ var _smithy_shared_ini_file_loader__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(4443);
-/* harmony import */ var _smithy_shared_ini_file_loader__WEBPACK_IMPORTED_MODULE_4__ = __webpack_require__(4445);
-/* harmony import */ var _isSsoProfile__WEBPACK_IMPORTED_MODULE_3__ = __webpack_require__(4432);
-/* harmony import */ var _resolveSSOCredentials__WEBPACK_IMPORTED_MODULE_6__ = __webpack_require__(4433);
-/* harmony import */ var _validateSsoProfile__WEBPACK_IMPORTED_MODULE_5__ = __webpack_require__(4448);
+/* harmony import */ var _smithy_property_provider__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(3084);
+/* harmony import */ var _smithy_shared_ini_file_loader__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(3087);
+/* harmony import */ var _smithy_shared_ini_file_loader__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(4447);
+/* harmony import */ var _smithy_shared_ini_file_loader__WEBPACK_IMPORTED_MODULE_4__ = __webpack_require__(4449);
+/* harmony import */ var _isSsoProfile__WEBPACK_IMPORTED_MODULE_3__ = __webpack_require__(4436);
+/* harmony import */ var _resolveSSOCredentials__WEBPACK_IMPORTED_MODULE_6__ = __webpack_require__(4437);
+/* harmony import */ var _validateSsoProfile__WEBPACK_IMPORTED_MODULE_5__ = __webpack_require__(4452);
 
 
 
@@ -102,7 +102,7 @@ const fromSSO = (init = {}) => async ({ callerClientConfig } = {}) => {
 
 /***/ }),
 
-/***/ 4430:
+/***/ 4434:
 /***/ ((__unused_webpack_module, __webpack_exports__, __webpack_require__) => {
 
 __webpack_require__.r(__webpack_exports__);
@@ -111,9 +111,9 @@ __webpack_require__.r(__webpack_exports__);
 /* harmony export */   isSsoProfile: () => (/* reexport safe */ _isSsoProfile__WEBPACK_IMPORTED_MODULE_1__.isSsoProfile),
 /* harmony export */   validateSsoProfile: () => (/* reexport safe */ _validateSsoProfile__WEBPACK_IMPORTED_MODULE_2__.validateSsoProfile)
 /* harmony export */ });
-/* harmony import */ var _fromSSO__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(4431);
-/* harmony import */ var _isSsoProfile__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(4432);
-/* harmony import */ var _validateSsoProfile__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(4448);
+/* harmony import */ var _fromSSO__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(4435);
+/* harmony import */ var _isSsoProfile__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(4436);
+/* harmony import */ var _validateSsoProfile__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(4452);
 
 
 
@@ -122,7 +122,7 @@ __webpack_require__.r(__webpack_exports__);
 
 /***/ }),
 
-/***/ 4432:
+/***/ 4436:
 /***/ ((__unused_webpack_module, __webpack_exports__, __webpack_require__) => {
 
 __webpack_require__.r(__webpack_exports__);
@@ -139,17 +139,17 @@ const isSsoProfile = (arg) => arg &&
 
 /***/ }),
 
-/***/ 4433:
+/***/ 4437:
 /***/ ((__unused_webpack_module, __webpack_exports__, __webpack_require__) => {
 
 __webpack_require__.r(__webpack_exports__);
 /* harmony export */ __webpack_require__.d(__webpack_exports__, {
 /* harmony export */   resolveSSOCredentials: () => (/* binding */ resolveSSOCredentials)
 /* harmony export */ });
-/* harmony import */ var _aws_sdk_core_client__WEBPACK_IMPORTED_MODULE_3__ = __webpack_require__(3176);
-/* harmony import */ var _aws_sdk_token_providers__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(4434);
-/* harmony import */ var _smithy_property_provider__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(3139);
-/* harmony import */ var _smithy_shared_ini_file_loader__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(4447);
+/* harmony import */ var _aws_sdk_core_client__WEBPACK_IMPORTED_MODULE_3__ = __webpack_require__(3121);
+/* harmony import */ var _aws_sdk_token_providers__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(4438);
+/* harmony import */ var _smithy_property_provider__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(3084);
+/* harmony import */ var _smithy_shared_ini_file_loader__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(4451);
 
 
 
@@ -196,7 +196,7 @@ const resolveSSOCredentials = async ({ ssoStartUrl, ssoSession, ssoAccountId, ss
         });
     }
     const { accessToken } = token;
-    const { SSOClient, GetRoleCredentialsCommand } = await __webpack_require__.e(/* import() */ 9).then(__webpack_require__.bind(__webpack_require__, 4471));
+    const { SSOClient, GetRoleCredentialsCommand } = await __webpack_require__.e(/* import() */ 9).then(__webpack_require__.bind(__webpack_require__, 4475));
     const sso = ssoClient ||
         new SSOClient(Object.assign({}, clientConfig ?? {}, {
             logger: clientConfig?.logger ?? parentClientConfig?.logger,
@@ -243,14 +243,14 @@ const resolveSSOCredentials = async ({ ssoStartUrl, ssoSession, ssoAccountId, ss
 
 /***/ }),
 
-/***/ 4448:
+/***/ 4452:
 /***/ ((__unused_webpack_module, __webpack_exports__, __webpack_require__) => {
 
 __webpack_require__.r(__webpack_exports__);
 /* harmony export */ __webpack_require__.d(__webpack_exports__, {
 /* harmony export */   validateSsoProfile: () => (/* binding */ validateSsoProfile)
 /* harmony export */ });
-/* harmony import */ var _smithy_property_provider__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(3139);
+/* harmony import */ var _smithy_property_provider__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(3084);
 
 const validateSsoProfile = (profile, logger) => {
     const { sso_start_url, sso_account_id, sso_region, sso_role_name } = profile;
@@ -264,7 +264,7 @@ const validateSsoProfile = (profile, logger) => {
 
 /***/ }),
 
-/***/ 4435:
+/***/ 4439:
 /***/ ((__unused_webpack_module, __webpack_exports__, __webpack_require__) => {
 
 __webpack_require__.r(__webpack_exports__);
@@ -278,23 +278,23 @@ const REFRESH_MESSAGE = `To refresh this SSO session run 'aws sso login' with th
 
 /***/ }),
 
-/***/ 4434:
+/***/ 4438:
 /***/ ((__unused_webpack_module, __webpack_exports__, __webpack_require__) => {
 
 __webpack_require__.r(__webpack_exports__);
 /* harmony export */ __webpack_require__.d(__webpack_exports__, {
 /* harmony export */   fromSso: () => (/* binding */ fromSso)
 /* harmony export */ });
-/* harmony import */ var _smithy_property_provider__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(4439);
-/* harmony import */ var _smithy_shared_ini_file_loader__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(4443);
-/* harmony import */ var _smithy_shared_ini_file_loader__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(3142);
-/* harmony import */ var _smithy_shared_ini_file_loader__WEBPACK_IMPORTED_MODULE_3__ = __webpack_require__(4445);
-/* harmony import */ var _smithy_shared_ini_file_loader__WEBPACK_IMPORTED_MODULE_4__ = __webpack_require__(4447);
-/* harmony import */ var _constants__WEBPACK_IMPORTED_MODULE_5__ = __webpack_require__(4435);
-/* harmony import */ var _getNewSsoOidcToken__WEBPACK_IMPORTED_MODULE_8__ = __webpack_require__(4436);
-/* harmony import */ var _validateTokenExpiry__WEBPACK_IMPORTED_MODULE_7__ = __webpack_require__(4438);
-/* harmony import */ var _validateTokenKey__WEBPACK_IMPORTED_MODULE_6__ = __webpack_require__(4440);
-/* harmony import */ var _writeSSOTokenToFile__WEBPACK_IMPORTED_MODULE_9__ = __webpack_require__(4441);
+/* harmony import */ var _smithy_property_provider__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(4443);
+/* harmony import */ var _smithy_shared_ini_file_loader__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(4447);
+/* harmony import */ var _smithy_shared_ini_file_loader__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(3087);
+/* harmony import */ var _smithy_shared_ini_file_loader__WEBPACK_IMPORTED_MODULE_3__ = __webpack_require__(4449);
+/* harmony import */ var _smithy_shared_ini_file_loader__WEBPACK_IMPORTED_MODULE_4__ = __webpack_require__(4451);
+/* harmony import */ var _constants__WEBPACK_IMPORTED_MODULE_5__ = __webpack_require__(4439);
+/* harmony import */ var _getNewSsoOidcToken__WEBPACK_IMPORTED_MODULE_8__ = __webpack_require__(4440);
+/* harmony import */ var _validateTokenExpiry__WEBPACK_IMPORTED_MODULE_7__ = __webpack_require__(4442);
+/* harmony import */ var _validateTokenKey__WEBPACK_IMPORTED_MODULE_6__ = __webpack_require__(4444);
+/* harmony import */ var _writeSSOTokenToFile__WEBPACK_IMPORTED_MODULE_9__ = __webpack_require__(4445);
 
 
 
@@ -387,17 +387,17 @@ const fromSso = (_init = {}) => async ({ callerClientConfig } = {}) => {
 
 /***/ }),
 
-/***/ 4436:
+/***/ 4440:
 /***/ ((__unused_webpack_module, __webpack_exports__, __webpack_require__) => {
 
 __webpack_require__.r(__webpack_exports__);
 /* harmony export */ __webpack_require__.d(__webpack_exports__, {
 /* harmony export */   getNewSsoOidcToken: () => (/* binding */ getNewSsoOidcToken)
 /* harmony export */ });
-/* harmony import */ var _getSsoOidcClient__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(4437);
+/* harmony import */ var _getSsoOidcClient__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(4441);
 
 const getNewSsoOidcToken = async (ssoToken, ssoRegion, init = {}) => {
-    const { CreateTokenCommand } = await __webpack_require__.e(/* import() */ 10).then(__webpack_require__.bind(__webpack_require__, 4489));
+    const { CreateTokenCommand } = await __webpack_require__.e(/* import() */ 10).then(__webpack_require__.bind(__webpack_require__, 4493));
     const ssoOidcClient = await (0,_getSsoOidcClient__WEBPACK_IMPORTED_MODULE_0__.getSsoOidcClient)(ssoRegion, init);
     return ssoOidcClient.send(new CreateTokenCommand({
         clientId: ssoToken.clientId,
@@ -410,7 +410,7 @@ const getNewSsoOidcToken = async (ssoToken, ssoRegion, init = {}) => {
 
 /***/ }),
 
-/***/ 4437:
+/***/ 4441:
 /***/ ((__unused_webpack_module, __webpack_exports__, __webpack_require__) => {
 
 __webpack_require__.r(__webpack_exports__);
@@ -418,7 +418,7 @@ __webpack_require__.r(__webpack_exports__);
 /* harmony export */   getSsoOidcClient: () => (/* binding */ getSsoOidcClient)
 /* harmony export */ });
 const getSsoOidcClient = async (ssoRegion, init = {}) => {
-    const { SSOOIDCClient } = await __webpack_require__.e(/* import() */ 10).then(__webpack_require__.bind(__webpack_require__, 4489));
+    const { SSOOIDCClient } = await __webpack_require__.e(/* import() */ 10).then(__webpack_require__.bind(__webpack_require__, 4493));
     const ssoOidcClient = new SSOOIDCClient(Object.assign({}, init.clientConfig ?? {}, {
         region: ssoRegion ?? init.clientConfig?.region,
         logger: init.clientConfig?.logger ?? init.parentClientConfig?.logger,
@@ -429,15 +429,15 @@ const getSsoOidcClient = async (ssoRegion, init = {}) => {
 
 /***/ }),
 
-/***/ 4438:
+/***/ 4442:
 /***/ ((__unused_webpack_module, __webpack_exports__, __webpack_require__) => {
 
 __webpack_require__.r(__webpack_exports__);
 /* harmony export */ __webpack_require__.d(__webpack_exports__, {
 /* harmony export */   validateTokenExpiry: () => (/* binding */ validateTokenExpiry)
 /* harmony export */ });
-/* harmony import */ var _smithy_property_provider__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(4439);
-/* harmony import */ var _constants__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(4435);
+/* harmony import */ var _smithy_property_provider__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(4443);
+/* harmony import */ var _constants__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(4439);
 
 
 const validateTokenExpiry = (token) => {
@@ -449,15 +449,15 @@ const validateTokenExpiry = (token) => {
 
 /***/ }),
 
-/***/ 4440:
+/***/ 4444:
 /***/ ((__unused_webpack_module, __webpack_exports__, __webpack_require__) => {
 
 __webpack_require__.r(__webpack_exports__);
 /* harmony export */ __webpack_require__.d(__webpack_exports__, {
 /* harmony export */   validateTokenKey: () => (/* binding */ validateTokenKey)
 /* harmony export */ });
-/* harmony import */ var _smithy_property_provider__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(4439);
-/* harmony import */ var _constants__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(4435);
+/* harmony import */ var _smithy_property_provider__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(4443);
+/* harmony import */ var _constants__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(4439);
 
 
 const validateTokenKey = (key, value, forRefresh = false) => {
@@ -469,14 +469,14 @@ const validateTokenKey = (key, value, forRefresh = false) => {
 
 /***/ }),
 
-/***/ 4441:
+/***/ 4445:
 /***/ ((__unused_webpack_module, __webpack_exports__, __webpack_require__) => {
 
 __webpack_require__.r(__webpack_exports__);
 /* harmony export */ __webpack_require__.d(__webpack_exports__, {
 /* harmony export */   writeSSOTokenToFile: () => (/* binding */ writeSSOTokenToFile)
 /* harmony export */ });
-/* harmony import */ var _smithy_shared_ini_file_loader__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(4442);
+/* harmony import */ var _smithy_shared_ini_file_loader__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(4446);
 /* harmony import */ var fs__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(673);
 /* harmony import */ var fs__WEBPACK_IMPORTED_MODULE_0___default = /*#__PURE__*/__webpack_require__.n(fs__WEBPACK_IMPORTED_MODULE_0__);
 
@@ -491,14 +491,14 @@ const writeSSOTokenToFile = (id, ssoToken) => {
 
 /***/ }),
 
-/***/ 4439:
+/***/ 4443:
 /***/ ((__unused_webpack_module, __webpack_exports__, __webpack_require__) => {
 
 __webpack_require__.r(__webpack_exports__);
 /* harmony export */ __webpack_require__.d(__webpack_exports__, {
 /* harmony export */   TokenProviderError: () => (/* binding */ TokenProviderError)
 /* harmony export */ });
-/* harmony import */ var _ProviderError__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(3140);
+/* harmony import */ var _ProviderError__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(3085);
 
 class TokenProviderError extends _ProviderError__WEBPACK_IMPORTED_MODULE_0__.ProviderError {
     name = "TokenProviderError";
@@ -511,7 +511,7 @@ class TokenProviderError extends _ProviderError__WEBPACK_IMPORTED_MODULE_0__.Pro
 
 /***/ }),
 
-/***/ 4442:
+/***/ 4446:
 /***/ ((__unused_webpack_module, __webpack_exports__, __webpack_require__) => {
 
 __webpack_require__.r(__webpack_exports__);
@@ -522,7 +522,7 @@ __webpack_require__.r(__webpack_exports__);
 /* harmony import */ var crypto__WEBPACK_IMPORTED_MODULE_0___default = /*#__PURE__*/__webpack_require__.n(crypto__WEBPACK_IMPORTED_MODULE_0__);
 /* harmony import */ var path__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(674);
 /* harmony import */ var path__WEBPACK_IMPORTED_MODULE_1___default = /*#__PURE__*/__webpack_require__.n(path__WEBPACK_IMPORTED_MODULE_1__);
-/* harmony import */ var _getHomeDir__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(3132);
+/* harmony import */ var _getHomeDir__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(3077);
 
 
 
@@ -535,7 +535,7 @@ const getSSOTokenFilepath = (id) => {
 
 /***/ }),
 
-/***/ 4447:
+/***/ 4451:
 /***/ ((__unused_webpack_module, __webpack_exports__, __webpack_require__) => {
 
 __webpack_require__.r(__webpack_exports__);
@@ -545,7 +545,7 @@ __webpack_require__.r(__webpack_exports__);
 /* harmony export */ });
 /* harmony import */ var fs__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(673);
 /* harmony import */ var fs__WEBPACK_IMPORTED_MODULE_0___default = /*#__PURE__*/__webpack_require__.n(fs__WEBPACK_IMPORTED_MODULE_0__);
-/* harmony import */ var _getSSOTokenFilepath__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(4442);
+/* harmony import */ var _getSSOTokenFilepath__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(4446);
 
 
 const { readFile } = fs__WEBPACK_IMPORTED_MODULE_0__.promises;
@@ -562,15 +562,15 @@ const getSSOTokenFromFile = async (id) => {
 
 /***/ }),
 
-/***/ 4446:
+/***/ 4450:
 /***/ ((__unused_webpack_module, __webpack_exports__, __webpack_require__) => {
 
 __webpack_require__.r(__webpack_exports__);
 /* harmony export */ __webpack_require__.d(__webpack_exports__, {
 /* harmony export */   getSsoSessionData: () => (/* binding */ getSsoSessionData)
 /* harmony export */ });
-/* harmony import */ var _smithy_types__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(3130);
-/* harmony import */ var _loadSharedConfigFiles__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(3128);
+/* harmony import */ var _smithy_types__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(3075);
+/* harmony import */ var _loadSharedConfigFiles__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(3073);
 
 
 const getSsoSessionData = (data) => Object.entries(data)
@@ -580,17 +580,17 @@ const getSsoSessionData = (data) => Object.entries(data)
 
 /***/ }),
 
-/***/ 4445:
+/***/ 4449:
 /***/ ((__unused_webpack_module, __webpack_exports__, __webpack_require__) => {
 
 __webpack_require__.r(__webpack_exports__);
 /* harmony export */ __webpack_require__.d(__webpack_exports__, {
 /* harmony export */   loadSsoSessionData: () => (/* binding */ loadSsoSessionData)
 /* harmony export */ });
-/* harmony import */ var _getConfigFilepath__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(3131);
-/* harmony import */ var _getSsoSessionData__WEBPACK_IMPORTED_MODULE_3__ = __webpack_require__(4446);
-/* harmony import */ var _parseIni__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(3134);
-/* harmony import */ var _slurpFile__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(3135);
+/* harmony import */ var _getConfigFilepath__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(3076);
+/* harmony import */ var _getSsoSessionData__WEBPACK_IMPORTED_MODULE_3__ = __webpack_require__(4450);
+/* harmony import */ var _parseIni__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(3079);
+/* harmony import */ var _slurpFile__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(3080);
 
 
 

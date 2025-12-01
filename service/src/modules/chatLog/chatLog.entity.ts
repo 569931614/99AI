@@ -27,7 +27,7 @@ export class ChatLogEntity extends BaseEntity {
   @Column({ comment: '视频Url', nullable: true, type: 'text' })
   videoUrl: string;
 
-  @Column({ comment: '音频Url', nullable: true, type: 'text' })
+  @Column({ comment: '音频Url', nullable: true, type: 'mediumtext' })
   audioUrl: string;
 
   @Column({ comment: '文件Url', nullable: true, type: 'text' })

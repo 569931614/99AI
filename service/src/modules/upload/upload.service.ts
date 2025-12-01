@@ -26,28 +26,39 @@ export class UploadService implements OnModuleInit {
 
   // 检查用户上传频率
   private async checkUploadFrequency(userId: number): Promise<void> {
-    const hourlyKey = `upload:frequency:${userId}:${new Date().getHours()}`;
+    try {
+      const hourlyKey = `upload:frequency:${userId}:${new Date().getHours()}`;
 
-    // 获取当前小时的上传次数
-    const uploadCount = await this.redisCacheService.get({ key: hourlyKey });
-    const count = uploadCount ? parseInt(uploadCount) : 0;
+      // 获取当前小时的上传次数
+      const uploadCount = await this.redisCacheService.get({ key: hourlyKey });
+      const count = uploadCount ? parseInt(uploadCount) : 0;
 
-    Logger.log(`用户${userId}当前小时上传次数: ${count}`, 'UploadService');
+      Logger.log(`用户${userId}当前小时上传次数: ${count}`, 'UploadService');
 
-    // 检查是否超过限制(1小时100次)
-    if (count >= 100) {
-      throw new HttpException('您的上传频率过高，请稍后再试', HttpStatus.TOO_MANY_REQUESTS);
+      // 检查是否超过限制(1小时100次)
+      if (count >= 100) {
+        throw new HttpException('您的上传频率过高，请稍后再试', HttpStatus.TOO_MANY_REQUESTS);
+      }
+
+      // 更新上传次数，设置过期时间为1小时
+      await this.redisCacheService.set({ key: hourlyKey, val: (count + 1).toString() }, 3600);
+    } catch (error) {
+      // 如果 Redis 不可用，记录警告但不阻止上传
+      if (error instanceof HttpException) {
+        throw error; // 重新抛出频率限制异常
+      }
+      Logger.warn(
+        `Redis 不可用，跳过上传频率检查: ${error.message}`,
+        'UploadService',
+      );
     }
-
-    // 更新上传次数，设置过期时间为1小时
-    await this.redisCacheService.set({ key: hourlyKey, val: (count + 1).toString() }, 3600);
   }
 
   async uploadFile(file, dir = 'others', user = null) {
-    // 如果存在用户信息，则进行频率检查
-    if (user && user.id) {
-      await this.checkUploadFrequency(user.id);
-    }
+    // 频率检查已禁用
+    // if (user && user.id) {
+    //   await this.checkUploadFrequency(user.id);
+    // }
 
     const { buffer, mimetype } = file;
 

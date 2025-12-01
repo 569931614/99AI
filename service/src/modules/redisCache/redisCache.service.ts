@@ -5,13 +5,23 @@ import { RedisClientType } from 'redis';
 export class RedisCacheService {
   constructor(@Inject('REDIS_CLIENT') private readonly redisClient: RedisClientType) {}
 
+  private isClientAvailable(): boolean {
+    return this.redisClient && this.redisClient.isOpen;
+  }
+
   async get(body) {
+    if (!this.isClientAvailable()) {
+      return null;
+    }
     const { key } = body;
     const res = await this.redisClient.get(key);
     return await this.redisClient.get(key);
   }
 
   async set(body, timeout = 3600) {
+    if (!this.isClientAvailable()) {
+      return null;
+    }
     const { key, val } = body;
     return await this.redisClient.set(key, val, { EX: timeout });
   }

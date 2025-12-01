@@ -25,9 +25,9 @@ import { ChatGroupEntity } from '../chatGroup/chatGroup.entity';
 type CookieMessageType = 'text' | 'voice' | 'image';
 
 const COOKIE_RULES: Record<CookieMessageType, { cost: number; remark: string }> = {
-  text: { cost: 1, remark: '开放接口文字聊天' },
-  voice: { cost: 2, remark: '开放接口语音聊天' },
-  image: { cost: 2, remark: '开放接口图片聊天' },
+  text: { cost: 1, remark: '消耗饼干-角色文字回复' },
+  voice: { cost: 2, remark: '消耗饼干-角色语音回复' },
+  image: { cost: 1, remark: '消耗饼干-用户发送图片' },
 };
 
 type AsrAudioFormat = 'wav' | 'pcm' | 'mp3' | 'opus' | 'speex' | 'aac' | 'amr';
@@ -215,8 +215,16 @@ export class OpenChatController {
         body.appId = body.speakerId;
       }
 
-      const messageType = this.resolveMessageType(body);
-      chargeReceipt = await this.chargeCookiesOrThrow(userId, messageType, maobingBaseUrl, token);
+      // 预判消息类型，但不立即扣费
+      const messageType = await this.resolveMessageType(body);
+
+      // 将扣费信息传递给 chatProcess，由它在保存 chatlog 之前执行扣费
+      body._cookieChargeInfo = {
+        userId,
+        messageType,
+        maobingBaseUrl,
+        token,
+      };
 
       // 构造伪造的 req 对象，使用 visitor 角色跳过用户验证
       const fakeReq: any = {
@@ -227,12 +235,26 @@ export class OpenChatController {
         socket: _req.socket,
         ip: _req.ip,
       };
-      return await this.chatService.chatProcess(body as any, fakeReq, res);
+
+      // 调用 chatProcess，扣费将在内部执行
+      const result = await this.chatService.chatProcess(body as any, fakeReq, res);
+
+      // 如果 chatProcess 成功完成并返回了扣费凭证，保存它用于可能的返还
+      if (body._cookieChargeReceipt) {
+        chargeReceipt = body._cookieChargeReceipt;
+      }
+
+      return result;
     } catch (e: any) {
-      if (chargeReceipt) {
+      // 如果是饼干不足错误（HTTP 402），不尝试返还
+      const status = e instanceof HttpException ? e.getStatus() : HttpStatus.INTERNAL_SERVER_ERROR;
+      const shouldRefund = status !== HttpStatus.PAYMENT_REQUIRED && chargeReceipt;
+
+      if (shouldRefund) {
+        this.logger.warn(`对话处理失败，尝试返还饼干`);
         await this.refundCookiesSafe(chargeReceipt);
       }
-      const status = e instanceof HttpException ? e.getStatus() : HttpStatus.INTERNAL_SERVER_ERROR;
+
       const message = e?.message || '对话处理失败';
       return res.status(status).json({ code: status, message });
     }
@@ -440,7 +462,17 @@ export class OpenChatController {
         prompt: text,
         audioUrl: uploadedAudioUrl || audioUrl,
       };
-      chargeReceipt = await this.chargeCookiesOrThrow(userId, 'voice', maobingBaseUrl, token);
+
+      // 预判消息类型，但不立即扣费
+      const messageType = await this.resolveMessageType(payload);
+
+      // 将扣费信息传递给 chatProcess
+      payload._cookieChargeInfo = {
+        userId,
+        messageType,
+        maobingBaseUrl,
+        token,
+      };
 
       const fakeReq: any = {
         user: { id: userId, role: 'visitor' },
@@ -450,12 +482,25 @@ export class OpenChatController {
         socket: _req.socket,
         ip: _req.ip,
       };
-      return await this.chatService.chatProcess(payload, fakeReq, res);
+
+      const result = await this.chatService.chatProcess(payload, fakeReq, res);
+
+      // 保存扣费凭证用于可能的返还
+      if (payload._cookieChargeReceipt) {
+        chargeReceipt = payload._cookieChargeReceipt;
+      }
+
+      return result;
     } catch (e: any) {
-      if (chargeReceipt) {
+      // 如果是饼干不足错误（HTTP 402），不尝试返还
+      const status = e instanceof HttpException ? e.getStatus() : HttpStatus.INTERNAL_SERVER_ERROR;
+      const shouldRefund = status !== HttpStatus.PAYMENT_REQUIRED && chargeReceipt;
+
+      if (shouldRefund) {
+        this.logger.warn(`语音对话处理失败，尝试返还饼干`);
         await this.refundCookiesSafe(chargeReceipt);
       }
-      const status = e instanceof HttpException ? e.getStatus() : HttpStatus.INTERNAL_SERVER_ERROR;
+
       const message = e?.message || '语音对话处理失败';
       return res.status(status).json({ code: status, message });
     }
@@ -553,7 +598,9 @@ export class OpenChatController {
         body.prompt = await this.buildCalendarMessagePrompt(body.prompt, userId, body.appId);
       }
 
-      const messageType = this.resolveMessageType(body);
+      const messageType = await this.resolveMessageType(body);
+      // 保存语音回复决定，用于后续TTS生成判断
+      const shouldGenerateVoiceByDecision = messageType === 'voice';
 
       // 用于收集流式响应的完整内容
       let fullResponse = '';
@@ -578,6 +625,14 @@ export class OpenChatController {
           for (const line of lines) {
             try {
               const parsed = JSON.parse(line);
+
+              // 检查是否为错误响应
+              if (parsed.error || parsed.code === 'SENSITIVE_CONTENT') {
+                const errorMsg = parsed.message || parsed.error || '处理请求时发生错误';
+                this.logger.error(`[chat-process-sync] 检测到错误响应: ${errorMsg}`);
+                throw new HttpException(errorMsg, HttpStatus.BAD_REQUEST);
+              }
+
               // 累加文本内容
               if (parsed.full_content !== undefined) {
                 fullResponse = parsed.full_content;
@@ -620,6 +675,10 @@ export class OpenChatController {
                 }
               }
             } catch (e) {
+              // 如果是HttpException（内容审核错误），重新抛出
+              if (e instanceof HttpException) {
+                throw e;
+              }
               // 如果不是JSON，可能是纯文本
               if (line && !line.startsWith('{')) {
                 fullResponse += line;
@@ -645,6 +704,14 @@ export class OpenChatController {
       };
 
       // 构造伪造的 req 对象
+      // 将扣费信息传递给 chatProcess
+      body._cookieChargeInfo = {
+        userId,
+        messageType,
+        maobingBaseUrl,
+        token,
+      };
+
       const fakeReq: any = {
         user: { id: userId, role: 'visitor' },
         header: (name: string) => _req.header(name),
@@ -654,10 +721,13 @@ export class OpenChatController {
         ip: _req.ip,
       };
 
-      // 调用流式接口，内部会写入到 mockRes
-      chargeReceipt = await this.chargeCookiesOrThrow(userId, messageType, maobingBaseUrl, token);
-
+      // 调用流式接口，内部会写入到 mockRes，扣费将在内部执行
       await this.chatService.chatProcess(body as any, fakeReq, mockRes);
+
+      // 保存扣费凭证用于可能的返还
+      if (body._cookieChargeReceipt) {
+        chargeReceipt = body._cookieChargeReceipt;
+      }
 
       // 记录大模型完整回复
       this.logger.log(
@@ -676,42 +746,13 @@ export class OpenChatController {
         );
       }
 
-      // 默认生成TTS（除非明确设置 generateTts=false）
-      let shouldGenerateTts = generateTts !== false; // 默认为 true
+      // 使用扣费时已经做出的语音回复决定（保证扣费和实际消耗一致）
+      // 如果用户明确设置 generateTts=false，则强制不生成语音
+      let shouldGenerateTts = generateTts === false ? false : shouldGenerateVoiceByDecision;
 
-      // 检查会话组的语音回复模式配置
-      const groupId = body?.options?.groupId;
-      if (groupId) {
-        try {
-          const chatGroup = await this.chatGroupEntity.findOne({ where: { id: groupId } });
-          if (chatGroup && chatGroup.voiceReplyMode === 'text_only') {
-            this.logger.log(`[chat-process-sync] 会话组 ${groupId} 设置为 text_only，跳过TTS生成`);
-            shouldGenerateTts = false;
-          } else if (chatGroup && chatGroup.voiceReplyMode === 'mixed') {
-            // mixed 模式：按照 5:2 的比例随机生成语音（约 28.6% 的概率）
-            const randomValue = Math.random();
-            const shouldGenerate = randomValue < 0.286;
-            this.logger.log(
-              `[chat-process-sync] ✅ 触发 mixed 模式概率判断 - groupId: ${groupId}, 随机值: ${randomValue.toFixed(
-                4,
-              )}, 阈值: 0.286, 结果: ${shouldGenerate ? '✅生成语音' : '❌仅文字'}`,
-            );
-            shouldGenerateTts = shouldGenerate;
-          } else if (chatGroup && chatGroup.voiceReplyMode === 'voice_only') {
-            this.logger.log(`[chat-process-sync] 会话组 ${groupId} 设置为 voice_only，生成语音`);
-            shouldGenerateTts = true;
-          } else if (chatGroup) {
-            this.logger.log(
-              `[chat-process-sync] 会话组 ${groupId} voiceReplyMode: ${
-                chatGroup.voiceReplyMode || 'undefined'
-              }`,
-            );
-          }
-        } catch (error: any) {
-          this.logger.warn(`[chat-process-sync] 获取会话组配置失败: ${error?.message || error}`);
-          // 获取配置失败不影响主流程，继续使用默认值
-        }
-      }
+      this.logger.log(
+        `[chat-process-sync] 语音生成决定 - messageType: ${messageType}, shouldGenerateTts: ${shouldGenerateTts}, generateTts参数: ${generateTts ?? 'default'}`,
+      );
 
       // 如果需要生成TTS且尚未生成语音，则主动调用TTS生成（包含情绪识别）
       if (shouldGenerateTts && !audioUrl && fullResponse && chatId) {
@@ -764,26 +805,53 @@ export class OpenChatController {
         },
       };
     } catch (e: any) {
-      if (chargeReceipt) {
+      // 如果是饼干不足错误（HTTP 402），不尝试返还
+      const status = e instanceof HttpException ? e.getStatus() : HttpStatus.INTERNAL_SERVER_ERROR;
+      const shouldRefund = status !== HttpStatus.PAYMENT_REQUIRED && chargeReceipt;
+
+      if (shouldRefund) {
+        this.logger.warn(`对话处理失败，尝试返还饼干`);
         await this.refundCookiesSafe(chargeReceipt);
       }
-      const status = e instanceof HttpException ? e.getStatus() : HttpStatus.INTERNAL_SERVER_ERROR;
+
       const message = e?.message || '对话处理失败';
       throw new HttpException(message, status);
     }
   }
 
-  private resolveMessageType(payload: any): CookieMessageType {
-    const explicitType = (
-      payload?.chatType ||
-      payload?.chat_type ||
-      payload?.messageType ||
-      ''
-    ).toLowerCase();
-    if (explicitType === 'voice') return 'voice';
-    if (explicitType === 'image') return 'image';
+  /**
+   * 判断本次对话的饼干消耗类型，并在 payload 中标记语音回复决定
+   * - 用户发送图片：image (1个饼干)
+   * - 角色回复语音：voice (2个饼干)
+   * - 角色回复文字：text (1个饼干)
+   *
+   * 对于 mixed 模式，会在 payload.extraParam 中设置 _voiceReplyDecision
+   */
+  private async resolveMessageType(payload: any): Promise<CookieMessageType> {
+    // 用户发送图片，消耗1个饼干
     if (payload?.imageUrl) return 'image';
-    if (payload?.audioUrl || payload?.audioBase64) return 'voice';
+
+    // 根据会话组配置判断角色是否会回复语音
+    const groupId = payload?.options?.groupId;
+    if (groupId) {
+      try {
+        const chatGroup = await this.chatGroupEntity.findOne({ where: { id: groupId } });
+        if (chatGroup?.voiceReplyMode === 'voice_only') {
+          return 'voice'; // 纯语音模式，扣2个饼干
+        } else if (chatGroup?.voiceReplyMode === 'mixed') {
+          // mixed模式：提前决定是否生成语音，并保存决定结果
+          const shouldGenerateVoice = Math.random() < 0.286;
+          // 将决定保存到 extraParam 中，供 chat.service 使用
+          if (!payload.extraParam) payload.extraParam = {};
+          payload.extraParam._voiceReplyDecision = shouldGenerateVoice;
+          return shouldGenerateVoice ? 'voice' : 'text';
+        }
+      } catch (error: any) {
+        this.logger.warn(`获取会话组配置失败: ${error?.message || error}`);
+      }
+    }
+
+    // 默认为文字回复，扣1个饼干
     return 'text';
   }
 

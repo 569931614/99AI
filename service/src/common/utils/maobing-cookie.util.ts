@@ -1,5 +1,6 @@
 import { Logger } from '@nestjs/common';
 import axios from 'axios';
+import * as FormData from 'form-data';
 
 type CookieAction = 1 | 2;
 
@@ -35,20 +36,21 @@ export class MaobingCookieUtil {
   private static async adjustCookie(params: CookieAdjustParams, type: CookieAction) {
     const url = this.buildEndpoint(params.maobingBaseUrl);
     try {
-      const response = await axios.post(
-        url,
-        {
-          token: params.token,
-          type: String(type),
-          num: String(params.amount),
-          remark: params.remark || '',
-        },
-        {
-          timeout: params.timeoutMs ?? 5000,
-        },
-      );
+      const formData = new FormData();
+      formData.append('token', params.token || '');
+      formData.append('type', String(type));
+      formData.append('num', String(params.amount));
+      formData.append('remark', params.remark || '');
+
+      const response = await axios.post(url, formData, {
+        timeout: params.timeoutMs ?? 5000,
+        headers: formData.getHeaders(),
+      });
       const payload = response.data;
       if (payload?.code === 1) {
+        this.logger.log(
+          `饼干${type === 2 ? '扣除' : '返还'}成功 - userId: ${params.userId}, amount: ${params.amount}, remark: ${params.remark}`,
+        );
         return {
           success: true,
           message: payload?.msg || '操作成功',

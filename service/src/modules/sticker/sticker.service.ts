@@ -119,12 +119,13 @@ export class StickerService {
   async pickStickerByText(
     text?: string | null,
     preferredEmotion?: string | null,
+    userMessage?: string | null,
   ): Promise<StickerEntity | null> {
     const normalizedText = text?.trim() ?? '';
 
     // 优先判断对话场景（scenario），场景表情包优先级高于情绪表情包
     if (normalizedText) {
-      const detectedScenario = await this.detectScenarioWithAI(normalizedText);
+      const detectedScenario = await this.detectScenarioWithAI(normalizedText, userMessage);
       if (detectedScenario) {
         Logger.log(`[Sticker场景] AI判断场景为: ${detectedScenario}`, 'StickerService');
         const scenarioSticker = await this.pickStickerByScenario(detectedScenario);
@@ -299,10 +300,14 @@ ${numberedOptions}
 
   /**
    * 使用AI判断对话场景
-   * @param text 对话内容
+   * @param text 对话内容（AI回复）
+   * @param userMessage 用户消息内容（可选）
    * @returns 场景描述或 null
    */
-  private async detectScenarioWithAI(text: string): Promise<string | null> {
+  private async detectScenarioWithAI(
+    text: string,
+    userMessage?: string | null,
+  ): Promise<string | null> {
     if (!text) return null;
 
     try {
@@ -342,66 +347,58 @@ ${numberedOptions}
       // 构建场景列表字符串
       const scenarioListText = scenarios.map((s, idx) => `${idx + 1}. ${s}`).join('\n');
 
-      const prompt = `你是一个严格的场景分类器。分析AI回复是否属于以下场景之一。
+      const prompt = `# Role
+你是一个语义匹配专家。请分析【用户】与【AI】的对话，判断AI是否执行了"给钱"或"买东西"的动作，并将其精准匹配到【动态场景列表】中最合适的一项。
 
-【AI回复】
+# Input Data
+${userMessage ? `【用户说】\n${userMessage}\n\n` : ''}【AI说】
 ${text}
 
-【场景列表】
+【动态场景列表】
 ${scenarioListText}
 
-【判断规则】
-只有同时满足以下所有条件才能匹配：
+# Logic Steps (严格执行)
 
-A. 购买类场景（场景描述包含"买"字）：
-   必须满足：AI明确表示"正在/即将立即购买"，且包含"买"字
+## Step 1: 动作真实性判定 (The Filter)
+**AI是否真的执行了动作？**
+*   **❌ 无效/拒绝 (输出 NO)**：
+    *   AI 拒绝请求（"不能给你"、"自己赚"）。
+    *   AI 提供替代方案（"教你做"、"喝水吧"）。
+    *   AI 仅画大饼/讨论话题（"带你去吃"、"下次买"），无实际支付行为。
+*   **✅ 有效 (进入下一步)**：
+    *   **给钱类**：AI 明确表示"已转"、"转给你了"、"查收红包"、"拿去花"。
+    *   **购买类**：AI 明确表示"买好了"、"下单了"、"外卖到了"。
+    *   **动作描写**：在 \`()\` 或描写中体现支付动作，如 \`(操作手机转账)\`、\`(递给你两百块)\`。
 
-   ✅ 匹配示例：
-   - "给你买奶茶"
-   - "我买零食给你"
-   - "买个蛋糕给你"
+👉 **如果 Step 1 判定无实际动作，直接输出 NO。**
 
-   ❌ 拒绝示例：
-   - "带你去喝奶茶" （无"买"字）
-   - "请你喝奶茶" （无"买"字）
-   - "送你奶茶" （无"买"字）
-   - "明天带你去买" （未来承诺，不是立即购买）
-   - "想要什么我给你买" （条件承诺，不是立即购买）
-   - "下次买给你" （未来承诺）
-   - "工资卡给你，你自己买" （让用户自己买）
+## Step 2: 核心意图分析 (The Classifier)
+如果 Step 1 有效，请分析AI行为属于哪种**核心意图**：
 
-B. 金钱奖励类场景（场景描述包含"奖励"/"生活费"等）：
-   必须满足：明确提到具体金额数字 或 "红包"/"转账" 等词
+*   **意图 A：纯粹给钱/生活费**
+    *   行为：直接转账、发红包、给现金、给生活费。
+    *   特征：没有指定具体的单一低价物品（如奶茶），或者用户就是来要钱的。
+*   **意图 B：特定饮食购买 (零食/奶茶)**
+    *   行为：买奶茶、买零食、买饮料。
+    *   特征：即使是"转账"，如果明确说是"转给你买奶茶钱"，也属于此类。
+*   **意图 C：奖励/节日/歉意**
+    *   行为：明确提到"生日红包"、"节日礼物"、"道歉补偿"。
 
-   ✅ 匹配示例：
-   - "奖励你100元"
-   - "给你发红包"
-   - "转你188"
-   - "给你生活费2000"
+## Step 3: 动态列表匹配 (The Matcher)
+将 Step 2 提取的意图与【动态场景列表】进行语义比对，选择最接近的一项。
 
-   ❌ 拒绝示例：
-   - "爱你哦" （无金钱）
-   - "送你礼物" （不是金钱）
-   - "工资卡给你保管" （不是转账，是管理权）
-   - "下次给你" （未来承诺）
+**匹配优先级规则：**
+1.  **针对"意图 A (给钱)"**：
+    *   优先寻找列表中包含："生活费"、"添置购买东西"、"给钱"、"转账"等关键词的选项。
+2.  **针对"意图 B (买零食)"**：
+    *   优先寻找列表中包含："零食"、"奶茶"、"小吃"等具体物品的选项。
+    *   *如果没有具体选项*，则退而求其次，匹配"购买东西"或"给钱"的宽泛选项。
+3.  **针对"意图 C (节日/奖励)"**：
+    *   优先寻找列表中包含："节日"、"庆祝"、"奖励"、"歉意"的选项。
 
-C. 节日庆祝类场景：
-   必须满足：提到具体节日名称 且 明确送礼/购买/转账
-
-   ✅ 匹配示例：
-   - "生日快乐！买蛋糕给你"
-   - "新年快乐！发个红包给你"
-
-   ❌ 拒绝示例：
-   - "生日快乐" （未送礼）
-   - "祝你开心" （非节日）
-
-【输出格式】
-- 如果匹配到场景：直接返回场景描述（不要加序号和任何其他文字）
-  示例：表达给用户买些零食奶茶等
-- 如果不匹配：只返回 NO
-
-立即返回：`;
+# Output
+*   仅输出匹配到的**场景选项原文**。
+*   若无匹配或无效，输出 **NO**。`;
 
       const requestBody = {
         model: 'qwen-turbo',

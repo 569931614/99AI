@@ -31,6 +31,7 @@ import { UserService } from '../user/user.service';
 import { UserAppSettingsService } from '../userAppSettings/userAppSettings.service';
 import { UserBalanceService } from '../userBalance/userBalance.service';
 import { VoiceService } from '../voice/voice.service';
+import { MaobingCookieUtil } from '@/common/utils/maobing-cookie.util';
 
 const STICKER_EMOTION_LABELS = ['happy', 'sad', 'angry', 'comfort', 'surprised', 'neutral'];
 
@@ -647,6 +648,7 @@ export class ChatService {
     groupId?: number | null;
     req?: Request;
     allowEmoji?: boolean; // 表情包开关，仅影响普通表情包
+    userMessage?: string | null; // 用户消息内容，用于更准确地判断场景
   }): Promise<{
     chatId: number;
     imageUrl: string;
@@ -656,7 +658,7 @@ export class ChatService {
     isScenarioSticker: boolean;
     transferText?: string; // 转账文本，如"转账188"
   } | null> {
-    const { userId, content, appId, groupId, req, allowEmoji } = options;
+    const { userId, content, appId, groupId, req, allowEmoji, userMessage } = options;
 
     try {
       // 1. 调用表情包服务获取匹配的表情包
@@ -669,7 +671,11 @@ export class ChatService {
       );
       const detectedEmotion = await this.detectEmotionWithAI(content);
       Logger.log(`[表情包] 🧠 AI情绪识别结果: ${detectedEmotion || 'null'}`, 'ChatService');
-      const sticker = await this.stickerService.pickStickerByText(content, detectedEmotion);
+      const sticker = await this.stickerService.pickStickerByText(
+        content,
+        detectedEmotion,
+        userMessage,
+      );
 
       if (!sticker) {
         Logger.log('[表情包] ❌ 未找到匹配的表情包', 'ChatService');
@@ -2215,6 +2221,47 @@ ${setSystemMessage}
       }
     }
 
+    // 🔥 在保存 chatlog 之前执行饼干扣费（仅对开放接口调用）
+    if (req.user.role === 'visitor' && (body as any)?._cookieChargeInfo) {
+      const chargeInfo = (body as any)._cookieChargeInfo;
+      const COOKIE_RULES = {
+        text: { cost: 1, remark: '消耗饼干-角色文字回复' },
+        voice: { cost: 2, remark: '消耗饼干-角色语音回复' },
+        image: { cost: 1, remark: '消耗饼干-用户发送图片' },
+      };
+      const rule = COOKIE_RULES[chargeInfo.messageType] || COOKIE_RULES.text;
+
+      const response = await MaobingCookieUtil.deductCookies({
+        userId: chargeInfo.userId,
+        amount: rule.cost,
+        remark: rule.remark,
+        maobingBaseUrl: chargeInfo.maobingBaseUrl,
+        token: chargeInfo.token,
+      });
+
+      if (!response.success) {
+        Logger.error(`[饼干扣费] 扣费失败: ${response.message}`, 'ChatService');
+        throw new HttpException(
+          response.message || '饼干不足，无法继续对话',
+          HttpStatus.PAYMENT_REQUIRED,
+        );
+      }
+
+      Logger.log(
+        `[饼干扣费] 扣费成功 - userId: ${chargeInfo.userId}, 消耗: ${rule.cost}个饼干, 类型: ${chargeInfo.messageType}`,
+        'ChatService',
+      );
+
+      // 保存扣费凭证用于可能的返还
+      (body as any)._cookieChargeReceipt = {
+        userId: chargeInfo.userId,
+        amount: rule.cost,
+        type: chargeInfo.messageType,
+        maobingBaseUrl: chargeInfo.maobingBaseUrl,
+        token: chargeInfo.token,
+      };
+    }
+
     // 如果设置了 skipSaveToDatabase，则不保存 assistant 消息到数据库
     let assistantSaveLog;
     let assistantLogId;
@@ -2988,7 +3035,15 @@ ${setSystemMessage}
             // - voice_only: 全部发语音（每次都生成）
             // - mixed: 偶尔发一次（按概率生成，文字:语音 = 5:2）
             let shouldGenerateVoice = false;
-            if (groupVoiceReplyMode === 'voice_only') {
+
+            // 优先使用开放接口传入的语音回复决定（保证扣费和实际生成一致）
+            if (extraParam?._voiceReplyDecision !== undefined) {
+              shouldGenerateVoice = extraParam._voiceReplyDecision;
+              this.logDebug(
+                `[语音回复] 使用开放接口预设决定 - ${shouldGenerateVoice ? '生成语音' : '仅文字'}`,
+                'ChatService',
+              );
+            } else if (groupVoiceReplyMode === 'voice_only') {
               shouldGenerateVoice = true;
               this.logDebug('[语音回复] voice_only 模式 - 生成语音', 'ChatService');
             } else if (groupVoiceReplyMode === 'mixed') {
@@ -3187,6 +3242,7 @@ ${setSystemMessage}
                 groupId: groupId || null,
                 req,
                 allowEmoji: groupAllowEmoji, // 传递开关状态，用于普通表情包判断
+                userMessage: prompt, // 传入用户消息，用于更准确地判断场景
               });
 
               if (stickerResult) {
@@ -3238,15 +3294,44 @@ ${setSystemMessage}
               status: 5,
             });
           }
-          response = { error: '处理请求时发生错误' };
+
+          // 检查是否为内容审核错误（BadRequestException）
+          const errorMessage = error?.message || '处理请求时发生错误';
+          const isSensitiveContent =
+            errorMessage.includes('敏感内容') ||
+            errorMessage.includes('inappropriate content') ||
+            error?.constructor?.name === 'BadRequestException';
+
+          response = {
+            error: errorMessage,
+            code: isSensitiveContent ? 'SENSITIVE_CONTENT' : 'UNKNOWN_ERROR',
+            message: errorMessage,
+          };
+
+          // 立即写入错误响应并返回，不再继续执行
+          return res.write(`\n${JSON.stringify(response)}`);
         }
       }
     } catch (error) {
       Logger.error('聊天处理全局错误', error);
+
+      // 检查是否为内容审核错误（BadRequestException）
+      const errorMessage = error?.message || error?.response?.message || '发生未知错误，请稍后再试';
+      const isSensitiveContent =
+        errorMessage.includes('敏感内容') ||
+        errorMessage.includes('inappropriate content') ||
+        error?.constructor?.name === 'BadRequestException';
+
       if (res) {
-        return res.write('发生未知错误，请稍后再试');
+        // 构造错误响应
+        const errorResponse = {
+          error: errorMessage,
+          code: isSensitiveContent ? 'SENSITIVE_CONTENT' : 'UNKNOWN_ERROR',
+          message: errorMessage,
+        };
+        return res.write(`\n${JSON.stringify(errorResponse)}`);
       } else {
-        throw new HttpException('发生未知错误，请稍后再试', HttpStatus.BAD_REQUEST);
+        throw new HttpException(errorMessage, HttpStatus.BAD_REQUEST);
       }
     } finally {
       res && res.end();

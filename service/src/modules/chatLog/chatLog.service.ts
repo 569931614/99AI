@@ -20,6 +20,8 @@ import { recDrawImgDto } from './dto/recDrawImg.dto';
 import { JwtPayload } from 'src/types/express';
 import { ModelsService } from '../models/models.service';
 import { QuerySingleChatDto } from './dto/querySingleChat.dto';
+import { UploadService } from '../upload/upload.service';
+import { VoiceService } from '../voice/voice.service';
 
 const DEFAULT_CHAT_PAGE_SIZE = 20;
 
@@ -33,10 +35,48 @@ export class ChatLogService {
     @InjectRepository(ChatGroupEntity)
     private readonly chatGroupEntity: Repository<ChatGroupEntity>,
     private readonly modelsService: ModelsService,
+    private readonly uploadService: UploadService,
+    private readonly voiceService: VoiceService,
   ) {}
 
   /* 记录问答日志 */
   async saveChatLog(logInfo): Promise<any> {
+    // 保存前检查audioUrl是否是base64格式，如果是则先上传到OSS
+    if (logInfo.audioUrl) {
+      const isBase64Audio =
+        logInfo.audioUrl.startsWith('data:audio/') || !logInfo.audioUrl.startsWith('http');
+
+      if (isBase64Audio) {
+        try {
+          Logger.log(`检测到base64格式的audioUrl，准备上传到OSS`, 'ChatLogService');
+
+          // 提取base64数据
+          const base64Data = logInfo.audioUrl.includes(',')
+            ? logInfo.audioUrl.split(',')[1]
+            : logInfo.audioUrl;
+          const audioBuffer = Buffer.from(base64Data, 'base64');
+
+          // 转换为MP3格式并上传
+          const mp3Buffer = await this.voiceService.convertPcmToMp3(audioBuffer, 16000, 1);
+          const fileName = `voice_${Date.now()}.mp3`;
+          const uploadedUrl = await this.uploadService.uploadFileFromBuffer(
+            mp3Buffer,
+            fileName,
+            'audio/mp3',
+            'voice',
+          );
+
+          Logger.log(`audioUrl已上传到OSS: ${uploadedUrl}`, 'ChatLogService');
+          logInfo.audioUrl = uploadedUrl;
+        } catch (error) {
+          Logger.warn(
+            `audioUrl上传OSS失败，保留原始base64数据: ${error.message}`,
+            'ChatLogService',
+          );
+        }
+      }
+    }
+
     const savedLog = await this.chatLogEntity.save(logInfo);
     return savedLog; // 这里返回保存后的实体，包括其 ID
   }

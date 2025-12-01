@@ -312,13 +312,13 @@ export class ChatGroupService {
           // 3. 未读消息数（暂时设为0，99AI暂无未读消息跟踪）
           const unreadCount = 0;
 
-          // 4. 判断是否需要显示红点（自动回复开启 且 超过30分钟没有消息）
+          // 4. 判断是否需要显示红点（自动回复开启 且 超过36小时没有消息）
           let showRedDot = false;
           if (item.proactivelySend === 1 && lastMessageTime) {
             const now = new Date();
             const lastTime = new Date(lastMessageTime);
             const diffMinutes = (now.getTime() - lastTime.getTime()) / (1000 * 60);
-            showRedDot = diffMinutes >= 30;
+            showRedDot = diffMinutes >= 2160; // 36小时 = 2160分钟
           }
 
           return {
@@ -415,13 +415,13 @@ export class ChatGroupService {
           // 2. 未读消息数（暂时设为0，99AI暂无未读消息跟踪）
           const unreadCount = 0;
 
-          // 3. 判断是否需要显示红点（自动回复开启 且 超过30分钟没有消息）
+          // 3. 判断是否需要显示红点（自动回复开启 且 超过36小时没有消息）
           let showRedDot = false;
           if (item.proactivelySend === 1 && lastMessageTime) {
             const now = new Date();
             const lastTime = new Date(lastMessageTime);
             const diffMinutes = (now.getTime() - lastTime.getTime()) / (1000 * 60);
-            showRedDot = diffMinutes >= 30;
+            showRedDot = diffMinutes >= 2160; // 36小时 = 2160分钟
           }
 
           return {

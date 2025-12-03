@@ -1,11 +1,8 @@
 import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Brackets, Repository } from 'typeorm';
-import { StickerEntity } from './sticker.entity';
 import { GlobalConfigService } from '../globalConfig/globalConfig.service';
-
-// 表情包支持的标准情绪列表
-const STICKER_EMOTION_LABELS = ['happy', 'sad', 'angry', 'comfort', 'surprised', 'neutral'];
+import { StickerEntity } from './sticker.entity';
 
 interface StickerQuery {
   keyword?: string;
@@ -152,64 +149,115 @@ export class StickerService {
   }
 
   /**
-   * 使用AI识别文本情绪（复用语音TTS的AI情绪识别逻辑）
+   * 使用AI识别文本情绪（从数据库动态获取情绪列表，让AI选择匹配）
    */
   private async detectEmotionByAI(text: string): Promise<string | null> {
     if (!text) return null;
 
     try {
+      Logger.log(
+        `[Sticker情绪AI识别] 开始识别 - 待分析文本: "${text.substring(0, 50)}${
+          text.length > 50 ? '...' : ''
+        }"`,
+        'StickerService',
+      );
+
       const dashscopeApiKey =
         (await this.globalConfigService.getConfigs(['dashscopeApiKey'])) ||
         process.env.DASHSCOPE_API_KEY;
 
       if (!dashscopeApiKey) {
-        Logger.warn('[Sticker AI情绪识别] 未配置DashScope API Key，跳过AI识别', 'StickerService');
+        Logger.warn('[Sticker情绪AI识别] 未配置DashScope API Key，跳过AI识别', 'StickerService');
         return null;
       }
 
-      const numberedOptions = STICKER_EMOTION_LABELS.map((opt, idx) => `${idx + 1}. ${opt}`).join(
-        '\n',
-      );
-      const prompt = `你是一个专业的情绪分析专家。请分析以下文本内容表达的情绪，从给定的候选情绪中选择最合适的一个。
+      // 从数据库动态获取所有普通情绪表情包的 scenario 值（scenario不为空，tags为空）
+      const emotionStickers = await this.stickerRepo
+        .createQueryBuilder('sticker')
+        .where('sticker.scenario IS NOT NULL')
+        .andWhere("sticker.scenario != ''")
+        .andWhere("(sticker.tags IS NULL OR sticker.tags = '')")
+        .select(['sticker.scenario'])
+        .getMany();
 
-文本内容：
+      const emotions = Array.from(
+        new Set(emotionStickers.map(s => s.scenario?.trim()).filter(Boolean)),
+      );
+
+      if (emotions.length === 0) {
+        Logger.warn(
+          '[Sticker情绪AI识别] 数据库中未找到任何情绪表情包（scenario不为空且tags为空），跳过AI识别',
+          'StickerService',
+        );
+        return null;
+      }
+
+      Logger.log(
+        `[Sticker情绪AI识别] 从数据库获取到 ${emotions.length} 种情绪类型: ${emotions.join(', ')}`,
+        'StickerService',
+      );
+
+      // 构建情绪列表字符串
+      const emotionListText = emotions.map((e, idx) => `${idx + 1}. ${e}`).join('\n');
+
+      const prompt = `# Role
+你是一个专业的情绪分析专家。请分析【AI回复内容】表达的情绪，并从【动态情绪列表】中选择最合适的一项。
+
+# Input Data
+【AI回复内容】
 ${text}
 
-候选情绪列表：
-${numberedOptions}
-0. neutral（中性/无法判断）
+【动态情绪列表】
+${emotionListText}
 
-要求：
-1. 仔细分析文本内容表达的主要情绪
-2. 如果候选列表中有匹配的，返回对应的编号（如：1）或完整的情绪名称
-3. 如果无法判断或都不合适，返回 0 或"neutral"
-4. 只返回编号或名称，不要任何解释
+# Logic Steps
 
-示例：
-- 文本"太开心了！"，返回：1 或 happy
-- 文本"真让人生气..."，返回：3 或 angry
-- 文本"今天天气不错"，返回：0 或 neutral
+## Step 1: 情绪分析
+分析AI回复内容的主要情绪特征：
+- 是否表达开心、兴奋、愉悦？
+- 是否表达悲伤、失落、难过？
+- 是否表达生气、愤怒、不满？
+- 是否表达安慰、关心、温柔？
+- 是否表达惊讶、震惊、意外？
+- 是否表达害羞、撒娇、可爱？
+- 是否表达调皮、俏皮、活泼？
+- 是否为中性/日常对话？
 
-请返回：`;
+## Step 2: 情绪匹配
+将分析结果与【动态情绪列表】进行语义比对：
+- 优先精确匹配情绪名称
+- 若无精确匹配，选择语义最接近的情绪
+- 若文本情绪过于中性或无法判断，输出 NO
+
+# Output
+- 仅输出匹配到的**情绪选项原文**（不带编号）
+- 若无匹配或无法判断，输出 **NO**`;
+
+      const requestBody = {
+        model: 'qwen-turbo',
+        input: {
+          messages: [
+            {
+              role: 'user',
+              content: prompt,
+            },
+          ],
+        },
+        parameters: {
+          max_tokens: 50,
+          temperature: 0.1,
+        },
+      };
+
+      Logger.debug(
+        `[Sticker情绪AI识别] 发送API请求 - model: qwen-turbo, 候选情绪数: ${emotions.length}`,
+        'StickerService',
+      );
 
       const axios = require('axios');
       const response = await axios.post(
         'https://dashscope.aliyuncs.com/api/v1/services/aigc/text-generation/generation',
-        {
-          model: 'qwen-turbo',
-          input: {
-            messages: [
-              {
-                role: 'user',
-                content: prompt,
-              },
-            ],
-          },
-          parameters: {
-            max_tokens: 30,
-            temperature: 0.1,
-          },
-        },
+        requestBody,
         {
           headers: {
             Authorization: `Bearer ${dashscopeApiKey}`,
@@ -220,50 +268,47 @@ ${numberedOptions}
       );
 
       const result = response.data?.output?.text?.trim() || '';
-      Logger.debug(`[Sticker AI情绪识别] AI原始返回: "${result}"`, 'StickerService');
+      Logger.log(`[Sticker情绪AI识别] ✓ API返回成功 - 原始返回: "${result}"`, 'StickerService');
 
-      // 检查是否为neutral/无法判断
-      if (
-        result === '0' ||
-        result.toLowerCase().includes('neutral') ||
-        result.toLowerCase().includes('无法判断')
-      ) {
-        Logger.debug(`[Sticker AI情绪识别] ⚠ AI判断为中性情绪或无法判断`, 'StickerService');
+      // 检查是否为NO（不匹配任何情绪）
+      if (result.toUpperCase() === 'NO' || result.includes('无法判断') || result.includes('中性')) {
+        Logger.log('[Sticker情绪AI识别] ⚠ AI判断为无特定情绪 - 跳过表情包', 'StickerService');
         return null;
       }
 
-      // 尝试解析编号
-      const numberMatch = result.match(/^(\d+)/);
-      if (numberMatch) {
-        const index = parseInt(numberMatch[1]) - 1;
-        if (index >= 0 && index < STICKER_EMOTION_LABELS.length) {
-          const matchedEmotion = STICKER_EMOTION_LABELS[index];
-          Logger.debug(
-            `[Sticker AI情绪识别] ✓ 通过编号匹配成功: ${matchedEmotion}`,
-            'StickerService',
-          );
-          return matchedEmotion;
+      // 清理AI返回结果（移除可能的序号和前缀）
+      let cleanedResult = result.replace(/^\d+\.\s*/, '').trim();
+
+      Logger.debug(`[Sticker情绪AI识别] 清理后的返回: "${cleanedResult}"`, 'StickerService');
+
+      // 精确匹配或模糊匹配情绪
+      for (const emotion of emotions) {
+        // 精确匹配（忽略大小写）
+        if (cleanedResult.toLowerCase() === emotion.toLowerCase()) {
+          Logger.log(`[Sticker情绪AI识别] ✓✓✓ 精确匹配成功 - 情绪: "${emotion}"`, 'StickerService');
+          return emotion;
         }
       }
 
-      // 尝试直接匹配名称
-      for (const emotion of STICKER_EMOTION_LABELS) {
-        if (result.toLowerCase().includes(emotion)) {
-          Logger.debug(`[Sticker AI情绪识别] ✓ 通过名称匹配成功: ${emotion}`, 'StickerService');
+      // 模糊匹配：AI返回包含有效情绪，或有效情绪包含AI返回
+      for (const emotion of emotions) {
+        if (
+          cleanedResult.toLowerCase().includes(emotion.toLowerCase()) ||
+          emotion.toLowerCase().includes(cleanedResult.toLowerCase().replace(/[。，、]/g, ''))
+        ) {
+          Logger.log(`[Sticker情绪AI识别] ✓✓ 模糊匹配成功 - 情绪: "${emotion}"`, 'StickerService');
           return emotion;
         }
       }
 
       Logger.warn(
-        `[Sticker AI情绪识别] ✗ 未能匹配 - AI返回: "${result}", 候选: [${STICKER_EMOTION_LABELS.join(
-          ' | ',
-        )}]`,
+        `[Sticker情绪AI识别] ✗ AI返回了无效的情绪: "${result}", 候选: [${emotions.join(' | ')}]`,
         'StickerService',
       );
       return null;
     } catch (error: any) {
       Logger.error(
-        `[Sticker AI情绪识别] ✗ 调用失败: ${error?.message || error}`,
+        `[Sticker情绪AI识别] ✗ 调用失败: ${error?.message || error}`,
         error?.stack || '',
         'StickerService',
       );
@@ -274,11 +319,13 @@ ${numberedOptions}
   private async pickRandomSticker(emotion?: string | null): Promise<StickerEntity | null> {
     const qb = this.stickerRepo.createQueryBuilder('sticker');
 
-    // 排除场景表情包，只选择纯情绪表情包（scenario为null的）
-    qb.andWhere('sticker.scenario IS NULL');
+    // 选择普通情绪表情包（scenario不为空且tags为空）
+    qb.andWhere('sticker.scenario IS NOT NULL');
+    qb.andWhere("sticker.scenario != ''");
+    qb.andWhere("(sticker.tags IS NULL OR sticker.tags = '')");
 
     if (emotion) {
-      qb.andWhere('sticker.emotion = :emotion', { emotion });
+      qb.andWhere('sticker.scenario = :emotion', { emotion });
     }
     const total = await qb.clone().getCount();
     if (total === 0) {
@@ -357,48 +404,46 @@ ${text}
 【动态场景列表】
 ${scenarioListText}
 
-# Logic Steps (严格执行)
+# Logic Steps (动作主导模式)
 
-## Step 1: 动作真实性判定 (The Filter)
-**AI是否真的执行了动作？**
-*   **❌ 无效/拒绝 (输出 NO)**：
-    *   AI 拒绝请求（"不能给你"、"自己赚"）。
-    *   AI 提供替代方案（"教你做"、"喝水吧"）。
-    *   AI 仅画大饼/讨论话题（"带你去吃"、"下次买"），无实际支付行为。
-*   **✅ 有效 (进入下一步)**：
-    *   **给钱类**：AI 明确表示"已转"、"转给你了"、"查收红包"、"拿去花"。
-    *   **购买类**：AI 明确表示"买好了"、"下单了"、"外卖到了"。
-    *   **动作描写**：在 \`()\` 或描写中体现支付动作，如 \`(操作手机转账)\`、\`(递给你两百块)\`。
+## Step 1: 独立动作扫描 (The Scanner)
+**不要管用户说了什么，只看AI说了什么。**
+AI的回复中是否包含以下**确切支付信号**？
 
-👉 **如果 Step 1 判定无实际动作，直接输出 NO。**
+*   **金钱类信号**：
+    *   "红包发过去了" / "红包拿去"
+    *   "转过去了" / "已转" / "转给你了"
+    *   "钱打过去了" / "查收一下"
+    *   动作描写：(发红包) / (转账) / (支付)
+*   **物品类信号**：
+    *   "买好了" / "下单了"
+    *   "点好外卖了"
+    *   动作描写：(递给你奶茶)/ (把买的东西给你)
 
-## Step 2: 核心意图分析 (The Classifier)
-如果 Step 1 有效，请分析AI行为属于哪种**核心意图**：
+👉 **判定结果**：
+*   如果没有上述信号，或AI表示"下次给"、"教你做" -> **输出 NO**。
+*   如果有上述信号 -> **进入 Step 2**。
 
-*   **意图 A：纯粹给钱/生活费**
-    *   行为：直接转账、发红包、给现金、给生活费。
-    *   特征：没有指定具体的单一低价物品（如奶茶），或者用户就是来要钱的。
-*   **意图 B：特定饮食购买 (零食/奶茶)**
-    *   行为：买奶茶、买零食、买饮料。
-    *   特征：即使是"转账"，如果明确说是"转给你买奶茶钱"，也属于此类。
-*   **意图 C：奖励/节日/歉意**
-    *   行为：明确提到"生日红包"、"节日礼物"、"道歉补偿"。
+## Step 2: 强制语义映射 (The Mapper)
+**AI已经确认给了钱或东西，现在必须在【动态场景列表】中找一个最接近的坑位填进去。**
 
-## Step 3: 动态列表匹配 (The Matcher)
-将 Step 2 提取的意图与【动态场景列表】进行语义比对，选择最接近的一项。
+请根据 AI 的具体行为进行关键词碰撞：
 
-**匹配优先级规则：**
-1.  **针对"意图 A (给钱)"**：
-    *   优先寻找列表中包含："生活费"、"添置购买东西"、"给钱"、"转账"等关键词的选项。
-2.  **针对"意图 B (买零食)"**：
-    *   优先寻找列表中包含："零食"、"奶茶"、"小吃"等具体物品的选项。
-    *   *如果没有具体选项*，则退而求其次，匹配"购买东西"或"给钱"的宽泛选项。
-3.  **针对"意图 C (节日/奖励)"**：
-    *   优先寻找列表中包含："节日"、"庆祝"、"奖励"、"歉意"的选项。
+*   **情形 A：AI 发红包 / 转账 / 给钱**
+    *   **首选匹配**：寻找包含“红包”、“转账”、“生活费”、“给钱”关键词的场景。
+    *   **次选匹配**：如果列表中没有上述词，寻找包含“添置东西”、“购买东西”、“奖励”的场景。
+    *   *注意：即使列表描述是“为用户添置购买东西”，发红包/转账也可以算作此类（因为钱是用来买东西的）。*
 
-# Output
-*   仅输出匹配到的**场景选项原文**。
-*   若无匹配或无效，输出 **NO**。`;
+*   **情形 B：AI 买零食 / 奶茶 / 饮料**
+    *   **首选匹配**：寻找包含“零食”、“奶茶”、“吃喝”关键词的场景。
+    *   **次选匹配**：寻找“购买东西”、“给钱”的通用场景。
+
+*   **情形 C：AI 节日 / 补偿**
+    *   优先匹配“节日”、“庆祝”、“歉意”、“奖励”类场景。
+
+# Output Rules
+1.  **必须输出**匹配到的【场景选项原文】。
+2.  仅在 Step 1 确实没有任何支付动作时，才输出 **NO**。`;
 
       const requestBody = {
         model: 'qwen-turbo',
@@ -572,16 +617,17 @@ ${scenarioListText}
   }
 
   /**
-   * 根据场景查询表情包
+   * 根据场景查询表情包（场景表情包必须有tags，如"转账"标签）
    * @param scenario 场景描述
    * @returns 表情包实体或 null
    */
   private async pickStickerByScenario(scenario: string): Promise<StickerEntity | null> {
     try {
-      // 查询scenario字段匹配的表情包
+      // 查询scenario字段匹配的表情包（必须有tags，区分于普通情绪表情包）
       const sticker = await this.stickerRepo
         .createQueryBuilder('sticker')
         .where('sticker.scenario LIKE :scenario', { scenario: `%${scenario}%` })
+        .andWhere("sticker.tags IS NOT NULL AND sticker.tags != ''")
         .getOne();
 
       return sticker;

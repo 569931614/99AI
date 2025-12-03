@@ -23,7 +23,7 @@
         </div>
       </template>
       <div class="text-xs text-gray-500 leading-6">
-        可选择 DashScope API 训练或 GPT-SoVITS 模型导入，点击“创建音色”进行配置。
+        可选择 DashScope API 训练、GPT-SoVITS 模型导入 或 MiniMax 语音克隆，点击"创建音色"进行配置。
       </div>
     </el-card>
     <el-card shadow="never">
@@ -359,6 +359,130 @@
             </div>
           </el-form>
         </el-tab-pane>
+        <el-tab-pane label="MiniMax 语音克隆" name="minimax">
+          <el-form :model="minimaxForm" label-width="120px" class="space-y-3">
+            <el-radio-group v-model="minimaxForm.mode" class="mb-4">
+              <el-radio label="clone">上传音频进行语音克隆</el-radio>
+              <el-radio label="design">AI音色设计（文字描述生成）</el-radio>
+              <el-radio label="link">关联已有 MiniMax 音色ID</el-radio>
+            </el-radio-group>
+
+            <el-form-item label="名称">
+              <el-input v-model="minimaxForm.name" placeholder="给该音色起个名字（便于识别）" />
+            </el-form-item>
+
+            <template v-if="minimaxForm.mode === 'clone'">
+              <el-form-item label="样本音频">
+                <div class="flex flex-col gap-2 w-full">
+                  <el-upload
+                    :auto-upload="false"
+                    :show-file-list="false"
+                    accept=".wav,.mp3,.m4a"
+                    @change="onMinimaxAudioFileChange"
+                  >
+                    <el-button>{{
+                      minimaxForm.audioFile ? '重新选择音频' : '上传音频文件'
+                    }}</el-button>
+                  </el-upload>
+                  <div
+                    v-if="minimaxForm.audioFileName"
+                    class="text-xs text-gray-500 flex items-center gap-2"
+                  >
+                    <span>
+                      {{ minimaxForm.audioFileName }}
+                      <template v-if="minimaxForm.audioFileSize">
+                        （{{ formatFileSize(minimaxForm.audioFileSize) }}）
+                      </template>
+                    </span>
+                    <el-button link type="danger" @click="clearMinimaxAudioFile">清除</el-button>
+                  </div>
+                </div>
+                <template #extra>
+                  <div class="text-xs text-gray-500 leading-5">
+                    要求：mp3/m4a/wav 格式，10秒-5分钟，不超过20MB。
+                  </div>
+                </template>
+              </el-form-item>
+              <el-form-item label="音频文本">
+                <el-input
+                  v-model="minimaxForm.promptText"
+                  type="textarea"
+                  :rows="2"
+                  placeholder="输入音频中说话的文本内容（可选，填写后可提升克隆质量）"
+                />
+                <template #extra>
+                  <div class="text-xs text-gray-500 leading-5">
+                    建议填写音频中实际说话的文本，可提升克隆音色的准确度。
+                  </div>
+                </template>
+              </el-form-item>
+            </template>
+
+            <template v-else-if="minimaxForm.mode === 'design'">
+              <el-form-item label="音色风格描述">
+                <el-input
+                  v-model="minimaxForm.designPrompt"
+                  type="textarea"
+                  :rows="3"
+                  placeholder="描述你想要的音色风格，例如：讲述悬疑故事的播音员，声音低沉富有磁性，语速时快时慢，营造紧张神秘的氛围。"
+                />
+                <template #extra>
+                  <div class="text-xs text-gray-500 leading-5">
+                    尽可能详细描述音色的风格特点，如性别、年龄、音色特征、情感色彩、语速节奏等。
+                  </div>
+                </template>
+              </el-form-item>
+            </template>
+
+            <template v-else>
+              <el-form-item label="MiniMax 音色ID">
+                <el-input
+                  v-model="minimaxForm.minimaxVoiceId"
+                  placeholder="输入 MiniMax 音色ID（如 audiobook_male_1）"
+                />
+                <template #extra>
+                  <div class="text-xs text-gray-500 leading-5">
+                    可以是 MiniMax 预置音色ID 或 通过语音克隆获得的 file_id
+                  </div>
+                </template>
+              </el-form-item>
+            </template>
+
+            <template v-if="minimaxForm.mode !== 'design'">
+              <el-divider content-position="left">合成参数（可选）</el-divider>
+              <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <el-form-item label="模型">
+                  <el-select v-model="minimaxForm.model" style="width: 100%">
+                    <el-option label="speech-2.6-hd" value="speech-2.6-hd" />
+                    <el-option label="speech-01-hd" value="speech-01-hd" />
+                    <el-option label="speech-02-hd" value="speech-02-hd" />
+                    <el-option label="speech-02-turbo" value="speech-02-turbo" />
+                  </el-select>
+                </el-form-item>
+                <el-form-item label="语速">
+                  <el-input-number v-model="minimaxForm.speed" :min="0.5" :max="2" :step="0.1" />
+                </el-form-item>
+                <el-form-item label="音量">
+                  <el-input-number v-model="minimaxForm.vol" :min="0.1" :max="10" :step="0.1" />
+                </el-form-item>
+              </div>
+              <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <el-form-item label="音调">
+                  <el-input-number v-model="minimaxForm.pitch" :min="-12" :max="12" :step="1" />
+                </el-form-item>
+                <el-form-item label="语言增强">
+                  <el-select v-model="minimaxForm.languageBoost" style="width: 100%">
+                    <el-option label="自动 (auto)" value="auto" />
+                    <el-option label="中文 (zh)" value="zh" />
+                    <el-option label="英文 (en)" value="en" />
+                    <el-option label="日语 (ja)" value="ja" />
+                    <el-option label="韩语 (ko)" value="ko" />
+                  </el-select>
+                </el-form-item>
+              </div>
+            </template>
+          </el-form>
+        </el-tab-pane>
       </el-tabs>
       <template #footer>
         <div class="flex justify-end gap-2">
@@ -372,11 +496,18 @@
             >提交复刻</el-button
           >
           <el-button
-            v-else
+            v-else-if="createVoiceDialog.active === 'gpt'"
             type="primary"
             :loading="gptSovitsForm.uploading"
             @click="onSubmitGptSovits"
             >上传模型</el-button
+          >
+          <el-button
+            v-else-if="createVoiceDialog.active === 'minimax'"
+            type="primary"
+            :loading="minimaxForm.uploading"
+            @click="onSubmitMinimax"
+            >{{ minimaxForm.mode === 'clone' ? '上传克隆' : minimaxForm.mode === 'design' ? '生成音色' : '关联音色' }}</el-button
           >
         </div>
       </template>
@@ -397,18 +528,28 @@
             <el-option v-for="lang in gptSovitsLanguages" :key="lang" :label="lang" :value="lang" />
           </el-select>
         </el-form-item>
-        <el-form-item label="模型" v-if="previewDialog.provider !== 'gpt-sovits'">
+        <el-form-item label="模型" v-if="previewDialog.provider === 'dashscope'">
           <el-select v-model="previewDialog.model" style="width: 220px">
             <el-option label="cosyvoice-v2" value="cosyvoice-v2" />
             <el-option label="cosyvoice-v3" value="cosyvoice-v3" />
             <el-option label="cosyvoice-v3-plus" value="cosyvoice-v3-plus" />
           </el-select>
         </el-form-item>
+        <el-form-item label="模型" v-if="previewDialog.provider === 'minimax'">
+          <el-select v-model="previewDialog.model" style="width: 220px">
+            <el-option label="speech-2.6-hd" value="speech-2.6-hd" />
+            <el-option label="speech-01-hd" value="speech-01-hd" />
+            <el-option label="speech-02-hd" value="speech-02-hd" />
+            <el-option label="speech-02-turbo" value="speech-02-turbo" />
+          </el-select>
+        </el-form-item>
         <el-form-item label="格式">
           <el-select
             v-model="previewDialog.format"
             style="width: 220px"
-            :disabled="previewDialog.provider === 'gpt-sovits'"
+            :disabled="
+              previewDialog.provider === 'gpt-sovits' || previewDialog.provider === 'minimax'
+            "
           >
             <el-option label="mp3" value="mp3" />
             <el-option label="wav" value="wav" />
@@ -828,7 +969,7 @@
     await onEnroll();
   }
 
-  const createVoiceDialog = reactive<{ visible: boolean; active: 'api' | 'gpt' }>({
+  const createVoiceDialog = reactive<{ visible: boolean; active: 'api' | 'gpt' | 'minimax' }>({
     visible: false,
     active: 'api',
   });
@@ -912,6 +1053,137 @@
   };
 
   const gptSovitsForm = reactive<GptSovitsFormState>({ ...defaultGptSovits });
+
+  // MiniMax 表单状态
+  interface MinimaxFormState {
+    mode: 'clone' | 'link' | 'design';
+    name: string;
+    audioFile: File | null;
+    audioFileName: string;
+    audioFileSize: number;
+    promptText: string; // 音频对应的文本
+    minimaxVoiceId: string;
+    model: string;
+    speed: number;
+    vol: number;
+    pitch: number;
+    languageBoost: string;
+    uploading: boolean;
+    // 音色设计相关
+    designPrompt: string;    // 音色风格描述
+  }
+
+  const defaultMinimax: MinimaxFormState = {
+    mode: 'clone',
+    name: '',
+    audioFile: null,
+    audioFileName: '',
+    audioFileSize: 0,
+    promptText: '',
+    minimaxVoiceId: '',
+    model: 'speech-2.6-hd',
+    speed: 1,
+    vol: 1,
+    pitch: 0,
+    languageBoost: 'auto',
+    uploading: false,
+    designPrompt: '',
+  };
+
+  const minimaxForm = reactive<MinimaxFormState>({ ...defaultMinimax });
+
+  function onMinimaxAudioFileChange(uploadFile: UploadFile) {
+    const rawFile = uploadFile?.raw || null;
+    minimaxForm.audioFile = rawFile;
+    minimaxForm.audioFileName = rawFile?.name || uploadFile?.name || '';
+    minimaxForm.audioFileSize = rawFile?.size || uploadFile?.size || 0;
+  }
+
+  function clearMinimaxAudioFile() {
+    minimaxForm.audioFile = null;
+    minimaxForm.audioFileName = '';
+    minimaxForm.audioFileSize = 0;
+  }
+
+  function resetMinimaxForm() {
+    Object.assign(minimaxForm, { ...defaultMinimax });
+  }
+
+  async function onSubmitMinimax() {
+    if (minimaxForm.mode === 'clone') {
+      // 上传音频进行语音克隆
+      if (!minimaxForm.audioFile) {
+        ElMessage.warning('请上传音频文件');
+        return;
+      }
+      minimaxForm.uploading = true;
+      try {
+        const fd = new FormData();
+        fd.append('audioFile', minimaxForm.audioFile, minimaxForm.audioFile.name || 'audio.wav');
+        if (minimaxForm.name) fd.append('name', minimaxForm.name);
+        if (minimaxForm.promptText) fd.append('promptText', minimaxForm.promptText);
+        await voiceApi.importMinimax(fd);
+        ElMessage.success('语音克隆成功');
+        resetMinimaxForm();
+        if (createVoiceDialog.visible) createVoiceDialog.visible = false;
+        createVoiceDialog.active = 'api';
+        fetchList();
+      } catch (e: any) {
+        ElMessage.error(e?.message || '语音克隆失败');
+      } finally {
+        minimaxForm.uploading = false;
+      }
+    } else if (minimaxForm.mode === 'design') {
+      // 音色设计：通过文字描述生成AI音色
+      if (!minimaxForm.designPrompt.trim()) {
+        ElMessage.warning('请输入音色风格描述');
+        return;
+      }
+      minimaxForm.uploading = true;
+      try {
+        await voiceApi.designMinimax({
+          name: minimaxForm.name || undefined,
+          prompt: minimaxForm.designPrompt,
+        });
+        ElMessage.success('音色生成成功，可在列表中试听');
+        resetMinimaxForm();
+        if (createVoiceDialog.visible) createVoiceDialog.visible = false;
+        createVoiceDialog.active = 'api';
+        fetchList();
+      } catch (e: any) {
+        ElMessage.error(e?.message || '音色设计失败');
+      } finally {
+        minimaxForm.uploading = false;
+      }
+    } else {
+      // 关联已有音色ID
+      if (!minimaxForm.minimaxVoiceId.trim()) {
+        ElMessage.warning('请输入 MiniMax 音色ID');
+        return;
+      }
+      minimaxForm.uploading = true;
+      try {
+        await voiceApi.linkMinimax({
+          name: minimaxForm.name || undefined,
+          minimaxVoiceId: minimaxForm.minimaxVoiceId,
+          model: minimaxForm.model,
+          speed: minimaxForm.speed,
+          vol: minimaxForm.vol,
+          pitch: minimaxForm.pitch,
+          languageBoost: minimaxForm.languageBoost,
+        });
+        ElMessage.success('音色关联成功');
+        resetMinimaxForm();
+        if (createVoiceDialog.visible) createVoiceDialog.visible = false;
+        createVoiceDialog.active = 'api';
+        fetchList();
+      } catch (e: any) {
+        ElMessage.error(e?.message || '关联失败');
+      } finally {
+        minimaxForm.uploading = false;
+      }
+    }
+  }
 
   // 角色列表
   const charactersLoading = ref(false);
@@ -1277,7 +1549,7 @@
 
     format: 'mp3' | 'wav';
 
-    provider: 'dashscope' | 'gpt-sovits';
+    provider: 'dashscope' | 'gpt-sovits' | 'minimax';
 
     textLanguage: string;
 
@@ -1324,9 +1596,17 @@
     previewDialog.visible = true;
     previewDialog.voice_id = row.voice_id;
     previewDialog.provider = row.provider || 'dashscope';
-    previewDialog.model =
-      previewDialog.provider === 'gpt-sovits' ? 'gpt-sovits' : deriveModelFromVoiceId(row.voice_id);
-    previewDialog.format = previewDialog.provider === 'gpt-sovits' ? 'wav' : 'mp3';
+    // 根据 provider 设置模型
+    if (previewDialog.provider === 'gpt-sovits') {
+      previewDialog.model = 'gpt-sovits';
+      previewDialog.format = 'wav';
+    } else if (previewDialog.provider === 'minimax') {
+      previewDialog.model = 'speech-2.6-hd';
+      previewDialog.format = 'mp3';
+    } else {
+      previewDialog.model = deriveModelFromVoiceId(row.voice_id);
+      previewDialog.format = 'mp3';
+    }
     previewDialog.textLanguage = row.text_language || gptSovitsForm.textLanguage || 'zh';
     previewDialog.url = undefined;
   }

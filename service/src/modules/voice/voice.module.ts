@@ -6,6 +6,7 @@ import { AppVoiceEntity } from '../app/appVoice.entity';
 import { GlobalConfigModule } from '../globalConfig/globalConfig.module';
 import { UploadModule } from '../upload/upload.module';
 import { OpenVoiceController } from './open-voice.controller';
+import { MinimaxProvider } from './providers/minimax.provider';
 import { VoiceController } from './voice.controller';
 import { VoiceEntity } from './voice.entity';
 import { VoiceService } from './voice.service';
@@ -26,7 +27,7 @@ import { VoiceCategoryService } from './voiceCategory.service';
     ]),
   ],
   controllers: [VoiceController, VoiceCategoryController, OpenVoiceController],
-  providers: [VoiceService, VoiceCategoryService],
+  providers: [VoiceService, VoiceCategoryService, MinimaxProvider],
   exports: [VoiceService, VoiceCategoryService],
 })
 export class VoiceModule {}

@@ -47,10 +47,7 @@ export class UploadService implements OnModuleInit {
       if (error instanceof HttpException) {
         throw error; // 重新抛出频率限制异常
       }
-      Logger.warn(
-        `Redis 不可用，跳过上传频率检查: ${error.message}`,
-        'UploadService',
-      );
+      Logger.warn(`Redis 不可用，跳过上传频率检查: ${error.message}`, 'UploadService');
     }
   }
 

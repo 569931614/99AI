@@ -39,7 +39,7 @@
 </template>
 
 <script setup lang="ts">
-import { fetchDeviceRolesHtml } from '@/api'
+import { fetchDeviceRolesHtml, fetchTouchChatProcess, fetchTouchTtsProcess } from '@/api'
 import { onMounted, onUnmounted, ref } from 'vue'
 import { useRoute } from 'vue-router'
 
@@ -134,32 +134,35 @@ const streamTextAsync = async (text: string, callback: Function, interval: numbe
 }
 
 const fetchChatSuggestion = () => {
-  let markdownContent = ''
-  if (
-    pageData.value.calendar &&
-    pageData.value.calendar[0] &&
-    pageData.value.calendar[0].description
-  ) {
-    markdownContent = pageData.value.calendar[0].description
+  // 格式化备忘录列表
+  let calendarList = ''
+  if (pageData.value.calendar && pageData.value.calendar.length > 0) {
+    const items = pageData.value.calendar
+      .map((item: any, index: number) => {
+        // 格式化时间：年月日 时:分
+        const year = item.schedule_year || ''
+        const month = item.schedule_month || ''
+        const day = item.schedule_day || ''
+        const hour = String(item.schedule_hour ?? '').padStart(2, '0')
+        const minute = String(item.schedule_minute ?? '').padStart(2, '0')
+        const time = year ? `${year}年${month}月${day}日 ${hour}:${minute}` : ''
+        const event = item.description || ''
+        return `${index + 1}.时间：${time}，事件：${event}`
+      })
+      .join('\n')
+    calendarList = items
   }
 
-  return fetch('https://admin.maobingai.com/api/open/chat/chat-process-sync', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
+  return fetchTouchChatProcess({
+    prompt: `备忘录列表：\n${calendarList}`,
+    appId: pageData.value.appId,
+    options: {
+      skipSaveToDatabase: true,
     },
-    body: JSON.stringify({
-      maobingBaseUrl: 'https://admin.maobingai.com',
-      options: {
-        skipSaveToDatabase: true,
-      },
-      prompt: `备忘录：${markdownContent}`,
-      isCalendarMessage: true,
-      userId: pageData.value.id,
-    }),
+    isCalendarMessage: true,
+    userId: pageData.value.id,
   })
-    .then(res => res.json())
-    .then(res => {
+    .then((res: any) => {
       const text = res?.data?.data?.text || res?.data?.text
       if (text) {
         aiText.value = text
@@ -178,19 +181,11 @@ const fetchChatSuggestion = () => {
 }
 
 const fetchChatTts = () => {
-  return fetch('https://admin.maobingai.com/api/open/chat/tts-process', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      maobingBaseUrl: 'https://admin.maobingai.com',
-      prompt: aiText.value,
-      userId: pageData.value.id,
-    }),
+  return fetchTouchTtsProcess({
+    prompt: aiText.value,
+    userId: pageData.value.id,
   })
-    .then(res => res.json())
-    .then(res => {
+    .then((res: any) => {
       const ttsUrl = res?.data?.ttsUrl || res?.ttsUrl
       if (ttsUrl) {
         audioUrl.value = ttsUrl

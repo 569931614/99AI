@@ -1,5 +1,16 @@
-import { Body, Controller, Get, Param, Post, Query, Req } from '@nestjs/common';
-import { ApiBody, ApiOperation, ApiParam, ApiQuery, ApiTags } from '@nestjs/swagger';
+import {
+  Body,
+  Controller,
+  Get,
+  Param,
+  Post,
+  Query,
+  Req,
+  UploadedFile,
+  UseInterceptors,
+} from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
+import { ApiBody, ApiConsumes, ApiOperation, ApiParam, ApiQuery, ApiTags } from '@nestjs/swagger';
 import { VoiceService } from './voice.service';
 import { VoiceCategoryService } from './voiceCategory.service';
 
@@ -107,65 +118,108 @@ export class OpenVoiceController {
   @ApiOperation({
     summary: '【开放】声音复刻：创建音色（无鉴权）',
     description:
-      '说明：prefix 可选，不传则后端自动生成；enablePreprocess 已废弃，后端始终忽略并直接使用原始音频URL。',
+      '默认使用 DashScope(cosyvoice)，兼容旧接口。新增 provider=minimax 支持 MiniMax 语音克隆。',
   })
+  @ApiConsumes('multipart/form-data', 'application/json')
   @ApiBody({
     schema: {
       type: 'object',
       properties: {
-        prefix: {
+        provider: {
           type: 'string',
-          description: '目标模型前缀（可选，不传则自动生成，最多10个字符），如 test01、qya3 等',
-          maxLength: 10,
+          enum: ['dashscope', 'minimax'],
+          description: '语音服务提供商（可选，默认 dashscope，兼容旧接口）',
         },
         url: {
           type: 'string',
-          description:
-            '训练音频URL（支持 http/https，建议 WAV 格式，16kHz 采样率，3-10秒清晰人声）',
+          description: '训练音频URL（DashScope必填，MiniMax可选）',
         },
-        targetModel: { type: 'string', description: '具体目标模型（可选，默认 cosyvoice-v2）' },
+        prefix: {
+          type: 'string',
+          description: '【DashScope】目标模型前缀（可选，最多10个字符）',
+          maxLength: 10,
+        },
+        targetModel: {
+          type: 'string',
+          description: '【DashScope】目标模型（可选，默认 cosyvoice-v2）',
+        },
+        audioFile: {
+          type: 'string',
+          format: 'binary',
+          description: '【MiniMax】音频文件（mp3/m4a/wav，10秒-5分钟，≤20MB）',
+        },
+        promptText: {
+          type: 'string',
+          description: '【MiniMax】音频对应的文本（可选，提升克隆质量）',
+        },
         name: { type: 'string', description: '音色名称（可选）' },
-        userId: { type: 'number', description: '用户ID（可选，用于区分用户自定义音色）' },
-        enablePreprocess: {
-          type: 'boolean',
-          description: '已废弃：后端忽略此参数，始终直接使用原始音频URL',
-        },
+        userId: { type: 'number', description: '用户ID（可选）' },
       },
       required: ['url'],
     },
     examples: {
-      demo: {
+      default: {
+        summary: '旧接口调用方式（默认cosyvoice）',
         value: {
           url: 'https://example.com/sample.wav',
           name: '示例音色',
-          userId: 123,
+        },
+      },
+      dashscope: {
+        summary: 'DashScope 语音克隆',
+        value: {
+          provider: 'dashscope',
+          url: 'https://example.com/sample.wav',
+          name: '示例音色',
           targetModel: 'cosyvoice-v2',
         },
       },
-      withPrefix: {
+      minimax: {
+        summary: 'MiniMax 语音克隆（需上传文件）',
         value: {
-          prefix: 'test01',
-          url: 'https://example.com/sample.wav',
-          name: '自定义前缀音色',
+          provider: 'minimax',
+          name: '克隆音色',
+          promptText: '音频中说的话',
         },
       },
     },
   })
+  @UseInterceptors(FileInterceptor('audioFile', { limits: { fileSize: 20 * 1024 * 1024 } }))
   enroll(
     @Req() req: Request,
+    @UploadedFile() audioFile: Express.Multer.File,
     @Body()
     body: {
+      provider?: 'dashscope' | 'minimax';
       prefix?: string;
-      url: string;
+      url?: string;
       targetModel?: string;
       name?: string;
       userId?: number;
-      enablePreprocess?: boolean;
+      promptText?: string;
     },
   ) {
-    // 如果前端没有传userId，尝试从req.user中获取
     const userId = body.userId || (req as any).user?.id;
-    return this.voiceService.enroll({ ...body, userId });
+
+    // provider=minimax 时使用 MiniMax 语音克隆
+    if (body.provider === 'minimax') {
+      return this.voiceService.importMinimaxVoice({
+        name: body.name,
+        userId,
+        audioFile,
+        audioUrl: body.url,
+        promptText: body.promptText,
+      });
+    }
+
+    // 默认使用 DashScope（兼容旧接口）
+    return this.voiceService.enroll({
+      prefix: body.prefix,
+      url: body.url,
+      targetModel: body.targetModel,
+      name: body.name,
+      userId,
+    });
   }
 
   @Post('update')
@@ -366,5 +420,54 @@ export class OpenVoiceController {
       console.error('[OpenVoiceController.preview] Error:', error);
       throw error;
     }
+  }
+
+  // ==================== MiniMax 关联预置音色 ====================
+
+  @Post('minimax/link')
+  @ApiOperation({
+    summary: '【开放】MiniMax 关联音色：使用已有音色ID（无鉴权）',
+    description: '关联 MiniMax 预置音色（如 audiobook_male_1）或已克隆的音色ID',
+  })
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        minimaxVoiceId: { type: 'string', description: 'MiniMax 音色ID（必填）' },
+        name: { type: 'string', description: '音色名称（可选）' },
+        userId: { type: 'number', description: '用户ID（可选）' },
+        model: { type: 'string', description: '模型（可选，默认 speech-2.6-hd）' },
+        speed: { type: 'number', description: '语速 0.5-2.0（可选，默认 1）' },
+        vol: { type: 'number', description: '音量 0.1-10（可选，默认 1）' },
+        pitch: { type: 'number', description: '音调 -12到12（可选，默认 0）' },
+        languageBoost: { type: 'string', description: '语言增强（可选，默认 auto）' },
+      },
+      required: ['minimaxVoiceId'],
+    },
+    examples: {
+      preset: {
+        summary: '使用预置音色',
+        value: { minimaxVoiceId: 'audiobook_male_1', name: '男声有声书' },
+      },
+      cloned: {
+        summary: '使用克隆音色',
+        value: { minimaxVoiceId: 'voice1234567890', name: '我的克隆音色' },
+      },
+    },
+  })
+  minimaxLink(
+    @Body()
+    body: {
+      minimaxVoiceId: string;
+      name?: string;
+      userId?: number;
+      model?: string;
+      speed?: number;
+      vol?: number;
+      pitch?: number;
+      languageBoost?: string;
+    },
+  ) {
+    return this.voiceService.linkMinimaxVoice(body);
   }
 }

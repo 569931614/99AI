@@ -31,6 +31,8 @@ const GPT_SOVITS_LIBRARY_DIR = {
   gpt: 'gpt-models',
   sovits: 'sovits-models',
 };
+// MiniMax 配置（实际使用在 providers/minimax.provider.ts 中）
+// API URL: https://api.minimaxi.com
 const fsp = fs.promises;
 
 // GPT-SoVITS 重试配置
@@ -38,7 +40,7 @@ const GPT_SOVITS_MAX_RETRIES = Number(process.env.GPT_SOVITS_MAX_RETRIES) || 3;
 const GPT_SOVITS_RETRY_DELAY = Number(process.env.GPT_SOVITS_RETRY_DELAY) || 1000; // 毫秒
 const GPT_SOVITS_RETRY_BACKOFF = Number(process.env.GPT_SOVITS_RETRY_BACKOFF) || 2; // 指数退避倍数
 
-type VoiceProvider = 'dashscope' | 'gpt-sovits';
+type VoiceProvider = 'dashscope' | 'gpt-sovits' | 'minimax';
 
 /**
  * 通用重试工具函数
@@ -149,6 +151,16 @@ export class VoiceService implements OnModuleInit {
     @InjectRepository(AppEntity)
     private readonly appRepo: Repository<AppEntity>,
   ) {}
+
+  // Lazy-load MinimaxProvider to avoid circular dependencies
+  private _minimaxProvider: any;
+  private get minimaxProvider() {
+    if (!this._minimaxProvider) {
+      const { MinimaxProvider } = require('./providers/minimax.provider');
+      this._minimaxProvider = new MinimaxProvider(this.globalConfigService);
+    }
+    return this._minimaxProvider;
+  }
 
   private async getApiKey(): Promise<string> {
     const dashscopeApiKey = await this.globalConfigService.getConfigs(['dashscopeApiKey']);
@@ -812,6 +824,151 @@ export class VoiceService implements OnModuleInit {
 
     Logger.log(`[importGptSovitsVoice] 新增 GPT-SoVITS 音色 ${voiceId}`, 'VoiceService');
     return { voice_id: voiceId, provider: 'gpt-sovits', status: 'SUCCEEDED' };
+  }
+
+  /**
+   * 导入 MiniMax 音色（语音克隆）
+   * 上传音频文件到 MiniMax，获取 file_id 用于后续 TTS
+   */
+  async importMinimaxVoice(body: {
+    voiceId?: string;
+    name?: string;
+    userId?: number;
+    audioUrl?: string;
+    audioFile?: Express.Multer.File;
+    promptText?: string; // 音频对应的文本（可选，用于提升克隆质量）
+  }) {
+    const timestamp = body.voiceId || Date.now();
+    const voiceId = `minimax-${timestamp}`;
+    await this.assertVoiceIdAvailable(voiceId);
+
+    const minimaxVoiceId = `voice${timestamp}`;
+    const cloneResult = await this.minimaxProvider.cloneVoice({
+      audioUrl: body.audioUrl,
+      audioBuffer: body.audioFile?.buffer,
+      fileName: body.audioFile?.originalname,
+      voiceId: minimaxVoiceId,
+      promptText: body.promptText,
+    });
+
+    await this.upsertVoice({
+      voiceId,
+      name: body.name || null,
+      userId: body.userId || null,
+      provider: 'minimax',
+      status: cloneResult.status === 'success' ? 'SUCCEEDED' : 'PENDING',
+      prefix: 'minimax',
+      model: 'speech-2.6-hd',
+      format: 'mp3',
+      sampleRate: 32000,
+      config: {
+        voiceId: cloneResult.voiceId,
+        fileId: cloneResult.fileId,
+        model: 'speech-2.6-hd',
+        speed: 1,
+        vol: 1,
+        pitch: 0,
+        languageBoost: 'auto',
+      },
+    });
+
+    return {
+      voice_id: voiceId,
+      provider: 'minimax',
+      status: cloneResult.status === 'success' ? 'SUCCEEDED' : 'PENDING',
+      minimax_voice_id: cloneResult.voiceId,
+    };
+  }
+
+  /** 关联已有的 MiniMax 音色ID */
+  async linkMinimaxVoice(body: {
+    voiceId?: string;
+    name?: string;
+    userId?: number;
+    minimaxVoiceId: string;
+    model?: string;
+    speed?: number;
+    vol?: number;
+    pitch?: number;
+    languageBoost?: string;
+  }) {
+    const voiceId = `minimax-${body.voiceId || Date.now()}`;
+    await this.assertVoiceIdAvailable(voiceId);
+
+    await this.upsertVoice({
+      voiceId,
+      name: body.name || null,
+      userId: body.userId || null,
+      provider: 'minimax',
+      status: 'SUCCEEDED',
+      prefix: 'minimax',
+      model: body.model || 'speech-2.6-hd',
+      format: 'mp3',
+      sampleRate: 32000,
+      config: {
+        voiceId: body.minimaxVoiceId,
+        model: body.model || 'speech-2.6-hd',
+        speed: body.speed || 1,
+        vol: body.vol || 1,
+        pitch: body.pitch || 0,
+        languageBoost: body.languageBoost || 'auto',
+      },
+    });
+
+    return { voice_id: voiceId, provider: 'minimax', status: 'SUCCEEDED' };
+  }
+
+  /**
+   * MiniMax 音色设计
+   * 通过文字描述生成AI音色，并保存到数据库
+   */
+  async designMinimaxVoice(body: {
+    voiceId?: string;
+    name?: string;
+    userId?: number;
+    prompt: string;       // 音色风格描述
+  }) {
+    // 使用默认试听文本（MiniMax API 需要此参数）
+    const defaultPreviewText = '你好，我是AI生成的虚拟音色，很高兴认识你。';
+
+    // 调用 MiniMax 音色设计 API
+    const designResult = await this.minimaxProvider.voiceDesign({
+      prompt: body.prompt,
+      previewText: defaultPreviewText,
+    });
+
+    const timestamp = body.voiceId || Date.now();
+    const voiceId = `minimax-design-${timestamp}`;
+    await this.assertVoiceIdAvailable(voiceId);
+
+    // 保存到数据库
+    await this.upsertVoice({
+      voiceId,
+      name: body.name || `AI设计音色-${timestamp}`,
+      userId: body.userId || null,
+      provider: 'minimax',
+      status: 'SUCCEEDED',
+      prefix: 'minimax-design',
+      model: 'speech-2.6-hd',
+      format: 'mp3',
+      sampleRate: 32000,
+      config: {
+        voiceId: designResult.voiceId,  // MiniMax返回的音色ID
+        designPrompt: body.prompt,       // 保存设计提示词
+        model: 'speech-2.6-hd',
+        speed: 1,
+        vol: 1,
+        pitch: 0,
+        languageBoost: 'auto',
+      },
+    });
+
+    return {
+      voice_id: voiceId,
+      provider: 'minimax',
+      status: 'SUCCEEDED',
+      minimax_voice_id: designResult.voiceId,
+    };
   }
 
   async listFromDB(query: {
@@ -2854,6 +3011,9 @@ export class VoiceService implements OnModuleInit {
     if ((voiceEntity.provider as VoiceProvider) === 'gpt-sovits') {
       return this.previewWithGptSovits(voiceEntity, body);
     }
+    if ((voiceEntity.provider as VoiceProvider) === 'minimax') {
+      return this.previewWithMinimax(voiceEntity, body);
+    }
 
     const saved = (await this.getVoiceParams(voice_id)) || {};
     const format = (body.format || saved.format || 'mp3') as 'mp3' | 'wav' | 'pcm';
@@ -3004,6 +3164,39 @@ export class VoiceService implements OnModuleInit {
       `[previewWithGptSovits] 音频生成完成 - URL: ${uploadUrl}, 时长: ${Math.round(duration)}秒`,
       'VoiceService',
     );
+    return { url: uploadUrl as any, duration };
+  }
+
+  /** MiniMax 预览合成 */
+  private async previewWithMinimax(
+    voice: VoiceEntity,
+    body: { text: string; sample_rate?: number },
+  ): Promise<{ url: string; duration: number }> {
+    const config = (voice.config || {}) as any;
+    if (!config.voiceId) {
+      throw new HttpException(
+        `音色 ${voice.voiceId} 缺少 MiniMax voiceId 配置`,
+        HttpStatus.BAD_REQUEST,
+      );
+    }
+
+    const result = await this.minimaxProvider.synthesizeSpeech({
+      text: body.text,
+      voiceId: String(config.voiceId),
+      model: config.model || 'speech-2.6-hd',
+      speed: config.speed || 1,
+      vol: config.vol || 1,
+      pitch: config.pitch || 0,
+      languageBoost: config.languageBoost || 'auto',
+      audioSampleRate: body.sample_rate || 32000,
+    });
+
+    const uploadUrl = await this.uploadService.uploadFile(
+      { buffer: result.audioBuffer, mimetype: 'audio/mpeg' } as any,
+      'voicePreview',
+    );
+    const duration = await this.getAudioDuration(result.audioBuffer, 'mp3', 32000);
+
     return { url: uploadUrl as any, duration };
   }
 

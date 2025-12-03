@@ -262,7 +262,13 @@ export function fetchDeviceRolesHtml<T>(data: { bracelet_id: string }): Promise<
 }
 
 // touchChat专用的同步聊天接口（调用本地service）
-export function fetchTouchChatProcess<T>(data: { prompt: string; appId: number }): Promise<T> {
+export function fetchTouchChatProcess<T>(data: {
+  prompt: string
+  appId: number
+  options?: { skipSaveToDatabase?: boolean }
+  isCalendarMessage?: boolean
+  userId?: number
+}): Promise<T> {
   return post<T>({
     url: '/open/chat/chat-process-sync',
     data,
@@ -270,7 +276,7 @@ export function fetchTouchChatProcess<T>(data: { prompt: string; appId: number }
 }
 
 // touchChat专用的TTS接口（调用本地service）
-export function fetchTouchTtsProcess<T>(data: { prompt: string }): Promise<T> {
+export function fetchTouchTtsProcess<T>(data: { prompt: string; userId?: number }): Promise<T> {
   return post<T>({
     url: '/open/chat/tts-process',
     data,

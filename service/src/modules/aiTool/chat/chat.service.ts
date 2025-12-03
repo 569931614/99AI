@@ -1097,10 +1097,7 @@ export class OpenAIChatService {
         );
 
         if (!fullText || fullText.trim() === '') {
-          Logger.warn(
-            `[QwenPlus] ⚠️ 流式响应返回了空内容！`,
-            'OpenAIChatService',
-          );
+          Logger.warn(`[QwenPlus] ⚠️ 流式响应返回了空内容！`, 'OpenAIChatService');
         }
 
         return {
@@ -1113,18 +1110,12 @@ export class OpenAIChatService {
         signal: options?.abortSignal,
       });
 
-      Logger.debug(
-        `[QwenPlus] 非流式响应: ${JSON.stringify(completion)}`,
-        'OpenAIChatService',
-      );
+      Logger.debug(`[QwenPlus] 非流式响应: ${JSON.stringify(completion)}`, 'OpenAIChatService');
 
       const text = completion?.choices?.[0]?.message?.content || '';
       const usage = completion?.usage ? this.mapDashscopeUsage(completion.usage) : undefined;
 
-      Logger.debug(
-        `[QwenPlus] 提取的文本: "${text}", 长度: ${text.length}`,
-        'OpenAIChatService',
-      );
+      Logger.debug(`[QwenPlus] 提取的文本: "${text}", 长度: ${text.length}`, 'OpenAIChatService');
 
       if (!text || text.trim() === '') {
         Logger.warn(
@@ -1148,11 +1139,10 @@ export class OpenAIChatService {
         errorMessage.includes('敏感内容') ||
         errorMessage.includes('DataInspectionFailed')
       ) {
-        Logger.warn(
-          `[QwenPlus] ⚠️ 触发内容审核，返回友好错误提示给用户`,
-          'OpenAIChatService',
+        Logger.warn(`[QwenPlus] ⚠️ 触发内容审核，返回友好错误提示给用户`, 'OpenAIChatService');
+        throw new BadRequestException(
+          '抱歉，您的消息或者角色提示词包含敏感内容，无法处理。请修改后重试。',
         );
-        throw new BadRequestException('抱歉，您的消息或者角色提示词包含敏感内容，无法处理。请修改后重试。');
       }
 
       throw error;
@@ -1613,11 +1603,10 @@ export class OpenAIChatService {
         errorMessage.includes('DataInspectionFailed') ||
         errorMessage.includes('安全审核')
       ) {
-        Logger.warn(
-          `[星尘API] ⚠️ 触发内容审核，返回友好错误提示给用户`,
-          'OpenAIChatService',
+        Logger.warn(`[星尘API] ⚠️ 触发内容审核，返回友好错误提示给用户`, 'OpenAIChatService');
+        throw new BadRequestException(
+          '抱歉，您的消息或者角色提示词包含敏感内容，无法处理。请修改后重试。',
         );
-        throw new BadRequestException('抱歉，您的消息或者角色提示词包含敏感内容，无法处理。请修改后重试。');
       }
 
       throw error; // 抛出错误而不是返回undefined
@@ -1644,7 +1633,7 @@ export class OpenAIChatService {
       暗示: '含蓄表达',
       暗示意味: '含蓄表达',
       嫉妒: '在意',
-      '不允许': '希望避免',
+      不允许: '希望避免',
       禁止: '不建议',
       狡诈: '机智',
       占据主导地位: '善于引导',
@@ -1652,8 +1641,8 @@ export class OpenAIChatService {
       控制: '关注',
       宠爱: '关心',
       溺爱: '关爱',
-      '男友气息': '亲切感',
-      '女友': '朋友',
+      男友气息: '亲切感',
+      女友: '朋友',
       恋人: '好友',
       情侣: '朋友',
       亲密: '友好',
@@ -1777,14 +1766,8 @@ export class OpenAIChatService {
     // 过滤敏感词汇以避免触发内容审核
     const sanitizedSystemPrompt = this.sanitizeSystemMessage(systemPrompt);
     if (sanitizedSystemPrompt !== systemPrompt) {
-      Logger.log(
-        `[QwenPlus] 已对System消息进行内容过滤，避免触发审核`,
-        'OpenAIChatService',
-      );
-      Logger.debug(
-        `[QwenPlus] 过滤后System消息:\n${sanitizedSystemPrompt}`,
-        'OpenAIChatService',
-      );
+      Logger.log(`[QwenPlus] 已对System消息进行内容过滤，避免触发审核`, 'OpenAIChatService');
+      Logger.debug(`[QwenPlus] 过滤后System消息:\n${sanitizedSystemPrompt}`, 'OpenAIChatService');
     }
 
     normalizedMessages.unshift({

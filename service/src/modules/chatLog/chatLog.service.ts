@@ -538,6 +538,14 @@ export class ChatLogService {
     }
   }
 
+  /* 根据ID删除单条对话记录（用于内部调用，不需要用户验证） */
+  async deleteChatLogById(id: number): Promise<void> {
+    const result = await this.chatLogEntity.update({ id }, { isDelete: true });
+    if (result.affected === 0) {
+      Logger.warn(`删除对话记录失败，ID不存在: ${id}`, 'ChatLogService');
+    }
+  }
+
   /* 清空一组对话记录 */
   async delByGroupId(req: Request, body: DelByGroupDto) {
     const { groupId } = body;

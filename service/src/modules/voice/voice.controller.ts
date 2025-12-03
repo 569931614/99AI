@@ -116,6 +116,78 @@ export class VoiceController {
     return this.voiceService.uploadGptSovitsModel(file);
   }
 
+  @Post('minimax/clone')
+  @ApiOperation({
+    summary: '【MiniMax】语音克隆：上传音频并创建克隆音色',
+    description:
+      '上传音频文件到 MiniMax 进行语音克隆。支持 mp3/m4a/wav 格式，10秒-5分钟，不超过20MB。promptText 为音频对应的文本，可提升克隆质量。',
+  })
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @UseInterceptors(
+    FileInterceptor('audioFile', {
+      limits: { fileSize: 20 * 1024 * 1024 }, // 20MB（MiniMax限制）
+    }),
+  )
+  importMinimaxVoice(
+    @UploadedFile() audioFile: Express.Multer.File,
+    @Body()
+    body: {
+      voiceId?: string;
+      name?: string;
+      userId?: number;
+      audioUrl?: string;
+      promptText?: string; // 音频对应的文本，可提升克隆质量
+    },
+  ) {
+    return this.voiceService.importMinimaxVoice({ ...body, audioFile });
+  }
+
+  @Post('minimax/link')
+  @ApiOperation({
+    summary: '【MiniMax】关联已有的 MiniMax 音色ID',
+    description: '关联 MiniMax 预置音色（如 audiobook_male_1）或通过克隆获得的 file_id',
+  })
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  linkMinimaxVoice(
+    @Body()
+    body: {
+      voiceId?: string;
+      name?: string;
+      userId?: number;
+      minimaxVoiceId: string;
+      model?: string;
+      speed?: number;
+      vol?: number;
+      pitch?: number;
+      languageBoost?: string;
+    },
+  ) {
+    return this.voiceService.linkMinimaxVoice(body);
+  }
+
+  @Post('minimax/design')
+  @ApiOperation({
+    summary: '【MiniMax】音色设计：通过文字描述生成AI音色',
+    description:
+      '使用 prompt 描述音色风格（如"讲述悬疑故事的播音员，声音低沉富有磁性"），' +
+      '系统会自动生成音色。返回生成的音色ID。',
+  })
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  designMinimaxVoice(
+    @Body()
+    body: {
+      voiceId?: string;
+      name?: string;
+      userId?: number;
+      prompt: string;       // 音色风格描述
+    },
+  ) {
+    return this.voiceService.designMinimaxVoice(body);
+  }
+
   @Get('list')
   @ApiOperation({ summary: '查询音色列表' })
   @UseGuards(JwtAuthGuard)

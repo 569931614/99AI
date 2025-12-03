@@ -49,7 +49,9 @@ export class MaobingCookieUtil {
       const payload = response.data;
       if (payload?.code === 1) {
         this.logger.log(
-          `饼干${type === 2 ? '扣除' : '返还'}成功 - userId: ${params.userId}, amount: ${params.amount}, remark: ${params.remark}`,
+          `饼干${type === 2 ? '扣除' : '返还'}成功 - userId: ${params.userId}, amount: ${
+            params.amount
+          }, remark: ${params.remark}`,
         );
         return {
           success: true,

@@ -704,13 +704,15 @@ export class OpenChatController {
       };
 
       // 构造伪造的 req 对象
-      // 将扣费信息传递给 chatProcess
-      body._cookieChargeInfo = {
-        userId,
-        messageType,
-        maobingBaseUrl,
-        token,
-      };
+      // 将扣费信息传递给 chatProcess（备忘录消息跳过扣费）
+      if (body?.isCalendarMessage !== true) {
+        body._cookieChargeInfo = {
+          userId,
+          messageType,
+          maobingBaseUrl,
+          token,
+        };
+      }
 
       const fakeReq: any = {
         user: { id: userId, role: 'visitor' },
@@ -751,7 +753,9 @@ export class OpenChatController {
       let shouldGenerateTts = generateTts === false ? false : shouldGenerateVoiceByDecision;
 
       this.logger.log(
-        `[chat-process-sync] 语音生成决定 - messageType: ${messageType}, shouldGenerateTts: ${shouldGenerateTts}, generateTts参数: ${generateTts ?? 'default'}`,
+        `[chat-process-sync] 语音生成决定 - messageType: ${messageType}, shouldGenerateTts: ${shouldGenerateTts}, generateTts参数: ${
+          generateTts ?? 'default'
+        }`,
       );
 
       // 如果需要生成TTS且尚未生成语音，则主动调用TTS生成（包含情绪识别）

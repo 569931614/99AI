@@ -8,6 +8,33 @@ export default {
   listGptSovitsFiles: () => api.get('voice/gpt-sovits/files'),
   // 导入 GPT-SoVITS 模型（支持上传文件或选择服务器文件）
   importGptSovits: (data: FormData) => api.post('voice/gpt-sovits/import', data),
+
+  // MiniMax 语音克隆：上传音频文件
+  importMinimax: (data: FormData) =>
+    api.post('voice/minimax/clone', data, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+      timeout: 120000, // 2分钟超时
+    }),
+  // MiniMax 关联已有音色ID
+  linkMinimax: (data: {
+    voiceId?: string;
+    name?: string;
+    minimaxVoiceId: string;
+    model?: string;
+    speed?: number;
+    vol?: number;
+    pitch?: number;
+    languageBoost?: string;
+  }) => api.post('voice/minimax/link', data),
+  // MiniMax 音色设计：通过文字描述生成AI音色
+  designMinimax: (data: {
+    voiceId?: string;
+    name?: string;
+    prompt: string;       // 音色风格描述
+  }) =>
+    api.post('voice/minimax/design', data, {
+      timeout: 120000, // 2分钟超时
+    }),
   // 上传单个 GPT-SoVITS 模型文件
   uploadGptSovitsModel: (file: File) => {
     const fd = new FormData();

@@ -21,6 +21,7 @@ import { AffectionService } from '../affection/affection.service';
 import { VoiceService } from '../voice/voice.service';
 import { ChatService } from './chat.service';
 import { ChatGroupEntity } from '../chatGroup/chatGroup.entity';
+import { ChatLogService } from '../chatLog/chatLog.service';
 
 type CookieMessageType = 'text' | 'voice' | 'image';
 
@@ -49,6 +50,7 @@ export class OpenChatController {
     private readonly chatService: ChatService,
     private readonly voiceService: VoiceService,
     private readonly affectionService: AffectionService,
+    private readonly chatLogService: ChatLogService,
     @InjectRepository(ChatGroupEntity)
     private readonly chatGroupEntity: Repository<ChatGroupEntity>,
   ) {}
@@ -557,6 +559,9 @@ export class OpenChatController {
     try {
       const { token, userId: originalUserId, maobingBaseUrl, generateTts } = body || {};
 
+      // 标记为chat-process-sync模式，用于在chatService中识别
+      body._isChatProcessSync = true;
+
       // 如果传了userId，直接使用，不校验token
       let userId = originalUserId ? Number(originalUserId) : null;
       if (!userId && token) {
@@ -595,6 +600,13 @@ export class OpenChatController {
 
       // 处理备忘录消息
       if (body?.isCalendarMessage === true) {
+        // 根据 appId 获取最新的会话组，将历史对话加入到 messages 中
+        const latestGroupId = await this.getLatestGroupIdByAppId(body.appId);
+        if (latestGroupId) {
+          if (!body.options) body.options = {};
+          body.options.groupId = latestGroupId;
+          this.logger.log(`[备忘录消息] 设置会话组 groupId: ${latestGroupId}`);
+        }
         body.prompt = await this.buildCalendarMessagePrompt(body.prompt, userId, body.appId);
       }
 
@@ -750,62 +762,222 @@ export class OpenChatController {
 
       // 使用扣费时已经做出的语音回复决定（保证扣费和实际消耗一致）
       // 如果用户明确设置 generateTts=false，则强制不生成语音
+      // 如果是备忘录消息（isCalendarMessage=true），默认强制生成语音
       let shouldGenerateTts = generateTts === false ? false : shouldGenerateVoiceByDecision;
+
+      // 备忘录消息默认生成语音（除非用户明确设置 generateTts=false）
+      if (body?.isCalendarMessage === true && generateTts !== false) {
+        shouldGenerateTts = true;
+      }
 
       this.logger.log(
         `[chat-process-sync] 语音生成决定 - messageType: ${messageType}, shouldGenerateTts: ${shouldGenerateTts}, generateTts参数: ${
           generateTts ?? 'default'
-        }`,
+        }, isCalendarMessage: ${body?.isCalendarMessage ?? false}`,
       );
 
-      // 如果需要生成TTS且尚未生成语音，则主动调用TTS生成（包含情绪识别）
-      if (shouldGenerateTts && !audioUrl && fullResponse && chatId) {
+      // 构建返回数组
+      const dataArray: Array<{
+        text: string;
+        audioUrl?: string | null;
+        voiceDuration?: number | null;
+        emotion?: string | null;
+        sticker?: any;
+        chatId?: number | null;
+      }> = [];
+
+      // 获取IP地址用于chatlog
+      const curIp = _req.ip || _req.connection.remoteAddress || '';
+
+      // 备忘录消息不分段，直接使用完整文本，且不保存到chatlog
+      if (body?.isCalendarMessage === true) {
         this.logger.log(
-          `[chat-process-sync] 🎤 开始TTS生成 - shouldGenerateTts: ${shouldGenerateTts}, audioUrl: ${
-            audioUrl || 'null'
-          }, chatId: ${chatId}, generateTts参数: ${generateTts ?? 'default(true)'}`,
+          `[chat-process-sync] 备忘录消息，不分段处理，不保存chatlog，完整文本长度: ${
+            fullResponse?.length || 0
+          }`,
         );
-        try {
-          const ttsResult = await this.chatService.generateTtsWithEmotion({
-            text: fullResponse,
-            chatId,
-            appId: body.appId || null,
-            userId,
-          });
-          if (ttsResult) {
-            audioUrl = ttsResult.ttsUrl;
-            voiceDuration = ttsResult.duration;
-            emotion = ttsResult.emotion || emotion;
-            this.logger.log(
-              `[chat-process-sync] ✅ TTS生成成功 - audioUrl: ${audioUrl}, emotion: ${emotion}, duration: ${voiceDuration}s`,
+
+        let calendarAudioUrl: string | null = null;
+        let calendarVoiceDuration: number | null = null;
+
+        // 为完整文本生成语音
+        if (shouldGenerateTts && fullResponse && chatId) {
+          this.logger.log(
+            `[chat-process-sync] 🎤 为备忘录消息生成TTS: "${fullResponse.substring(0, 50)}..."`,
+          );
+          try {
+            const ttsResult = await this.chatService.generateTtsWithEmotion({
+              text: fullResponse,
+              chatId,
+              appId: body.appId || null,
+              userId,
+            });
+            if (ttsResult) {
+              calendarAudioUrl = ttsResult.ttsUrl;
+              calendarVoiceDuration = ttsResult.duration;
+              emotion = ttsResult.emotion || emotion;
+              this.logger.log(
+                `[chat-process-sync] ✅ 备忘录消息TTS生成成功 - audioUrl: ${calendarAudioUrl}, duration: ${calendarVoiceDuration}s`,
+              );
+            } else {
+              this.logger.warn(`[chat-process-sync] ⚠️ 备忘录消息TTS生成返回空结果`);
+            }
+          } catch (ttsError: any) {
+            this.logger.warn(
+              `[chat-process-sync] ❌ 备忘录消息TTS生成失败: ${ttsError?.message || ttsError}`,
             );
-          } else {
-            this.logger.warn(`[chat-process-sync] ⚠️ TTS生成返回空结果`);
           }
-        } catch (ttsError: any) {
-          this.logger.warn(`[chat-process-sync] ❌ TTS生成失败: ${ttsError?.message || ttsError}`);
-          // TTS失败不影响主流程，继续返回文本结果
         }
+
+        // 备忘录消息不保存到chatlog
+        dataArray.push({
+          text: fullResponse || '',
+          audioUrl: calendarAudioUrl,
+          voiceDuration: calendarVoiceDuration,
+          emotion,
+          sticker: stickerData,
+          chatId: null, // 不保存，无chatId
+        });
       } else {
+        // 非备忘录消息：按句号切分文本（保护【】内的句号）
+        const sentences = this.splitTextBySentence(fullResponse);
         this.logger.log(
-          `[chat-process-sync] ⏭️ 跳过TTS生成 - shouldGenerateTts: ${shouldGenerateTts}, audioUrl: ${
-            audioUrl || 'null'
-          }, fullResponse: ${fullResponse ? 'exists' : 'null'}, chatId: ${chatId || 'null'}`,
+          `[chat-process-sync] 切分句子数量: ${sentences.length}, 句子: ${JSON.stringify(
+            sentences,
+          )}`,
         );
+
+        for (let i = 0; i < sentences.length; i++) {
+          const sentence = sentences[i];
+          let sentenceAudioUrl: string | null = null;
+          let sentenceVoiceDuration: number | null = null;
+          let sentenceEmotion: string | null = emotion; // 使用整体情绪
+          let sentenceChatId: number | null = null;
+
+          // 先生成TTS（不更新chatlog），再一起保存到chatlog
+          if (shouldGenerateTts && sentence) {
+            this.logger.log(
+              `[chat-process-sync] 🎤 为第${i + 1}句生成TTS: "${sentence.substring(0, 30)}..."`,
+            );
+            try {
+              const ttsResult = await this.chatService.generateTtsWithEmotion({
+                text: sentence,
+                appId: body.appId || null,
+                userId,
+                skipChatLogUpdate: true, // 跳过chatlog更新，后面一起保存
+              });
+              if (ttsResult) {
+                sentenceAudioUrl = ttsResult.ttsUrl;
+                sentenceVoiceDuration = ttsResult.duration;
+                sentenceEmotion = ttsResult.emotion || emotion;
+                this.logger.log(
+                  `[chat-process-sync] ✅ 第${
+                    i + 1
+                  }句TTS生成成功 - audioUrl: ${sentenceAudioUrl}, duration: ${sentenceVoiceDuration}s`,
+                );
+              } else {
+                this.logger.warn(`[chat-process-sync] ⚠️ 第${i + 1}句TTS生成返回空结果`);
+              }
+            } catch (ttsError: any) {
+              this.logger.warn(
+                `[chat-process-sync] ❌ 第${i + 1}句TTS生成失败: ${ttsError?.message || ttsError}`,
+              );
+              // TTS失败不影响主流程，继续处理
+            }
+          }
+
+          // 保存chatlog记录（包含完整的audioUrl和ttsDuration）
+          try {
+            const sentenceLog = await this.chatLogService.saveChatLog({
+              appId: body.appId || null,
+              curIp,
+              userId,
+              type: body.modelType || 1,
+              progress: '100%',
+              model: body.model || 'gpt-3.5-turbo',
+              modelName: body.modelName || 'GPT-3.5',
+              role: 'assistant',
+              groupId: body.options?.groupId || null,
+              status: 3,
+              content: sentence,
+              audioUrl: sentenceAudioUrl, // 直接保存语音URL
+              ttsDuration: sentenceVoiceDuration, // 直接保存语音时长
+              promptTokens: 0,
+              completionTokens: 0,
+              totalTokens: 0,
+            });
+
+            sentenceChatId = sentenceLog.id;
+            this.logger.log(
+              `[chat-process-sync] 💾 第${
+                i + 1
+              }句已保存到chatlog，chatId: ${sentenceChatId}, audioUrl: ${
+                sentenceAudioUrl || 'N/A'
+              }`,
+            );
+          } catch (saveError: any) {
+            this.logger.warn(
+              `[chat-process-sync] ❌ 第${i + 1}句保存chatlog失败: ${
+                saveError?.message || saveError
+              }`,
+            );
+            // 保存失败不影响返回，继续处理
+          }
+
+          const item: {
+            text: string;
+            audioUrl?: string | null;
+            voiceDuration?: number | null;
+            emotion?: string | null;
+            chatId?: number | null;
+          } = {
+            text: sentence,
+            audioUrl: sentenceAudioUrl,
+            voiceDuration: sentenceVoiceDuration,
+            emotion: sentenceEmotion,
+            chatId: sentenceChatId,
+          };
+
+          dataArray.push(item);
+        }
+
+        // 表情包单独作为一条记录（如果存在）
+        if (stickerData) {
+          this.logger.log(
+            `[chat-process-sync] 📦 添加表情包记录 - chatId: ${stickerData.chatId}, imageUrl: ${stickerData.imageUrl}`,
+          );
+          dataArray.push({
+            text: stickerData.transferText || '', // 转账文本，如"转账188"
+            audioUrl: null,
+            voiceDuration: null,
+            emotion: null,
+            chatId: stickerData.chatId, // 表情包已有的chatId
+            sticker: stickerData, // 表情包数据
+          });
+        }
+
+        // 如果没有切分出任何句子且没有表情包（可能是空响应），返回单个item
+        if (dataArray.length === 0 && !stickerData) {
+          dataArray.push({
+            text: fullResponse || '',
+            audioUrl: null,
+            voiceDuration: null,
+            emotion,
+            chatId: null,
+          });
+        }
       }
 
-      // 返回完整结果
+      // 返回完整结果（data改为数组格式）
       return {
         success: true,
-        data: {
-          text: fullResponse,
-          chatId,
-          emotion,
+        data: dataArray,
+        // 保留完整响应的元信息
+        meta: {
+          fullText: fullResponse,
+          chatId: dataArray[0]?.chatId || null, // 第一句的chatId（不再有完整文本的chatlog）
           psychologicalDesc,
-          audioUrl,
-          voiceDuration,
           imageUrl,
-          sticker: stickerData, // 新增：如果有表情包，包含在返回数据中
         },
       };
     } catch (e: any) {
@@ -821,6 +993,71 @@ export class OpenChatController {
       const message = e?.message || '对话处理失败';
       throw new HttpException(message, status);
     }
+  }
+
+  /**
+   * 按句号、问号切分文本，但保护【】内的标点和省略号不切分
+   * @param text 要切分的文本
+   * @returns 切分后的句子数组
+   */
+  private splitTextBySentence(text: string): string[] {
+    if (!text || text.trim() === '') {
+      return [];
+    }
+
+    // 占位符定义
+    const periodPlaceholder = '\x00PERIOD\x00';
+    const questionPlaceholder = '\x00QUESTION\x00';
+    const ellipsisPlaceholder = '\x00ELLIPSIS\x00';
+
+    let processed = text;
+
+    // 1. 先保护省略号（...、…、。。。等）不被分段
+    // 匹配：三个或更多连续的点/句号，或单个省略号字符
+    processed = processed.replace(/\.{3,}|。{3,}|…+/g, ellipsisPlaceholder);
+
+    // 2. 保护【】内的句号和问号
+    const bracketRegex = /【[^】]*】/g;
+    const bracketMatches = text.match(bracketRegex) || [];
+    const bracketReplacements: { original: string; replaced: string }[] = [];
+
+    bracketMatches.forEach(match => {
+      // 在【】内的内容也需要先保护省略号
+      let replaced = match.replace(/\.{3,}|。{3,}|…+/g, ellipsisPlaceholder);
+      replaced = replaced.replace(/。/g, periodPlaceholder);
+      replaced = replaced.replace(/[？?]/g, questionPlaceholder);
+      bracketReplacements.push({ original: match, replaced });
+      processed = processed.replace(match, replaced);
+    });
+
+    // 3. 按句号和问号切分（包括中文和英文）
+    // 匹配单个句号或问号作为分隔符（省略号已被保护）
+    const sentences = processed
+      .split(/([。.？?])/) // 捕获分隔符：句号和问号
+      .reduce((acc, part, index, arr) => {
+        // 奇数索引是分隔符，偶数索引是文本
+        if (index % 2 === 0 && part.trim()) {
+          // 文本部分，如果后面有分隔符，则合并
+          const nextPart = arr[index + 1] || '';
+          acc.push((part + nextPart).trim());
+        }
+        return acc;
+      }, [] as string[])
+      .filter(s => s.length > 0);
+
+    // 4. 恢复所有占位符
+    return sentences.map(sentence => {
+      let result = sentence;
+      // 恢复【】内容
+      bracketReplacements.forEach(({ original, replaced }) => {
+        result = result.replace(replaced, original);
+      });
+      // 恢复占位符
+      result = result.replace(new RegExp(periodPlaceholder, 'g'), '。');
+      result = result.replace(new RegExp(questionPlaceholder, 'g'), '？');
+      result = result.replace(new RegExp(ellipsisPlaceholder, 'g'), '...');
+      return result;
+    });
   }
 
   /**
@@ -1053,7 +1290,7 @@ export class OpenChatController {
 
     switch (selectedRule) {
       case 'calendar_reminder':
-        return await this.buildCalendarReminderPrompt(originalPrompt, userId);
+        return await this.buildCalendarReminderPrompt(originalPrompt, userId, appId);
       case 'chat_memory':
         return await this.buildChatMemoryPrompt(originalPrompt, userId, appId);
       case 'check_in':
@@ -1064,11 +1301,12 @@ export class OpenChatController {
   }
 
   /**
-   * 规则1: 备忘录提醒（包含天气信息）
+   * 规则1: 备忘录提醒（包含天气信息，历史对话通过 groupId 自动加载到 messages）
    */
   private async buildCalendarReminderPrompt(
     originalPrompt: string,
     userId: number,
+    appId?: number,
   ): Promise<string> {
     // 获取天气信息（可选）
     let weatherInfo = '';
@@ -1087,26 +1325,74 @@ export class OpenChatController {
       this.logger.warn(`获取天气信息失败: ${error.message}`);
     }
 
-    const prompt = `${originalPrompt}
+    // 检查备忘录是否为空（提取"备忘录列表："后的内容）
+    const calendarMatch = originalPrompt.match(/备忘录列表：\n?([\s\S]*)/);
+    const calendarContent = calendarMatch ? calendarMatch[1].trim() : '';
+    const hasCalendarItems = calendarContent.length > 0;
+
+    let prompt: string;
+
+    if (hasCalendarItems) {
+      // 有备忘录内容时，提醒具体事项
+      prompt = `${originalPrompt}
 
 你是一个贴心的AI助手，现在需要根据用户的备忘录内容向用户发送提醒消息。
 
 天气信息：${weatherInfo || '天气信息暂时无法获取'}
 
 要求：
-1. 仔细阅读用户备忘录中记录的重要事情（如考试、会议、姨妈期等）
+1. 仔细阅读用户备忘录中记录的事情，只提醒备忘录中实际存在的内容
 2. 结合当前的天气信息，用温柔关心的语气提醒用户
 3. 如果备忘录中有今天的重要安排，要重点提醒
 4. 如果天气不好（下雨/冷/雾霾），要提醒用户做好准备
 5. 语气要亲切自然，像朋友或恋人之间的关心
-
-示例：
-- "今天好像要下雨，记得带伞哦。对了，你上午十点有考试，东西都准备好了么？"
-- "天气有点冷呢，多穿点别感冒了。你备忘录说这几天是特殊时期，要多注意保暖，多喝热水~"
+6. 可以结合之前的聊天内容进行关心
+7. 【重要】不要编造备忘录中没有的事情，只提醒实际存在的内容
 
 请现在生成一条贴心的提醒消息：`;
+    } else {
+      // 备忘录为空时，只根据天气、时间和历史对话发送问候
+      prompt = `你是一个贴心的AI助手，现在需要向用户发送一条温馨的问候消息。
+
+天气信息：${weatherInfo || '天气信息暂时无法获取'}
+
+要求：
+1. 用户今天没有特别的备忘事项
+2. 根据当前的天气信息，发送一条温暖的问候
+3. 可以根据天气建议用户的活动（如天气好可以出去走走，下雨记得带伞等）
+4. 可以结合之前的聊天内容进行关心（如之前提到身体不舒服，可以询问是否好转）
+5. 语气要亲切自然，像朋友或恋人之间的关心
+6. 【重要】不要编造任何具体的日程安排（如会议、考试等），因为用户没有设置备忘录
+
+请现在生成一条温馨的问候消息：`;
+    }
 
     return prompt;
+  }
+
+  /**
+   * 根据 appId 获取最新的会话组 ID
+   */
+  private async getLatestGroupIdByAppId(appId: number): Promise<number | null> {
+    if (!appId) return null;
+
+    const latestGroup = await this.chatGroupEntity.findOne({
+      where: {
+        appId: appId,
+        isDelete: false,
+      },
+      order: {
+        updatedAt: 'DESC',
+      },
+    });
+
+    if (!latestGroup) {
+      this.logger.warn(`[备忘录消息] 未找到会话组 - appId: ${appId}`);
+      return null;
+    }
+
+    this.logger.log(`[备忘录消息] 找到最新会话组 - groupId: ${latestGroup.id}, appId: ${appId}`);
+    return latestGroup.id;
   }
 
   /**

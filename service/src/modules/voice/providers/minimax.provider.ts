@@ -41,12 +41,12 @@ export interface TTSQueryResponse {
 }
 
 export interface VoiceDesignRequest {
-  prompt: string;       // 音色风格描述，如"讲述悬疑故事的播音员，声音低沉富有磁性"
-  previewText: string;  // 试听文本，用于生成试听音频
+  prompt: string; // 音色风格描述，如"讲述悬疑故事的播音员，声音低沉富有磁性"
+  previewText: string; // 试听文本，用于生成试听音频
 }
 
 export interface VoiceDesignResponse {
-  voiceId: string;      // 生成的音色ID，如 ttv-voice-2025060717322425-xxxxxxxx
+  voiceId: string; // 生成的音色ID，如 ttv-voice-2025060717322425-xxxxxxxx
 }
 
 /**
@@ -316,7 +316,9 @@ export class MinimaxProvider {
       pollCount++;
       const result = await this.queryTTS(taskId);
       const elapsed = Date.now() - startTime;
-      this.logger.debug(`[pollTTSCompletion] 第${pollCount}次查询，状态: ${result.status}，已耗时: ${elapsed}ms`);
+      this.logger.debug(
+        `[pollTTSCompletion] 第${pollCount}次查询，状态: ${result.status}，已耗时: ${elapsed}ms`,
+      );
 
       if (result.status === 'Success') {
         this.logger.log(`[pollTTSCompletion] 任务 ${taskId} 完成，耗时: ${elapsed}ms`);
@@ -330,8 +332,13 @@ export class MinimaxProvider {
     }
 
     const totalTime = Date.now() - startTime;
-    this.logger.error(`[pollTTSCompletion] 任务 ${taskId} 超时，共轮询 ${pollCount} 次，耗时: ${totalTime}ms`);
-    throw new HttpException(`TTS 任务超时（已等待 ${Math.round(totalTime / 1000)} 秒）`, HttpStatus.REQUEST_TIMEOUT);
+    this.logger.error(
+      `[pollTTSCompletion] 任务 ${taskId} 超时，共轮询 ${pollCount} 次，耗时: ${totalTime}ms`,
+    );
+    throw new HttpException(
+      `TTS 任务超时（已等待 ${Math.round(totalTime / 1000)} 秒）`,
+      HttpStatus.REQUEST_TIMEOUT,
+    );
   }
 
   /** 一站式 TTS：使用同步接口直接返回音频 */
@@ -349,6 +356,7 @@ export class MinimaxProvider {
     promptText?: string;
     testText?: string;
     model?: string;
+    languageBoost?: string;
   }): Promise<{ voiceId: string; demoAudio?: string; status: string }> {
     const headers = await this.getHeaders();
     const payload: any = {
@@ -356,6 +364,7 @@ export class MinimaxProvider {
       voice_id: options.voiceId,
       text: options.testText || '你好，这是语音克隆测试。',
       model: options.model || 'speech-2.6-hd',
+      language_boost: options.languageBoost || 'auto',
       need_noise_reduction: false,
       need_volume_normalization: false,
       aigc_watermark: false,
@@ -396,6 +405,7 @@ export class MinimaxProvider {
     promptText?: string;
     testText?: string;
     model?: string;
+    languageBoost?: string;
   }): Promise<{ voiceId: string; fileId: string | number; demoAudio?: string; status: string }> {
     const uploadResult = await this.uploadFile({
       audioUrl: request.audioUrl,
@@ -410,6 +420,7 @@ export class MinimaxProvider {
       promptText: request.promptText,
       testText: request.testText,
       model: request.model,
+      languageBoost: request.languageBoost,
     });
 
     return {

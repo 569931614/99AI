@@ -182,7 +182,7 @@ export class VoiceController {
       voiceId?: string;
       name?: string;
       userId?: number;
-      prompt: string;       // 音色风格描述
+      prompt: string; // 音色风格描述
     },
   ) {
     return this.voiceService.designMinimaxVoice(body);

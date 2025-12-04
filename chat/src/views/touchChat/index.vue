@@ -39,7 +39,7 @@
 </template>
 
 <script setup lang="ts">
-import { fetchDeviceRolesHtml, fetchTouchChatProcess, fetchTouchTtsProcess } from '@/api'
+import { fetchDeviceRolesHtml, fetchTouchChatProcess } from '@/api'
 import { onMounted, onUnmounted, ref } from 'vue'
 import { useRoute } from 'vue-router'
 
@@ -134,67 +134,75 @@ const streamTextAsync = async (text: string, callback: Function, interval: numbe
 }
 
 const fetchChatSuggestion = () => {
-  // 格式化备忘录列表
+  // 格式化备忘录列表（只保留未过期的）
   let calendarList = ''
   if (pageData.value.calendar && pageData.value.calendar.length > 0) {
-    const items = pageData.value.calendar
-      .map((item: any, index: number) => {
-        // 格式化时间：年月日 时:分
-        const year = item.schedule_year || ''
-        const month = item.schedule_month || ''
-        const day = item.schedule_day || ''
-        const hour = String(item.schedule_hour ?? '').padStart(2, '0')
-        const minute = String(item.schedule_minute ?? '').padStart(2, '0')
-        const time = year ? `${year}年${month}月${day}日 ${hour}:${minute}` : ''
-        const event = item.description || ''
-        return `${index + 1}.时间：${time}，事件：${event}`
-      })
-      .join('\n')
-    calendarList = items
+    const now = new Date()
+    const futureItems = pageData.value.calendar.filter((item: any) => {
+      // 构建备忘录时间
+      const year = item.schedule_year || now.getFullYear()
+      const month = (item.schedule_month || 1) - 1 // 月份从0开始
+      const day = item.schedule_day || 1
+      const hour = item.schedule_hour ?? 0
+      const minute = item.schedule_minute ?? 0
+      const itemDate = new Date(year, month, day, hour, minute)
+      // 只保留未来的备忘录
+      return itemDate >= now
+    })
+
+    if (futureItems.length > 0) {
+      const items = futureItems
+        .map((item: any, index: number) => {
+          // 格式化时间：年月日 时:分
+          const year = item.schedule_year || ''
+          const month = item.schedule_month || ''
+          const day = item.schedule_day || ''
+          const hour = String(item.schedule_hour ?? '').padStart(2, '0')
+          const minute = String(item.schedule_minute ?? '').padStart(2, '0')
+          const time = year ? `${year}年${month}月${day}日 ${hour}:${minute}` : ''
+          const event = item.description || ''
+          return `${index + 1}.时间：${time}，事件：${event}`
+        })
+        .join('\n')
+      calendarList = items
+    }
   }
 
   return fetchTouchChatProcess({
     prompt: `备忘录列表：\n${calendarList}`,
-    appId: pageData.value.appId,
+    appId: Number(pageData.value.id),
+    userId: Number(pageData.value.userId),
     options: {
       skipSaveToDatabase: true,
     },
     isCalendarMessage: true,
-    userId: pageData.value.id,
   })
     .then((res: any) => {
-      const text = res?.data?.data?.text || res?.data?.text
+      // 返回格式: { success, data: [{ text, audioUrl, voiceDuration, emotion, chatId }], meta }
+      const dataArray = res?.data?.data || res?.data || []
+      const firstItem = Array.isArray(dataArray) ? dataArray[0] : dataArray
+
+      const text = firstItem?.text
       if (text) {
         aiText.value = text
         pageData.value = { ...pageData.value, desAiText: '' }
         animationText(text)
-        fetchChatTts().catch(err => {
-          console.error('fetchChatTts catch', err)
-        })
+
+        // 直接从返回数据获取语音URL
+        const ttsUrl = firstItem?.audioUrl
+        if (ttsUrl) {
+          audioUrl.value = ttsUrl
+          console.log('备忘录消息语音URL:', ttsUrl)
+        } else {
+          audioUrl.value = ''
+          console.log('返回数据无语音URL')
+        }
       } else {
         audioUrl.value = ''
       }
     })
     .catch(error => {
       console.error('fetchChatSuggestion error', error)
-    })
-}
-
-const fetchChatTts = () => {
-  return fetchTouchTtsProcess({
-    prompt: aiText.value,
-    userId: pageData.value.id,
-  })
-    .then((res: any) => {
-      const ttsUrl = res?.data?.ttsUrl || res?.ttsUrl
-      if (ttsUrl) {
-        audioUrl.value = ttsUrl
-      } else {
-        audioUrl.value = ''
-      }
-    })
-    .catch(error => {
-      console.error('fetchChatTts error', error)
     })
 }
 

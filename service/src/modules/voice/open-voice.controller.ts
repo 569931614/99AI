@@ -470,4 +470,44 @@ export class OpenVoiceController {
   ) {
     return this.voiceService.linkMinimaxVoice(body);
   }
+
+  // ==================== MiniMax 音色设计 ====================
+
+  @Post('minimax/design')
+  @ApiOperation({
+    summary: '【开放】MiniMax 音色设计：通过文字描述生成AI音色（无鉴权）',
+    description:
+      '使用 prompt 描述音色风格（如"讲述悬疑故事的播音员，声音低沉富有磁性"），' +
+      '系统会自动生成音色。返回生成的音色ID。',
+  })
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        prompt: { type: 'string', description: '音色风格描述（必填）' },
+        name: { type: 'string', description: '音色名称（可选）' },
+        userId: { type: 'number', description: '用户ID（可选）' },
+      },
+      required: ['prompt'],
+    },
+    examples: {
+      demo: {
+        summary: '音色设计示例',
+        value: {
+          prompt: '讲述悬疑故事的播音员，声音低沉富有磁性，语速时快时慢，营造紧张神秘的氛围。',
+          name: '悬疑男声',
+        },
+      },
+    },
+  })
+  designMinimaxVoice(
+    @Body()
+    body: {
+      prompt: string;
+      name?: string;
+      userId?: number;
+    },
+  ) {
+    return this.voiceService.designMinimaxVoice(body);
+  }
 }

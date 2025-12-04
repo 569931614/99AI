@@ -33,8 +33,6 @@ import { UserBalanceService } from '../userBalance/userBalance.service';
 import { VoiceService } from '../voice/voice.service';
 import { MaobingCookieUtil } from '@/common/utils/maobing-cookie.util';
 
-const STICKER_EMOTION_LABELS = ['happy', 'sad', 'angry', 'comfort', 'surprised', 'neutral'];
-
 @Injectable()
 export class ChatService {
   constructor(
@@ -125,11 +123,30 @@ export class ChatService {
     const weekDays = ['星期日', '星期一', '星期二', '星期三', '星期四', '星期五', '星期六'];
     const weekDay = weekDays[shanghaiTime.getDay()];
 
-    // 格式化为更清晰的时间描述
-    const currentDate = `${year}年${month}月${day}日 ${weekDay} ${String(currentHour).padStart(
-      2,
-      '0',
-    )}:${String(minute).padStart(2, '0')}`;
+    // 获取时间段标识（早上/上午/中午/下午/傍晚/晚上/深夜/凌晨）
+    let timePeriod = '';
+    if (currentHour >= 0 && currentHour < 6) {
+      timePeriod = '凌晨';
+    } else if (currentHour >= 6 && currentHour < 9) {
+      timePeriod = '早上';
+    } else if (currentHour >= 9 && currentHour < 12) {
+      timePeriod = '上午';
+    } else if (currentHour >= 12 && currentHour < 14) {
+      timePeriod = '中午';
+    } else if (currentHour >= 14 && currentHour < 18) {
+      timePeriod = '下午';
+    } else if (currentHour >= 18 && currentHour < 20) {
+      timePeriod = '傍晚';
+    } else if (currentHour >= 20 && currentHour < 22) {
+      timePeriod = '晚上';
+    } else {
+      timePeriod = '深夜';
+    }
+
+    // 格式化为更清晰的时间描述（包含时间段标识）
+    const currentDate = `${year}年${month}月${day}日 ${weekDay} ${timePeriod}${String(
+      currentHour,
+    ).padStart(2, '0')}:${String(minute).padStart(2, '0')}`;
 
     // 根据时间段生成情景提示
     let timeContextPrompt = '';
@@ -439,13 +456,6 @@ export class ChatService {
     return [text.trim()];
   }
 
-  private shouldSendSticker(probability?: number | null): boolean {
-    const num = Number(probability);
-    if (!Number.isFinite(num) || num <= 0) return false;
-    const normalized = Math.max(0, Math.min(100, num));
-    return Math.random() * 100 < normalized;
-  }
-
   private buildAssistantLogBasePayload(context: {
     appId: number | null;
     action?: string | null;
@@ -497,39 +507,39 @@ export class ChatService {
     return saved;
   }
 
+  /**
+   * 尝试创建表情包消息（基于场景识别）
+   */
   private async maybeCreateStickerMessage(options: {
-    allowEmoji: boolean;
     basePayload?: Record<string, any> | null;
     referenceText?: string | null;
-    probability?: number | null;
   }): Promise<{ chatId: number; message: any } | null> {
-    const { allowEmoji, basePayload, referenceText, probability } = options;
-    if (!allowEmoji || !basePayload) {
-      return null;
-    }
-    if (!this.shouldSendSticker(probability ?? 30)) {
-      this.logDebug('[Sticker] 本次概率未命中，跳过自动发送', 'ChatService');
+    const { basePayload, referenceText } = options;
+    if (!basePayload) {
       return null;
     }
 
     try {
-      const sticker = await this.stickerService.pickStickerByText(referenceText?.trim() || '');
-      if (!sticker?.imageUrl) {
-        this.logDebug('[Sticker] 公共表情库未返回有效图片，跳过', 'ChatService');
+      const result = await this.stickerService.pickStickerByText(referenceText?.trim() || '');
+      if (!result?.sticker?.imageUrl) {
+        this.logDebug('[Sticker] 未找到匹配的表情包，跳过', 'ChatService');
         return null;
       }
 
+      const { sticker, isScenarioSticker } = result;
+      const transferText = isScenarioSticker ? sticker.name || '' : '';
       const extraParam = {
         type: 'sticker',
         stickerId: sticker.id,
-        emotion: sticker.emotion,
         tags: sticker.tags,
         scenario: sticker.scenario,
         source: 'global',
+        isScenarioSticker: isScenarioSticker,
+        transferText: transferText || undefined,
       };
       const stickerLog = await this.chatLogService.saveChatLog({
         ...basePayload,
-        content: '',
+        content: transferText,
         imageUrl: sticker.imageUrl,
         extraParam: JSON.stringify(extraParam),
         promptTokens: 0,
@@ -542,7 +552,7 @@ export class ChatService {
         message: {
           chatId: stickerLog.id,
           message_type: 'sticker',
-          content: '',
+          content: transferText,
           content_image: sticker.imageUrl,
           sticker_id: sticker.id,
         },
@@ -553,23 +563,9 @@ export class ChatService {
     }
   }
 
-  private async detectEmotionWithAI(text: string): Promise<string | null> {
-    const trimmed = text?.trim();
-    if (!trimmed) {
-      return null;
-    }
-    try {
-      const prompt = `请阅读以下用户内容，并从["happy","sad","angry","comfort","surprised","neutral"]中选择最匹配的一项情绪。只返回该英文单词，不要包含其他任何内容。\n\n内容：${trimmed}`;
-      const systemMessage = 'You are an emotion classifier that only responds with one label.';
-      const result = await this.openAIChatService.chatQwenPlusCharacter(prompt, systemMessage);
-      const answer = (result?.text || '').toLowerCase();
-      return STICKER_EMOTION_LABELS.find(label => answer.includes(label)) || null;
-    } catch (error) {
-      Logger.warn(`[StickerEmotion] AI 情绪识别失败: ${error?.message || error}`, 'ChatService');
-      return null;
-    }
-  }
-
+  /**
+   * 创建表情包消息（基于场景识别）
+   */
   public async createStickerMessageFromContent(options: {
     userId: number;
     content: string;
@@ -580,7 +576,6 @@ export class ChatService {
     chatId: number;
     imageUrl: string;
     stickerId: number;
-    emotion: string | null;
     scenario: string | null;
     isScenarioSticker: boolean;
   }> {
@@ -590,22 +585,23 @@ export class ChatService {
       throw new HttpException('content 不能为空', HttpStatus.BAD_REQUEST);
     }
 
-    const detectedEmotion = await this.detectEmotionWithAI(trimmedContent);
-    const sticker = await this.stickerService.pickStickerByText(trimmedContent, detectedEmotion);
-    if (!sticker) {
+    const result = await this.stickerService.pickStickerByText(trimmedContent);
+    if (!result) {
       throw new HttpException('暂时没有匹配的表情包', HttpStatus.NOT_FOUND);
     }
 
+    const { sticker, isScenarioSticker } = result;
     const curIp = req ? getClientIp(req) : null;
+    const transferText = isScenarioSticker ? sticker.name || '' : '';
     const extraParam = {
       type: 'sticker',
       stickerId: sticker.id,
-      emotion: sticker.emotion,
       tags: sticker.tags,
       scenario: sticker.scenario,
       source: 'external',
-      detectedEmotion: detectedEmotion,
+      isScenarioSticker: isScenarioSticker,
       originalContent: trimmedContent,
+      transferText: transferText || undefined,
     };
 
     const stickerLog = await this.chatLogService.saveChatLog({
@@ -619,7 +615,7 @@ export class ChatService {
       role: 'assistant',
       groupId: groupId ?? null,
       status: 3,
-      content: '',
+      content: transferText,
       imageUrl: sticker.imageUrl,
       extraParam: JSON.stringify(extraParam),
       promptTokens: 0,
@@ -631,14 +627,15 @@ export class ChatService {
       chatId: stickerLog.id,
       imageUrl: sticker.imageUrl,
       stickerId: sticker.id,
-      emotion: sticker.emotion || detectedEmotion || null,
       scenario: sticker.scenario || null,
-      isScenarioSticker: !!sticker.scenario, // 标识是否为场景表情包（如转账表情包）
+      isScenarioSticker: isScenarioSticker,
     };
   }
 
   /**
    * 尝试自动发送表情包（AI主动发送，带去重检查）
+   * - 场景表情包（有tags）：100%触发 + 去重检查
+   * - 普通表情包（无tags）：先检查allowEmoji开关 → 再判断30%概率 → 最后去重（优化性能）
    * @returns 表情包信息或 null（不发送）
    */
   private async tryAutoSendSticker(options: {
@@ -653,7 +650,6 @@ export class ChatService {
     chatId: number;
     imageUrl: string;
     stickerId: number;
-    emotion: string | null;
     scenario: string | null;
     isScenarioSticker: boolean;
     transferText?: string; // 转账文本，如"转账188"
@@ -661,7 +657,6 @@ export class ChatService {
     const { userId, content, appId, groupId, req, allowEmoji, userMessage } = options;
 
     try {
-      // 1. 调用表情包服务获取匹配的表情包
       Logger.log(
         `[表情包] 🔍 开始匹配表情包 - userId: ${userId}, groupId: ${groupId}, allowEmoji: ${allowEmoji}, content: "${content.substring(
           0,
@@ -669,33 +664,20 @@ export class ChatService {
         )}${content.length > 50 ? '...' : ''}"`,
         'ChatService',
       );
-      const detectedEmotion = await this.detectEmotionWithAI(content);
-      Logger.log(`[表情包] 🧠 AI情绪识别结果: ${detectedEmotion || 'null'}`, 'ChatService');
-      const sticker = await this.stickerService.pickStickerByText(
-        content,
-        detectedEmotion,
-        userMessage,
-      );
 
-      if (!sticker) {
-        Logger.log('[表情包] ❌ 未找到匹配的表情包', 'ChatService');
-        return null;
-      }
-      Logger.log(
-        `[表情包] ✅ 找到匹配的表情包 - id: ${sticker.id}, emotion: ${
-          sticker.emotion || 'null'
-        }, scenario: ${sticker.scenario || 'null'}, name: ${sticker.name || 'null'}`,
-        'ChatService',
-      );
+      // 1. 优先识别场景表情包（100%触发，不受开关和概率影响）
+      const scenarioResult = await this.stickerService.pickStickerByText(content, userMessage, {
+        skipNormalSticker: true, // 跳过普通表情包识别
+      });
 
-      const isScenarioSticker = !!sticker.scenario;
-
-      // 2. 场景表情包：检查去重（10条消息内不重复转账）
-      if (isScenarioSticker) {
+      if (scenarioResult?.isScenarioSticker) {
+        const { sticker } = scenarioResult;
         Logger.log(
-          `[表情包] 🎯 检测到场景表情包 - scenario: ${sticker.scenario}, name: ${sticker.name}, imageUrl: ${sticker.imageUrl}`,
+          `[表情包] 🎯 检测到场景表情包 - id: ${sticker.id}, scenario: ${sticker.scenario}, name: ${sticker.name}`,
           'ChatService',
         );
+
+        // 场景表情包去重检查
         const hasSent = await this.checkIfScenarioStickerAlreadySent(
           userId,
           groupId || null,
@@ -709,80 +691,97 @@ export class ChatService {
           );
           return null;
         }
+
         Logger.log(
-          `[表情包] ✅ 场景表情包100%触发（不受概率限制） - scenario: ${sticker.scenario}, userId: ${userId}, groupId: ${groupId}`,
+          `[表情包] ✅ 场景表情包100%触发 - scenario: ${sticker.scenario}, userId: ${userId}, groupId: ${groupId}`,
           'ChatService',
         );
-      } else {
-        // 3. 普通情绪表情包：受 allowEmoji 开关控制 + 30%概率
-        if (!allowEmoji) {
-          Logger.log(
-            `[表情包] ⏭️ 普通情绪表情包被开关拦截 - emotion: ${sticker.emotion}, allowEmoji: ${allowEmoji}`,
-            'ChatService',
-          );
-          return null;
-        }
-        const randomValue = Math.random();
-        const shouldSend = randomValue < 0.3;
-        Logger.log(
-          `[表情包] 🎲 普通情绪表情包概率判断 - emotion: ${
-            sticker.emotion
-          }, 随机值: ${randomValue.toFixed(4)}, 阈值: 0.3000, 结果: ${
-            shouldSend ? '✅触发' : '❌未触发'
-          }`,
-          'ChatService',
-        );
-        if (!shouldSend) {
-          return null;
-        }
+
+        // 创建场景表情包消息并返回
+        return await this.createStickerMessage({
+          sticker,
+          isScenarioSticker: true,
+          userId,
+          appId,
+          groupId,
+          req,
+          content,
+        });
       }
 
-      // 4. 创建表情包消息并保存到数据库
-      const curIp = req ? getClientIp(req) : null;
+      Logger.log('[表情包] ⏭️ 未检测到场景表情包，开始判断普通表情包', 'ChatService');
 
-      // 场景表情包使用sticker.name作为转账文本（如"转账188"）
-      const transferText = isScenarioSticker ? sticker.name : '';
+      // 2. 场景表情包未匹配，判断是否需要识别普通表情包
+      // 2.1 先检查开关（如果关闭则直接跳过AI识别，节省成本）
+      if (!allowEmoji) {
+        Logger.log(
+          `[表情包] ⏭️ 普通表情包开关已关闭，跳过AI识别 - allowEmoji: ${allowEmoji}`,
+          'ChatService',
+        );
+        return null;
+      }
 
-      const extraParam = {
-        type: 'sticker',
-        stickerId: sticker.id,
-        emotion: sticker.emotion,
-        tags: sticker.tags,
-        scenario: sticker.scenario,
-        source: 'auto',
-        detectedEmotion: detectedEmotion,
-        originalContent: content,
-        transferText: transferText, // 保存转账文本到extraParam
-      };
+      // 2.2 判断30%概率（在AI识别之前，节省成本）
+      const randomValue = Math.random();
+      const shouldSend = randomValue < 0.3;
+      Logger.log(
+        `[表情包] 🎲 普通表情包概率判断 - 随机值: ${randomValue.toFixed(4)}, 阈值: 0.3000, 结果: ${
+          shouldSend ? '✅通过' : '❌未通过'
+        }`,
+        'ChatService',
+      );
+      if (!shouldSend) {
+        Logger.log('[表情包] ⏭️ 概率判断未通过，跳过AI识别', 'ChatService');
+        return null;
+      }
 
-      const stickerLog = await this.chatLogService.saveChatLog({
-        appId: appId ?? null,
-        curIp,
-        userId,
-        type: 1,
-        progress: '100%',
-        model: 'sticker-generator',
-        modelName: 'Sticker',
-        role: 'assistant',
-        groupId: groupId ?? null,
-        status: 3,
-        content: transferText, // 场景表情包的content保存转账文本
-        imageUrl: sticker.imageUrl,
-        extraParam: JSON.stringify(extraParam),
-        promptTokens: 0,
-        completionTokens: 0,
-        totalTokens: 0,
+      // 2.3 概率通过后，才调用AI识别普通表情包
+      Logger.log('[表情包] 🤖 开始AI识别普通表情包...', 'ChatService');
+      const normalResult = await this.stickerService.pickStickerByText(content, userMessage, {
+        onlyNormalSticker: true, // 只识别普通表情包
       });
 
-      return {
-        chatId: stickerLog.id,
-        imageUrl: sticker.imageUrl,
-        stickerId: sticker.id,
-        emotion: sticker.emotion || detectedEmotion || null,
-        scenario: sticker.scenario || null,
-        isScenarioSticker: isScenarioSticker,
-        transferText: transferText || undefined, // 返回转账文本
-      };
+      if (!normalResult || normalResult.isScenarioSticker) {
+        Logger.log('[表情包] ❌ 未找到匹配的普通表情包', 'ChatService');
+        return null;
+      }
+
+      const { sticker } = normalResult;
+      Logger.log(
+        `[表情包] ✅ AI识别到普通表情包 - id: ${sticker.id}, scenario: ${sticker.scenario}, name: ${sticker.name}`,
+        'ChatService',
+      );
+
+      // 2.4 普通表情包去重检查（需要数据库查询，放在最后）
+      const hasSentNormal = await this.checkIfNormalStickerAlreadySent(
+        userId,
+        groupId || null,
+        sticker.scenario,
+        sticker.imageUrl,
+      );
+      if (hasSentNormal) {
+        Logger.log(
+          `[表情包] ⏭️ 普通表情包去重：最近10条消息内已发送过场景"${sticker.scenario}"的表情包，跳过`,
+          'ChatService',
+        );
+        return null;
+      }
+
+      Logger.log(
+        `[表情包] ✅ 普通表情包通过所有检查，准备发送 - scenario: ${sticker.scenario}`,
+        'ChatService',
+      );
+
+      // 创建普通表情包消息并返回
+      return await this.createStickerMessage({
+        sticker,
+        isScenarioSticker: false,
+        userId,
+        appId,
+        groupId,
+        req,
+        content,
+      });
     } catch (error: any) {
       Logger.error(
         `[表情包] tryAutoSendSticker 失败: ${error?.message || error}`,
@@ -791,6 +790,73 @@ export class ChatService {
       );
       return null;
     }
+  }
+
+  /**
+   * 创建表情包消息并保存到数据库
+   * @private
+   */
+  private async createStickerMessage(options: {
+    sticker: any;
+    isScenarioSticker: boolean;
+    userId: number;
+    appId?: number | null;
+    groupId?: number | null;
+    req?: Request;
+    content: string;
+  }): Promise<{
+    chatId: number;
+    imageUrl: string;
+    stickerId: number;
+    scenario: string | null;
+    isScenarioSticker: boolean;
+    transferText?: string;
+  }> {
+    const { sticker, isScenarioSticker, userId, appId, groupId, req, content } = options;
+
+    const curIp = req ? getClientIp(req) : null;
+
+    // 场景表情包使用sticker.name作为转账文本（如"转账188"）
+    const transferText = isScenarioSticker ? sticker.name || '' : '';
+
+    const extraParam = {
+      type: 'sticker',
+      stickerId: sticker.id,
+      tags: sticker.tags,
+      scenario: sticker.scenario,
+      source: 'auto',
+      isScenarioSticker: isScenarioSticker,
+      originalContent: content,
+      transferText: transferText || undefined,
+    };
+
+    const stickerLog = await this.chatLogService.saveChatLog({
+      appId: appId ?? null,
+      curIp,
+      userId,
+      type: 1,
+      progress: '100%',
+      model: 'sticker-generator',
+      modelName: 'Sticker',
+      role: 'assistant',
+      groupId: groupId ?? null,
+      status: 3,
+      content: transferText, // 场景表情包的content保存转账文本
+      imageUrl: sticker.imageUrl,
+      extraParam: JSON.stringify(extraParam),
+      promptTokens: 0,
+      completionTokens: 0,
+      totalTokens: 0,
+    });
+
+    return {
+      chatId: stickerLog.id,
+      imageUrl: sticker.imageUrl,
+      stickerId: sticker.id,
+      scenario: sticker.scenario || null,
+      isScenarioSticker: isScenarioSticker,
+      transferText: transferText || undefined,
+    };
   }
 
   /**
@@ -869,6 +935,78 @@ export class ChatService {
       return false;
     } catch (error: any) {
       Logger.warn(`[表情包去重] 检查失败: ${error?.message || error}`, 'ChatService');
+      return false; // 失败时允许发送，避免影响用户体验
+    }
+  }
+
+  /**
+   * 检查最近10条消息内是否已发送过相同场景/图片的普通表情包（去重）
+   * 与场景表情包不同，普通表情包只检查相同场景或相同图片，不同场景可以发送
+   * @param userId 用户ID
+   * @param groupId 会话组ID
+   * @param scenario 场景描述
+   * @param imageUrl 表情包图片URL
+   * @returns true=已发送过相同的（应跳过），false=未发送过（可以发送）
+   */
+  private async checkIfNormalStickerAlreadySent(
+    userId: number,
+    groupId: number | null,
+    scenario: string,
+    imageUrl: string,
+  ): Promise<boolean> {
+    if (!scenario) {
+      return false;
+    }
+
+    try {
+      // 查询最近10条消息
+      const recentMessages = await this.chatLogService.queryChatLogByGroup({
+        groupId: groupId,
+        userId: userId,
+        page: 1,
+        pageSize: 10,
+      });
+
+      if (!recentMessages || recentMessages.length === 0) {
+        return false;
+      }
+
+      // 检查是否有相同场景或相同图片的普通表情包
+      for (const msg of recentMessages) {
+        // 检查相同图片
+        if (msg.imageUrl === imageUrl) {
+          Logger.debug(
+            `[普通表情包去重] 找到相同图片的表情包 - imageUrl=${imageUrl}`,
+            'ChatService',
+          );
+          return true;
+        }
+
+        // 检查 extraParam 中的 scenario（仅普通表情包，isScenarioSticker为false或不存在）
+        if (msg.extraParam) {
+          try {
+            const extra = JSON.parse(msg.extraParam);
+            // 只检查普通表情包（非场景表情包）
+            if (
+              extra.type === 'sticker' &&
+              !extra.isScenarioSticker &&
+              extra.scenario === scenario
+            ) {
+              Logger.debug(
+                `[普通表情包去重] 找到相同场景的普通表情包 - scenario=${scenario}`,
+                'ChatService',
+              );
+              return true;
+            }
+          } catch (e) {
+            // JSON解析失败，忽略
+          }
+        }
+      }
+
+      return false;
+    } catch (error: any) {
+      Logger.warn(`[普通表情包去重] 检查失败: ${error?.message || error}`, 'ChatService');
       return false; // 失败时允许发送，避免影响用户体验
     }
   }
@@ -1710,8 +1848,10 @@ ${setSystemMessage}
 - 根据上述提供的角色设定，以第一人称视角进行表达。
 - 在回答时，尽可能地融入该角色的性格特点、语言风格以及其特有的口头禅或经典台词。`;
 
-      setSystemMessage = `${rolePlayPrompt}
-- 当前时间:${currentDate}\n${timeContextPrompt}`;
+      setSystemMessage = `【当前时间】${currentDate}
+${timeContextPrompt}
+
+${rolePlayPrompt}`;
       // - 回复内容必须回复1个句子，并且用空行隔开，每个句子内容20字以内（如需添加心理描述，心理描述的括号内容不计入字数）。
     } else {
       if (usingPlugin?.parameters === 'mermaid') {
@@ -1985,6 +2125,8 @@ ${setSystemMessage}
     const skipPromptInHistory = options?.skipPromptInHistory === true;
     // 跳过保存到数据库模式：不保存但会添加到上下文
     const skipSave = options?.skipSaveToDatabase === true;
+    // chat-process-sync模式：跳过保存完整的assistant消息，但保存用户消息
+    const isChatProcessSync = (body as any)?._isChatProcessSync === true;
 
     if (isGroupChat && groupId && !skipPromptInHistory && !skipSave) {
       // 关键修复：只在第一个成员（isFirstMember=true）时才保存/查询用户消息
@@ -2263,10 +2405,11 @@ ${setSystemMessage}
     }
 
     // 如果设置了 skipSaveToDatabase，则不保存 assistant 消息到数据库
+    // 如果是 chat-process-sync 模式，也跳过保存（因为会逐句保存）
     let assistantSaveLog;
     let assistantLogId;
 
-    if (!skipSave) {
+    if (!skipSave && !isChatProcessSync) {
       assistantSaveLog = await this.chatLogService.saveChatLog({
         appId: appId ? appId : null,
         action: action ? action : null,
@@ -2289,12 +2432,19 @@ ${setSystemMessage}
       assistantLogId = assistantSaveLog.id;
       this.logDebug(`[保存] 已保存 assistant 消息到数据库，id=${assistantLogId}`, 'ChatService');
     } else {
-      // skipSaveToDatabase 模式：不保存 assistant 消息
+      // skipSaveToDatabase 模式或 chat-process-sync 模式：不保存 assistant 消息
       assistantLogId = null;
-      this.logDebug(
-        `[跳过保存] skipSaveToDatabase=true，不保存 assistant 消息到数据库`,
-        'ChatService',
-      );
+      if (isChatProcessSync) {
+        this.logDebug(
+          `[跳过保存] chat-process-sync模式，不保存完整 assistant 消息（将逐句保存）`,
+          'ChatService',
+        );
+      } else {
+        this.logDebug(
+          `[跳过保存] skipSaveToDatabase=true，不保存 assistant 消息到数据库`,
+          'ChatService',
+        );
+      }
     }
 
     if (autoReplyRes.answer && res) {
@@ -3031,31 +3181,44 @@ ${setSystemMessage}
               });
             }
 
-            // 语音回复逻辑：
+            // 语音回复判断函数：每条消息独立判断是否生成语音
             // - voice_only: 全部发语音（每次都生成）
             // - mixed: 偶尔发一次（按概率生成，文字:语音 = 5:2）
-            let shouldGenerateVoice = false;
+            // - text_only 或其他: 全部发文字
+            const shouldGenerateVoiceForMessage = (messageIndex: number): boolean => {
+              // 优先使用开放接口传入的语音回复决定（保证扣费和实际生成一致）
+              if (extraParam?._voiceReplyDecision !== undefined) {
+                this.logDebug(
+                  `[语音回复] 消息${messageIndex} 使用开放接口预设决定 - ${
+                    extraParam._voiceReplyDecision ? '生成语音' : '仅文字'
+                  }`,
+                  'ChatService',
+                );
+                return extraParam._voiceReplyDecision;
+              }
+              if (groupVoiceReplyMode === 'voice_only') {
+                this.logDebug(
+                  `[语音回复] 消息${messageIndex} voice_only 模式 - 生成语音`,
+                  'ChatService',
+                );
+                return true;
+              }
+              if (groupVoiceReplyMode === 'mixed') {
+                // 按照 5:2 的比例随机生成语音（约 28.6% 的概率）
+                const shouldGenerate = Math.random() < 0.286;
+                this.logDebug(
+                  `[语音回复] 消息${messageIndex} mixed 模式 - ${
+                    shouldGenerate ? '生成语音' : '仅文字'
+                  }`,
+                  'ChatService',
+                );
+                return shouldGenerate;
+              }
+              return false;
+            };
 
-            // 优先使用开放接口传入的语音回复决定（保证扣费和实际生成一致）
-            if (extraParam?._voiceReplyDecision !== undefined) {
-              shouldGenerateVoice = extraParam._voiceReplyDecision;
-              this.logDebug(
-                `[语音回复] 使用开放接口预设决定 - ${shouldGenerateVoice ? '生成语音' : '仅文字'}`,
-                'ChatService',
-              );
-            } else if (groupVoiceReplyMode === 'voice_only') {
-              shouldGenerateVoice = true;
-              this.logDebug('[语音回复] voice_only 模式 - 生成语音', 'ChatService');
-            } else if (groupVoiceReplyMode === 'mixed') {
-              // 按照 5:2 的比例随机生成语音（约 28.6% 的概率）
-              shouldGenerateVoice = Math.random() < 0.286;
-              this.logDebug(
-                `[语音回复] mixed 模式 - ${shouldGenerateVoice ? '生成语音' : '仅文字'}`,
-                'ChatService',
-              );
-            }
-
-            if (shouldGenerateVoice && replyContent) {
+            // 第一条消息的语音处理
+            if (replyContent && shouldGenerateVoiceForMessage(0)) {
               const voiceReply = await this.generateVoiceReplyForMessage({
                 text: replyContent,
                 chatId: assistantLogId,
@@ -3067,11 +3230,44 @@ ${setSystemMessage}
                 response.ttsUrl = voiceReply.ttsUrl;
                 response.audioUrl = voiceReply.ttsUrl;
                 response.voiceDuration = voiceReply.duration;
-                response.audioDuration = voiceReply.duration; // 添加audioDuration字段供cat_AI使用
+                response.audioDuration = voiceReply.duration;
                 if (assistantMessagesPayload.length > 0) {
                   assistantMessagesPayload[0].content_voice = voiceReply.ttsUrl;
                   assistantMessagesPayload[0].voice_duration = voiceReply.duration;
-                  assistantMessagesPayload[0].audioDuration = voiceReply.duration; // 添加audioDuration字段
+                  assistantMessagesPayload[0].audioDuration = voiceReply.duration;
+                }
+              }
+            }
+
+            // 为分段消息中的每条额外消息独立判断并生成语音
+            if (extraAssistantLogs.length > 0) {
+              for (let i = 0; i < extraAssistantLogs.length; i++) {
+                const extraLog = extraAssistantLogs[i];
+                const messageIndex = i + 1;
+
+                if (!shouldGenerateVoiceForMessage(messageIndex)) {
+                  continue;
+                }
+
+                const extraVoiceReply = await this.generateVoiceReplyForMessage({
+                  text: extraLog.content,
+                  chatId: extraLog.chatId,
+                  appId: appId ? Number(appId) : null,
+                  req,
+                });
+                if (extraVoiceReply) {
+                  // 更新 assistantMessagesPayload 中对应的消息
+                  const payloadIndex = i + 1; // 第一条消息在index 0，额外消息从index 1开始
+                  if (assistantMessagesPayload[payloadIndex]) {
+                    assistantMessagesPayload[payloadIndex].content_voice = extraVoiceReply.ttsUrl;
+                    assistantMessagesPayload[payloadIndex].voice_duration =
+                      extraVoiceReply.duration;
+                    assistantMessagesPayload[payloadIndex].audioDuration = extraVoiceReply.duration;
+                  }
+                  this.logDebug(
+                    `[语音回复] 分段消息 ${messageIndex} 语音生成成功 - chatId=${extraLog.chatId}`,
+                    'ChatService',
+                  );
                 }
               }
             }
@@ -3227,10 +3423,13 @@ ${setSystemMessage}
           }
 
           // 表情包自动发送逻辑：AI主动在合适场景下发送表情包
+          // - 场景表情包（有tags）：100%触发 + 去重检查
+          // - 普通表情包（无tags）：30%概率 + allowEmoji开关控制
+          // - 备忘录消息（isCalendarMessage=true）：跳过表情包
           try {
-            // 只在单聊（非群聊）且有AI回复内容时触发
-            // 注意：场景表情包（如转账）不受 allowEmoji 开关控制
-            if (!isGroupChat && appId && response.full_content) {
+            // 只在单聊（非群聊）且有AI回复内容时触发，备忘录消息跳过表情包
+            const isCalendarMessage = (body as any)?.isCalendarMessage === true;
+            if (!isGroupChat && appId && response.full_content && !isCalendarMessage) {
               this.logDebug(
                 `[表情包] 🔍 尝试自动发送表情包 - groupId: ${groupId}, allowEmoji: ${groupAllowEmoji}`,
                 'ChatService',
@@ -3247,11 +3446,7 @@ ${setSystemMessage}
 
               if (stickerResult) {
                 Logger.log(
-                  `[表情包] ✅ AI主动发送表情包成功 - userId=${req.user.id}, scenario=${
-                    stickerResult.scenario || '情绪表情包'
-                  }, isScenarioSticker=${stickerResult.isScenarioSticker}, imageUrl=${
-                    stickerResult.imageUrl
-                  }`,
+                  `[表情包] ✅ AI主动发送表情包成功 - userId=${req.user.id}, scenario=${stickerResult.scenario}, isScenarioSticker=${stickerResult.isScenarioSticker}, imageUrl=${stickerResult.imageUrl}`,
                   'ChatService',
                 );
 
@@ -3715,6 +3910,14 @@ ${setSystemMessage}
             }
           }
 
+          // 遍历所有消息，先收集到临时数组
+          const tempMessages: Array<{
+            role: string;
+            content: string;
+            appId?: number;
+            modelName?: string;
+          }> = [];
+
           for (const msg of allMessages) {
             // 跳过转账表情包消息（role为'sticker'）
             if (msg.role === 'sticker') {
@@ -3756,7 +3959,7 @@ ${setSystemMessage}
                 continue;
               }
 
-              messages.push({
+              tempMessages.push({
                 role: 'user',
                 content: userContent,
               });
@@ -3789,9 +3992,11 @@ ${setSystemMessage}
                 );
               }
 
-              messages.push({
+              tempMessages.push({
                 role: finalRole,
                 content: messageContent,
+                appId: msgAppId,
+                modelName: msg.modelName,
               });
               this.logDebug(
                 `[群聊历史] AI消息(${msg.modelName || msgAppId}, ${finalRole}): ${
@@ -3801,6 +4006,34 @@ ${setSystemMessage}
                 }`,
                 'ChatService',
               );
+            }
+          }
+
+          // 合并连续的同角色assistant消息（逐句保存的情况）
+          for (let i = 0; i < tempMessages.length; i++) {
+            const currentMsg = tempMessages[i];
+
+            // 如果上一条消息和当前消息都是相同角色的assistant，且来自同一个appId，则合并
+            if (
+              messages.length > 0 &&
+              messages[messages.length - 1].role === currentMsg.role &&
+              currentMsg.role !== 'user' && // 不合并user消息
+              i > 0 &&
+              tempMessages[i - 1].appId === currentMsg.appId
+            ) {
+              // 合并到上一条消息（去掉重复的角色名前缀）
+              const contentWithoutPrefix = currentMsg.content.replace(/^[^：]+：/, '');
+              messages[messages.length - 1].content += contentWithoutPrefix;
+              this.logDebug(
+                `[群聊消息合并] 合并逐句assistant消息: ${contentWithoutPrefix.substring(0, 30)}...`,
+                'ChatService',
+              );
+            } else {
+              // 添加新消息
+              messages.push({
+                role: currentMsg.role,
+                content: currentMsg.content,
+              });
             }
           }
 
@@ -3850,22 +4083,44 @@ ${setSystemMessage}
           }
 
           // 构建messages数组，过滤sticker消息并追加转账文本
-          messages.push(
-            ...allMessages
-              .filter(m => m.role !== 'sticker') // 过滤掉转账表情包消息
-              .map(m => {
-                let content = m.content;
-                // 如果是assistant消息且有转账标记，追加转账文本（拼接到同一条消息）
-                if (m.role === 'assistant' && (m as any).transferText) {
-                  content = `${content}\n${(m as any).transferText}`;
-                  this.logDebug(
-                    `[转账上下文] 为assistant消息追加转账文本: ${(m as any).transferText}`,
-                    'ChatService',
-                  );
-                }
-                return { role: m.role, content: content };
-              }),
-          );
+          // 合并连续的assistant消息（逐句保存的情况）
+          const mergedMessages: Array<{ role: string; content: string }> = [];
+          const filteredMessages = allMessages.filter(m => m.role !== 'sticker'); // 过滤掉转账表情包消息
+
+          for (let i = 0; i < filteredMessages.length; i++) {
+            const m = filteredMessages[i];
+            let content = m.content;
+
+            // 如果是assistant消息且有转账标记，追加转账文本（拼接到同一条消息）
+            if (m.role === 'assistant' && (m as any).transferText) {
+              content = `${content}\n${(m as any).transferText}`;
+              this.logDebug(
+                `[转账上下文] 为assistant消息追加转账文本: ${(m as any).transferText}`,
+                'ChatService',
+              );
+            }
+
+            // 如果上一条消息和当前消息都是assistant，且来自同一个appId，则合并
+            if (
+              mergedMessages.length > 0 &&
+              mergedMessages[mergedMessages.length - 1].role === 'assistant' &&
+              m.role === 'assistant' &&
+              i > 0 &&
+              filteredMessages[i - 1].appId === m.appId
+            ) {
+              // 合并到上一条消息
+              mergedMessages[mergedMessages.length - 1].content += content;
+              this.logDebug(
+                `[消息合并] 合并逐句assistant消息: ${content.substring(0, 30)}...`,
+                'ChatService',
+              );
+            } else {
+              // 添加新消息
+              mergedMessages.push({ role: m.role, content: content });
+            }
+          }
+
+          messages.push(...mergedMessages);
         }
       } catch (error) {
         Logger.error(`获取聊天历史记录失败: ${error.message}`, 'ChatService');
@@ -4125,22 +4380,22 @@ ${setSystemMessage}
   /**
    * 公开方法：为 chat-process-sync 生成带情绪识别的TTS
    * 直接复用 ttsProcess 的核心逻辑
-   * @param options 包含 text, chatId, appId, userId
+   * @param options 包含 text, chatId(可选), appId, userId, skipChatLogUpdate(可选)
    * @returns { ttsUrl, duration, emotion } 或 null
    */
   async generateTtsWithEmotion(options: {
     text: string;
-    chatId: number;
+    chatId?: number;
     appId: number | null;
     userId: number;
+    skipChatLogUpdate?: boolean;
   }): Promise<{ ttsUrl: string; duration: number; emotion: string | null } | null> {
-    const { text, chatId, appId, userId } = options;
+    const { text, chatId, appId, userId, skipChatLogUpdate = false } = options;
 
     this.logDebug(
-      `[generateTtsWithEmotion] 开始处理: text=${text.substring(
-        0,
-        50,
-      )}..., chatId=${chatId}, appId=${appId}`,
+      `[generateTtsWithEmotion] 开始处理: text=${text.substring(0, 50)}..., chatId=${
+        chatId ?? 'N/A'
+      }, appId=${appId}, skipChatLogUpdate=${skipChatLogUpdate}`,
       'TTSService',
     );
 
@@ -4175,7 +4430,7 @@ ${setSystemMessage}
 
     try {
       // 直接调用 ttsProcess，复用其完整的情绪识别逻辑
-      await this.ttsProcess(body, fakeReq, mockRes);
+      await this.ttsProcess(body, fakeReq, mockRes, { skipChatLogUpdate });
 
       if (ttsResult?.ttsUrl) {
         this.logDebug(
@@ -4200,8 +4455,9 @@ ${setSystemMessage}
     }
   }
 
-  async ttsProcess(body: any, req: any, res?: any) {
+  async ttsProcess(body: any, req: any, res?: any, options?: { skipChatLogUpdate?: boolean }) {
     const { chatId, prompt, emotion, appId: bodyAppId } = body;
+    const skipChatLogUpdate = options?.skipChatLogUpdate ?? false;
 
     this.logDebug(
       `开始TTS处理: ${String(prompt || '').substring(0, 50)}${
@@ -4274,7 +4530,10 @@ ${setSystemMessage}
           'TTSService',
         );
       }
-      await this.chatLogService.updateChatLog(chatId, { ttsUrl: url, ttsDuration: durationInt });
+      // 只有在有 chatId 且不跳过更新时才更新 chatlog
+      if (chatId && !skipChatLogUpdate) {
+        await this.chatLogService.updateChatLog(chatId, { ttsUrl: url, ttsDuration: durationInt });
+      }
       return res.status(200).send({ ttsUrl: url, duration: durationInt });
     };
 

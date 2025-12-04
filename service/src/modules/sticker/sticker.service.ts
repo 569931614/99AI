@@ -113,50 +113,71 @@ export class StickerService {
     return { success: true };
   }
 
+  /**
+   * 根据文本内容匹配表情包
+   * - 优先匹配场景表情包（scenario不为空 & tags不为空，如转账场景）
+   * - 其次匹配普通表情包（scenario不为空 & tags为空）
+   * @param text AI回复内容
+   * @param userMessage 用户消息内容（可选，用于更准确判断场景）
+   * @param options 识别选项
+   *   - skipNormalSticker: 跳过普通表情包识别（只识别场景表情包）
+   *   - onlyNormalSticker: 只识别普通表情包（跳过场景表情包）
+   * @returns { sticker, isScenarioSticker } 或 null
+   */
   async pickStickerByText(
     text?: string | null,
-    preferredEmotion?: string | null,
     userMessage?: string | null,
-  ): Promise<StickerEntity | null> {
+    options?: { skipNormalSticker?: boolean; onlyNormalSticker?: boolean },
+  ): Promise<{ sticker: StickerEntity; isScenarioSticker: boolean } | null> {
     const normalizedText = text?.trim() ?? '';
 
-    // 优先判断对话场景（scenario），场景表情包优先级高于情绪表情包
-    if (normalizedText) {
+    if (!normalizedText) {
+      return null;
+    }
+
+    const { skipNormalSticker = false, onlyNormalSticker = false } = options || {};
+
+    // 1. 优先识别场景表情包（有tags的，如转账场景）
+    if (!onlyNormalSticker) {
       const detectedScenario = await this.detectScenarioWithAI(normalizedText, userMessage);
       if (detectedScenario) {
         Logger.log(`[Sticker场景] AI判断场景为: ${detectedScenario}`, 'StickerService');
         const scenarioSticker = await this.pickStickerByScenario(detectedScenario);
         if (scenarioSticker) {
           Logger.log(`[Sticker场景] ✓ 找到场景表情包: ${scenarioSticker.name}`, 'StickerService');
-          return scenarioSticker;
+          return { sticker: scenarioSticker, isScenarioSticker: true };
         }
         Logger.debug(`[Sticker场景] 未找到场景"${detectedScenario}"的表情包`, 'StickerService');
       }
     }
 
-    // 没有匹配到场景表情包，使用AI识别情绪
-    let detectedEmotion = preferredEmotion?.trim()?.toLowerCase();
-
-    if (!detectedEmotion && normalizedText) {
-      detectedEmotion = await this.detectEmotionByAI(normalizedText);
+    // 2. 尝试匹配普通表情包（scenario不为空 & tags为空）
+    if (!skipNormalSticker) {
+      const normalScenario = await this.detectNormalStickerScenarioWithAI(normalizedText);
+      if (normalScenario) {
+        Logger.log(`[Sticker普通] AI判断普通场景为: ${normalScenario}`, 'StickerService');
+        const normalSticker = await this.pickRandomNormalSticker(normalScenario);
+        if (normalSticker) {
+          Logger.log(`[Sticker普通] ✓ 找到普通表情包: ${normalSticker.name}`, 'StickerService');
+          return { sticker: normalSticker, isScenarioSticker: false };
+        }
+        Logger.debug(`[Sticker普通] 未找到普通场景"${normalScenario}"的表情包`, 'StickerService');
+      }
     }
 
-    let sticker = await this.pickRandomSticker(detectedEmotion);
-    if (!sticker && detectedEmotion) {
-      sticker = await this.pickRandomSticker();
-    }
-    return sticker;
+    return null;
   }
 
   /**
-   * 使用AI识别文本情绪（从数据库动态获取情绪列表，让AI选择匹配）
+   * 使用AI识别普通表情包场景（从数据库动态获取场景列表）
+   * 普通表情包：scenario不为空 & tags为空
    */
-  private async detectEmotionByAI(text: string): Promise<string | null> {
+  private async detectNormalStickerScenarioWithAI(text: string): Promise<string | null> {
     if (!text) return null;
 
     try {
       Logger.log(
-        `[Sticker情绪AI识别] 开始识别 - 待分析文本: "${text.substring(0, 50)}${
+        `[Sticker普通AI识别] 开始识别 - 待分析文本: "${text.substring(0, 50)}${
           text.length > 50 ? '...' : ''
         }"`,
         'StickerService',
@@ -167,12 +188,12 @@ export class StickerService {
         process.env.DASHSCOPE_API_KEY;
 
       if (!dashscopeApiKey) {
-        Logger.warn('[Sticker情绪AI识别] 未配置DashScope API Key，跳过AI识别', 'StickerService');
+        Logger.warn('[Sticker普通AI识别] 未配置DashScope API Key，跳过AI识别', 'StickerService');
         return null;
       }
 
-      // 从数据库动态获取所有普通情绪表情包的 scenario 值（scenario不为空，tags为空）
-      const emotionStickers = await this.stickerRepo
+      // 从数据库动态获取所有普通表情包的 scenario 值（scenario不为空，tags为空）
+      const normalStickers = await this.stickerRepo
         .createQueryBuilder('sticker')
         .where('sticker.scenario IS NOT NULL')
         .andWhere("sticker.scenario != ''")
@@ -180,58 +201,56 @@ export class StickerService {
         .select(['sticker.scenario'])
         .getMany();
 
-      const emotions = Array.from(
-        new Set(emotionStickers.map(s => s.scenario?.trim()).filter(Boolean)),
+      const scenarios = Array.from(
+        new Set(normalStickers.map(s => s.scenario?.trim()).filter(Boolean)),
       );
 
-      if (emotions.length === 0) {
+      if (scenarios.length === 0) {
         Logger.warn(
-          '[Sticker情绪AI识别] 数据库中未找到任何情绪表情包（scenario不为空且tags为空），跳过AI识别',
+          '[Sticker普通AI识别] 数据库中未找到任何普通表情包（scenario不为空且tags为空），跳过AI识别',
           'StickerService',
         );
         return null;
       }
 
       Logger.log(
-        `[Sticker情绪AI识别] 从数据库获取到 ${emotions.length} 种情绪类型: ${emotions.join(', ')}`,
+        `[Sticker普通AI识别] 从数据库获取到 ${scenarios.length} 种场景: ${scenarios.join(', ')}`,
         'StickerService',
       );
 
-      // 构建情绪列表字符串
-      const emotionListText = emotions.map((e, idx) => `${idx + 1}. ${e}`).join('\n');
+      // 构建场景列表字符串
+      const scenarioListText = scenarios.map((s, idx) => `${idx + 1}. ${s}`).join('\n');
 
       const prompt = `# Role
-你是一个专业的情绪分析专家。请分析【AI回复内容】表达的情绪，并从【动态情绪列表】中选择最合适的一项。
+你是一个对话场景匹配专家。请分析【角色回复内容】，判断它属于【动态场景列表】中的哪个场景。
 
 # Input Data
-【AI回复内容】
+【角色回复内容】
 ${text}
 
-【动态情绪列表】
-${emotionListText}
+【动态场景列表】
+${scenarioListText}
 
-# Logic Steps
+# 匹配规则
 
-## Step 1: 情绪分析
-分析AI回复内容的主要情绪特征：
-- 是否表达开心、兴奋、愉悦？
-- 是否表达悲伤、失落、难过？
-- 是否表达生气、愤怒、不满？
-- 是否表达安慰、关心、温柔？
-- 是否表达惊讶、震惊、意外？
-- 是否表达害羞、撒娇、可爱？
-- 是否表达调皮、俏皮、活泼？
-- 是否为中性/日常对话？
+场景描述是口语化的，需要理解其含义进行匹配：
+- "晚上要睡觉的时候" → 角色说"晚安"、"睡了"、"困了要睡觉"等
+- "没钱，没饭吃难过" → 角色表达穷、没钱、饿了等
+- "撒娇，鼓励" → 角色撒娇或鼓励对方
+- "表达肯定" → 角色表示同意、赞同、好的
+- "被事情所吓倒" → 角色表达惊讶、害怕、震惊
+- "表达喜欢" → 角色表达喜欢、爱、心动
+- "累了" → 角色表达疲惫、累、想休息
+- "不屑" → 角色表达不在意、看不起、嫌弃
 
-## Step 2: 情绪匹配
-将分析结果与【动态情绪列表】进行语义比对：
-- 优先精确匹配情绪名称
-- 若无精确匹配，选择语义最接近的情绪
-- 若文本情绪过于中性或无法判断，输出 NO
+# Logic
+1. 理解角色回复的核心情绪/意图
+2. 在【动态场景列表】中找语义最接近的场景
+3. 如果回复内容过于普通（如简单问答），输出 NO
 
 # Output
-- 仅输出匹配到的**情绪选项原文**（不带编号）
-- 若无匹配或无法判断，输出 **NO**`;
+- 仅输出匹配到的**场景选项原文**（不带编号）
+- 若无匹配，输出 **NO**`;
 
       const requestBody = {
         model: 'qwen-turbo',
@@ -250,7 +269,7 @@ ${emotionListText}
       };
 
       Logger.debug(
-        `[Sticker情绪AI识别] 发送API请求 - model: qwen-turbo, 候选情绪数: ${emotions.length}`,
+        `[Sticker普通AI识别] 发送API请求 - model: qwen-turbo, 候选场景数: ${scenarios.length}`,
         'StickerService',
       );
 
@@ -268,47 +287,50 @@ ${emotionListText}
       );
 
       const result = response.data?.output?.text?.trim() || '';
-      Logger.log(`[Sticker情绪AI识别] ✓ API返回成功 - 原始返回: "${result}"`, 'StickerService');
+      Logger.log(`[Sticker普通AI识别] ✓ API返回成功 - 原始返回: "${result}"`, 'StickerService');
 
-      // 检查是否为NO（不匹配任何情绪）
+      // 检查是否为NO（不匹配任何场景）
       if (result.toUpperCase() === 'NO' || result.includes('无法判断') || result.includes('中性')) {
-        Logger.log('[Sticker情绪AI识别] ⚠ AI判断为无特定情绪 - 跳过表情包', 'StickerService');
+        Logger.log('[Sticker普通AI识别] ⚠ AI判断为无特定场景 - 跳过表情包', 'StickerService');
         return null;
       }
 
       // 清理AI返回结果（移除可能的序号和前缀）
       let cleanedResult = result.replace(/^\d+\.\s*/, '').trim();
 
-      Logger.debug(`[Sticker情绪AI识别] 清理后的返回: "${cleanedResult}"`, 'StickerService');
+      Logger.debug(`[Sticker普通AI识别] 清理后的返回: "${cleanedResult}"`, 'StickerService');
 
-      // 精确匹配或模糊匹配情绪
-      for (const emotion of emotions) {
+      // 精确匹配或模糊匹配场景
+      for (const scenario of scenarios) {
         // 精确匹配（忽略大小写）
-        if (cleanedResult.toLowerCase() === emotion.toLowerCase()) {
-          Logger.log(`[Sticker情绪AI识别] ✓✓✓ 精确匹配成功 - 情绪: "${emotion}"`, 'StickerService');
-          return emotion;
+        if (cleanedResult.toLowerCase() === scenario.toLowerCase()) {
+          Logger.log(
+            `[Sticker普通AI识别] ✓✓✓ 精确匹配成功 - 场景: "${scenario}"`,
+            'StickerService',
+          );
+          return scenario;
         }
       }
 
-      // 模糊匹配：AI返回包含有效情绪，或有效情绪包含AI返回
-      for (const emotion of emotions) {
+      // 模糊匹配：AI返回包含有效场景，或有效场景包含AI返回
+      for (const scenario of scenarios) {
         if (
-          cleanedResult.toLowerCase().includes(emotion.toLowerCase()) ||
-          emotion.toLowerCase().includes(cleanedResult.toLowerCase().replace(/[。，、]/g, ''))
+          cleanedResult.toLowerCase().includes(scenario.toLowerCase()) ||
+          scenario.toLowerCase().includes(cleanedResult.toLowerCase().replace(/[。，、]/g, ''))
         ) {
-          Logger.log(`[Sticker情绪AI识别] ✓✓ 模糊匹配成功 - 情绪: "${emotion}"`, 'StickerService');
-          return emotion;
+          Logger.log(`[Sticker普通AI识别] ✓✓ 模糊匹配成功 - 场景: "${scenario}"`, 'StickerService');
+          return scenario;
         }
       }
 
       Logger.warn(
-        `[Sticker情绪AI识别] ✗ AI返回了无效的情绪: "${result}", 候选: [${emotions.join(' | ')}]`,
+        `[Sticker普通AI识别] ✗ AI返回了无效的场景: "${result}", 候选: [${scenarios.join(' | ')}]`,
         'StickerService',
       );
       return null;
     } catch (error: any) {
       Logger.error(
-        `[Sticker情绪AI识别] ✗ 调用失败: ${error?.message || error}`,
+        `[Sticker普通AI识别] ✗ 调用失败: ${error?.message || error}`,
         error?.stack || '',
         'StickerService',
       );
@@ -316,17 +338,18 @@ ${emotionListText}
     }
   }
 
-  private async pickRandomSticker(emotion?: string | null): Promise<StickerEntity | null> {
+  /**
+   * 随机选择一个普通表情包（scenario不为空 & tags为空）
+   * @param scenario 场景描述
+   * @returns 表情包实体或 null
+   */
+  private async pickRandomNormalSticker(scenario: string): Promise<StickerEntity | null> {
     const qb = this.stickerRepo.createQueryBuilder('sticker');
 
-    // 选择普通情绪表情包（scenario不为空且tags为空）
-    qb.andWhere('sticker.scenario IS NOT NULL');
-    qb.andWhere("sticker.scenario != ''");
+    // 选择普通表情包（scenario不为空且tags为空）
+    qb.andWhere('sticker.scenario = :scenario', { scenario });
     qb.andWhere("(sticker.tags IS NULL OR sticker.tags = '')");
 
-    if (emotion) {
-      qb.andWhere('sticker.scenario = :emotion', { emotion });
-    }
     const total = await qb.clone().getCount();
     if (total === 0) {
       return null;

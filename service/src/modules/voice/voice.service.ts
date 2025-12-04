@@ -926,7 +926,7 @@ export class VoiceService implements OnModuleInit {
     voiceId?: string;
     name?: string;
     userId?: number;
-    prompt: string;       // 音色风格描述
+    prompt: string; // 音色风格描述
   }) {
     // 使用默认试听文本（MiniMax API 需要此参数）
     const defaultPreviewText = '你好，我是AI生成的虚拟音色，很高兴认识你。';
@@ -953,8 +953,8 @@ export class VoiceService implements OnModuleInit {
       format: 'mp3',
       sampleRate: 32000,
       config: {
-        voiceId: designResult.voiceId,  // MiniMax返回的音色ID
-        designPrompt: body.prompt,       // 保存设计提示词
+        voiceId: designResult.voiceId, // MiniMax返回的音色ID
+        designPrompt: body.prompt, // 保存设计提示词
         model: 'speech-2.6-hd',
         speed: 1,
         vol: 1,

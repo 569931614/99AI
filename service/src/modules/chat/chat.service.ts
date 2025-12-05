@@ -370,8 +370,11 @@ export class ChatService {
   }
 
   /**
-   * 将长文本按自然语句边界分割，用于流式TTS
-   * 在句号、问号、感叹号等位置分割，确保朗读自然流畅
+   * 将长文本按自然语句边界分割，用于流式TTS。
+   * 遵循以下原则：
+   * - 句号、问号、感叹号、波浪号、破折号、分号等视为句子结束
+   * - 若句尾后紧跟“【”，需等待翻译块结束（】）再切分
+   * - 【】内部视为连续文本，不单独拆分
    * @param text 要分割的文本
    * @param maxChunkLength 每个片段的最大长度（可选，默认不限制）
    * @returns 分割后的句子数组
@@ -380,63 +383,135 @@ export class ChatService {
     if (!text || text.trim().length === 0) return [];
 
     const chunks: string[] = [];
-
-    // 主要句子分隔符（强停顿）
-    const sentenceBreaks = /([。！？\.\!\?]+)/g;
-
-    // 按主要标点符号分割
-    const segments = text.split(sentenceBreaks);
-
     let currentChunk = '';
+    let inTranslation = false;
 
-    for (let i = 0; i < segments.length; i++) {
-      const segment = segments[i];
-      if (!segment) continue;
+    const pushChunk = () => {
+      const trimmed = currentChunk.trim();
+      if (trimmed) {
+        chunks.push(trimmed);
+      }
+      currentChunk = '';
+    };
 
-      // 如果是标点符号，附加到当前块
-      if (sentenceBreaks.test(segment)) {
-        currentChunk += segment;
+    const enforceMaxChunkLength = () => {
+      if (!maxChunkLength || currentChunk.length < maxChunkLength) {
+        return;
+      }
+      const trimmed = currentChunk.trim();
+      if (!trimmed) {
+        currentChunk = '';
+        return;
+      }
 
-        // 到达句子边界，保存当前块
-        if (currentChunk.trim()) {
-          chunks.push(currentChunk.trim());
-          currentChunk = '';
+      const fallbackIndex = Math.max(
+        trimmed.lastIndexOf('；'),
+        trimmed.lastIndexOf(';'),
+        trimmed.lastIndexOf('—'),
+        trimmed.lastIndexOf('～'),
+        trimmed.lastIndexOf('~'),
+        trimmed.lastIndexOf(' ')
+      );
+
+      if (fallbackIndex > -1 && fallbackIndex < trimmed.length - 1) {
+        const head = trimmed.slice(0, fallbackIndex + 1).trim();
+        const tail = trimmed.slice(fallbackIndex + 1);
+        if (head) {
+          chunks.push(head);
         }
-      } else {
-        // 如果设置了最大长度限制，且当前段落过长
-        if (maxChunkLength && segment.length > maxChunkLength) {
-          // 在次要分隔符处分割（逗号、顿号等）
-          const subSegments = segment.split(/([，,、；;])/);
+        currentChunk = tail;
+        return;
+      }
 
-          for (let j = 0; j < subSegments.length; j++) {
-            const subSegment = subSegments[j];
-            if (!subSegment) continue;
+      pushChunk();
+    };
 
-            // 如果加上这个子片段会超过最大长度，先保存当前块
-            if (
-              maxChunkLength &&
-              currentChunk.length + subSegment.length > maxChunkLength &&
-              currentChunk.trim()
-            ) {
-              chunks.push(currentChunk.trim());
-              currentChunk = '';
-            }
+    for (let i = 0; i < text.length; i++) {
+      const char = text[i];
+      const prevChar = i > 0 ? text[i - 1] : '';
+      const nextChar = i + 1 < text.length ? text[i + 1] : '';
 
-            currentChunk += subSegment;
+      currentChunk += char;
+
+      if (char === '【') {
+        inTranslation = true;
+        continue;
+      }
+
+      if (char === '】') {
+        inTranslation = false;
+        pushChunk();
+        continue;
+      }
+
+      if (inTranslation) {
+        continue;
+      }
+
+      if (this.isSentenceBoundaryChar(char, prevChar, nextChar)) {
+        const nextMeaningfulChar = this.findNextNonWhitespaceChar(text, i + 1);
+        if (nextMeaningfulChar === '【') {
+          continue;
+        }
+
+        if ((char === '～' || char === '~' || char === '—') && nextChar === char) {
+          while (i + 1 < text.length && text[i + 1] === char) {
+            i++;
+            currentChunk += text[i];
           }
-        } else {
-          currentChunk += segment;
         }
+
+        pushChunk();
+        continue;
+      }
+
+      if (!inTranslation) {
+        enforceMaxChunkLength();
       }
     }
 
-    // 保存剩余的内容
-    if (currentChunk.trim()) {
-      chunks.push(currentChunk.trim());
+    pushChunk();
+
+    return chunks.filter(chunk => chunk && chunk.trim().length > 0);
+  }
+
+  private isSentenceBoundaryChar(char: string, prevChar: string, nextChar: string): boolean {
+    const strongStops = new Set(['。', '！', '？', '!', '?', '；', ';']);
+    if (strongStops.has(char)) {
+      return true;
     }
 
-    // 过滤掉空片段
-    return chunks.filter(chunk => chunk && chunk.trim().length > 0);
+    if (char === '.' && prevChar !== '.' && nextChar !== '.') {
+      return true;
+    }
+
+    if (char === '～' || char === '~' || char === '—') {
+      return true;
+    }
+
+    return false;
+  }
+
+  private findNextNonWhitespaceChar(text: string, startIndex: number): string | null {
+    for (let i = startIndex; i < text.length; i++) {
+      const char = text[i];
+      if (char && char.trim()) {
+        return char;
+      }
+    }
+    return null;
+  }
+
+  private isRoleSignatureOnly(content?: string | null): boolean {
+    if (typeof content !== 'string') {
+      return false;
+    }
+    const trimmed = content.trim();
+    if (!trimmed) {
+      return false;
+    }
+    const normalized = trimmed.replace(/^\[|\]$/g, '');
+    return /^[^：]+：$/.test(normalized);
   }
 
   private clampReplyCount(value?: number | null, fallback = 1): number {
@@ -635,7 +710,7 @@ export class ChatService {
   /**
    * 尝试自动发送表情包（AI主动发送，带去重检查）
    * - 场景表情包（有tags）：100%触发 + 去重检查
-   * - 普通表情包（无tags）：先检查allowEmoji开关 → 再判断30%概率 → 最后去重（优化性能）
+   * - 普通表情包（无tags）：开启allowEmoji开关后100%触发（暂时关闭30%概率限制）→ 最后去重
    * @returns 表情包信息或 null（不发送）
    */
   private async tryAutoSendSticker(options: {
@@ -721,22 +796,25 @@ export class ChatService {
         return null;
       }
 
-      // 2.2 判断30%概率（在AI识别之前，节省成本）
-      const randomValue = Math.random();
-      const shouldSend = randomValue < 0.3;
+      // 2.2 判断30%概率（在AI识别之前，节省成本） - 暂时关闭
+      // const randomValue = Math.random();
+      // const shouldSend = randomValue < 0.3;
+      // Logger.log(
+      //   `[表情包] 🎲 普通表情包概率判断 - 随机值: ${randomValue.toFixed(4)}, 阈值: 0.3000, 结果: ${
+      //     shouldSend ? '✅通过' : '❌未通过'
+      //   }`,
+      //   'ChatService',
+      // );
+      // if (!shouldSend) {
+      //   Logger.log('[表情包] ⏭️ 概率判断未通过，跳过AI识别', 'ChatService');
+      //   return null;
+      // }
+
+      // 2.3 开启普通表情包开关后，直接调用AI识别（100%触发）
       Logger.log(
-        `[表情包] 🎲 普通表情包概率判断 - 随机值: ${randomValue.toFixed(4)}, 阈值: 0.3000, 结果: ${
-          shouldSend ? '✅通过' : '❌未通过'
-        }`,
+        '[表情包] 🤖 allowEmoji开启，跳过30%概率限制，直接识别普通表情包',
         'ChatService',
       );
-      if (!shouldSend) {
-        Logger.log('[表情包] ⏭️ 概率判断未通过，跳过AI识别', 'ChatService');
-        return null;
-      }
-
-      // 2.3 概率通过后，才调用AI识别普通表情包
-      Logger.log('[表情包] 🤖 开始AI识别普通表情包...', 'ChatService');
       const normalResult = await this.stickerService.pickStickerByText(content, userMessage, {
         onlyNormalSticker: true, // 只识别普通表情包
       });
@@ -1733,6 +1811,8 @@ ${numberedOptions}
     res && res.status(200);
     const curIp = getClientIp(req);
     let useModelAvatar = '';
+    const getResolvedModelAvatar = () =>
+      usingPlugin?.pluginImg || useModelAvatar || modelAvatar || '';
     let usingPlugin;
 
     if (usingPluginId) {
@@ -2349,7 +2429,7 @@ ${rolePlayPrompt}`;
               completionTokens: 0,
               totalTokens: 0,
               status: 3, // 已完成
-              modelAvatar: usingPlugin?.pluginImg || useModelAvatar || modelAvatar || '',
+              modelAvatar: getResolvedModelAvatar(),
               isOpeningRemark: true, // 标记为开场白
             });
             this.logDebug(
@@ -2409,6 +2489,9 @@ ${rolePlayPrompt}`;
     let assistantSaveLog;
     let assistantLogId;
 
+    const resolvedModelAvatar = getResolvedModelAvatar();
+    (body as any)._resolvedModelAvatar = resolvedModelAvatar;
+
     if (!skipSave && !isChatProcessSync) {
       assistantSaveLog = await this.chatLogService.saveChatLog({
         appId: appId ? appId : null,
@@ -2422,7 +2505,7 @@ ${rolePlayPrompt}`;
         role: 'assistant',
         groupId: groupId ? groupId : null,
         status: 2,
-        modelAvatar: usingPlugin?.pluginImg || useModelAvatar || modelAvatar || '',
+        modelAvatar: resolvedModelAvatar,
         pluginParam: usingPlugin?.parameters
           ? usingPlugin.parameters
           : modelType === 2
@@ -3157,7 +3240,7 @@ ${rolePlayPrompt}`;
               model: useModel,
               modelName: assistantName,
               groupId: groupId ? Number(groupId) : null,
-              modelAvatar: usingPlugin?.pluginImg || useModelAvatar || modelAvatar || '',
+              modelAvatar: resolvedModelAvatar,
               pluginParam:
                 assistantSaveLog?.pluginParam ||
                 (usingPlugin?.parameters
@@ -3424,7 +3507,7 @@ ${rolePlayPrompt}`;
 
           // 表情包自动发送逻辑：AI主动在合适场景下发送表情包
           // - 场景表情包（有tags）：100%触发 + 去重检查
-          // - 普通表情包（无tags）：30%概率 + allowEmoji开关控制
+          // - 普通表情包（无tags）：allowEmoji开关开启后100%触发（暂时取消概率限制）
           // - 备忘录消息（isCalendarMessage=true）：跳过表情包
           try {
             // 只在单聊（非群聊）且有AI回复内容时触发，备忘录消息跳过表情包
@@ -4012,6 +4095,7 @@ ${rolePlayPrompt}`;
           // 合并连续的同角色assistant消息（逐句保存的情况）
           for (let i = 0; i < tempMessages.length; i++) {
             const currentMsg = tempMessages[i];
+            const roleSignatureOnly = this.isRoleSignatureOnly(currentMsg.content);
 
             // 如果上一条消息和当前消息都是相同角色的assistant，且来自同一个appId，则合并
             if (
@@ -4019,7 +4103,8 @@ ${rolePlayPrompt}`;
               messages[messages.length - 1].role === currentMsg.role &&
               currentMsg.role !== 'user' && // 不合并user消息
               i > 0 &&
-              tempMessages[i - 1].appId === currentMsg.appId
+              tempMessages[i - 1].appId === currentMsg.appId &&
+              !roleSignatureOnly
             ) {
               // 合并到上一条消息（去掉重复的角色名前缀）
               const contentWithoutPrefix = currentMsg.content.replace(/^[^：]+：/, '');
@@ -4090,6 +4175,7 @@ ${rolePlayPrompt}`;
           for (let i = 0; i < filteredMessages.length; i++) {
             const m = filteredMessages[i];
             let content = m.content;
+            const roleSignatureOnly = this.isRoleSignatureOnly(m.content);
 
             // 如果是assistant消息且有转账标记，追加转账文本（拼接到同一条消息）
             if (m.role === 'assistant' && (m as any).transferText) {
@@ -4106,7 +4192,8 @@ ${rolePlayPrompt}`;
               mergedMessages[mergedMessages.length - 1].role === 'assistant' &&
               m.role === 'assistant' &&
               i > 0 &&
-              filteredMessages[i - 1].appId === m.appId
+              filteredMessages[i - 1].appId === m.appId &&
+              !roleSignatureOnly
             ) {
               // 合并到上一条消息
               mergedMessages[mergedMessages.length - 1].content += content;

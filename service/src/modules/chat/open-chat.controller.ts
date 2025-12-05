@@ -550,6 +550,12 @@ export class OpenChatController {
           type: 'boolean',
           description: '是否生成TTS语音（默认true，会进行情绪识别并生成语音；设为false可跳过）',
         },
+        messages: {
+          type: 'array',
+          description:
+            '对话消息列表（可选，仅当 prompt 为空时，用于携带最近一次用户消息，元素格式遵循 { role: string, content: string }）',
+          items: { type: 'object' },
+        },
       },
       required: ['prompt'],
     },
@@ -558,6 +564,30 @@ export class OpenChatController {
     let chargeReceipt: CookieChargeReceipt | null = null;
     try {
       const { token, userId: originalUserId, maobingBaseUrl, generateTts } = body || {};
+
+      const conversationMessages = this.extractConversationMessages(body);
+      if ((!body?.prompt || body.prompt.trim() === '') && conversationMessages.length > 0) {
+        const latestUserMessage = this.extractLatestUserMessage(conversationMessages);
+        if (latestUserMessage) {
+          body.prompt = latestUserMessage.text;
+          if (!body?.imageUrl && latestUserMessage.imageUrl) {
+            body.imageUrl = latestUserMessage.imageUrl;
+          }
+          if (!body?.audioUrl && latestUserMessage.audioUrl) {
+            body.audioUrl = latestUserMessage.audioUrl;
+            if (!body?.voiceDuration && latestUserMessage.voiceDuration) {
+              body.voiceDuration = latestUserMessage.voiceDuration;
+            }
+          }
+          if (!body.options) body.options = {};
+          if (body.options.skipPromptInHistory === true) {
+            body.options.skipPromptInHistory = false;
+          }
+          this.logger.log(
+            `[chat-process-sync] 从conversation messages中提取到用户消息，自动填充prompt并恢复skipPromptInHistory`,
+          );
+        }
+      }
 
       // 标记为chat-process-sync模式，用于在chatService中识别
       body._isChatProcessSync = true;
@@ -899,6 +929,11 @@ export class OpenChatController {
               role: 'assistant',
               groupId: body.options?.groupId || null,
               status: 3,
+              modelAvatar:
+                body._resolvedModelAvatar ||
+                body.modelAvatar ||
+                (stickerData?.modelAvatar ?? '') ||
+                '',
               content: sentence,
               audioUrl: sentenceAudioUrl, // 直接保存语音URL
               ttsDuration: sentenceVoiceDuration, // 直接保存语音时长
@@ -995,69 +1030,247 @@ export class OpenChatController {
     }
   }
 
+  private extractConversationMessages(body: any): any[] {
+    if (!body) return [];
+
+    const arrayCandidates = [
+      body.messages,
+      body.conversationMessages,
+      body.conversationMessage,
+      body.dialogMessages,
+      body.dialogueMessages,
+      body.historyMessages,
+      body.history,
+      body.chatMessages,
+      body.recentMessages,
+      body.conversation,
+      body.records,
+      body.chatLogs,
+      body.chatlogs,
+      body.chatlog,
+      body.logs,
+      body.dataList,
+      body?.options?.messages,
+      body?.options?.conversationMessages,
+      body?.options?.dialogMessages,
+      body?.options?.dialogueMessages,
+    ];
+
+    for (const candidate of arrayCandidates) {
+      const normalized = this.normalizeConversationArray(candidate);
+      if (normalized.length > 0) {
+        return normalized;
+      }
+    }
+
+    const singleCandidates = [
+      body.lastMessage,
+      body.latestMessage,
+      body.lastUserMessage,
+      body.latestUserMessage,
+      body.recentMessage,
+      body?.options?.lastMessage,
+      body?.options?.latestMessage,
+      body?.options?.lastUserMessage,
+      body?.options?.latestUserMessage,
+    ];
+
+    for (const candidate of singleCandidates) {
+      const wrapped = this.wrapSingleConversationMessage(candidate);
+      if (wrapped.length > 0) {
+        return wrapped;
+      }
+    }
+
+    return [];
+  }
+
+  private normalizeConversationArray(candidate: any): any[] {
+    if (!candidate) return [];
+    if (Array.isArray(candidate)) return candidate;
+    if (typeof candidate === 'object') {
+      if (Array.isArray(candidate.list)) return candidate.list;
+      if (Array.isArray(candidate.data)) return candidate.data;
+      if (Array.isArray(candidate.items)) return candidate.items;
+      if (Array.isArray(candidate.rows)) return candidate.rows;
+      if (Array.isArray(candidate.records)) return candidate.records;
+    }
+    return [];
+  }
+
+  private wrapSingleConversationMessage(candidate: any): any[] {
+    if (candidate && typeof candidate === 'object') {
+      return [candidate];
+    }
+    return [];
+  }
+
+  private extractLatestUserMessage(conversation: any[]): {
+    text: string;
+    imageUrl?: string | null;
+    audioUrl?: string | null;
+    voiceDuration?: number | null;
+  } | null {
+    if (!Array.isArray(conversation) || conversation.length === 0) {
+      return null;
+    }
+
+    for (let i = conversation.length - 1; i >= 0; i--) {
+      const item = conversation[i];
+      if (!item) continue;
+
+      const role = typeof item.role === 'string' ? item.role.toLowerCase() : '';
+      const sender = typeof item.sender === 'string' ? item.sender.toLowerCase() : '';
+      const messageType = typeof item.message_type === 'string' ? item.message_type.toLowerCase() : '';
+      const isUserSender =
+        role === 'user' ||
+        role === 'human' ||
+        sender === 'user' ||
+        sender === 'visitor' ||
+        messageType === 'user' ||
+        item.isUser === true ||
+        item.is_user === true ||
+        item.isVisitor === true ||
+        item.is_sender === 0 ||
+        item.isSender === 0;
+
+      if (!isUserSender) {
+        continue;
+      }
+
+      const text = this.pickConversationMessageContent(item);
+      if (!text) {
+        continue;
+      }
+
+      const imageUrl = item.imageUrl || item.image_url || item.content_image || null;
+      const audioUrl = item.audioUrl || item.audio_url || item.voiceUrl || null;
+      const voiceDurationValue =
+        item.voiceDuration ?? item.voice_duration ?? item.audioDuration ?? item.voice_time ?? null;
+      const voiceDuration =
+        voiceDurationValue !== null && voiceDurationValue !== undefined
+          ? Number(voiceDurationValue) || null
+          : null;
+
+      return {
+        text,
+        imageUrl,
+        audioUrl,
+        voiceDuration,
+      };
+    }
+
+    return null;
+  }
+
+  private pickConversationMessageContent(message: any): string | null {
+    if (!message) {
+      return null;
+    }
+    const candidates = [
+      message.content,
+      message.text,
+      message.message,
+      message.prompt,
+      message.body,
+      message.detail,
+    ];
+    for (const candidate of candidates) {
+      if (typeof candidate === 'string') {
+        const trimmed = candidate.trim();
+        if (trimmed) {
+          return trimmed;
+        }
+      }
+    }
+    return null;
+  }
+
   /**
-   * 按句号、问号切分文本，但保护【】内的标点和省略号不切分
-   * @param text 要切分的文本
-   * @returns 切分后的句子数组
+   * 按句号等边界切分文本，满足以下规则：
+   * - 句号、问号、感叹号、波浪号、破折号、分号作为切分点
+   * - 如果这些符号后面紧跟“【”，延迟到“【”出现再切分上一句
+   * - 遇到“【”本身，立即切分，并将【】中的文本视为独立的一句
+   * - 保护【】内部的标点和省略号
    */
   private splitTextBySentence(text: string): string[] {
     if (!text || text.trim() === '') {
       return [];
     }
 
-    // 占位符定义
-    const periodPlaceholder = '\x00PERIOD\x00';
-    const questionPlaceholder = '\x00QUESTION\x00';
-    const ellipsisPlaceholder = '\x00ELLIPSIS\x00';
+    const sentences: string[] = [];
+    let current = '';
+    let inTranslation = false;
 
-    let processed = text;
+    const pushSentence = () => {
+      const trimmed = current.trim();
+      if (trimmed) {
+        sentences.push(trimmed);
+      }
+      current = '';
+    };
 
-    // 1. 先保护省略号（...、…、。。。等）不被分段
-    // 匹配：三个或更多连续的点/句号，或单个省略号字符
-    processed = processed.replace(/\.{3,}|。{3,}|…+/g, ellipsisPlaceholder);
+    for (let i = 0; i < text.length; i++) {
+      const char = text[i];
+      const prevChar = i > 0 ? text[i - 1] : '';
+      const nextChar = i + 1 < text.length ? text[i + 1] : '';
 
-    // 2. 保护【】内的句号和问号
-    const bracketRegex = /【[^】]*】/g;
-    const bracketMatches = text.match(bracketRegex) || [];
-    const bracketReplacements: { original: string; replaced: string }[] = [];
+      current += char;
 
-    bracketMatches.forEach(match => {
-      // 在【】内的内容也需要先保护省略号
-      let replaced = match.replace(/\.{3,}|。{3,}|…+/g, ellipsisPlaceholder);
-      replaced = replaced.replace(/。/g, periodPlaceholder);
-      replaced = replaced.replace(/[？?]/g, questionPlaceholder);
-      bracketReplacements.push({ original: match, replaced });
-      processed = processed.replace(match, replaced);
-    });
+      if (char === '【') {
+        inTranslation = true;
+        continue;
+      }
 
-    // 3. 按句号和问号切分（包括中文和英文）
-    // 匹配单个句号或问号作为分隔符（省略号已被保护）
-    const sentences = processed
-      .split(/([。.？?])/) // 捕获分隔符：句号和问号
-      .reduce((acc, part, index, arr) => {
-        // 奇数索引是分隔符，偶数索引是文本
-        if (index % 2 === 0 && part.trim()) {
-          // 文本部分，如果后面有分隔符，则合并
-          const nextPart = arr[index + 1] || '';
-          acc.push((part + nextPart).trim());
+      if (char === '】') {
+        inTranslation = false;
+        pushSentence();
+        continue;
+      }
+
+      if (inTranslation) {
+        continue;
+      }
+
+      if (this.isSentenceBoundaryChar(char, prevChar, nextChar)) {
+        const nextNonWhitespace = this.findNextNonWhitespaceChar(text, i + 1);
+        if (nextNonWhitespace === '【') {
+          continue;
         }
-        return acc;
-      }, [] as string[])
-      .filter(s => s.length > 0);
+        pushSentence();
+      }
+    }
 
-    // 4. 恢复所有占位符
-    return sentences.map(sentence => {
-      let result = sentence;
-      // 恢复【】内容
-      bracketReplacements.forEach(({ original, replaced }) => {
-        result = result.replace(replaced, original);
-      });
-      // 恢复占位符
-      result = result.replace(new RegExp(periodPlaceholder, 'g'), '。');
-      result = result.replace(new RegExp(questionPlaceholder, 'g'), '？');
-      result = result.replace(new RegExp(ellipsisPlaceholder, 'g'), '...');
-      return result;
-    });
+    pushSentence();
+
+    return sentences;
+  }
+
+  private isSentenceBoundaryChar(char: string, prevChar: string, nextChar: string): boolean {
+    const strongStops = new Set(['。', '！', '？', '!', '?', '；', ';']);
+    if (strongStops.has(char)) {
+      return true;
+    }
+
+    if (char === '.' && prevChar !== '.' && nextChar !== '.') {
+      return true;
+    }
+
+    if (char === '～' || char === '~' || char === '—') {
+      return true;
+    }
+
+    return false;
+  }
+
+  private findNextNonWhitespaceChar(text: string, startIndex: number): string | null {
+    for (let i = startIndex; i < text.length; i++) {
+      const char = text[i];
+      if (char && char.trim()) {
+        return char;
+      }
+    }
+    return null;
   }
 
   /**

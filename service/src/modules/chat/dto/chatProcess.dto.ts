@@ -73,4 +73,28 @@ export class ChatProcessDto {
   })
   @IsOptional()
   model: string;
+
+  @ApiProperty({
+    example: '七海建人',
+    description: '模型展示名称（可选）',
+    required: false,
+  })
+  @IsOptional()
+  modelName?: string;
+
+  @ApiProperty({
+    example: 1,
+    description: '模型类型（可选）',
+    required: false,
+  })
+  @IsOptional()
+  modelType?: number;
+
+  @ApiProperty({
+    example: 'https://static.xx/avatar.png',
+    description: '模型头像URL（可选）',
+    required: false,
+  })
+  @IsOptional()
+  modelAvatar?: string;
 }

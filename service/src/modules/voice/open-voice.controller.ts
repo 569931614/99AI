@@ -258,6 +258,23 @@ export class OpenVoiceController {
     return this.voiceService.updateStatus(body.voiceId, body.status);
   }
 
+  @Post('enable')
+  @ApiOperation({ summary: '【开放】将音色置为可用（SUCCEEDED）（无鉴权）' })
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        voiceId: { type: 'string', description: '音色ID（必填）' },
+      },
+      required: ['voiceId'],
+    },
+    examples: { demo: { value: { voiceId: 'minimax-1736578180000' } } },
+  })
+  enable(@Body() body: { voiceId: string }) {
+    const { voiceId } = body || {};
+    return this.voiceService.updateStatus(voiceId, 'SUCCEEDED');
+  }
+
   @Post('sync-pending-status')
   @ApiOperation({ summary: '【开放】自动同步PENDING状态的音色（无鉴权）' })
   syncPendingStatus() {
@@ -441,6 +458,7 @@ export class OpenVoiceController {
         vol: { type: 'number', description: '音量 0.1-10（可选，默认 1）' },
         pitch: { type: 'number', description: '音调 -12到12（可选，默认 0）' },
         languageBoost: { type: 'string', description: '语言增强（可选，默认 auto）' },
+        isDesign: { type: 'boolean', description: '是否来自音色设计（可选，用于前端区分）' },
       },
       required: ['minimaxVoiceId'],
     },
@@ -478,7 +496,7 @@ export class OpenVoiceController {
     summary: '【开放】MiniMax 音色设计：通过文字描述生成AI音色（无鉴权）',
     description:
       '使用 prompt 描述音色风格（如"讲述悬疑故事的播音员，声音低沉富有磁性"），' +
-      '系统会自动生成音色。返回生成的音色ID。',
+      '系统会自动生成音色。支持预览模式，返回试听音频和生成的音色ID，确认保存后再落库。',
   })
   @ApiBody({
     schema: {
@@ -487,6 +505,11 @@ export class OpenVoiceController {
         prompt: { type: 'string', description: '音色风格描述（必填）' },
         name: { type: 'string', description: '音色名称（可选）' },
         userId: { type: 'number', description: '用户ID（可选）' },
+        previewText: { type: 'string', description: '试听文本（可选，默认系统预置）' },
+        previewOnly: {
+          type: 'boolean',
+          description: '预览模式：true 时仅返回试听音频与 voice_id，不落库',
+        },
       },
       required: ['prompt'],
     },
@@ -498,6 +521,14 @@ export class OpenVoiceController {
           name: '悬疑男声',
         },
       },
+      preview: {
+        summary: '仅预览，不落库',
+        value: {
+          prompt: '沉稳的男声旁白，语气温和但富有力量感',
+          previewOnly: true,
+          previewText: '夜深了，古屋里只有他一人。窗外传来若有若无的脚步声...',
+        },
+      },
     },
   })
   designMinimaxVoice(
@@ -506,6 +537,9 @@ export class OpenVoiceController {
       prompt: string;
       name?: string;
       userId?: number;
+      previewOnly?: boolean;
+      previewText?: string;
+      preview_text?: string;
     },
   ) {
     return this.voiceService.designMinimaxVoice(body);

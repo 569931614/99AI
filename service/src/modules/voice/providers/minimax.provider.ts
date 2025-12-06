@@ -31,6 +31,7 @@ export interface TTSCreateRequest {
   bitrate?: number;
   format?: string;
   channel?: number;
+  emotion?: string;
 }
 
 export interface TTSQueryResponse {
@@ -47,6 +48,7 @@ export interface VoiceDesignRequest {
 
 export interface VoiceDesignResponse {
   voiceId: string; // 生成的音色ID，如 ttv-voice-2025060717322425-xxxxxxxx
+  trialAudioHex?: string | null;
 }
 
 /**
@@ -166,6 +168,7 @@ export class MinimaxProvider {
         speed: request.speed || 1,
         vol: request.vol || 1,
         pitch: request.pitch || 0,
+        ...(request.emotion ? { emotion: request.emotion } : {}),
       },
       audio_setting: {
         audio_sample_rate: request.audioSampleRate || 32000,
@@ -212,6 +215,7 @@ export class MinimaxProvider {
         speed: request.speed || 1,
         vol: request.vol || 1,
         pitch: request.pitch || 0,
+        ...(request.emotion ? { emotion: request.emotion } : {}),
       },
       audio_setting: {
         audio_sample_rate: request.audioSampleRate || 32000,
@@ -458,13 +462,51 @@ export class MinimaxProvider {
         );
       }
 
+      const trialAudioHex =
+        response.data?.trial_audio || response.data?.data?.trial_audio || null;
+
       return {
         voiceId: response.data.voice_id,
+        trialAudioHex,
       };
     } catch (error) {
       this.logger.error(`[voiceDesign] ${error?.message || error}`);
       throw new HttpException(
         error?.response?.data?.base_resp?.status_msg || error?.message || '音色设计失败',
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
+    }
+  }
+
+  /** 删除 MiniMax 音色 */
+  async deleteVoice(request: {
+    voiceId: string;
+    voiceType?: 'voice_cloning' | 'voice_design';
+  }): Promise<any> {
+    const headers = await this.getHeaders();
+    const payload = {
+      voice_type: request.voiceType || 'voice_cloning',
+      voice_id: request.voiceId,
+    };
+
+    try {
+      const response = await this.retryRequest(
+        () => axios.post(`${this.baseUrl}/v1/delete_voice`, payload, { headers }),
+        'deleteVoice',
+      );
+
+      if (response.data?.base_resp?.status_code !== 0) {
+        throw new HttpException(
+          response.data?.base_resp?.status_msg || '删除 MiniMax 音色失败',
+          HttpStatus.BAD_REQUEST,
+        );
+      }
+
+      return response.data;
+    } catch (error) {
+      this.logger.error(`[deleteVoice] ${error?.message || error}`);
+      throw new HttpException(
+        error?.response?.data?.base_resp?.status_msg || error?.message || '删除 MiniMax 音色失败',
         HttpStatus.INTERNAL_SERVER_ERROR,
       );
     }

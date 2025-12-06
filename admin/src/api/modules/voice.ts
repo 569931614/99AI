@@ -30,7 +30,7 @@ export default {
   designMinimax: (data: {
     voiceId?: string;
     name?: string;
-    prompt: string;       // 音色风格描述
+    prompt: string; // 音色风格描述
   }) =>
     api.post('voice/minimax/design', data, {
       timeout: 120000, // 2分钟超时

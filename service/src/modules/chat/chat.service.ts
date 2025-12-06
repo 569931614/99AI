@@ -31,7 +31,10 @@ import { UserService } from '../user/user.service';
 import { UserAppSettingsService } from '../userAppSettings/userAppSettings.service';
 import { UserBalanceService } from '../userBalance/userBalance.service';
 import { VoiceService } from '../voice/voice.service';
+import { VoiceEntity } from '../voice/voice.entity';
 import { MaobingCookieUtil } from '@/common/utils/maobing-cookie.util';
+
+type VoiceProvider = 'dashscope' | 'gpt-sovits' | 'minimax';
 
 @Injectable()
 export class ChatService {
@@ -64,6 +67,8 @@ export class ChatService {
     private readonly appEmotionVoiceRepo: Repository<AppEmotionVoiceEntity>,
     @InjectRepository(RoleEmotionEntity)
     private readonly roleEmotionRepo: Repository<RoleEmotionEntity>,
+    @InjectRepository(VoiceEntity)
+    private readonly voiceRepo: Repository<VoiceEntity>,
   ) {}
 
   // Gate verbose chat logs to avoid flooding production unless explicitly enabled.
@@ -76,6 +81,51 @@ export class ChatService {
     }
     return 180;
   })();
+  private readonly minimaxSupportedEmotions = [
+    'happy',
+    'sad',
+    'angry',
+    'fearful',
+    'disgusted',
+    'surprised',
+    'calm',
+    'fluent',
+    'whisper',
+  ];
+  private readonly minimaxEmotionAliasMap: Record<string, string> = {
+    开心: 'happy',
+    高兴: 'happy',
+    快乐: 'happy',
+    喜悦: 'happy',
+    悲伤: 'sad',
+    难过: 'sad',
+    伤心: 'sad',
+    愤怒: 'angry',
+    生气: 'angry',
+    气愤: 'angry',
+    害怕: 'fearful',
+    恐惧: 'fearful',
+    畏惧: 'fearful',
+    厌恶: 'disgusted',
+    嫌弃: 'disgusted',
+    惊讶: 'surprised',
+    吃惊: 'surprised',
+    惊喜: 'surprised',
+    平静: 'calm',
+    冷静: 'calm',
+    中性: 'calm',
+    镇定: 'calm',
+    neutral: 'calm',
+    生动: 'fluent',
+    活泼: 'fluent',
+    富有表现力: 'fluent',
+    lively: 'fluent',
+    expressive: 'fluent',
+    低语: 'whisper',
+    耳语: 'whisper',
+    轻声: 'whisper',
+    whispering: 'whisper',
+  };
 
   private logDebug(message: any, context = ChatService.name) {
     if (!this.enableVerboseChatLogs) {
@@ -1175,6 +1225,61 @@ export class ChatService {
     return table[label] || {};
   }
 
+  private resolveMinimaxVoiceContext(
+    pairs: Array<{ emotion: string; voiceId: string }>,
+    voiceProviders: Record<string, VoiceProvider>,
+  ): { isMinimax: boolean; voiceId: string | null } {
+    const uniqueVoiceIds = Array.from(new Set(pairs.map(p => p.voiceId)));
+    if (!uniqueVoiceIds.length) {
+      return { isMinimax: false, voiceId: null };
+    }
+    const allMinimax = uniqueVoiceIds.every(id => voiceProviders[id] === 'minimax');
+    if (!allMinimax) {
+      return { isMinimax: false, voiceId: null };
+    }
+    return { isMinimax: true, voiceId: uniqueVoiceIds[0] || null };
+  }
+
+  private applyMinimaxEmotionPreset(
+    currentOptions: string[],
+    currentPairs: Array<{ emotion: string; voiceId: string }>,
+    voiceId: string,
+  ): {
+    options: string[];
+    pairs: Array<{ emotion: string; voiceId: string }>;
+  } {
+    const optionSet = new Set(currentOptions);
+    const pairSet = new Set(currentPairs.map(p => p.emotion));
+    const options = [...currentOptions];
+    const pairs = [...currentPairs];
+
+    for (const emotion of this.minimaxSupportedEmotions) {
+      if (!optionSet.has(emotion)) {
+        options.push(emotion);
+        optionSet.add(emotion);
+      }
+      if (!pairSet.has(emotion)) {
+        pairs.push({ emotion, voiceId });
+        pairSet.add(emotion);
+      }
+    }
+    return { options, pairs };
+  }
+
+  private normalizeMinimaxEmotion(emotion?: string | null): string | null {
+    if (!emotion) return null;
+    const normalized = emotion.toLowerCase().trim();
+    if (this.minimaxSupportedEmotions.includes(normalized)) {
+      return normalized;
+    }
+    const alias =
+      this.minimaxEmotionAliasMap[emotion] || this.minimaxEmotionAliasMap[normalized];
+    if (alias && this.minimaxSupportedEmotions.includes(alias)) {
+      return alias;
+    }
+    return null;
+  }
+
   /**
    * 统一获取应用情绪配置（选项和音色对）
    * @param appId 应用ID
@@ -1187,11 +1292,13 @@ export class ChatService {
   ): Promise<{
     options: string[];
     pairs: Array<{ emotion: string; voiceId: string }>;
+    voiceProviders: Record<string, VoiceProvider>;
   }> {
     const options: string[] = [];
     const pairs: Array<{ emotion: string; voiceId: string }> = [];
+    const voiceProviders: Record<string, VoiceProvider> = {};
 
-    if (!appId) return { options, pairs };
+    if (!appId) return { options, pairs, voiceProviders };
 
     try {
       const rows = await this.appEmotionVoiceRepo.find({
@@ -1215,7 +1322,22 @@ export class ChatService {
       }
     } catch {}
 
-    return { options, pairs };
+    const uniqueVoiceIds = Array.from(new Set(pairs.map(p => p.voiceId)));
+    if (uniqueVoiceIds.length) {
+      try {
+        const voices = await this.voiceRepo.find({ where: { voiceId: In(uniqueVoiceIds) } });
+        for (const voice of voices) {
+          voiceProviders[voice.voiceId] = (voice.provider as VoiceProvider) || 'dashscope';
+        }
+      } catch (error) {
+        Logger.warn(
+          `[情绪配置] 读取音色提供商失败: ${error?.message || error}`,
+          'ChatService',
+        );
+      }
+    }
+
+    return { options, pairs, voiceProviders };
   }
 
   // 保留向后兼容的方法（内部调用统一方法）
@@ -4545,6 +4667,7 @@ ${rolePlayPrompt}`;
   async ttsProcess(body: any, req: any, res?: any, options?: { skipChatLogUpdate?: boolean }) {
     const { chatId, prompt, emotion, appId: bodyAppId } = body;
     const skipChatLogUpdate = options?.skipChatLogUpdate ?? false;
+    let voiceProviderMap: Record<string, VoiceProvider> = {};
 
     this.logDebug(
       `开始TTS处理: ${String(prompt || '').substring(0, 50)}${
@@ -4583,6 +4706,22 @@ ${rolePlayPrompt}`;
         if (params.rate !== undefined) previewPayload.rate = params.rate;
         if (params.pitch !== undefined) previewPayload.pitch = params.pitch;
         if (params.volume !== undefined) previewPayload.volume = params.volume;
+      }
+
+      if (voiceProviderMap?.[voiceId] === 'minimax') {
+        const minimaxEmotion = this.normalizeMinimaxEmotion(emotion);
+        if (minimaxEmotion) {
+          previewPayload.emotion = minimaxEmotion;
+          Logger.log(
+            `[TTSService] MiniMax emotion参数: ${minimaxEmotion} (voice=${voiceId})`,
+            'TTSService',
+          );
+        } else if (emotion) {
+          Logger.log(
+            `[TTSService] MiniMax emotion未匹配，跳过emotion参数: ${emotion}`,
+            'TTSService',
+          );
+        }
       }
 
       // 记录使用的情绪和音色信息
@@ -4634,7 +4773,22 @@ ${rolePlayPrompt}`;
       this.logDebug(`[TTSService] 使用的appId: ${appId}`, 'TTSService');
 
       // 统一获取情绪配置
-      const { options, pairs } = await this.getAppEmotionConfig(appId);
+      const emotionConfig = await this.getAppEmotionConfig(appId);
+      let options = [...emotionConfig.options];
+      let pairs = [...emotionConfig.pairs];
+      voiceProviderMap = emotionConfig.voiceProviders || {};
+      const minimaxContext = this.resolveMinimaxVoiceContext(pairs, voiceProviderMap);
+      if (minimaxContext.isMinimax && minimaxContext.voiceId) {
+        const applied = this.applyMinimaxEmotionPreset(options, pairs, minimaxContext.voiceId);
+        options = applied.options;
+        pairs = applied.pairs;
+        Logger.log(
+          `[TTSService] 检测到 MiniMax 音色，情绪候选已固定为: ${this.minimaxSupportedEmotions.join(
+            ', ',
+          )}`,
+          'TTSService',
+        );
+      }
 
       // 获取角色默认音色，并将其作为"日常"情绪加入到选项和映射中
       let defaultVoiceId: string | null = null;
@@ -4644,6 +4798,12 @@ ${rolePlayPrompt}`;
             where: { appId, isDefault: 1 },
           });
           defaultVoiceId = defaultVoiceMap?.voiceId || null;
+          if (defaultVoiceId && !voiceProviderMap[defaultVoiceId]) {
+            const meta = await this.voiceRepo.findOne({ where: { voiceId: defaultVoiceId } });
+            if (meta?.provider) {
+              voiceProviderMap[defaultVoiceId] = (meta.provider as VoiceProvider) || 'dashscope';
+            }
+          }
           if (defaultVoiceId && !pairs.find(p => p.emotion === '日常')) {
             // 将默认音色作为"日常"情绪加入
             options.push('日常');

@@ -224,6 +224,8 @@ export class VoiceService implements OnModuleInit {
 
     format?: string;
 
+    providerVoiceId?: string | null;
+
     config?: Record<string, any> | null;
   }) {
     if (!partial.voiceId) {
@@ -283,7 +285,7 @@ export class VoiceService implements OnModuleInit {
           } as any);
 
       if (data && typeof data === 'object') {
-        for (const k of ['prefix', 'model', 'status', 'name', 'format']) {
+        for (const k of ['prefix', 'model', 'status', 'name', 'format', 'providerVoiceId']) {
           if (data[k] === '') data[k] = null;
         }
       }
@@ -837,6 +839,7 @@ export class VoiceService implements OnModuleInit {
     audioUrl?: string;
     audioFile?: Express.Multer.File;
     promptText?: string; // 音频对应的文本（可选，用于提升克隆质量）
+    testText?: string; // 试听时朗读的文本
   }) {
     const timestamp = body.voiceId || Date.now();
     const voiceId = `minimax-${timestamp}`;
@@ -849,6 +852,7 @@ export class VoiceService implements OnModuleInit {
       fileName: body.audioFile?.originalname,
       voiceId: minimaxVoiceId,
       promptText: body.promptText,
+      testText: body.testText,
     });
 
     await this.upsertVoice({
@@ -861,6 +865,7 @@ export class VoiceService implements OnModuleInit {
       model: 'speech-2.6-hd',
       format: 'mp3',
       sampleRate: 32000,
+      providerVoiceId: cloneResult.voiceId,
       config: {
         voiceId: cloneResult.voiceId,
         fileId: cloneResult.fileId,
@@ -877,6 +882,7 @@ export class VoiceService implements OnModuleInit {
       provider: 'minimax',
       status: cloneResult.status === 'success' ? 'SUCCEEDED' : 'PENDING',
       minimax_voice_id: cloneResult.voiceId,
+      demo_audio: cloneResult.demoAudio || null,
     };
   }
 
@@ -891,9 +897,12 @@ export class VoiceService implements OnModuleInit {
     vol?: number;
     pitch?: number;
     languageBoost?: string;
+    isDesign?: boolean;
   }) {
     const voiceId = `minimax-${body.voiceId || Date.now()}`;
     await this.assertVoiceIdAvailable(voiceId);
+
+    const prefix = body.isDesign ? 'minimax-design' : 'minimax';
 
     await this.upsertVoice({
       voiceId,
@@ -901,10 +910,11 @@ export class VoiceService implements OnModuleInit {
       userId: body.userId || null,
       provider: 'minimax',
       status: 'SUCCEEDED',
-      prefix: 'minimax',
+      prefix,
       model: body.model || 'speech-2.6-hd',
       format: 'mp3',
       sampleRate: 32000,
+      providerVoiceId: body.minimaxVoiceId,
       config: {
         voiceId: body.minimaxVoiceId,
         model: body.model || 'speech-2.6-hd',
@@ -927,15 +937,36 @@ export class VoiceService implements OnModuleInit {
     name?: string;
     userId?: number;
     prompt: string; // 音色风格描述
+    previewOnly?: boolean;
+    previewText?: string;
   }) {
     // 使用默认试听文本（MiniMax API 需要此参数）
     const defaultPreviewText = '你好，我是AI生成的虚拟音色，很高兴认识你。';
+    const previewText = body.previewText || (body as any).preview_text || defaultPreviewText;
 
     // 调用 MiniMax 音色设计 API
     const designResult = await this.minimaxProvider.voiceDesign({
       prompt: body.prompt,
-      previewText: defaultPreviewText,
+      previewText,
     });
+
+    // 预览模式：仅返回试听音频和 voice_id，不落库
+    if (body.previewOnly === true) {
+      const previewAudioBase64 =
+        designResult.trialAudioHex && typeof designResult.trialAudioHex === 'string'
+          ? Buffer.from(designResult.trialAudioHex, 'hex').toString('base64')
+          : null;
+
+      return {
+        voice_id: designResult.voiceId,
+        provider: 'minimax',
+        status: 'PREVIEW',
+        minimax_voice_id: designResult.voiceId,
+        preview_audio_base64: previewAudioBase64
+          ? `data:audio/mp3;base64,${previewAudioBase64}`
+          : null,
+      };
+    }
 
     const timestamp = body.voiceId || Date.now();
     const voiceId = `minimax-design-${timestamp}`;
@@ -952,6 +983,7 @@ export class VoiceService implements OnModuleInit {
       model: 'speech-2.6-hd',
       format: 'mp3',
       sampleRate: 32000,
+      providerVoiceId: designResult.voiceId,
       config: {
         voiceId: designResult.voiceId, // MiniMax返回的音色ID
         designPrompt: body.prompt, // 保存设计提示词
@@ -968,6 +1000,9 @@ export class VoiceService implements OnModuleInit {
       provider: 'minimax',
       status: 'SUCCEEDED',
       minimax_voice_id: designResult.voiceId,
+      preview_audio_base64: designResult.trialAudioHex
+        ? `data:audio/mp3;base64,${Buffer.from(designResult.trialAudioHex, 'hex').toString('base64')}`
+        : null,
     };
   }
 
@@ -1704,14 +1739,70 @@ export class VoiceService implements OnModuleInit {
 
     const existing = await this.voiceRepo.findOne({ where: { voiceId: voice_id } });
 
-    if (existing && (existing.provider as VoiceProvider) === 'gpt-sovits') {
-      Logger.log(`开始删除 GPT-SoVITS 音色 ${voice_id}`, 'VoiceService');
+    if (existing) {
+      const provider = existing.provider as VoiceProvider;
 
-      await this.deleteVoiceAssociations(voice_id);
+      if (provider === 'gpt-sovits') {
+        Logger.log(`开始删除 GPT-SoVITS 音色 ${voice_id}`, 'VoiceService');
 
-      await this.cleanupGptSovitsAssets(voice_id);
+        await this.deleteVoiceAssociations(voice_id);
 
-      return { success: true };
+        await this.cleanupGptSovitsAssets(voice_id);
+
+        return { success: true };
+      }
+
+      if (provider === 'minimax') {
+        Logger.log(`开始删除 MiniMax 音色 ${voice_id}`, 'VoiceService');
+
+        const config = (existing.config || {}) as { voiceId?: string };
+        const minimaxVoiceId = existing.providerVoiceId || config?.voiceId;
+        if (!minimaxVoiceId) {
+          Logger.warn(
+            `MiniMax 音色 ${voice_id} 缺少 voiceId 配置，跳过远程删除，仅清理本地记录`,
+            'VoiceService',
+          );
+          await this.deleteVoiceAssociations(voice_id);
+          return {
+            success: true,
+            provider: 'minimax',
+            message: '已删除本地记录，但缺少 MiniMax voiceId，未调用远程API',
+          };
+        }
+
+        const prefix = existing.prefix || '';
+        const isDesignVoice =
+          prefix.startsWith('minimax-design') || voice_id.startsWith('minimax-design');
+        const voiceType = isDesignVoice ? 'voice_design' : 'voice_cloning';
+
+        try {
+          const remoteResult = await this.minimaxProvider.deleteVoice({
+            voiceId: minimaxVoiceId,
+            voiceType,
+          });
+          Logger.log(
+            `MiniMax 音色 ${voice_id} 删除成功（远程ID: ${minimaxVoiceId}, type: ${voiceType})`,
+            'VoiceService',
+          );
+
+          await this.deleteVoiceAssociations(voice_id);
+
+          return remoteResult;
+        } catch (error) {
+          Logger.error(
+            `MiniMax 音色 ${voice_id} 删除失败（远程ID: ${minimaxVoiceId}): ${error?.message || error}`,
+            error?.stack || '',
+            'VoiceService',
+          );
+          if (error instanceof HttpException) {
+            throw error;
+          }
+          throw new HttpException(
+            `删除 MiniMax 音色失败: ${error?.message || error}`,
+            HttpStatus.BAD_GATEWAY,
+          );
+        }
+      }
     }
 
     try {
@@ -3001,6 +3092,7 @@ export class VoiceService implements OnModuleInit {
     instruction?: string;
     text_language?: string;
     cut_punc?: string;
+    emotion?: string;
   }): Promise<{ url: string; duration: number }> {
     const { voice_id, text } = body;
     if (!voice_id || !text)
@@ -3170,10 +3262,11 @@ export class VoiceService implements OnModuleInit {
   /** MiniMax 预览合成 */
   private async previewWithMinimax(
     voice: VoiceEntity,
-    body: { text: string; sample_rate?: number },
+    body: { text: string; sample_rate?: number; emotion?: string },
   ): Promise<{ url: string; duration: number }> {
     const config = (voice.config || {}) as any;
-    if (!config.voiceId) {
+    const minimaxVoiceId = voice.providerVoiceId || config.voiceId;
+    if (!minimaxVoiceId) {
       throw new HttpException(
         `音色 ${voice.voiceId} 缺少 MiniMax voiceId 配置`,
         HttpStatus.BAD_REQUEST,
@@ -3182,13 +3275,14 @@ export class VoiceService implements OnModuleInit {
 
     const result = await this.minimaxProvider.synthesizeSpeech({
       text: body.text,
-      voiceId: String(config.voiceId),
+      voiceId: String(minimaxVoiceId),
       model: config.model || 'speech-2.6-hd',
       speed: config.speed || 1,
       vol: config.vol || 1,
       pitch: config.pitch || 0,
       languageBoost: config.languageBoost || 'auto',
       audioSampleRate: body.sample_rate || 32000,
+      emotion: body.emotion,
     });
 
     const uploadUrl = await this.uploadService.uploadFile(

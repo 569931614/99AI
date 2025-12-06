@@ -416,6 +416,19 @@
                   </div>
                 </template>
               </el-form-item>
+              <el-form-item label="试听文本">
+                <el-input
+                  v-model="minimaxForm.testText"
+                  type="textarea"
+                  :rows="2"
+                  placeholder="输入克隆完成后希望播放的试听文本，如：你好，我上线啦。"
+                />
+                <template #extra>
+                  <div class="text-xs text-gray-500 leading-5">
+                    该文本将作为 MiniMax 合成试听音频的内容，可自由填写以便快速验证音色。
+                  </div>
+                </template>
+              </el-form-item>
             </template>
 
             <template v-else-if="minimaxForm.mode === 'design'">
@@ -507,7 +520,13 @@
             type="primary"
             :loading="minimaxForm.uploading"
             @click="onSubmitMinimax"
-            >{{ minimaxForm.mode === 'clone' ? '上传克隆' : minimaxForm.mode === 'design' ? '生成音色' : '关联音色' }}</el-button
+            >{{
+              minimaxForm.mode === 'clone'
+                ? '上传克隆'
+                : minimaxForm.mode === 'design'
+                  ? '生成音色'
+                  : '关联音色'
+            }}</el-button
           >
         </div>
       </template>
@@ -565,6 +584,40 @@
             >生成试听</el-button
           >
         </div>
+      </template>
+    </el-dialog>
+
+    <el-dialog v-model="minimaxDemoPreview.visible" title="MiniMax 试听链接" width="520px">
+      <div class="space-y-3">
+        <div class="text-sm text-gray-500">
+          MiniMax 成功创建音色后会返回试听地址，你可以直接在此播放验证音色质量。
+        </div>
+        <div v-if="minimaxDemoPreview.voiceId" class="text-xs text-gray-500 break-all">
+          本地 Voice ID：{{ minimaxDemoPreview.voiceId }}
+        </div>
+        <div v-if="minimaxDemoPreview.minimaxVoiceId" class="text-xs text-gray-500 break-all">
+          MiniMax 音色ID：{{ minimaxDemoPreview.minimaxVoiceId }}
+        </div>
+        <div>
+          <audio
+            v-if="minimaxDemoPreview.url"
+            :src="minimaxDemoPreview.url"
+            controls
+            style="width: 100%"
+          />
+          <a
+            v-if="minimaxDemoPreview.url"
+            :href="minimaxDemoPreview.url"
+            target="_blank"
+            rel="noopener noreferrer"
+            class="mt-2 inline-flex items-center text-blue-500 text-sm"
+          >
+            新窗口打开试听链接
+          </a>
+        </div>
+      </div>
+      <template #footer>
+        <el-button type="primary" @click="minimaxDemoPreview.visible = false">知道了</el-button>
       </template>
     </el-dialog>
 
@@ -1062,6 +1115,7 @@
     audioFileName: string;
     audioFileSize: number;
     promptText: string; // 音频对应的文本
+    testText: string; // 试听文本
     minimaxVoiceId: string;
     model: string;
     speed: number;
@@ -1070,7 +1124,7 @@
     languageBoost: string;
     uploading: boolean;
     // 音色设计相关
-    designPrompt: string;    // 音色风格描述
+    designPrompt: string; // 音色风格描述
   }
 
   const defaultMinimax: MinimaxFormState = {
@@ -1080,6 +1134,7 @@
     audioFileName: '',
     audioFileSize: 0,
     promptText: '',
+    testText: '你好，这是语音克隆测试。',
     minimaxVoiceId: '',
     model: 'speech-2.6-hd',
     speed: 1,
@@ -1091,6 +1146,29 @@
   };
 
   const minimaxForm = reactive<MinimaxFormState>({ ...defaultMinimax });
+
+  const minimaxDemoPreview = reactive<{
+    visible: boolean;
+    url: string;
+    voiceId: string;
+    minimaxVoiceId: string;
+  }>({
+    visible: false,
+    url: '',
+    voiceId: '',
+    minimaxVoiceId: '',
+  });
+
+  function showMinimaxDemoPreview(payload?: {
+    demo_audio?: string;
+    voice_id?: string;
+    minimax_voice_id?: string;
+  }) {
+    minimaxDemoPreview.url = payload?.demo_audio || '';
+    minimaxDemoPreview.voiceId = payload?.voice_id || '';
+    minimaxDemoPreview.minimaxVoiceId = payload?.minimax_voice_id || '';
+    minimaxDemoPreview.visible = Boolean(minimaxDemoPreview.url);
+  }
 
   function onMinimaxAudioFileChange(uploadFile: UploadFile) {
     const rawFile = uploadFile?.raw || null;
@@ -1122,8 +1200,10 @@
         fd.append('audioFile', minimaxForm.audioFile, minimaxForm.audioFile.name || 'audio.wav');
         if (minimaxForm.name) fd.append('name', minimaxForm.name);
         if (minimaxForm.promptText) fd.append('promptText', minimaxForm.promptText);
-        await voiceApi.importMinimax(fd);
+        if (minimaxForm.testText) fd.append('testText', minimaxForm.testText);
+        const result = await voiceApi.importMinimax(fd);
         ElMessage.success('语音克隆成功');
+        showMinimaxDemoPreview(result);
         resetMinimaxForm();
         if (createVoiceDialog.visible) createVoiceDialog.visible = false;
         createVoiceDialog.active = 'api';

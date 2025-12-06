@@ -138,6 +138,7 @@ export class VoiceController {
       userId?: number;
       audioUrl?: string;
       promptText?: string; // 音频对应的文本，可提升克隆质量
+      testText?: string; // 自定义试听文本
     },
   ) {
     return this.voiceService.importMinimaxVoice({ ...body, audioFile });

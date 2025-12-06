@@ -33,6 +33,9 @@ export class VoiceEntity extends BaseEntity {
   @Column({ comment: '状态（PENDING/SUCCEEDED/FAILED 等）', nullable: true })
   status?: string;
 
+  @Column({ comment: '第三方/远端音色ID（MiniMax 等使用）', nullable: true })
+  providerVoiceId?: string;
+
   @Column({
     type: 'simple-json',
     comment: '提供商专属配置（JSON）',

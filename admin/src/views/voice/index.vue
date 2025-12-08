@@ -1203,7 +1203,7 @@
         if (minimaxForm.testText) fd.append('testText', minimaxForm.testText);
         const result = await voiceApi.importMinimax(fd);
         ElMessage.success('语音克隆成功');
-        showMinimaxDemoPreview(result);
+        showMinimaxDemoPreview(result.data);
         resetMinimaxForm();
         if (createVoiceDialog.visible) createVoiceDialog.visible = false;
         createVoiceDialog.active = 'api';

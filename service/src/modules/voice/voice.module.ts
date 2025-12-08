@@ -28,6 +28,6 @@ import { VoiceCategoryService } from './voiceCategory.service';
   ],
   controllers: [VoiceController, VoiceCategoryController, OpenVoiceController],
   providers: [VoiceService, VoiceCategoryService, MinimaxProvider],
-  exports: [VoiceService, VoiceCategoryService],
+  exports: [VoiceService, VoiceCategoryService, TypeOrmModule],
 })
 export class VoiceModule {}

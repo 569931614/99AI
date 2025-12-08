@@ -357,7 +357,6 @@ export class MinimaxProvider {
   async createClonedVoice(options: {
     fileId: string | number;
     voiceId: string;
-    promptText?: string;
     testText?: string;
     model?: string;
     languageBoost?: string;
@@ -373,10 +372,6 @@ export class MinimaxProvider {
       need_volume_normalization: false,
       aigc_watermark: false,
     };
-
-    if (options.promptText) {
-      payload.clone_prompt = { prompt_audio: options.fileId, prompt_text: options.promptText };
-    }
 
     try {
       const response = await this.retryRequest(
@@ -406,7 +401,6 @@ export class MinimaxProvider {
     audioBuffer?: Buffer;
     fileName?: string;
     voiceId: string;
-    promptText?: string;
     testText?: string;
     model?: string;
     languageBoost?: string;
@@ -421,7 +415,6 @@ export class MinimaxProvider {
     const cloneResult = await this.createClonedVoice({
       fileId: uploadResult.fileId,
       voiceId: request.voiceId,
-      promptText: request.promptText,
       testText: request.testText,
       model: request.model,
       languageBoost: request.languageBoost,
@@ -462,8 +455,7 @@ export class MinimaxProvider {
         );
       }
 
-      const trialAudioHex =
-        response.data?.trial_audio || response.data?.data?.trial_audio || null;
+      const trialAudioHex = response.data?.trial_audio || response.data?.data?.trial_audio || null;
 
       return {
         voiceId: response.data.voice_id,

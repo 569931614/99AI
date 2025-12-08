@@ -33,6 +33,10 @@ export class VoiceEntity extends BaseEntity {
   @Column({ comment: '状态（PENDING/SUCCEEDED/FAILED 等）', nullable: true })
   status?: string;
 
+  @Index()
+  @Column({ comment: '是否已启用（用户付费确认后设为true）', type: 'boolean', default: false })
+  isEnabled: boolean;
+
   @Column({ comment: '第三方/远端音色ID（MiniMax 等使用）', nullable: true })
   providerVoiceId?: string;
 

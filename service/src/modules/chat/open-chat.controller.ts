@@ -27,7 +27,7 @@ type CookieMessageType = 'text' | 'voice' | 'image';
 
 const COOKIE_RULES: Record<CookieMessageType, { cost: number; remark: string }> = {
   text: { cost: 1, remark: '消耗饼干-角色文字回复' },
-  voice: { cost: 2, remark: '消耗饼干-角色语音回复' },
+  voice: { cost: 1, remark: '消耗饼干-角色语音回复' },
   image: { cost: 1, remark: '消耗饼干-用户发送图片' },
 };
 
@@ -591,6 +591,8 @@ export class OpenChatController {
 
       // 标记为chat-process-sync模式，用于在chatService中识别
       body._isChatProcessSync = true;
+      // 跳过表情包chatlog保存，由chatProcessSync最后统一保存
+      body._skipStickerSave = true;
 
       // 如果传了userId，直接使用，不校验token
       let userId = originalUserId ? Number(originalUserId) : null;
@@ -643,6 +645,8 @@ export class OpenChatController {
       const messageType = await this.resolveMessageType(body);
       // 保存语音回复决定，用于后续TTS生成判断
       const shouldGenerateVoiceByDecision = messageType === 'voice';
+
+      // 注意：扣费逻辑已移至返回前，根据最终返回的消息数扣费（每条消息1个饼干）
 
       // 用于收集流式响应的完整内容
       let fullResponse = '';
@@ -746,15 +750,8 @@ export class OpenChatController {
       };
 
       // 构造伪造的 req 对象
-      // 将扣费信息传递给 chatProcess（备忘录消息跳过扣费）
-      if (body?.isCalendarMessage !== true) {
-        body._cookieChargeInfo = {
-          userId,
-          messageType,
-          maobingBaseUrl,
-          token,
-        };
-      }
+      // 跳过预扣费，扣费逻辑移至返回前根据消息数扣费
+      // body._cookieChargeInfo 不再设置，避免 chatProcess 内部扣费
 
       const fakeReq: any = {
         user: { id: userId, role: 'visitor' },
@@ -765,13 +762,8 @@ export class OpenChatController {
         ip: _req.ip,
       };
 
-      // 调用流式接口，内部会写入到 mockRes，扣费将在内部执行
+      // 调用流式接口，内部会写入到 mockRes（扣费已移至返回前根据消息数执行）
       await this.chatService.chatProcess(body as any, fakeReq, mockRes);
-
-      // 保存扣费凭证用于可能的返还
-      if (body._cookieChargeReceipt) {
-        chargeReceipt = body._cookieChargeReceipt;
-      }
 
       // 记录大模型完整回复
       this.logger.log(
@@ -976,18 +968,56 @@ export class OpenChatController {
           dataArray.push(item);
         }
 
-        // 表情包单独作为一条记录（如果存在）
+        // 表情包单独作为一条记录（如果存在）- 放在最后保存确保顺序正确
         if (stickerData) {
+          let stickerChatId = stickerData.chatId;
+
+          // 如果chatId为null，说明是skipSave模式，需要在这里保存chatlog
+          if (!stickerChatId && stickerData.stickerData) {
+            this.logger.log(
+              `[chat-process-sync] 📦 保存表情包chatlog（skipSave模式）- imageUrl: ${stickerData.imageUrl}`,
+            );
+            try {
+              const stickerSaveData = stickerData.stickerData;
+              const stickerLog = await this.chatLogService.saveChatLog({
+                appId: stickerSaveData.appId,
+                curIp: stickerSaveData.curIp || curIp,
+                userId: stickerSaveData.userId || userId,
+                type: 1,
+                progress: '100%',
+                model: 'sticker-generator',
+                modelName: 'Sticker',
+                role: 'assistant',
+                groupId: stickerSaveData.groupId || body.options?.groupId || null,
+                status: 3,
+                content: stickerSaveData.transferText || '',
+                imageUrl: stickerSaveData.imageUrl,
+                extraParam: stickerSaveData.extraParam,
+                promptTokens: 0,
+                completionTokens: 0,
+                totalTokens: 0,
+              });
+              stickerChatId = stickerLog.id;
+              this.logger.log(
+                `[chat-process-sync] ✅ 表情包chatlog保存成功 - chatId: ${stickerChatId}`,
+              );
+            } catch (stickerSaveError: any) {
+              this.logger.warn(
+                `[chat-process-sync] ❌ 表情包chatlog保存失败: ${stickerSaveError?.message || stickerSaveError}`,
+              );
+            }
+          }
+
           this.logger.log(
-            `[chat-process-sync] 📦 添加表情包记录 - chatId: ${stickerData.chatId}, imageUrl: ${stickerData.imageUrl}`,
+            `[chat-process-sync] 📦 添加表情包记录 - chatId: ${stickerChatId}, imageUrl: ${stickerData.imageUrl}`,
           );
           dataArray.push({
             text: stickerData.transferText || '', // 转账文本，如"转账188"
             audioUrl: null,
             voiceDuration: null,
             emotion: null,
-            chatId: stickerData.chatId, // 表情包已有的chatId
-            sticker: stickerData, // 表情包数据
+            chatId: stickerChatId, // 表情包的chatId（最后保存的）
+            sticker: { ...stickerData, chatId: stickerChatId }, // 更新chatId
           });
         }
 
@@ -1000,6 +1030,26 @@ export class OpenChatController {
             emotion,
             chatId: null,
           });
+        }
+      }
+
+      // 根据最终返回的消息数扣费（每条消息1个饼干，备忘录消息跳过扣费）
+      if (body?.isCalendarMessage !== true && dataArray.length > 0) {
+        const totalCost = dataArray.length; // 每条消息1个饼干
+        this.logger.log(
+          `[chat-process-sync] 🍪 根据返回消息数扣费 - 消息数: ${dataArray.length}, 扣除饼干: ${totalCost}`,
+        );
+        try {
+          chargeReceipt = await this.chargeMultipleCookies(
+            userId,
+            totalCost,
+            maobingBaseUrl,
+            token,
+          );
+        } catch (chargeError: any) {
+          this.logger.warn(
+            `[chat-process-sync] ⚠️ 扣费失败但不影响返回: ${chargeError?.message || chargeError}`,
+          );
         }
       }
 
@@ -1121,7 +1171,8 @@ export class OpenChatController {
 
       const role = typeof item.role === 'string' ? item.role.toLowerCase() : '';
       const sender = typeof item.sender === 'string' ? item.sender.toLowerCase() : '';
-      const messageType = typeof item.message_type === 'string' ? item.message_type.toLowerCase() : '';
+      const messageType =
+        typeof item.message_type === 'string' ? item.message_type.toLowerCase() : '';
       const isUserSender =
         role === 'user' ||
         role === 'human' ||
@@ -1186,81 +1237,387 @@ export class OpenChatController {
     return null;
   }
 
+  // 分段常量配置
+  private static readonly MIN_SENTENCE_LENGTH = 6;  // 单句最少字数
+  private static readonly MAX_SENTENCE_LENGTH = 30; // 单句最多字数
+
   /**
-   * 按句号等边界切分文本，满足以下规则：
-   * - 句号、问号、感叹号、波浪号、破折号、分号作为切分点
-   * - 如果这些符号后面紧跟“【”，延迟到“【”出现再切分上一句
-   * - 遇到“【”本身，立即切分，并将【】中的文本视为独立的一句
-   * - 保护【】内部的标点和省略号
+   * 智能句子分段算法，满足以下规则：
+   *
+   * 长度限制：单句 6-30 字
+   *
+   * 规则1: 语气词和极短句合并（少于6字的合并）
+   * - 例如："啊？不对吧宝宝！" 是一句
+   *
+   * 规则2: 长句多逗号按情绪拆分
+   * - 例如："因为爱上了你，所以我变成了世界上最幸运的人，如果没有你，我就会成为最不幸的人。"
+   * - 拆分成两句
+   *
+   * 规则3: 超过30字的句子按逗号拆分
+   *
+   * 规则4: 多标点符号根据话题转换拆分
+   *
+   * 保护规则：
+   * - 【】内的内容作为独立句子处理
+   * - 省略号不作为切分点
    */
   private splitTextBySentence(text: string): string[] {
     if (!text || text.trim() === '') {
       return [];
     }
 
-    const sentences: string[] = [];
-    let current = '';
-    let inTranslation = false;
+    // 第一步：预处理，提取【】内容并用占位符替换
+    const bracketContents: string[] = [];
+    let processedText = text.replace(/【[^】]*】/g, (match) => {
+      bracketContents.push(match);
+      return `\x00BRACKET${bracketContents.length - 1}\x00`;
+    });
 
-    const pushSentence = () => {
-      const trimmed = current.trim();
-      if (trimmed) {
-        sentences.push(trimmed);
-      }
-      current = '';
-    };
+    // 第二步：初步按强结束符切分（句号、感叹号、问号）
+    const rawSegments = this.splitByStrongPunctuation(processedText);
 
-    for (let i = 0; i < text.length; i++) {
-      const char = text[i];
-      const prevChar = i > 0 ? text[i - 1] : '';
-      const nextChar = i + 1 < text.length ? text[i + 1] : '';
+    // 第三步：处理每个片段，根据规则进一步拆分或合并
+    const refinedSegments: string[] = [];
 
-      current += char;
+    for (let i = 0; i < rawSegments.length; i++) {
+      const segment = rawSegments[i].trim();
+      if (!segment) continue;
 
-      if (char === '【') {
-        inTranslation = true;
+      // 检查是否包含占位符（【】内容）
+      if (segment.includes('\x00BRACKET')) {
+        // 恢复【】内容并作为独立句子
+        const restored = segment.replace(/\x00BRACKET(\d+)\x00/g, (_, idx) => {
+          return bracketContents[parseInt(idx)] || '';
+        });
+        refinedSegments.push(restored);
         continue;
       }
 
-      if (char === '】') {
-        inTranslation = false;
-        pushSentence();
+      // 规则2：检查是否需要按转折词拆分长句
+      const splitByTransition = this.splitByTransitionWords(segment);
+      if (splitByTransition.length > 1) {
+        refinedSegments.push(...splitByTransition);
         continue;
       }
 
-      if (inTranslation) {
+      // 规则4：检查波浪号后是否有话题转换
+      const splitByTopicChange = this.splitByTopicChange(segment);
+      if (splitByTopicChange.length > 1) {
+        refinedSegments.push(...splitByTopicChange);
         continue;
       }
 
-      if (this.isSentenceBoundaryChar(char, prevChar, nextChar)) {
-        const nextNonWhitespace = this.findNextNonWhitespaceChar(text, i + 1);
-        if (nextNonWhitespace === '【') {
-          continue;
-        }
-        pushSentence();
-      }
+      refinedSegments.push(segment);
     }
 
-    pushSentence();
+    // 第四步：规则3 - 超过30字的句子按逗号拆分
+    const lengthLimitedSegments = this.splitLongSentences(refinedSegments);
 
-    return sentences;
+    // 第五步：规则1 - 合并极短句和语气词（少于6字的合并）
+    const mergedSegments = this.mergeShortSegments(lengthLimitedSegments);
+
+    // 恢复所有【】内容
+    return mergedSegments.map(segment => {
+      return segment.replace(/\x00BRACKET(\d+)\x00/g, (_, idx) => {
+        return bracketContents[parseInt(idx)] || '';
+      });
+    }).filter(s => s.trim());
   }
 
-  private isSentenceBoundaryChar(char: string, prevChar: string, nextChar: string): boolean {
-    const strongStops = new Set(['。', '！', '？', '!', '?', '；', ';']);
-    if (strongStops.has(char)) {
-      return true;
+  /**
+   * 规则3：拆分超过30字的长句
+   * 按逗号拆分，尽量保持每段在30字以内
+   */
+  private splitLongSentences(segments: string[]): string[] {
+    const result: string[] = [];
+    const maxLen = OpenChatController.MAX_SENTENCE_LENGTH;
+
+    for (const segment of segments) {
+      const pureLen = this.getPureTextLength(segment);
+
+      if (pureLen <= maxLen) {
+        result.push(segment);
+        continue;
+      }
+
+      // 超过30字，按逗号拆分
+      const parts = segment.split(/([，,])/);
+      let current = '';
+
+      for (let i = 0; i < parts.length; i++) {
+        const part = parts[i];
+        const testMerge = current + part;
+
+        if (this.getPureTextLength(testMerge) <= maxLen) {
+          current = testMerge;
+        } else {
+          // 当前累积的内容已经够长了，保存并开始新的
+          if (current.trim()) {
+            // 去掉末尾的逗号
+            result.push(current.replace(/[，,]$/, '').trim());
+          }
+          current = part;
+        }
+      }
+
+      // 处理剩余内容
+      if (current.trim()) {
+        result.push(current.replace(/[，,]$/, '').trim());
+      }
     }
 
-    if (char === '.' && prevChar !== '.' && nextChar !== '.') {
-      return true;
+    return result.filter(s => s.trim());
+  }
+
+  /**
+   * 按强结束标点符号初步切分
+   * 保留标点符号在句尾
+   */
+  private splitByStrongPunctuation(text: string): string[] {
+    const segments: string[] = [];
+    let current = '';
+    let i = 0;
+
+    while (i < text.length) {
+      const char = text[i];
+      current += char;
+
+      // 检查是否是省略号（连续的点），不切分
+      if ((char === '.' || char === '。') && this.isEllipsis(text, i)) {
+        i++;
+        continue;
+      }
+
+      // 强结束符：句号、感叹号、问号
+      if (this.isStrongEndPunctuation(char)) {
+        // 检查后面是否还有连续的标点（如"？！"）
+        while (i + 1 < text.length && this.isStrongEndPunctuation(text[i + 1])) {
+          i++;
+          current += text[i];
+        }
+
+        // 检查后面是否紧跟【，如果是则不切分
+        const nextNonSpace = this.findNextNonWhitespaceChar(text, i + 1);
+        if (nextNonSpace !== '【' && nextNonSpace !== '\x00') {
+          segments.push(current.trim());
+          current = '';
+        }
+      }
+
+      i++;
     }
 
-    if (char === '～' || char === '~' || char === '—') {
-      return true;
+    if (current.trim()) {
+      segments.push(current.trim());
     }
 
-    return false;
+    return segments;
+  }
+
+  /**
+   * 检查是否是省略号（连续2个以上的点）
+   */
+  private isEllipsis(text: string, index: number): boolean {
+    const char = text[index];
+    if (char !== '.' && char !== '。' && char !== '…') return false;
+
+    let count = 1;
+    // 向前检查
+    for (let i = index - 1; i >= 0 && (text[i] === '.' || text[i] === '。' || text[i] === '…'); i--) {
+      count++;
+    }
+    // 向后检查
+    for (let i = index + 1; i < text.length && (text[i] === '.' || text[i] === '。' || text[i] === '…'); i++) {
+      count++;
+    }
+
+    return count >= 2 || char === '…';
+  }
+
+  /**
+   * 检查是否是强结束标点
+   */
+  private isStrongEndPunctuation(char: string): boolean {
+    return ['。', '！', '？', '!', '?'].includes(char);
+  }
+
+  /**
+   * 规则2：按转折词/条件词切分长句
+   * 识别：如果、但是、不过、然而、可是、否则、要是、假如、倘若、若是等
+   */
+  private splitByTransitionWords(text: string): string[] {
+    // 只处理较长的句子（超过20个字符且包含多个逗号）
+    const commaCount = (text.match(/[，,]/g) || []).length;
+    if (text.length < 20 || commaCount < 2) {
+      return [text];
+    }
+
+    // 转折词/条件词列表（按优先级排序）
+    const transitionWords = [
+      '如果没有', '如果不是', '如果说', '如果',
+      '要是没有', '要是不是', '要是',
+      '假如没有', '假如不是', '假如',
+      '倘若没有', '倘若不是', '倘若',
+      '若是没有', '若是不是', '若是',
+      '但是说', '但是',
+      '不过说', '不过',
+      '然而说', '然而',
+      '可是说', '可是',
+      '否则的话', '否则',
+      '要不然', '不然的话', '不然',
+    ];
+
+    // 查找第一个转折词的位置
+    for (const word of transitionWords) {
+      const index = text.indexOf(word);
+      // 确保转折词不在句首（至少有10个字符在前面）
+      if (index > 10) {
+        const beforePart = text.substring(0, index).trim();
+        const afterPart = text.substring(index).trim();
+
+        // 确保两部分都有足够的内容
+        if (beforePart.length >= 8 && afterPart.length >= 8) {
+          // 移除前半部分末尾多余的逗号
+          const cleanedBefore = beforePart.replace(/[，,]$/, '');
+          return [cleanedBefore, afterPart];
+        }
+      }
+    }
+
+    return [text];
+  }
+
+  /**
+   * 规则3：按话题转换切分（波浪号后的话题变化）
+   * 判断波浪号/破折号后面是否有话题转换
+   */
+  private splitByTopicChange(text: string): string[] {
+    // 查找波浪号或破折号
+    const separators = ['~', '～', '—', '——'];
+
+    for (const sep of separators) {
+      const index = text.indexOf(sep);
+      if (index > 0 && index < text.length - 1) {
+        const beforePart = text.substring(0, index + sep.length).trim();
+        const afterPart = text.substring(index + sep.length).trim();
+
+        // 检查后面部分是否以明确的话题转换词开头
+        // 注意：单纯的疑问句不作为拆分依据（如"你有没有想我？"可能是同一主题的追问）
+        const topicChangeWords = ['不过', '但是', '可是', '然而', '话说', '对了', '哦对了', '诶', '那你', '所以你', '怎么说'];
+        const startsWithTopicChange = topicChangeWords.some(word => afterPart.startsWith(word));
+
+        // 只有明确的话题转换词才拆分，且前后都有足够内容
+        if (startsWithTopicChange && beforePart.length >= 5 && afterPart.length >= 5) {
+          return [beforePart, afterPart];
+        }
+      }
+    }
+
+    return [text];
+  }
+
+  /**
+   * 规则1：合并极短句和语气词
+   * - 少于6个字的句子（纯语气词或极短句）与下一句合并
+   * - 合并后不能超过30字
+   */
+  private mergeShortSegments(segments: string[]): string[] {
+    if (segments.length <= 1) {
+      return segments;
+    }
+
+    const result: string[] = [];
+    let buffer = '';
+    const minLen = OpenChatController.MIN_SENTENCE_LENGTH;
+    const maxLen = OpenChatController.MAX_SENTENCE_LENGTH;
+
+    // 语气词列表
+    const modalParticles = ['啊', '呀', '哇', '哦', '噢', '嗯', '呢', '吧', '啦', '嘛', '哎', '唉', '诶', '哼', '嘿'];
+
+    for (let i = 0; i < segments.length; i++) {
+      const current = segments[i];
+      const pureTextLength = this.getPureTextLength(current);
+
+      // 判断是否是极短句（纯文本少于6个字）
+      const isShort = pureTextLength < minLen;
+
+      // 判断是否主要是语气词
+      const isModalOnly = this.isMainlyModalParticles(current, modalParticles);
+
+      if (buffer) {
+        // 检查合并后是否会超过30字
+        const mergedLength = this.getPureTextLength(buffer + current);
+
+        if (mergedLength <= maxLen) {
+          // 可以合并
+          buffer += current;
+          // 如果合并后仍然很短且不是最后一句，继续缓冲
+          if (this.getPureTextLength(buffer) < minLen && i < segments.length - 1) {
+            continue;
+          }
+          result.push(buffer);
+          buffer = '';
+        } else {
+          // 合并会超过30字，分别保存
+          result.push(buffer);
+          // 当前句子如果太短，放入缓冲区
+          if ((isShort || isModalOnly) && i < segments.length - 1) {
+            buffer = current;
+          } else {
+            result.push(current);
+            buffer = '';
+          }
+        }
+      } else if ((isShort || isModalOnly) && i < segments.length - 1) {
+        // 极短句或纯语气词，放入缓冲区与下一句合并
+        buffer = current;
+      } else {
+        result.push(current);
+      }
+    }
+
+    // 处理剩余的缓冲内容
+    if (buffer) {
+      if (result.length > 0) {
+        // 检查合并到最后一个结果是否会超过30字
+        const lastResult = result[result.length - 1];
+        if (this.getPureTextLength(lastResult + buffer) <= maxLen) {
+          result[result.length - 1] = lastResult + buffer;
+        } else {
+          // 超过30字，单独作为一条（即使很短）
+          result.push(buffer);
+        }
+      } else {
+        result.push(buffer);
+      }
+    }
+
+    return result;
+  }
+
+  /**
+   * 获取纯文本长度（去除标点符号）
+   */
+  private getPureTextLength(text: string): number {
+    return text.replace(/[，。！？、；：""''（）【】～~…—\-,.!?;:'"()\[\]]/g, '').length;
+  }
+
+  /**
+   * 判断文本是否主要由语气词组成
+   */
+  private isMainlyModalParticles(text: string, modalParticles: string[]): boolean {
+    const pureText = text.replace(/[，。！？、；：""''（）【】～~…—\-,.!?;:'"()\[\]]/g, '');
+    if (pureText.length > 6) return false;
+
+    let modalCount = 0;
+    for (const char of pureText) {
+      if (modalParticles.includes(char)) {
+        modalCount++;
+      }
+    }
+
+    // 如果语气词占比超过50%，认为是语气词句子
+    return modalCount > 0 && modalCount / pureText.length >= 0.5;
   }
 
   private findNextNonWhitespaceChar(text: string, startIndex: number): string | null {
@@ -1417,6 +1774,36 @@ export class OpenChatController {
       userId,
       amount: rule.cost,
       type,
+      maobingBaseUrl,
+      token,
+    };
+  }
+
+  /**
+   * 根据消息数量扣费（每条消息1个饼干）
+   * 用于 chat-process-sync 接口，根据最终返回的消息数扣费
+   */
+  private async chargeMultipleCookies(
+    userId: number,
+    messageCount: number,
+    maobingBaseUrl?: string,
+    token?: string,
+  ): Promise<CookieChargeReceipt> {
+    const totalCost = messageCount; // 每条消息1个饼干
+    const response = await MaobingCookieUtil.deductCookies({
+      userId,
+      amount: totalCost,
+      remark: `消耗饼干-聊天消息${messageCount}条`,
+      maobingBaseUrl,
+      token,
+    });
+    if (!response.success) {
+      this.logger.warn(`饼干扣费失败，但不影响正常聊天: ${response.message}`);
+    }
+    return {
+      userId,
+      amount: totalCost,
+      type: 'text', // 统一使用 text 类型记录
       maobingBaseUrl,
       token,
     };

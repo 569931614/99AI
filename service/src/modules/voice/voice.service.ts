@@ -838,7 +838,6 @@ export class VoiceService implements OnModuleInit {
     userId?: number;
     audioUrl?: string;
     audioFile?: Express.Multer.File;
-    promptText?: string; // 音频对应的文本（可选，用于提升克隆质量）
     testText?: string; // 试听时朗读的文本
   }) {
     const timestamp = body.voiceId || Date.now();
@@ -851,7 +850,6 @@ export class VoiceService implements OnModuleInit {
       audioBuffer: body.audioFile?.buffer,
       fileName: body.audioFile?.originalname,
       voiceId: minimaxVoiceId,
-      promptText: body.promptText,
       testText: body.testText,
     });
 
@@ -1001,7 +999,9 @@ export class VoiceService implements OnModuleInit {
       status: 'SUCCEEDED',
       minimax_voice_id: designResult.voiceId,
       preview_audio_base64: designResult.trialAudioHex
-        ? `data:audio/mp3;base64,${Buffer.from(designResult.trialAudioHex, 'hex').toString('base64')}`
+        ? `data:audio/mp3;base64,${Buffer.from(designResult.trialAudioHex, 'hex').toString(
+            'base64',
+          )}`
         : null,
     };
   }
@@ -1025,6 +1025,8 @@ export class VoiceService implements OnModuleInit {
     if (query?.userId !== undefined) {
       // 如果明确传了 userId，则查询该用户的音色
       where.userId = query.userId;
+      // 用户音色需要过滤 isEnabled = true（只显示已付费启用的音色）
+      where.isEnabled = true;
     } else {
       // 如果没有传 userId，则只查询官方音色（userId 为 null）
       // 注意：TypeORM 查询 null 需要使用 IsNull()
@@ -1068,6 +1070,7 @@ export class VoiceService implements OnModuleInit {
         voice_id: r.voiceId,
         user_id: r.userId,
         status: r.status,
+        isEnabled: r.isEnabled,
         name: r.name,
         prefix: r.prefix,
         model: r.model,
@@ -1106,6 +1109,7 @@ export class VoiceService implements OnModuleInit {
       voice_id: r.voiceId,
       user_id: r.userId,
       status: r.status,
+      isEnabled: r.isEnabled,
       name: r.name,
       prefix: r.prefix,
       model: r.model,
@@ -1647,6 +1651,27 @@ export class VoiceService implements OnModuleInit {
     }
   }
 
+  // 启用音色（设置 isEnabled = true，同时确保 status = SUCCEEDED）
+  async enableVoice(voiceId: string) {
+    if (!voiceId) throw new HttpException('voiceId 必填', HttpStatus.BAD_REQUEST);
+    try {
+      console.log(`启用音色: ${voiceId}`);
+      const voice = await this.voiceRepo.findOne({ where: { voiceId: String(voiceId) } });
+      if (!voice) {
+        throw new HttpException(`音色不存在: ${voiceId}`, HttpStatus.NOT_FOUND);
+      }
+      voice.status = 'SUCCEEDED';
+      voice.isEnabled = true;
+      await this.voiceRepo.save(voice);
+      console.log(`音色启用成功: ${voiceId}`);
+      return { success: true, message: '音色启用成功', voiceId };
+    } catch (error) {
+      console.error(`启用音色失败: ${voiceId}`, error.message);
+      if (error instanceof HttpException) throw error;
+      throw new HttpException(`启用音色失败: ${error.message}`, HttpStatus.BAD_REQUEST);
+    }
+  }
+
   // 自动同步PENDING状态的音色
   async syncPendingVoicesStatus() {
     try {
@@ -1790,7 +1815,9 @@ export class VoiceService implements OnModuleInit {
           return remoteResult;
         } catch (error) {
           Logger.error(
-            `MiniMax 音色 ${voice_id} 删除失败（远程ID: ${minimaxVoiceId}): ${error?.message || error}`,
+            `MiniMax 音色 ${voice_id} 删除失败（远程ID: ${minimaxVoiceId}): ${
+              error?.message || error
+            }`,
             error?.stack || '',
             'VoiceService',
           );

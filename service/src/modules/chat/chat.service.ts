@@ -460,7 +460,7 @@ export class ChatService {
         trimmed.lastIndexOf('—'),
         trimmed.lastIndexOf('～'),
         trimmed.lastIndexOf('~'),
-        trimmed.lastIndexOf(' ')
+        trimmed.lastIndexOf(' '),
       );
 
       if (fallbackIndex > -1 && fallbackIndex < trimmed.length - 1) {
@@ -771,15 +771,17 @@ export class ChatService {
     req?: Request;
     allowEmoji?: boolean; // 表情包开关，仅影响普通表情包
     userMessage?: string | null; // 用户消息内容，用于更准确地判断场景
+    skipSave?: boolean; // 跳过chatlog保存，由外部统一保存（chat-process-sync模式）
   }): Promise<{
-    chatId: number;
+    chatId: number | null;
     imageUrl: string;
     stickerId: number;
     scenario: string | null;
     isScenarioSticker: boolean;
     transferText?: string; // 转账文本，如"转账188"
+    stickerData?: any; // skipSave模式下返回完整sticker数据供外部保存
   } | null> {
-    const { userId, content, appId, groupId, req, allowEmoji, userMessage } = options;
+    const { userId, content, appId, groupId, req, allowEmoji, userMessage, skipSave } = options;
 
     try {
       Logger.log(
@@ -831,6 +833,7 @@ export class ChatService {
           groupId,
           req,
           content,
+          skipSave,
         });
       }
 
@@ -861,16 +864,13 @@ export class ChatService {
       // }
 
       // 2.3 开启普通表情包开关后，直接调用AI识别（100%触发）
-      Logger.log(
-        '[表情包] 🤖 allowEmoji开启，跳过30%概率限制，直接识别普通表情包',
-        'ChatService',
-      );
+      Logger.log('[表情包] 🤖 allowEmoji开启，跳过30%概率限制，直接识别普通表情包', 'ChatService');
       const normalResult = await this.stickerService.pickStickerByText(content, userMessage, {
         onlyNormalSticker: true, // 只识别普通表情包
       });
 
       if (!normalResult || normalResult.isScenarioSticker) {
-        Logger.log('[表情包] ❌ 未找到匹配的普通表情包', 'ChatService');
+        Logger.log('[表情包] ❌ 数据库中没有可用的普通表情包（scenario不为空且tags为空）', 'ChatService');
         return null;
       }
 
@@ -880,23 +880,9 @@ export class ChatService {
         'ChatService',
       );
 
-      // 2.4 普通表情包去重检查（需要数据库查询，放在最后）
-      const hasSentNormal = await this.checkIfNormalStickerAlreadySent(
-        userId,
-        groupId || null,
-        sticker.scenario,
-        sticker.imageUrl,
-      );
-      if (hasSentNormal) {
-        Logger.log(
-          `[表情包] ⏭️ 普通表情包去重：最近10条消息内已发送过场景"${sticker.scenario}"的表情包，跳过`,
-          'ChatService',
-        );
-        return null;
-      }
-
+      // 普通表情包不进行去重检查，直接发送
       Logger.log(
-        `[表情包] ✅ 普通表情包通过所有检查，准备发送 - scenario: ${sticker.scenario}`,
+        `[表情包] ✅ 普通表情包准备发送（无去重）- scenario: ${sticker.scenario}`,
         'ChatService',
       );
 
@@ -909,6 +895,7 @@ export class ChatService {
         groupId,
         req,
         content,
+        skipSave,
       });
     } catch (error: any) {
       Logger.error(
@@ -932,15 +919,17 @@ export class ChatService {
     groupId?: number | null;
     req?: Request;
     content: string;
+    skipSave?: boolean; // 跳过chatlog保存，由外部统一保存
   }): Promise<{
-    chatId: number;
+    chatId: number | null;
     imageUrl: string;
     stickerId: number;
     scenario: string | null;
     isScenarioSticker: boolean;
     transferText?: string;
+    stickerData?: any; // skipSave模式下返回完整数据供外部保存
   }> {
-    const { sticker, isScenarioSticker, userId, appId, groupId, req, content } = options;
+    const { sticker, isScenarioSticker, userId, appId, groupId, req, content, skipSave } = options;
 
     const curIp = req ? getClientIp(req) : null;
 
@@ -957,6 +946,27 @@ export class ChatService {
       originalContent: content,
       transferText: transferText || undefined,
     };
+
+    // skipSave模式：不保存chatlog，返回数据供外部保存
+    if (skipSave) {
+      return {
+        chatId: null,
+        imageUrl: sticker.imageUrl,
+        stickerId: sticker.id,
+        scenario: sticker.scenario || null,
+        isScenarioSticker: isScenarioSticker,
+        transferText: transferText || undefined,
+        stickerData: {
+          appId: appId ?? null,
+          curIp,
+          userId,
+          groupId: groupId ?? null,
+          imageUrl: sticker.imageUrl,
+          extraParam: JSON.stringify(extraParam),
+          transferText,
+        },
+      };
+    }
 
     const stickerLog = await this.chatLogService.saveChatLog({
       appId: appId ?? null,
@@ -1272,8 +1282,7 @@ export class ChatService {
     if (this.minimaxSupportedEmotions.includes(normalized)) {
       return normalized;
     }
-    const alias =
-      this.minimaxEmotionAliasMap[emotion] || this.minimaxEmotionAliasMap[normalized];
+    const alias = this.minimaxEmotionAliasMap[emotion] || this.minimaxEmotionAliasMap[normalized];
     if (alias && this.minimaxSupportedEmotions.includes(alias)) {
       return alias;
     }
@@ -1330,10 +1339,7 @@ export class ChatService {
           voiceProviders[voice.voiceId] = (voice.provider as VoiceProvider) || 'dashscope';
         }
       } catch (error) {
-        Logger.warn(
-          `[情绪配置] 读取音色提供商失败: ${error?.message || error}`,
-          'ChatService',
-        );
+        Logger.warn(`[情绪配置] 读取音色提供商失败: ${error?.message || error}`, 'ChatService');
       }
     }
 
@@ -2570,7 +2576,7 @@ ${rolePlayPrompt}`;
       const chargeInfo = (body as any)._cookieChargeInfo;
       const COOKIE_RULES = {
         text: { cost: 1, remark: '消耗饼干-角色文字回复' },
-        voice: { cost: 2, remark: '消耗饼干-角色语音回复' },
+        voice: { cost: 1, remark: '消耗饼干-角色语音回复' },
         image: { cost: 1, remark: '消耗饼干-用户发送图片' },
       };
       const rule = COOKIE_RULES[chargeInfo.messageType] || COOKIE_RULES.text;
@@ -3647,6 +3653,7 @@ ${rolePlayPrompt}`;
                 req,
                 allowEmoji: groupAllowEmoji, // 传递开关状态，用于普通表情包判断
                 userMessage: prompt, // 传入用户消息，用于更准确地判断场景
+                skipSave: (body as any)?._skipStickerSave === true, // chat-process-sync模式跳过保存
               });
 
               if (stickerResult) {

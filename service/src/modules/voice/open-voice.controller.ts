@@ -179,7 +179,7 @@ export class OpenVoiceController {
         value: {
           provider: 'minimax',
           name: '克隆音色',
-          promptText: '音频中说的话',
+          testText: '你好，这是语音克隆试听测试。',
         },
       },
     },
@@ -196,7 +196,7 @@ export class OpenVoiceController {
       targetModel?: string;
       name?: string;
       userId?: number;
-      promptText?: string;
+      testText?: string; // 试听时朗读的文本
     },
   ) {
     const userId = body.userId || (req as any).user?.id;
@@ -208,7 +208,7 @@ export class OpenVoiceController {
         userId,
         audioFile,
         audioUrl: body.url,
-        promptText: body.promptText,
+        testText: body.testText,
       });
     }
 
@@ -259,7 +259,7 @@ export class OpenVoiceController {
   }
 
   @Post('enable')
-  @ApiOperation({ summary: '【开放】将音色置为可用（SUCCEEDED）（无鉴权）' })
+  @ApiOperation({ summary: '【开放】启用音色（设置 isEnabled=true）（无鉴权）' })
   @ApiBody({
     schema: {
       type: 'object',
@@ -272,7 +272,7 @@ export class OpenVoiceController {
   })
   enable(@Body() body: { voiceId: string }) {
     const { voiceId } = body || {};
-    return this.voiceService.updateStatus(voiceId, 'SUCCEEDED');
+    return this.voiceService.enableVoice(voiceId);
   }
 
   @Post('sync-pending-status')

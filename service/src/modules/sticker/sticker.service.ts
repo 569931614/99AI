@@ -156,7 +156,7 @@ export class StickerService {
       const normalScenario = await this.detectNormalStickerScenarioWithAI(normalizedText);
       if (normalScenario) {
         Logger.log(`[Sticker普通] AI判断普通场景为: ${normalScenario}`, 'StickerService');
-        const normalSticker = await this.pickRandomNormalSticker(normalScenario);
+        const normalSticker = await this.pickStickerByNormalScenario(normalScenario);
         if (normalSticker) {
           Logger.log(`[Sticker普通] ✓ 找到普通表情包: ${normalSticker.name}`, 'StickerService');
           return { sticker: normalSticker, isScenarioSticker: false };
@@ -222,7 +222,7 @@ export class StickerService {
       const scenarioListText = scenarios.map((s, idx) => `${idx + 1}. ${s}`).join('\n');
 
       const prompt = `# Role
-你是一个对话场景匹配专家。请分析【角色回复内容】，判断它属于【动态场景列表】中的哪个场景。
+你是一个对话场景匹配专家。请分析【角色回复内容】，从【动态场景列表】中选出最匹配的一个场景。
 
 # Input Data
 【角色回复内容】
@@ -246,11 +246,11 @@ ${scenarioListText}
 # Logic
 1. 理解角色回复的核心情绪/意图
 2. 在【动态场景列表】中找语义最接近的场景
-3. 如果回复内容过于普通（如简单问答），输出 NO
+3. **必须从列表中选择一个**，即使匹配度不高也要选最接近的
 
 # Output
-- 仅输出匹配到的**场景选项原文**（不带编号）
-- 若无匹配，输出 **NO**`;
+- **必须输出**匹配到的**场景选项原文**（不带编号）
+- **禁止输出NO**，必须从列表中选择一个最接近的场景`;
 
       const requestBody = {
         model: 'qwen-turbo',
@@ -289,12 +289,6 @@ ${scenarioListText}
       const result = response.data?.output?.text?.trim() || '';
       Logger.log(`[Sticker普通AI识别] ✓ API返回成功 - 原始返回: "${result}"`, 'StickerService');
 
-      // 检查是否为NO（不匹配任何场景）
-      if (result.toUpperCase() === 'NO' || result.includes('无法判断') || result.includes('中性')) {
-        Logger.log('[Sticker普通AI识别] ⚠ AI判断为无特定场景 - 跳过表情包', 'StickerService');
-        return null;
-      }
-
       // 清理AI返回结果（移除可能的序号和前缀）
       let cleanedResult = result.replace(/^\d+\.\s*/, '').trim();
 
@@ -323,8 +317,9 @@ ${scenarioListText}
         }
       }
 
+      // AI返回无法匹配到数据库场景，记录警告但不随机选择（避免发送不合适的表情包）
       Logger.warn(
-        `[Sticker普通AI识别] ✗ AI返回了无效的场景: "${result}", 候选: [${scenarios.join(' | ')}]`,
+        `[Sticker普通AI识别] ⚠ AI返回"${result}"无法匹配到数据库场景，跳过`,
         'StickerService',
       );
       return null;
@@ -339,23 +334,21 @@ ${scenarioListText}
   }
 
   /**
-   * 随机选择一个普通表情包（scenario不为空 & tags为空）
+   * 根据场景选择一个普通表情包（scenario不为空 & tags为空）
+   * 按上传时间倒序选择最新的一个
    * @param scenario 场景描述
    * @returns 表情包实体或 null
    */
-  private async pickRandomNormalSticker(scenario: string): Promise<StickerEntity | null> {
+  private async pickStickerByNormalScenario(scenario: string): Promise<StickerEntity | null> {
     const qb = this.stickerRepo.createQueryBuilder('sticker');
 
     // 选择普通表情包（scenario不为空且tags为空）
     qb.andWhere('sticker.scenario = :scenario', { scenario });
     qb.andWhere("(sticker.tags IS NULL OR sticker.tags = '')");
+    // 按上传时间倒序，选择最新上传的
+    qb.orderBy('sticker.uploadDate', 'DESC');
 
-    const total = await qb.clone().getCount();
-    if (total === 0) {
-      return null;
-    }
-    const offset = Math.floor(Math.random() * total);
-    return qb.skip(offset).take(1).getOne();
+    return qb.getOne();
   }
 
   private normalizeTags(tags?: string[] | null) {

@@ -163,6 +163,17 @@ export class StickerService {
         }
         Logger.debug(`[Sticker普通] 未找到普通场景"${normalScenario}"的表情包`, 'StickerService');
       }
+
+      // 3. Fallback: 如果AI识别失败或场景不匹配，随机选择一个普通表情包
+      const randomSticker = await this.pickRandomNormalSticker();
+      if (randomSticker) {
+        Logger.log(
+          `[Sticker普通] ✓ Fallback随机选择普通表情包: ${randomSticker.name}`,
+          'StickerService',
+        );
+        return { sticker: randomSticker, isScenarioSticker: false };
+      }
+      Logger.debug(`[Sticker普通] Fallback失败，数据库中没有普通表情包`, 'StickerService');
     }
 
     return null;
@@ -246,11 +257,12 @@ ${scenarioListText}
 # Logic
 1. 理解角色回复的核心情绪/意图
 2. 在【动态场景列表】中找语义最接近的场景
-3. **必须从列表中选择一个**，即使匹配度不高也要选最接近的
+3. **必须且只能从上面的【动态场景列表】中选择一个**，绝对不能输出列表之外的内容
 
 # Output
-- **必须输出**匹配到的**场景选项原文**（不带编号）
-- **禁止输出NO**，必须从列表中选择一个最接近的场景`;
+- **只能输出【动态场景列表】中的某一项原文**（不带编号）
+- **严禁自己编造场景**，只能从列表中复制一个
+- 如果列表只有一个选项，就输出那个选项`;
 
       const requestBody = {
         model: 'qwen-turbo',
@@ -263,7 +275,7 @@ ${scenarioListText}
           ],
         },
         parameters: {
-          max_tokens: 50,
+          max_tokens: 200, // 场景描述可能较长，增加 token 限制以避免截断
           temperature: 0.1,
         },
       };
@@ -294,12 +306,31 @@ ${scenarioListText}
 
       Logger.debug(`[Sticker普通AI识别] 清理后的返回: "${cleanedResult}"`, 'StickerService');
 
+      // 用于匹配的标准化函数：移除空格和常见标点
+      const normalize = (text: string) =>
+        text
+          .toLowerCase()
+          .replace(/[\s。，、！？!?,.\-_：:；;""''「」『』【】（）()]/g, '');
+
+      const normalizedResult = normalize(cleanedResult);
+
       // 精确匹配或模糊匹配场景
       for (const scenario of scenarios) {
         // 精确匹配（忽略大小写）
         if (cleanedResult.toLowerCase() === scenario.toLowerCase()) {
           Logger.log(
             `[Sticker普通AI识别] ✓✓✓ 精确匹配成功 - 场景: "${scenario}"`,
+            'StickerService',
+          );
+          return scenario;
+        }
+      }
+
+      // 标准化精确匹配（移除标点和空格后比较）
+      for (const scenario of scenarios) {
+        if (normalizedResult === normalize(scenario)) {
+          Logger.log(
+            `[Sticker普通AI识别] ✓✓✓ 标准化精确匹配成功 - 场景: "${scenario}"`,
             'StickerService',
           );
           return scenario;
@@ -317,12 +348,37 @@ ${scenarioListText}
         }
       }
 
-      // AI返回无法匹配到数据库场景，记录警告但不随机选择（避免发送不合适的表情包）
+      // 前缀匹配：处理 AI 返回被截断的情况
+      // 如果 AI 返回的前 20 个字符（标准化后）与场景的前 20 个字符匹配，则认为匹配成功
+      const minPrefixLen = 15;
+      if (normalizedResult.length >= minPrefixLen) {
+        const resultPrefix = normalizedResult.substring(0, Math.min(30, normalizedResult.length));
+        for (const scenario of scenarios) {
+          const scenarioNorm = normalize(scenario);
+          if (scenarioNorm.length >= minPrefixLen) {
+            const scenarioPrefix = scenarioNorm.substring(0, Math.min(30, scenarioNorm.length));
+            // 检查前缀是否相同，或者一个是另一个的前缀
+            if (
+              resultPrefix === scenarioPrefix ||
+              resultPrefix.startsWith(scenarioPrefix) ||
+              scenarioPrefix.startsWith(resultPrefix)
+            ) {
+              Logger.log(
+                `[Sticker普通AI识别] ✓✓ 前缀匹配成功 - 场景: "${scenario}"`,
+                'StickerService',
+              );
+              return scenario;
+            }
+          }
+        }
+      }
+
+      // AI返回无法匹配到数据库场景，强制选择列表中的第一个场景
       Logger.warn(
-        `[Sticker普通AI识别] ⚠ AI返回"${result}"无法匹配到数据库场景，跳过`,
+        `[Sticker普通AI识别] ⚠ AI返回"${result}"无法匹配到数据库场景，强制选择第一个场景: "${scenarios[0]}"`,
         'StickerService',
       );
-      return null;
+      return scenarios[0];
     } catch (error: any) {
       Logger.error(
         `[Sticker普通AI识别] ✗ 调用失败: ${error?.message || error}`,
@@ -349,6 +405,28 @@ ${scenarioListText}
     qb.orderBy('sticker.uploadDate', 'DESC');
 
     return qb.getOne();
+  }
+
+  /**
+   * 随机选择一个普通表情包（scenario不为空 & tags为空）
+   * 用于当AI场景识别失败时的fallback
+   * @returns 表情包实体或 null
+   */
+  private async pickRandomNormalSticker(): Promise<StickerEntity | null> {
+    const stickers = await this.stickerRepo
+      .createQueryBuilder('sticker')
+      .where('sticker.scenario IS NOT NULL')
+      .andWhere("sticker.scenario != ''")
+      .andWhere("(sticker.tags IS NULL OR sticker.tags = '')")
+      .getMany();
+
+    if (stickers.length === 0) {
+      return null;
+    }
+
+    // 随机选择一个
+    const randomIndex = Math.floor(Math.random() * stickers.length);
+    return stickers[randomIndex];
   }
 
   private normalizeTags(tags?: string[] | null) {

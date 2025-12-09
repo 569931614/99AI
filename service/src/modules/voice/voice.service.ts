@@ -13,6 +13,7 @@ import { AppVoiceEntity } from '../app/appVoice.entity';
 import { GlobalConfigService } from '../globalConfig/globalConfig.service';
 import { UploadService } from '../upload/upload.service';
 import { VoiceEntity } from './voice.entity';
+import { MaobingCookieUtil } from '../../common/utils/maobing-cookie.util';
 
 const COSY_CUSTOMIZATION_URL =
   'https://dashscope.aliyuncs.com/api/v1/services/audio/tts/customization';
@@ -948,21 +949,34 @@ export class VoiceService implements OnModuleInit {
       previewText,
     });
 
+    // 将试听音频上传到 OSS（避免 base64 在某些设备上的兼容性问题）
+    let previewAudioUrl: string | null = null;
+    if (designResult.trialAudioHex && typeof designResult.trialAudioHex === 'string') {
+      try {
+        const audioBuffer = Buffer.from(designResult.trialAudioHex, 'hex');
+        const filename = `voice-design-${Date.now()}-${Math.random().toString(36).substring(2, 8)}.mp3`;
+        previewAudioUrl = await this.uploadService.uploadFileFromBuffer(
+          audioBuffer,
+          filename,
+          'audio/mpeg',
+          'voiceDesign',
+        );
+        Logger.log(`[designMinimaxVoice] 试听音频已上传: ${previewAudioUrl}`, 'VoiceService');
+      } catch (uploadError) {
+        Logger.error(`[designMinimaxVoice] 上传试听音频失败: ${uploadError?.message}`, '', 'VoiceService');
+        // 上传失败时回退到 base64（兼容性降级）
+        previewAudioUrl = `data:audio/mp3;base64,${Buffer.from(designResult.trialAudioHex, 'hex').toString('base64')}`;
+      }
+    }
+
     // 预览模式：仅返回试听音频和 voice_id，不落库
     if (body.previewOnly === true) {
-      const previewAudioBase64 =
-        designResult.trialAudioHex && typeof designResult.trialAudioHex === 'string'
-          ? Buffer.from(designResult.trialAudioHex, 'hex').toString('base64')
-          : null;
-
       return {
         voice_id: designResult.voiceId,
         provider: 'minimax',
         status: 'PREVIEW',
         minimax_voice_id: designResult.voiceId,
-        preview_audio_base64: previewAudioBase64
-          ? `data:audio/mp3;base64,${previewAudioBase64}`
-          : null,
+        preview_audio_url: previewAudioUrl,
       };
     }
 
@@ -998,11 +1012,7 @@ export class VoiceService implements OnModuleInit {
       provider: 'minimax',
       status: 'SUCCEEDED',
       minimax_voice_id: designResult.voiceId,
-      preview_audio_base64: designResult.trialAudioHex
-        ? `data:audio/mp3;base64,${Buffer.from(designResult.trialAudioHex, 'hex').toString(
-            'base64',
-          )}`
-        : null,
+      preview_audio_url: previewAudioUrl,
     };
   }
 
@@ -1586,6 +1596,15 @@ export class VoiceService implements OnModuleInit {
         name: local.name,
       };
     }
+    // 对于 minimax 等其他 provider，直接返回本地数据
+    if (local && (local.provider as VoiceProvider) === 'minimax') {
+      return {
+        voice_id: local.voiceId,
+        status: local.status || 'SUCCEEDED',
+        provider: local.provider,
+        name: local.name,
+      };
+    }
     const apiKey = await this.getApiKey();
     const payload = {
       model: 'voice-enrollment',
@@ -1607,6 +1626,10 @@ export class VoiceService implements OnModuleInit {
       console.log(`声音状态更新成功: ${voiceId} -> ${status}`);
     } catch (error) {
       console.error(`更新声音状态失败: ${voiceId}`, error.message);
+    }
+    // 合并本地数据库中的 name
+    if (local && local.name) {
+      return { ...data, name: local.name };
     }
     return data;
   }
@@ -1651,8 +1674,8 @@ export class VoiceService implements OnModuleInit {
     }
   }
 
-  // 启用音色（设置 isEnabled = true，同时确保 status = SUCCEEDED）
-  async enableVoice(voiceId: string) {
+  // 启用音色（设置 isEnabled = true，同时确保 status = SUCCEEDED，并扣除饼干）
+  async enableVoice(voiceId: string, token?: string) {
     if (!voiceId) throw new HttpException('voiceId 必填', HttpStatus.BAD_REQUEST);
     try {
       console.log(`启用音色: ${voiceId}`);
@@ -1660,6 +1683,34 @@ export class VoiceService implements OnModuleInit {
       if (!voice) {
         throw new HttpException(`音色不存在: ${voiceId}`, HttpStatus.NOT_FOUND);
       }
+
+      // 如果音色已经启用，直接返回成功（避免重复扣费）
+      if (voice.isEnabled) {
+        console.log(`音色已启用，跳过: ${voiceId}`);
+        return { success: true, message: '音色已启用', voiceId };
+      }
+
+      // 扣除 3000 饼干
+      const VOICE_ENABLE_COST = 3000;
+      if (token && voice.userId) {
+        console.log(`扣除饼干: userId=${voice.userId}, amount=${VOICE_ENABLE_COST}`);
+        const deductResult = await MaobingCookieUtil.deductCookies({
+          userId: voice.userId,
+          amount: VOICE_ENABLE_COST,
+          remark: `启用音色: ${voice.name || voiceId}`,
+          token,
+        });
+        if (!deductResult.success) {
+          throw new HttpException(
+            deductResult.message || '饼干扣费失败，余额不足',
+            HttpStatus.PAYMENT_REQUIRED,
+          );
+        }
+        console.log(`饼干扣费成功: ${deductResult.message}`);
+      } else {
+        console.warn(`缺少 token 或 userId，跳过扣费: voiceId=${voiceId}, userId=${voice.userId}`);
+      }
+
       voice.status = 'SUCCEEDED';
       voice.isEnabled = true;
       await this.voiceRepo.save(voice);
@@ -1800,35 +1851,34 @@ export class VoiceService implements OnModuleInit {
           prefix.startsWith('minimax-design') || voice_id.startsWith('minimax-design');
         const voiceType = isDesignVoice ? 'voice_design' : 'voice_cloning';
 
+        // 尝试调用 MiniMax 删除接口，失败不影响本地数据删除
+        // （只有调用过 TTS 的音色才能成功调用 MiniMax 删除接口）
         try {
           const remoteResult = await this.minimaxProvider.deleteVoice({
             voiceId: minimaxVoiceId,
             voiceType,
           });
           Logger.log(
-            `MiniMax 音色 ${voice_id} 删除成功（远程ID: ${minimaxVoiceId}, type: ${voiceType})`,
+            `MiniMax 音色 ${voice_id} 远程删除成功（远程ID: ${minimaxVoiceId}, type: ${voiceType})`,
             'VoiceService',
           );
-
-          await this.deleteVoiceAssociations(voice_id);
-
-          return remoteResult;
         } catch (error) {
-          Logger.error(
-            `MiniMax 音色 ${voice_id} 删除失败（远程ID: ${minimaxVoiceId}): ${
+          Logger.warn(
+            `MiniMax 音色 ${voice_id} 远程删除失败（远程ID: ${minimaxVoiceId}): ${
               error?.message || error
-            }`,
-            error?.stack || '',
+            }，继续删除本地数据`,
             'VoiceService',
-          );
-          if (error instanceof HttpException) {
-            throw error;
-          }
-          throw new HttpException(
-            `删除 MiniMax 音色失败: ${error?.message || error}`,
-            HttpStatus.BAD_GATEWAY,
           );
         }
+
+        // 无论远程删除是否成功，都删除本地数据
+        await this.deleteVoiceAssociations(voice_id);
+
+        return {
+          success: true,
+          provider: 'minimax',
+          message: '音色删除完成',
+        };
       }
     }
 

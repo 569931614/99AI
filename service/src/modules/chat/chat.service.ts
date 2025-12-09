@@ -423,8 +423,9 @@ export class ChatService {
    * 将长文本按自然语句边界分割，用于流式TTS。
    * 遵循以下原则：
    * - 句号、问号、感叹号、波浪号、破折号、分号等视为句子结束
-   * - 若句尾后紧跟“【”，需等待翻译块结束（】）再切分
-   * - 【】内部视为连续文本，不单独拆分
+   * - 若句尾后紧跟"【"或括号，需等待翻译块/心理描述结束再切分
+   * - 【】内部视为连续文本（翻译），不单独拆分
+   * - ()（）内部视为连续文本（心理描述），不单独拆分
    * @param text 要分割的文本
    * @param maxChunkLength 每个片段的最大长度（可选，默认不限制）
    * @returns 分割后的句子数组
@@ -434,7 +435,8 @@ export class ChatService {
 
     const chunks: string[] = [];
     let currentChunk = '';
-    let inTranslation = false;
+    let inTranslation = false; // 【】翻译块内
+    let inParenthesis = 0; // 括号嵌套层级 ()（）
 
     const pushChunk = () => {
       const trimmed = currentChunk.trim();
@@ -476,6 +478,16 @@ export class ChatService {
       pushChunk();
     };
 
+    // 判断是否为左括号（开始心理描述）
+    const isOpenParenthesis = (char: string): boolean => {
+      return char === '(' || char === '（';
+    };
+
+    // 判断是否为右括号（结束心理描述）
+    const isCloseParenthesis = (char: string): boolean => {
+      return char === ')' || char === '）';
+    };
+
     for (let i = 0; i < text.length; i++) {
       const char = text[i];
       const prevChar = i > 0 ? text[i - 1] : '';
@@ -483,6 +495,7 @@ export class ChatService {
 
       currentChunk += char;
 
+      // 处理【】翻译块
       if (char === '【') {
         inTranslation = true;
         continue;
@@ -494,13 +507,27 @@ export class ChatService {
         continue;
       }
 
-      if (inTranslation) {
+      // 处理()（）心理描述括号
+      if (isOpenParenthesis(char)) {
+        inParenthesis++;
+        continue;
+      }
+
+      if (isCloseParenthesis(char)) {
+        inParenthesis = Math.max(0, inParenthesis - 1);
+        // 括号结束后不立即切分，让句子继续
+        continue;
+      }
+
+      // 在翻译块或括号内时，不进行句子切分
+      if (inTranslation || inParenthesis > 0) {
         continue;
       }
 
       if (this.isSentenceBoundaryChar(char, prevChar, nextChar)) {
         const nextMeaningfulChar = this.findNextNonWhitespaceChar(text, i + 1);
-        if (nextMeaningfulChar === '【') {
+        // 如果下一个有意义的字符是【或括号，不切分，等待翻译/心理描述结束
+        if (nextMeaningfulChar === '【' || isOpenParenthesis(nextMeaningfulChar || '')) {
           continue;
         }
 
@@ -515,7 +542,7 @@ export class ChatService {
         continue;
       }
 
-      if (!inTranslation) {
+      if (!inTranslation && inParenthesis === 0) {
         enforceMaxChunkLength();
       }
     }
@@ -804,23 +831,9 @@ export class ChatService {
           'ChatService',
         );
 
-        // 场景表情包去重检查
-        const hasSent = await this.checkIfScenarioStickerAlreadySent(
-          userId,
-          groupId || null,
-          sticker.scenario,
-          sticker.imageUrl,
-        );
-        if (hasSent) {
-          Logger.log(
-            `[表情包] ⏭️ 去重检查：最近10条消息内已发送过场景"${sticker.scenario}"的表情包，跳过本次发送`,
-            'ChatService',
-          );
-          return null;
-        }
-
+        // 场景表情包不进行去重检查，直接发送
         Logger.log(
-          `[表情包] ✅ 场景表情包100%触发 - scenario: ${sticker.scenario}, userId: ${userId}, groupId: ${groupId}`,
+          `[表情包] ✅ 场景表情包100%触发（无去重）- scenario: ${sticker.scenario}, userId: ${userId}, groupId: ${groupId}`,
           'ChatService',
         );
 
@@ -870,7 +883,10 @@ export class ChatService {
       });
 
       if (!normalResult || normalResult.isScenarioSticker) {
-        Logger.log('[表情包] ❌ 数据库中没有可用的普通表情包（scenario不为空且tags为空）', 'ChatService');
+        Logger.log(
+          '[表情包] ❌ 数据库中没有可用的普通表情包（scenario不为空且tags为空）',
+          'ChatService',
+        );
         return null;
       }
 
@@ -2839,7 +2855,7 @@ ${rolePlayPrompt}`;
       }
     }
 
-    const translationPrompt = `当回复的是非中文时，必须在每次回复中加上中文翻译，使用中文中括号【】括起来。无论之前的对话中是否有加。\n`;
+    const translationPrompt = `当回复内容包含非中文句子时，必须在每个非中文句子后面紧跟中文翻译，使用中文中括号【】括起来。例如：Hello, how are you?【你好，最近怎么样？】I'm fine.【我很好。】不要在最后统一翻译，而是每句话后面都要有对应的翻译。\n`;
 
     const rolePresetMarker = '要求：';
     if (setSystemMessage.includes(rolePresetMarker)) {

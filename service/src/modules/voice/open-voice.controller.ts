@@ -259,20 +259,21 @@ export class OpenVoiceController {
   }
 
   @Post('enable')
-  @ApiOperation({ summary: '【开放】启用音色（设置 isEnabled=true）（无鉴权）' })
+  @ApiOperation({ summary: '【开放】启用音色（设置 isEnabled=true，扣除3000饼干）（无鉴权）' })
   @ApiBody({
     schema: {
       type: 'object',
       properties: {
         voiceId: { type: 'string', description: '音色ID（必填）' },
+        token: { type: 'string', description: '用户token（用于扣费）' },
       },
       required: ['voiceId'],
     },
-    examples: { demo: { value: { voiceId: 'minimax-1736578180000' } } },
+    examples: { demo: { value: { voiceId: 'minimax-1736578180000', token: 'user-token' } } },
   })
-  enable(@Body() body: { voiceId: string }) {
-    const { voiceId } = body || {};
-    return this.voiceService.enableVoice(voiceId);
+  enable(@Body() body: { voiceId: string; token?: string }) {
+    const { voiceId, token } = body || {};
+    return this.voiceService.enableVoice(voiceId, token);
   }
 
   @Post('sync-pending-status')
@@ -405,6 +406,22 @@ export class OpenVoiceController {
         volume: { type: 'number', description: '音量（可选）' },
         rate: { type: 'number', description: '语速（可选）' },
         pitch: { type: 'number', description: '音调（可选）' },
+        emotion: {
+          type: 'string',
+          description:
+            '情绪（MiniMax可选）：happy/sad/angry/fearful/disgusted/surprised/calm/fluent/whisper',
+          enum: [
+            'happy',
+            'sad',
+            'angry',
+            'fearful',
+            'disgusted',
+            'surprised',
+            'calm',
+            'fluent',
+            'whisper',
+          ],
+        },
         text_language: { type: 'string', description: '文本语言（GPT-SoVITS 可选）' },
         cut_punc: { type: 'string', description: '文本切分符（GPT-SoVITS 可选）' },
       },
@@ -413,6 +430,9 @@ export class OpenVoiceController {
     examples: {
       demo: {
         value: { voice_id: 'cosyvoice-v2-ls3-xxxx', text: '你好，欢迎使用。', format: 'mp3' },
+      },
+      withEmotion: {
+        value: { voice_id: 'minimax-xxx', text: '今天天气真好！', emotion: 'happy' },
       },
     },
   })
@@ -427,6 +447,7 @@ export class OpenVoiceController {
       volume?: number;
       rate?: number;
       pitch?: number;
+      emotion?: string;
       text_language?: string;
       cut_punc?: string;
     },

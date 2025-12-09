@@ -1017,21 +1017,18 @@ export class OpenAIChatService {
       }
     }
 
-    // 使用全局配置（通义千问）
-    const cfgKey: any = await this.globalConfigService.getConfigs(['dashscopeApiKey']);
-    const dashscopeApiKey = typeof cfgKey === 'string' ? cfgKey : cfgKey?.dashscopeApiKey;
-    const apiKey = dashscopeApiKey || process.env.DASHSCOPE_API_KEY || '';
+    // 使用全局配置（DeepSeek）
+    const apiKey = process.env.DEEPSEEK_API_KEY || '';
 
     if (!apiKey) {
       Logger.error(
-        'DashScope API Key未配置！请在系统配置中设置 dashscopeApiKey，或在环境变量中设置 DASHSCOPE_API_KEY',
+        'DeepSeek API Key未配置！请在环境变量中设置 DEEPSEEK_API_KEY',
         'OpenAIChatService',
       );
-      throw new Error('DashScope API Key未配置');
+      throw new Error('DeepSeek API Key未配置');
     }
 
-    const baseURL =
-      process.env.DASHSCOPE_BASE_URL || 'https://dashscope.aliyuncs.com/compatible-mode/v1';
+    const baseURL = process.env.DEEPSEEK_BASE_URL || 'https://api.deepseek.com';
     const messages = await this.buildQwenPlusMessages(
       prompt,
       systemMessage,
@@ -1046,7 +1043,7 @@ export class OpenAIChatService {
     });
 
     const requestConfig: any = {
-      model: 'deepseek-v3.2-exp',
+      model: 'deepseek-chat',
       messages,
       stream: isStreaming,
     };
@@ -1059,7 +1056,7 @@ export class OpenAIChatService {
       appId: appConfig?.appId,
       userId: appConfig?.userId,
     });
-    Logger.debug(`QwenPlus请求 - body: ${JSON.stringify(logPayload)}`, 'OpenAIChatService');
+    Logger.debug(`DeepSeek请求 - body: ${JSON.stringify(logPayload)}`, 'OpenAIChatService');
 
     try {
       if (isStreaming) {
@@ -1092,12 +1089,12 @@ export class OpenAIChatService {
         }
 
         Logger.debug(
-          `[QwenPlus] 流式响应完成，fullText长度: ${fullText.length}`,
+          `[DeepSeek] 流式响应完成，fullText长度: ${fullText.length}`,
           'OpenAIChatService',
         );
 
         if (!fullText || fullText.trim() === '') {
-          Logger.warn(`[QwenPlus] ⚠️ 流式响应返回了空内容！`, 'OpenAIChatService');
+          Logger.warn(`[DeepSeek] ⚠️ 流式响应返回了空内容！`, 'OpenAIChatService');
         }
 
         return {
@@ -1110,16 +1107,16 @@ export class OpenAIChatService {
         signal: options?.abortSignal,
       });
 
-      Logger.debug(`[QwenPlus] 非流式响应: ${JSON.stringify(completion)}`, 'OpenAIChatService');
+      Logger.debug(`[DeepSeek] 非流式响应: ${JSON.stringify(completion)}`, 'OpenAIChatService');
 
       const text = completion?.choices?.[0]?.message?.content || '';
       const usage = completion?.usage ? this.mapDashscopeUsage(completion.usage) : undefined;
 
-      Logger.debug(`[QwenPlus] 提取的文本: "${text}", 长度: ${text.length}`, 'OpenAIChatService');
+      Logger.debug(`[DeepSeek] 提取的文本: "${text}", 长度: ${text.length}`, 'OpenAIChatService');
 
       if (!text || text.trim() === '') {
         Logger.warn(
-          `[QwenPlus] ⚠️ 模型返回了空内容！完整响应: ${JSON.stringify(completion)}`,
+          `[DeepSeek] ⚠️ 模型返回了空内容！完整响应: ${JSON.stringify(completion)}`,
           'OpenAIChatService',
         );
       }
@@ -1130,7 +1127,7 @@ export class OpenAIChatService {
       };
     } catch (error) {
       const errorMessage = handleError(error);
-      Logger.error(`QwenPlus调用失败: ${errorMessage}`, 'OpenAIChatService');
+      Logger.error(`DeepSeek调用失败: ${errorMessage}`, 'OpenAIChatService');
 
       // 检查是否为内容审核错误
       if (
@@ -1139,7 +1136,7 @@ export class OpenAIChatService {
         errorMessage.includes('敏感内容') ||
         errorMessage.includes('DataInspectionFailed')
       ) {
-        Logger.warn(`[QwenPlus] ⚠️ 触发内容审核，返回友好错误提示给用户`, 'OpenAIChatService');
+        Logger.warn(`[DeepSeek] ⚠️ 触发内容审核，返回友好错误提示给用户`, 'OpenAIChatService');
         throw new BadRequestException(
           '抱歉，您的消息或者角色提示词包含敏感内容，无法处理。请修改后重试。',
         );
@@ -2140,6 +2137,82 @@ export class OpenAIChatService {
         'OpenAIChatService',
       );
       throw error;
+    }
+  }
+
+  /**
+   * 使用 DeepSeek API 进行对话（非流式）
+   * 专门用于 chat-process-sync 接口
+   * @param prompt 用户输入
+   * @param systemMessage 系统消息
+   * @param messagesHistory 消息历史
+   * @returns 对话响应
+   */
+  async chatWithDeepSeek(
+    prompt: string,
+    systemMessage?: string,
+    messagesHistory?: any[],
+  ): Promise<{
+    text: string;
+    usage?: { inputTokens?: number; outputTokens?: number };
+  }> {
+    const apiKey = process.env.DEEPSEEK_API_KEY;
+    const baseUrl = process.env.DEEPSEEK_BASE_URL || 'https://api.deepseek.com';
+
+    if (!apiKey) {
+      throw new BadRequestException('DeepSeek API Key 未配置');
+    }
+
+    // 构建消息数组
+    const messages: any[] = [];
+
+    if (systemMessage) {
+      messages.push({ role: 'system', content: systemMessage });
+    }
+
+    if (messagesHistory && messagesHistory.length > 0) {
+      messages.push(...messagesHistory);
+    }
+
+    if (prompt) {
+      messages.push({ role: 'user', content: prompt });
+    }
+
+    Logger.log(`[DeepSeek] 发送请求 - 消息数: ${messages.length}`, 'OpenAIChatService');
+
+    try {
+      const openai = new OpenAI({
+        apiKey: apiKey,
+        baseURL: baseUrl,
+        timeout: 60000,
+      });
+
+      const completion = await openai.chat.completions.create({
+        model: 'deepseek-chat',
+        messages: messages,
+        stream: false,
+      });
+
+      const content = completion.choices?.[0]?.message?.content || '';
+      const usage = completion.usage;
+
+      Logger.log(
+        `[DeepSeek] 响应成功 - 内容长度: ${content.length}, tokens: ${
+          usage?.total_tokens || 'N/A'
+        }`,
+        'OpenAIChatService',
+      );
+
+      return {
+        text: content,
+        usage: {
+          inputTokens: usage?.prompt_tokens,
+          outputTokens: usage?.completion_tokens,
+        },
+      };
+    } catch (error: any) {
+      Logger.error(`[DeepSeek] 请求失败: ${error?.message || error}`, 'OpenAIChatService');
+      throw new BadRequestException(`DeepSeek API 调用失败: ${error?.message || '未知错误'}`);
     }
   }
 }

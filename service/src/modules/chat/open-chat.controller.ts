@@ -22,6 +22,7 @@ import { VoiceService } from '../voice/voice.service';
 import { ChatService } from './chat.service';
 import { ChatGroupEntity } from '../chatGroup/chatGroup.entity';
 import { ChatLogService } from '../chatLog/chatLog.service';
+import { OpenAIChatService } from '../aiTool/chat/chat.service';
 
 type CookieMessageType = 'text' | 'voice' | 'image';
 
@@ -51,6 +52,7 @@ export class OpenChatController {
     private readonly voiceService: VoiceService,
     private readonly affectionService: AffectionService,
     private readonly chatLogService: ChatLogService,
+    private readonly openAIChatService: OpenAIChatService,
     @InjectRepository(ChatGroupEntity)
     private readonly chatGroupEntity: Repository<ChatGroupEntity>,
   ) {}
@@ -1003,7 +1005,9 @@ export class OpenChatController {
               );
             } catch (stickerSaveError: any) {
               this.logger.warn(
-                `[chat-process-sync] ❌ 表情包chatlog保存失败: ${stickerSaveError?.message || stickerSaveError}`,
+                `[chat-process-sync] ❌ 表情包chatlog保存失败: ${
+                  stickerSaveError?.message || stickerSaveError
+                }`,
               );
             }
           }
@@ -1238,7 +1242,7 @@ export class OpenChatController {
   }
 
   // 分段常量配置
-  private static readonly MIN_SENTENCE_LENGTH = 6;  // 单句最少字数
+  private static readonly MIN_SENTENCE_LENGTH = 6; // 单句最少字数
   private static readonly MAX_SENTENCE_LENGTH = 30; // 单句最多字数
 
   /**
@@ -1258,7 +1262,8 @@ export class OpenChatController {
    * 规则4: 多标点符号根据话题转换拆分
    *
    * 保护规则：
-   * - 【】内的内容作为独立句子处理
+   * - 【】内的内容（翻译）不会被切分，作为整体处理
+   * - ()（）内的内容（心理描述）不会被切分，作为整体处理
    * - 省略号不作为切分点
    */
   private splitTextBySentence(text: string): string[] {
@@ -1266,30 +1271,33 @@ export class OpenChatController {
       return [];
     }
 
-    // 第一步：预处理，提取【】内容并用占位符替换
-    const bracketContents: string[] = [];
-    let processedText = text.replace(/【[^】]*】/g, (match) => {
-      bracketContents.push(match);
-      return `\x00BRACKET${bracketContents.length - 1}\x00`;
+    // 第一步：预处理，提取【】和()（）内容并用占位符替换
+    // 这些内容是翻译和心理描述，不应该被切分
+    const protectedContents: string[] = [];
+
+    // 先提取【】内容（翻译）
+    let processedText = text.replace(/【[^】]*】/g, match => {
+      protectedContents.push(match);
+      return `\x00PROTECTED${protectedContents.length - 1}\x00`;
     });
+
+    // 再提取()（）内容（心理描述），支持嵌套
+    processedText = this.extractParenthesisContent(processedText, protectedContents);
 
     // 第二步：初步按强结束符切分（句号、感叹号、问号）
     const rawSegments = this.splitByStrongPunctuation(processedText);
 
     // 第三步：处理每个片段，根据规则进一步拆分或合并
+    // 注意：保持占位符不变，让后续步骤也能正确处理
     const refinedSegments: string[] = [];
 
     for (let i = 0; i < rawSegments.length; i++) {
       const segment = rawSegments[i].trim();
       if (!segment) continue;
 
-      // 检查是否包含占位符（【】内容）
-      if (segment.includes('\x00BRACKET')) {
-        // 恢复【】内容并作为独立句子
-        const restored = segment.replace(/\x00BRACKET(\d+)\x00/g, (_, idx) => {
-          return bracketContents[parseInt(idx)] || '';
-        });
-        refinedSegments.push(restored);
+      // 包含占位符的片段直接保留，不进行其他拆分处理
+      if (segment.includes('\x00PROTECTED')) {
+        refinedSegments.push(segment);
         continue;
       }
 
@@ -1311,17 +1319,181 @@ export class OpenChatController {
     }
 
     // 第四步：规则3 - 超过30字的句子按逗号拆分
-    const lengthLimitedSegments = this.splitLongSentences(refinedSegments);
+    // 占位符会被保护，不会在其中切分
+    const lengthLimitedSegments = this.splitLongSentencesProtected(
+      refinedSegments,
+      protectedContents,
+    );
 
     // 第五步：规则1 - 合并极短句和语气词（少于6字的合并）
     const mergedSegments = this.mergeShortSegments(lengthLimitedSegments);
 
-    // 恢复所有【】内容
-    return mergedSegments.map(segment => {
-      return segment.replace(/\x00BRACKET(\d+)\x00/g, (_, idx) => {
-        return bracketContents[parseInt(idx)] || '';
+    // 第六步：恢复所有受保护的内容（翻译和心理描述）
+    return mergedSegments
+      .map(segment => {
+        return segment.replace(/\x00PROTECTED(\d+)\x00/g, (_, idx) => {
+          return protectedContents[parseInt(idx)] || '';
+        });
+      })
+      .filter(s => s.trim());
+  }
+
+  /**
+   * 提取()（）括号内容（心理描述），支持嵌套
+   */
+  private extractParenthesisContent(text: string, protectedContents: string[]): string {
+    let result = '';
+    let depth = 0;
+    let currentMatch = '';
+    let matchStart = -1;
+
+    for (let i = 0; i < text.length; i++) {
+      const char = text[i];
+
+      if (char === '(' || char === '（') {
+        if (depth === 0) {
+          matchStart = i;
+          currentMatch = char;
+        } else {
+          currentMatch += char;
+        }
+        depth++;
+      } else if (char === ')' || char === '）') {
+        if (depth > 0) {
+          currentMatch += char;
+          depth--;
+          if (depth === 0) {
+            // 完整的括号内容提取完成
+            protectedContents.push(currentMatch);
+            result += `\x00PROTECTED${protectedContents.length - 1}\x00`;
+            currentMatch = '';
+            matchStart = -1;
+          }
+        } else {
+          result += char;
+        }
+      } else if (depth > 0) {
+        currentMatch += char;
+      } else {
+        result += char;
+      }
+    }
+
+    // 处理未闭合的括号（保留原样）
+    if (depth > 0 && matchStart >= 0) {
+      result += currentMatch;
+    }
+
+    return result;
+  }
+
+  /**
+   * 规则3：拆分超过30字的长句（保护占位符版本）
+   * 按逗号拆分，尽量保持每段在30字以内
+   * 不会在占位符处切分
+   */
+  private splitLongSentencesProtected(
+    segments: string[],
+    protectedContents: string[],
+  ): string[] {
+    const result: string[] = [];
+    const maxLen = OpenChatController.MAX_SENTENCE_LENGTH;
+
+    for (const segment of segments) {
+      // 计算纯文本长度时，占位符按实际内容长度计算
+      const pureLen = this.getPureTextLengthWithProtected(segment, protectedContents);
+
+      if (pureLen <= maxLen) {
+        result.push(segment);
+        continue;
+      }
+
+      // 超过30字，按逗号拆分，但要避开占位符
+      const splitResult = this.splitByCommaProtected(segment, maxLen, protectedContents);
+      result.push(...splitResult);
+    }
+
+    return result.filter(s => s.trim());
+  }
+
+  /**
+   * 计算纯文本长度（将占位符替换为实际内容后计算）
+   */
+  private getPureTextLengthWithProtected(text: string, protectedContents: string[]): number {
+    const restored = text.replace(/\x00PROTECTED(\d+)\x00/g, (_, idx) => {
+      return protectedContents[parseInt(idx)] || '';
+    });
+    return this.getPureTextLength(restored);
+  }
+
+  /**
+   * 按逗号切分文本，但保护占位符不被切分
+   */
+  private splitByCommaProtected(
+    text: string,
+    maxLen: number,
+    protectedContents: string[],
+  ): string[] {
+    const result: string[] = [];
+
+    // 找到所有占位符的位置
+    const placeholderRegex = /\x00PROTECTED\d+\x00/g;
+    const placeholders: Array<{ start: number; end: number; match: string }> = [];
+    let match;
+    while ((match = placeholderRegex.exec(text)) !== null) {
+      placeholders.push({
+        start: match.index,
+        end: match.index + match[0].length,
+        match: match[0],
       });
-    }).filter(s => s.trim());
+    }
+
+    // 找到所有逗号的位置（排除在占位符内的）
+    const commaPositions: number[] = [];
+    for (let i = 0; i < text.length; i++) {
+      const char = text[i];
+      if (char === '，' || char === ',') {
+        // 检查是否在占位符内
+        const inPlaceholder = placeholders.some(p => i >= p.start && i < p.end);
+        if (!inPlaceholder) {
+          commaPositions.push(i);
+        }
+      }
+    }
+
+    if (commaPositions.length === 0) {
+      // 没有可切分的逗号，直接返回
+      return [text];
+    }
+
+    // 按逗号位置切分
+    let lastSplitPos = 0;
+    let current = '';
+
+    for (const commaPos of commaPositions) {
+      const part = text.substring(lastSplitPos, commaPos + 1);
+      const testMerge = current + part;
+      const testLen = this.getPureTextLengthWithProtected(testMerge, protectedContents);
+
+      if (testLen <= maxLen) {
+        current = testMerge;
+      } else {
+        if (current.trim()) {
+          result.push(current.replace(/[，,]$/, '').trim());
+        }
+        current = part;
+      }
+      lastSplitPos = commaPos + 1;
+    }
+
+    // 处理最后一部分
+    const remaining = text.substring(lastSplitPos);
+    current += remaining;
+    if (current.trim()) {
+      result.push(current.replace(/[，,]$/, '').trim());
+    }
+
+    return result.filter(s => s.trim());
   }
 
   /**
@@ -1423,11 +1595,19 @@ export class OpenChatController {
 
     let count = 1;
     // 向前检查
-    for (let i = index - 1; i >= 0 && (text[i] === '.' || text[i] === '。' || text[i] === '…'); i--) {
+    for (
+      let i = index - 1;
+      i >= 0 && (text[i] === '.' || text[i] === '。' || text[i] === '…');
+      i--
+    ) {
       count++;
     }
     // 向后检查
-    for (let i = index + 1; i < text.length && (text[i] === '.' || text[i] === '。' || text[i] === '…'); i++) {
+    for (
+      let i = index + 1;
+      i < text.length && (text[i] === '.' || text[i] === '。' || text[i] === '…');
+      i++
+    ) {
       count++;
     }
 
@@ -1454,17 +1634,35 @@ export class OpenChatController {
 
     // 转折词/条件词列表（按优先级排序）
     const transitionWords = [
-      '如果没有', '如果不是', '如果说', '如果',
-      '要是没有', '要是不是', '要是',
-      '假如没有', '假如不是', '假如',
-      '倘若没有', '倘若不是', '倘若',
-      '若是没有', '若是不是', '若是',
-      '但是说', '但是',
-      '不过说', '不过',
-      '然而说', '然而',
-      '可是说', '可是',
-      '否则的话', '否则',
-      '要不然', '不然的话', '不然',
+      '如果没有',
+      '如果不是',
+      '如果说',
+      '如果',
+      '要是没有',
+      '要是不是',
+      '要是',
+      '假如没有',
+      '假如不是',
+      '假如',
+      '倘若没有',
+      '倘若不是',
+      '倘若',
+      '若是没有',
+      '若是不是',
+      '若是',
+      '但是说',
+      '但是',
+      '不过说',
+      '不过',
+      '然而说',
+      '然而',
+      '可是说',
+      '可是',
+      '否则的话',
+      '否则',
+      '要不然',
+      '不然的话',
+      '不然',
     ];
 
     // 查找第一个转折词的位置
@@ -1503,7 +1701,19 @@ export class OpenChatController {
 
         // 检查后面部分是否以明确的话题转换词开头
         // 注意：单纯的疑问句不作为拆分依据（如"你有没有想我？"可能是同一主题的追问）
-        const topicChangeWords = ['不过', '但是', '可是', '然而', '话说', '对了', '哦对了', '诶', '那你', '所以你', '怎么说'];
+        const topicChangeWords = [
+          '不过',
+          '但是',
+          '可是',
+          '然而',
+          '话说',
+          '对了',
+          '哦对了',
+          '诶',
+          '那你',
+          '所以你',
+          '怎么说',
+        ];
         const startsWithTopicChange = topicChangeWords.some(word => afterPart.startsWith(word));
 
         // 只有明确的话题转换词才拆分，且前后都有足够内容
@@ -1532,7 +1742,23 @@ export class OpenChatController {
     const maxLen = OpenChatController.MAX_SENTENCE_LENGTH;
 
     // 语气词列表
-    const modalParticles = ['啊', '呀', '哇', '哦', '噢', '嗯', '呢', '吧', '啦', '嘛', '哎', '唉', '诶', '哼', '嘿'];
+    const modalParticles = [
+      '啊',
+      '呀',
+      '哇',
+      '哦',
+      '噢',
+      '嗯',
+      '呢',
+      '吧',
+      '啦',
+      '嘛',
+      '哎',
+      '唉',
+      '诶',
+      '哼',
+      '嘿',
+    ];
 
     for (let i = 0; i < segments.length; i++) {
       const current = segments[i];
@@ -2086,5 +2312,117 @@ ${example}
 请现在生成一条查岗或报备的消息：`;
 
     return Promise.resolve(prompt);
+  }
+
+  /**
+   * 将会话消息转换为 DeepSeek API 所需的格式
+   * @param body 请求体
+   * @param conversationMessages 从请求中提取的会话消息
+   * @returns DeepSeek API 格式的消息数组
+   */
+  private buildMessagesForDeepSeek(body: any, conversationMessages: any[]): any[] {
+    const messages: any[] = [];
+
+    // 优先使用 body.messages（如果存在）
+    if (body?.messages && Array.isArray(body.messages) && body.messages.length > 0) {
+      for (const msg of body.messages) {
+        if (msg.role && msg.content) {
+          messages.push({
+            role: msg.role,
+            content: typeof msg.content === 'string' ? msg.content : JSON.stringify(msg.content),
+          });
+        }
+      }
+      return messages;
+    }
+
+    // 其次使用提取的 conversationMessages
+    if (conversationMessages && conversationMessages.length > 0) {
+      for (const msg of conversationMessages) {
+        const role = this.mapRoleForDeepSeek(msg);
+        const content = this.extractContentFromMessage(msg);
+        if (role && content) {
+          messages.push({ role, content });
+        }
+      }
+    }
+
+    return messages;
+  }
+
+  /**
+   * 将消息角色映射为 DeepSeek API 支持的角色
+   */
+  private mapRoleForDeepSeek(msg: any): string | null {
+    const role = (msg.role || '').toLowerCase();
+    const sender = (msg.sender || '').toLowerCase();
+    const messageType = (msg.message_type || '').toLowerCase();
+
+    // 判断是否为用户消息
+    const isUser =
+      role === 'user' ||
+      role === 'human' ||
+      sender === 'user' ||
+      sender === 'visitor' ||
+      messageType === 'user' ||
+      msg.isUser === true ||
+      msg.is_user === true ||
+      msg.isVisitor === true ||
+      msg.is_sender === 0 ||
+      msg.isSender === 0;
+
+    if (isUser) {
+      return 'user';
+    }
+
+    // 判断是否为系统消息
+    if (role === 'system') {
+      return 'system';
+    }
+
+    // 其他情况默认为助手消息
+    return 'assistant';
+  }
+
+  /**
+   * 从消息对象中提取文本内容
+   */
+  private extractContentFromMessage(msg: any): string | null {
+    const candidates = [msg.content, msg.text, msg.message, msg.prompt, msg.body, msg.detail];
+
+    for (const candidate of candidates) {
+      if (typeof candidate === 'string' && candidate.trim()) {
+        return candidate.trim();
+      }
+    }
+
+    return null;
+  }
+
+  /**
+   * 将数据库历史消息转换为 DeepSeek API 格式
+   * @param historyFromDb chatLogService.chatHistory 返回的历史消息
+   * @returns DeepSeek API 格式的消息数组
+   */
+  private convertDbHistoryToDeepSeekFormat(historyFromDb: any[]): any[] {
+    if (!historyFromDb || historyFromDb.length === 0) {
+      return [];
+    }
+
+    const messages: any[] = [];
+
+    for (const record of historyFromDb) {
+      const role = record.role === 'user' ? 'user' : 'assistant';
+      const content = record.content || '';
+
+      if (content.trim()) {
+        messages.push({
+          role,
+          content: content.trim(),
+        });
+      }
+    }
+
+    return messages;
   }
 }

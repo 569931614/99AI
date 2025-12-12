@@ -23,6 +23,7 @@ import { ChatService } from './chat.service';
 import { ChatGroupEntity } from '../chatGroup/chatGroup.entity';
 import { ChatLogService } from '../chatLog/chatLog.service';
 import { OpenAIChatService } from '../aiTool/chat/chat.service';
+import { DeviceBackgroundService } from '../deviceBackground/deviceBackground.service';
 
 type CookieMessageType = 'text' | 'voice' | 'image';
 
@@ -53,6 +54,7 @@ export class OpenChatController {
     private readonly affectionService: AffectionService,
     private readonly chatLogService: ChatLogService,
     private readonly openAIChatService: OpenAIChatService,
+    private readonly deviceBackgroundService: DeviceBackgroundService,
     @InjectRepository(ChatGroupEntity)
     private readonly chatGroupEntity: Repository<ChatGroupEntity>,
   ) {}
@@ -653,6 +655,7 @@ export class OpenChatController {
       // 用于收集流式响应的完整内容
       let fullResponse = '';
       let chatId: number | null = null;
+      let userChatId: number | null = null; // 用户消息的chatId
       let emotion: string | null = null;
       let psychologicalDesc: string | null = null;
       let audioUrl: string | null = null;
@@ -688,6 +691,7 @@ export class OpenChatController {
               if (parsed.text) fullResponse += parsed.text;
               // 记录其他字段
               if (parsed.chatId !== undefined) chatId = parsed.chatId;
+              if (parsed.userChatId !== undefined) userChatId = parsed.userChatId; // 捕获用户消息的chatId
               if (parsed.emotion) emotion = parsed.emotion;
               if (parsed.psychologicalDesc) psychologicalDesc = parsed.psychologicalDesc;
               const resolvedAudioUrl = parsed.audioUrl ?? parsed.ttsUrl;
@@ -773,6 +777,16 @@ export class OpenChatController {
           body.appId || 'N/A'
         }): ${fullResponse}`,
       );
+
+      // 清理大模型返回消息中的特定格式内容（去掉"..."和[...]，保留（...）心理描述）
+      const originalResponse = fullResponse;
+      fullResponse = this.cleanAIResponseQuotesAndBrackets(fullResponse);
+      if (originalResponse !== fullResponse) {
+        this.logger.log(
+          `[chat-process-sync] 清理后的回复: ${fullResponse}`,
+        );
+      }
+
       if (chatId) {
         this.logger.log(`[chat-process-sync] chatId: ${chatId}`);
       }
@@ -992,6 +1006,11 @@ export class OpenChatController {
                 role: 'assistant',
                 groupId: stickerSaveData.groupId || body.options?.groupId || null,
                 status: 3,
+                modelAvatar:
+                  stickerSaveData.modelAvatar ||
+                  body._resolvedModelAvatar ||
+                  body.modelAvatar ||
+                  '',
                 content: stickerSaveData.transferText || '',
                 imageUrl: stickerSaveData.imageUrl,
                 extraParam: stickerSaveData.extraParam,
@@ -1065,6 +1084,7 @@ export class OpenChatController {
         meta: {
           fullText: fullResponse,
           chatId: dataArray[0]?.chatId || null, // 第一句的chatId（不再有完整文本的chatlog）
+          userChatId: userChatId, // 用户消息的chatId，用于小程序删除消息
           psychologicalDesc,
           imageUrl,
         },
@@ -1392,10 +1412,7 @@ export class OpenChatController {
    * 按逗号拆分，尽量保持每段在30字以内
    * 不会在占位符处切分
    */
-  private splitLongSentencesProtected(
-    segments: string[],
-    protectedContents: string[],
-  ): string[] {
+  private splitLongSentencesProtected(segments: string[], protectedContents: string[]): string[] {
     const result: string[] = [];
     const maxLen = OpenChatController.MAX_SENTENCE_LENGTH;
 
@@ -1560,10 +1577,16 @@ export class OpenChatController {
         continue;
       }
 
+      // 检查是否是连续相同的强结束符（如？？、！！），不切分
+      if (this.isStrongEndPunctuation(char) && this.isRepeatedPunctuation(text, i, char)) {
+        i++;
+        continue;
+      }
+
       // 强结束符：句号、感叹号、问号
       if (this.isStrongEndPunctuation(char)) {
-        // 检查后面是否还有连续的标点（如"？！"）
-        while (i + 1 < text.length && this.isStrongEndPunctuation(text[i + 1])) {
+        // 检查后面是否还有连续的不同标点（如"？！"）
+        while (i + 1 < text.length && this.isStrongEndPunctuation(text[i + 1]) && text[i + 1] !== char) {
           i++;
           current += text[i];
         }
@@ -1615,10 +1638,25 @@ export class OpenChatController {
   }
 
   /**
+   * 检查是否是连续相同符号的一部分（但不是最后一个）
+   * 例如：？？中的第一个？，！！！中的前两个！
+   * 用于跳过连续相同符号，只在最后一个符号处切分
+   */
+  private isRepeatedPunctuation(text: string, index: number, char: string): boolean {
+    // 检查下一个字符是否与当前字符相同
+    if (index + 1 < text.length && text[index + 1] === char) {
+      return true;
+    }
+    return false;
+  }
+
+  /**
    * 检查是否是强结束标点
    */
   private isStrongEndPunctuation(char: string): boolean {
-    return ['。', '！', '？', '!', '?'].includes(char);
+    // 包含英文句号 . 以支持韩语、英语等使用英文句号的语言
+    // 省略号（...）已在 splitByStrongPunctuation 中通过 isEllipsis 检测跳过
+    return ['。', '！', '？', '!', '?', '.'].includes(char);
   }
 
   /**
@@ -1822,10 +1860,19 @@ export class OpenChatController {
   }
 
   /**
-   * 获取纯文本长度（去除标点符号）
+   * 获取纯文本长度（去除翻译、心理动作描述和标点符号）
+   * - 【...】内的内容（翻译）不计入
+   * - (...)或（...）内的内容（心理动作描述）不计入
+   * - 标点符号不计入
    */
   private getPureTextLength(text: string): number {
-    return text.replace(/[，。！？、；：""''（）【】～~…—\-,.!?;:'"()\[\]]/g, '').length;
+    // 1. 去除【翻译】内容
+    let pureText = text.replace(/【[^】]*】/g, '');
+    // 2. 去除（心理动作）内容，支持中英文括号
+    pureText = pureText.replace(/[（(][^）)]*[）)]/g, '');
+    // 3. 去除标点符号
+    pureText = pureText.replace(/[，。！？、；：""''～~…—\-,.!?;:'"]/g, '');
+    return pureText.length;
   }
 
   /**
@@ -2049,6 +2096,49 @@ export class OpenChatController {
     if (!response.success) {
       this.logger.warn(`Maobing cookie refund failed: ${response.message}`);
     }
+  }
+
+  /**
+   * 清理包围整个句子的成对符号
+   * - 去掉包围整个句子的成对符号（引号、方括号、书名号等）
+   * - 保留 （...） 中文圆括号（心理描述是正常的，不处理）
+   *
+   * @param text 大模型返回的文本
+   * @returns 清理后的文本
+   */
+  private cleanAIResponseQuotesAndBrackets(text: string): string {
+    if (!text) return text;
+
+    let result = text.trim();
+
+    // 定义成对符号（左符号 -> 右符号），不包括圆括号
+    const pairSymbols: Array<[string, string]> = [
+      ['\u201C', '\u201D'], // 中文双引号 ""
+      ['\u2018', '\u2019'], // 中文单引号 ''
+      ['\u300C', '\u300D'], // 日式引号 「」
+      ['\u300E', '\u300F'], // 日式双引号 『』
+      ['\u3010', '\u3011'], // 中文方括号 【】
+      ['[', ']'], // 英文方括号
+      ['\u300A', '\u300B'], // 书名号 《》
+      ['\u3008', '\u3009'], // 单书名号 〈〉
+      ['"', '"'], // 英文双引号
+      ["'", "'"], // 英文单引号
+    ];
+
+    // 循环检测并去掉包围整个句子的成对符号
+    let changed = true;
+    while (changed) {
+      changed = false;
+      for (const [left, right] of pairSymbols) {
+        if (result.startsWith(left) && result.endsWith(right) && result.length > 2) {
+          result = result.slice(left.length, -right.length).trim();
+          changed = true;
+          break; // 重新从头开始检测
+        }
+      }
+    }
+
+    return result;
   }
 
   @Get('affection/status')
@@ -2424,5 +2514,162 @@ ${example}
     }
 
     return messages;
+  }
+
+  // ========== 设备背景管理接口 ==========
+
+  @Post('device-background/save')
+  @ApiOperation({ summary: '【开放】保存设备背景（视频/GIF/图片）' })
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        braceletId: { type: 'string', description: '设备/手环ID（必填）' },
+        backgroundUrl: { type: 'string', description: '背景媒体URL（必填，已上传到OSS的URL）' },
+        backgroundType: {
+          type: 'string',
+          enum: ['image', 'gif', 'video'],
+          description: '背景类型：image（静态图片）、gif（动态图片）或 video（视频），默认 image',
+        },
+        originalName: { type: 'string', description: '原始文件名（可选）' },
+      },
+      required: ['braceletId', 'backgroundUrl'],
+    },
+    examples: {
+      image: {
+        summary: '保存图片背景',
+        value: {
+          braceletId: '8676',
+          backgroundUrl: 'https://example.com/bg.jpg',
+          backgroundType: 'image',
+        },
+      },
+      gif: {
+        summary: '保存GIF背景',
+        value: {
+          braceletId: '8676',
+          backgroundUrl: 'https://example.com/bg.gif',
+          backgroundType: 'gif',
+          originalName: 'animated-bg.gif',
+        },
+      },
+      video: {
+        summary: '保存视频背景',
+        value: {
+          braceletId: '8676',
+          backgroundUrl: 'https://example.com/bg.mp4',
+          backgroundType: 'video',
+          originalName: 'my-background.mp4',
+        },
+      },
+    },
+  })
+  async saveDeviceBackground(@Body() body: any, @Res() res: Response) {
+    try {
+      const { braceletId, backgroundUrl, backgroundType = 'image', originalName } = body;
+
+      if (!braceletId) {
+        throw new HttpException('braceletId 必填', HttpStatus.BAD_REQUEST);
+      }
+      if (!backgroundUrl) {
+        throw new HttpException('backgroundUrl 必填', HttpStatus.BAD_REQUEST);
+      }
+
+      const result = await this.deviceBackgroundService.saveBackground(
+        braceletId,
+        backgroundUrl,
+        backgroundType,
+        originalName,
+      );
+
+      this.logger.log(`设备 ${braceletId} 背景已保存: ${backgroundUrl}`);
+
+      return res.status(200).json({
+        success: true,
+        data: result,
+        message: '背景保存成功',
+      });
+    } catch (e: any) {
+      this.logger.error(`保存设备背景失败: ${e.message}`);
+      const status = e instanceof HttpException ? e.getStatus() : HttpStatus.INTERNAL_SERVER_ERROR;
+      return res.status(status).json({
+        success: false,
+        message: e.message || '保存失败',
+      });
+    }
+  }
+
+  @Get('device-background')
+  @ApiOperation({ summary: '【开放】获取设备背景' })
+  @ApiQuery({ name: 'braceletId', required: true, description: '设备/手环ID' })
+  async getDeviceBackground(@Query('braceletId') braceletId: string, @Res() res: Response) {
+    try {
+      if (!braceletId) {
+        throw new HttpException('braceletId 必填', HttpStatus.BAD_REQUEST);
+      }
+
+      const result = await this.deviceBackgroundService.getBackground(braceletId);
+
+      if (!result) {
+        return res.status(200).json({
+          success: true,
+          data: null,
+          message: '未找到该设备的背景设置',
+        });
+      }
+
+      return res.status(200).json({
+        success: true,
+        data: {
+          braceletId: result.braceletId,
+          backgroundUrl: result.backgroundUrl,
+          backgroundType: result.backgroundType,
+          originalName: result.originalName,
+        },
+      });
+    } catch (e: any) {
+      this.logger.error(`获取设备背景失败: ${e.message}`);
+      const status = e instanceof HttpException ? e.getStatus() : HttpStatus.INTERNAL_SERVER_ERROR;
+      return res.status(status).json({
+        success: false,
+        message: e.message || '获取失败',
+      });
+    }
+  }
+
+  @Post('device-background/delete')
+  @ApiOperation({ summary: '【开放】删除设备背景' })
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        braceletId: { type: 'string', description: '设备/手环ID（必填）' },
+      },
+      required: ['braceletId'],
+    },
+  })
+  async deleteDeviceBackground(@Body() body: any, @Res() res: Response) {
+    try {
+      const { braceletId } = body;
+
+      if (!braceletId) {
+        throw new HttpException('braceletId 必填', HttpStatus.BAD_REQUEST);
+      }
+
+      const deleted = await this.deviceBackgroundService.deleteBackground(braceletId);
+
+      return res.status(200).json({
+        success: true,
+        data: { deleted },
+        message: deleted ? '背景删除成功' : '未找到需要删除的背景',
+      });
+    } catch (e: any) {
+      this.logger.error(`删除设备背景失败: ${e.message}`);
+      const status = e instanceof HttpException ? e.getStatus() : HttpStatus.INTERNAL_SERVER_ERROR;
+      return res.status(status).json({
+        success: false,
+        message: e.message || '删除失败',
+      });
+    }
   }
 }

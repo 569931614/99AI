@@ -2,6 +2,7 @@ import { Global, Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { AffectionModule } from '../affection/affection.module';
 import { OpenAIChatService } from '../aiTool/chat/chat.service';
+import { DeviceBackgroundModule } from '../deviceBackground/deviceBackground.module';
 import { NetSearchService } from '../aiTool/search/netSearch.service';
 import { AppEntity } from '../app/app.entity';
 import { AppModule } from '../app/app.module';
@@ -81,6 +82,7 @@ import { OpenChatController } from './open-chat.controller';
     AppModule,
     ConversationSummaryModule,
     StickerModule,
+    DeviceBackgroundModule,
   ],
   controllers: [ChatController, OpenChatController],
   providers: [

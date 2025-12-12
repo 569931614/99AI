@@ -282,3 +282,37 @@ export function fetchTouchTtsProcess<T>(data: { prompt: string; userId?: number 
     data,
   }) as Promise<T>
 }
+
+// 保存设备背景（视频/GIF/图片）
+export function saveDeviceBackground<T>(data: {
+  braceletId: string
+  backgroundUrl: string
+  backgroundType?: 'image' | 'gif' | 'video'
+  originalName?: string
+}): Promise<T> {
+  return post<T>({
+    url: '/open/chat/device-background/save',
+    data,
+  }) as Promise<T>
+}
+
+// 获取设备背景
+export function getDeviceBackground<T>(braceletId: string): Promise<T> {
+  return get<T>({
+    url: `/open/chat/device-background?braceletId=${encodeURIComponent(braceletId)}`,
+  }) as Promise<T>
+}
+
+// 上传文件到OSS（开放接口）
+export function uploadFileOpen<T>(file: File, userId: string, dir?: string): Promise<T> {
+  const formData = new FormData()
+  formData.append('file', file)
+  formData.append('userId', userId)
+  if (dir) {
+    formData.append('dir', dir)
+  }
+  return fetch('/api/open/upload/file', {
+    method: 'POST',
+    body: formData,
+  }).then(res => res.json()) as Promise<T>
+}

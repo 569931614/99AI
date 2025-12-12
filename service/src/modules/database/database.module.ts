@@ -35,6 +35,7 @@ import { UserAppSettingsEntity } from '../userAppSettings/userAppSettings.entity
 import { VerificationEntity } from '../verification/verification.entity';
 import { VoiceEntity } from '../voice/voice.entity';
 import { VoiceCategoryEntity } from '../voice/voiceCategory.entity';
+import { DeviceBackgroundEntity } from '../deviceBackground/deviceBackground.entity';
 
 @Module({
   imports: [
@@ -82,6 +83,7 @@ import { VoiceCategoryEntity } from '../voice/voiceCategory.entity';
             ConversationSummaryEntity,
             UserAppSettingsEntity,
             StickerEntity,
+            DeviceBackgroundEntity,
           ],
           synchronize: false,
           logging: false,

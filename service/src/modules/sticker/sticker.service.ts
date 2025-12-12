@@ -308,9 +308,7 @@ ${scenarioListText}
 
       // 用于匹配的标准化函数：移除空格和常见标点
       const normalize = (text: string) =>
-        text
-          .toLowerCase()
-          .replace(/[\s。，、！？!?,.\-_：:；;""''「」『』【】（）()]/g, '');
+        text.toLowerCase().replace(/[\s。，、！？!?,.\-_：:；;""''「」『』【】（）()]/g, '');
 
       const normalizedResult = normalize(cleanedResult);
 

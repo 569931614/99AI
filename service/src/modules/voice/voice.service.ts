@@ -954,7 +954,9 @@ export class VoiceService implements OnModuleInit {
     if (designResult.trialAudioHex && typeof designResult.trialAudioHex === 'string') {
       try {
         const audioBuffer = Buffer.from(designResult.trialAudioHex, 'hex');
-        const filename = `voice-design-${Date.now()}-${Math.random().toString(36).substring(2, 8)}.mp3`;
+        const filename = `voice-design-${Date.now()}-${Math.random()
+          .toString(36)
+          .substring(2, 8)}.mp3`;
         previewAudioUrl = await this.uploadService.uploadFileFromBuffer(
           audioBuffer,
           filename,
@@ -963,9 +965,16 @@ export class VoiceService implements OnModuleInit {
         );
         Logger.log(`[designMinimaxVoice] 试听音频已上传: ${previewAudioUrl}`, 'VoiceService');
       } catch (uploadError) {
-        Logger.error(`[designMinimaxVoice] 上传试听音频失败: ${uploadError?.message}`, '', 'VoiceService');
+        Logger.error(
+          `[designMinimaxVoice] 上传试听音频失败: ${uploadError?.message}`,
+          '',
+          'VoiceService',
+        );
         // 上传失败时回退到 base64（兼容性降级）
-        previewAudioUrl = `data:audio/mp3;base64,${Buffer.from(designResult.trialAudioHex, 'hex').toString('base64')}`;
+        previewAudioUrl = `data:audio/mp3;base64,${Buffer.from(
+          designResult.trialAudioHex,
+          'hex',
+        ).toString('base64')}`;
       }
     }
 

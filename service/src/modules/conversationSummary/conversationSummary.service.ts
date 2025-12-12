@@ -41,6 +41,8 @@ export class ConversationSummaryService {
 
   /**
    * 异步总结对话（非阻塞）
+   * @param roleName 角色名称，用于在总结中替换"assistant"
+   * @param userName 用户名称，用于在总结中替换"user"
    */
   async summarizeConversationAsync(
     groupId: string,
@@ -48,11 +50,13 @@ export class ConversationSummaryService {
     appId: number | null,
     previousSummary: string | null,
     newMessages: Array<{ role: string; content: string }>,
+    roleName: string = '助理',
+    userName: string = '用户',
   ): Promise<void> {
     setImmediate(async () => {
       try {
         Logger.debug(
-          `[对话总结] 开始异步总结 - groupId=${groupId}, 新消息数=${newMessages.length}`,
+          `[对话总结] 开始异步总结 - groupId=${groupId}, 新消息数=${newMessages.length}, 角色名=${roleName}, 用户名=${userName}`,
           'ConversationSummaryService',
         );
 
@@ -64,7 +68,7 @@ export class ConversationSummaryService {
           return;
         }
 
-        const newSummary = await this.generateSummary(previousSummary, validMessages);
+        const newSummary = await this.generateSummary(previousSummary, validMessages, roleName, userName);
         if (!newSummary) {
           Logger.warn(`[对话总结] 总结生成失败，跳过保存`, 'ConversationSummaryService');
           return;
@@ -87,10 +91,14 @@ export class ConversationSummaryService {
 
   /**
    * 使用DashScope API生成总结
+   * @param roleName 角色名称，用于替换"assistant"
+   * @param userName 用户名称，用于替换"user"
    */
   private async generateSummary(
     previousSummary: string | null,
     messages: Array<{ role: string; content: string }>,
+    roleName: string = '助理',
+    userName: string = '用户',
   ): Promise<string | null> {
     try {
       const dashscopeApiKey =
@@ -102,8 +110,13 @@ export class ConversationSummaryService {
         return null;
       }
 
-      // 构建对话文本
-      const conversationText = messages.map(m => `${m.role}: ${m.content}`).join('\n');
+      // 构建对话文本，将 assistant 替换为角色名，user 替换为用户名
+      const conversationText = messages
+        .map(m => {
+          const displayRole = m.role === 'assistant' ? roleName : userName;
+          return `${displayRole}: ${m.content}`;
+        })
+        .join('\n');
 
       // 构建消息：分离指令和数据
       const systemMessage = `你是一个**聊天记录概括助手**。你的任务是：

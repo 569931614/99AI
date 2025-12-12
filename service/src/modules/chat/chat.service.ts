@@ -193,10 +193,12 @@ export class ChatService {
       timePeriod = '深夜';
     }
 
-    // 格式化为更清晰的时间描述（包含时间段标识）
-    const currentDate = `${year}年${month}月${day}日 ${weekDay} ${timePeriod}${String(
-      currentHour,
-    ).padStart(2, '0')}:${String(minute).padStart(2, '0')}`;
+    // 格式化为更清晰的时间描述（使用12小时制，避免混淆）
+    // 将24小时制转换为12小时制
+    const hour12 = currentHour === 0 ? 12 : currentHour > 12 ? currentHour - 12 : currentHour;
+    const currentDate = `${year}年${month}月${day}日 ${weekDay} ${timePeriod}${hour12}:${String(
+      minute,
+    ).padStart(2, '0')}`;
 
     // 根据时间段生成情景提示
     let timeContextPrompt = '';
@@ -422,21 +424,25 @@ export class ChatService {
   /**
    * 将长文本按自然语句边界分割，用于流式TTS。
    * 遵循以下原则：
-   * - 句号、问号、感叹号、波浪号、破折号、分号等视为句子结束
+   * - 句号、问号、感叹号、波浪号、破折号、分号等视为句子结束（中英文标点均支持）
    * - 若句尾后紧跟"【"或括号，需等待翻译块/心理描述结束再切分
    * - 【】内部视为连续文本（翻译），不单独拆分
    * - ()（）内部视为连续文本（心理描述），不单独拆分
+   * - ""''「」『』""内部视为连续文本（引用/对话），不单独拆分
+   * - 最小切分长度控制，避免切分太碎
    * @param text 要分割的文本
    * @param maxChunkLength 每个片段的最大长度（可选，默认不限制）
+   * @param minChunkLength 每个片段的最小长度（可选，默认10个字符）
    * @returns 分割后的句子数组
    */
-  splitTextForTTS(text: string, maxChunkLength?: number): string[] {
+  splitTextForTTS(text: string, maxChunkLength?: number, minChunkLength: number = 10): string[] {
     if (!text || text.trim().length === 0) return [];
 
     const chunks: string[] = [];
     let currentChunk = '';
     let inTranslation = false; // 【】翻译块内
     let inParenthesis = 0; // 括号嵌套层级 ()（）
+    let inQuote = 0; // 引号嵌套层级 ""''「」『』""
 
     const pushChunk = () => {
       const trimmed = currentChunk.trim();
@@ -444,6 +450,18 @@ export class ChatService {
         chunks.push(trimmed);
       }
       currentChunk = '';
+    };
+
+    // 尝试切分，但需满足最小长度要求
+    const tryPushChunk = (): boolean => {
+      const trimmed = currentChunk.trim();
+      if (trimmed && trimmed.length >= minChunkLength) {
+        chunks.push(trimmed);
+        currentChunk = '';
+        return true;
+      }
+      // 长度不足，不切分，继续累积
+      return false;
     };
 
     const enforceMaxChunkLength = () => {
@@ -488,6 +506,20 @@ export class ChatService {
       return char === ')' || char === '）';
     };
 
+    // 判断是否为左引号（开始引用/对话）
+    const isOpenQuote = (char: string): boolean => {
+      return (
+        char === '\u201C' || char === '\u2018' || char === '「' || char === '『' || char === '"'
+      );
+    };
+
+    // 判断是否为右引号（结束引用/对话）
+    const isCloseQuote = (char: string): boolean => {
+      return (
+        char === '\u201D' || char === '\u2019' || char === '」' || char === '』' || char === '"'
+      );
+    };
+
     for (let i = 0; i < text.length; i++) {
       const char = text[i];
       const prevChar = i > 0 ? text[i - 1] : '';
@@ -503,7 +535,8 @@ export class ChatService {
 
       if (char === '】') {
         inTranslation = false;
-        pushChunk();
+        // 翻译块结束，尝试切分（需满足最小长度）
+        tryPushChunk();
         continue;
       }
 
@@ -519,15 +552,31 @@ export class ChatService {
         continue;
       }
 
-      // 在翻译块或括号内时，不进行句子切分
-      if (inTranslation || inParenthesis > 0) {
+      // 处理引号（对话/引用）
+      if (isOpenQuote(char)) {
+        inQuote++;
+        continue;
+      }
+
+      if (isCloseQuote(char)) {
+        inQuote = Math.max(0, inQuote - 1);
+        // 引号结束后不立即切分，让句子继续
+        continue;
+      }
+
+      // 在翻译块、括号内或引号内时，不进行句子切分
+      if (inTranslation || inParenthesis > 0 || inQuote > 0) {
         continue;
       }
 
       if (this.isSentenceBoundaryChar(char, prevChar, nextChar)) {
         const nextMeaningfulChar = this.findNextNonWhitespaceChar(text, i + 1);
-        // 如果下一个有意义的字符是【或括号，不切分，等待翻译/心理描述结束
-        if (nextMeaningfulChar === '【' || isOpenParenthesis(nextMeaningfulChar || '')) {
+        // 如果下一个有意义的字符是【、括号或引号，不切分，等待翻译/心理描述/引用结束
+        if (
+          nextMeaningfulChar === '【' ||
+          isOpenParenthesis(nextMeaningfulChar || '') ||
+          isOpenQuote(nextMeaningfulChar || '')
+        ) {
           continue;
         }
 
@@ -538,11 +587,12 @@ export class ChatService {
           }
         }
 
-        pushChunk();
+        // 尝试切分，如果长度不足则继续累积
+        tryPushChunk();
         continue;
       }
 
-      if (!inTranslation && inParenthesis === 0) {
+      if (!inTranslation && inParenthesis === 0 && inQuote === 0) {
         enforceMaxChunkLength();
       }
     }
@@ -952,16 +1002,8 @@ export class ChatService {
     // 场景表情包使用sticker.name作为转账文本（如"转账188"）
     const transferText = isScenarioSticker ? sticker.name || '' : '';
 
-    const extraParam = {
-      type: 'sticker',
-      stickerId: sticker.id,
-      tags: sticker.tags,
-      scenario: sticker.scenario,
-      source: 'auto',
-      isScenarioSticker: isScenarioSticker,
-      originalContent: content,
-      transferText: transferText || undefined,
-    };
+    // 只保留最小标识，避免数据过长导致保存失败
+    const extraParam = { type: 'sticker' };
 
     // skipSave模式：不保存chatlog，返回数据供外部保存
     if (skipSave) {
@@ -980,6 +1022,7 @@ export class ChatService {
           imageUrl: sticker.imageUrl,
           extraParam: JSON.stringify(extraParam),
           transferText,
+          modelAvatar: sticker.modelAvatar || '', // 添加modelAvatar字段
         },
       };
     }
@@ -1877,6 +1920,7 @@ ${numberedOptions}
     }
 
     const { groupId, usingNetwork, usingDeepThinking, usingMcpTool, isFirstMember } = options || {};
+    const isCalendarMessage = body?.isCalendarMessage === true;
 
     // 判断是否为真正的群聊模式（需要检查 isGroupChat 字段）
     let isGroupChat = false;
@@ -2061,20 +2105,19 @@ ${numberedOptions}
       const { currentDate, timeContextPrompt } = this.getTimeContextPrompt();
 
       // 构建角色扮演系统提示词
-      const rolePlayPrompt = `你将扮演一个人物角色${
-        appName ? `"${appName}"` : ''
-      }，以下是关于这个角色的详细设定，请根据这些信息来构建你的回答。
-
-**人物基本信息：**
+      const rolePlayPrompt = `
+**以下是你的人物基本信息和任务信息：**
 ${setSystemMessage}
+
+${appName ? `\n**用户对你的爱称：** ${appName}` : ''}
 
 要求：
 - 根据上述提供的角色设定，以第一人称视角进行表达。
-- 在回答时，尽可能地融入该角色的性格特点、语言风格以及其特有的口头禅或经典台词。`;
+- 在回答时，尽可能地融入该角色的性格特点、语言风格以及其特有的口头禅或经典台词。
+${appName ? `- 用户会亲切地称呼你为"${appName}"，你应该自然地接受这个爱称。` : ''}`;
 
       setSystemMessage = `【当前时间】${currentDate}
-${timeContextPrompt}
-
+${isCalendarMessage ? timeContextPrompt + '\n' : ''}
 ${rolePlayPrompt}`;
       // - 回复内容必须回复1个句子，并且用空行隔开，每个句子内容20字以内（如需添加心理描述，心理描述的括号内容不计入字数）。
     } else {
@@ -2175,18 +2218,17 @@ ${rolePlayPrompt}`;
 
         currentRequestModelKey = await this.modelsService.getCurrentModelKeyInfo(model);
 
+        // 只有当 isCalendarMessage = true 时才添加时间情景提示
+        const timePrefix = isCalendarMessage
+          ? `【当前时间】${currentDate}\n${timeContextPrompt}\n\n`
+          : `【当前时间】${currentDate}\n\n`;
+
         if (currentRequestModelKey.systemPromptType === 1) {
-          setSystemMessage =
-            `【当前时间】${currentDate}\n${timeContextPrompt}\n\n` +
-            systemPreMessage +
-            currentRequestModelKey.systemPrompt;
+          setSystemMessage = timePrefix + systemPreMessage + currentRequestModelKey.systemPrompt;
         } else if (currentRequestModelKey.systemPromptType === 2) {
-          setSystemMessage =
-            `【当前时间】${currentDate}\n${timeContextPrompt}\n\n` +
-            currentRequestModelKey.systemPrompt;
+          setSystemMessage = timePrefix + currentRequestModelKey.systemPrompt;
         } else {
-          setSystemMessage =
-            `【当前时间】${currentDate}\n${timeContextPrompt}\n\n` + systemPreMessage;
+          setSystemMessage = timePrefix + systemPreMessage;
         }
 
         this.logDebug(`使用默认系统预设`, 'ChatService');
@@ -2855,7 +2897,7 @@ ${rolePlayPrompt}`;
       }
     }
 
-    const translationPrompt = `当回复内容包含非中文句子时，必须在每个非中文句子后面紧跟中文翻译，使用中文中括号【】括起来。例如：Hello, how are you?【你好，最近怎么样？】I'm fine.【我很好。】不要在最后统一翻译，而是每句话后面都要有对应的翻译。\n`;
+    const translationPrompt = `【重要限制】：当回复内容包含非中文时，必须在整个回复的最后面加上完整的中文翻译，使用中文中括号【】括起来。翻译内容只能出现在回复末尾，不要穿插在回复中间。无论之前的对话中是否有加翻译的内容，最后回复中必须加上翻译的内容。\n`;
 
     const rolePresetMarker = '要求：';
     if (setSystemMessage.includes(rolePresetMarker)) {
@@ -3258,6 +3300,7 @@ ${rolePlayPrompt}`;
 
           response = {
             chatId: assistantLogId,
+            userChatId: userLogId || null, // 用户消息的chatId
             modelName: useModeName,
             modelAvatar: '',
             model: useModel,
@@ -3582,6 +3625,8 @@ ${rolePlayPrompt}`;
                   appId,
                   previousSummary,
                   newMessages,
+                  appName || '助理', // 传入角色名，用于总结时显示
+                  userName || '用户', // 传入用户名，用于总结时显示
                 )
                 .catch(err => {
                   Logger.error(
@@ -3653,17 +3698,21 @@ ${rolePlayPrompt}`;
           // - 场景表情包（有tags）：100%触发 + 去重检查
           // - 普通表情包（无tags）：allowEmoji开关开启后100%触发（暂时取消概率限制）
           // - 备忘录消息（isCalendarMessage=true）：跳过表情包
+          // - 群聊和单聊逻辑一致
+          // - AI回复为空时也可触发，根据用户消息选择表情包
           try {
-            // 只在单聊（非群聊）且有AI回复内容时触发，备忘录消息跳过表情包
+            // 备忘录消息跳过表情包
             const isCalendarMessage = (body as any)?.isCalendarMessage === true;
-            if (!isGroupChat && appId && response.full_content && !isCalendarMessage) {
+            if (appId && !isCalendarMessage) {
               this.logDebug(
                 `[表情包] 🔍 尝试自动发送表情包 - groupId: ${groupId}, allowEmoji: ${groupAllowEmoji}`,
                 'ChatService',
               );
+              // 优先使用AI回复内容，如果为空则使用用户消息
+              const stickerMatchContent = response.full_content || prompt || '';
               const stickerResult = await this.tryAutoSendSticker({
                 userId: req.user.id,
-                content: response.full_content,
+                content: stickerMatchContent,
                 appId: appId,
                 groupId: groupId || null,
                 req,
@@ -3692,6 +3741,7 @@ ${rolePlayPrompt}`;
                     isScenarioSticker: stickerResult.isScenarioSticker,
                     transferText: stickerResult.transferText, // 添加转账文本到事件数据
                     isStickerImage: true, // 标记为表情包图片，前端不显示content文字
+                    stickerData: stickerResult.stickerData, // skipSave模式下供外部保存chatlog
                   },
                 };
                 res.write(`\n${JSON.stringify(stickerEvent)}`);
@@ -3975,20 +4025,13 @@ ${rolePlayPrompt}`;
 
               // 🔥 新增：跳过转账表情包消息（它们不应该出现在LLM上下文中）
               let isTransferSticker = false;
-              if (record.extraParam) {
-                try {
-                  const extraParam = JSON.parse(record.extraParam);
-                  // 如果是表情包消息且有transferText，跳过
-                  if (extraParam.type === 'sticker' && extraParam.transferText) {
-                    isTransferSticker = true;
-                    this.logDebug(
-                      `[转账上下文] 检测到转账表情包消息 - id=${record.id}, transferText=${extraParam.transferText}`,
-                      'ChatService',
-                    );
-                  }
-                } catch (e) {
-                  // JSON解析失败，忽略
-                }
+              // 通过 model 和 content 判断是否是转账表情包
+              if (record.model === 'sticker-generator' && record.content?.includes('转账')) {
+                isTransferSticker = true;
+                this.logDebug(
+                  `[转账上下文] 检测到转账表情包消息 - id=${record.id}, content=${record.content}`,
+                  'ChatService',
+                );
               }
 
               if (isTransferSticker) {

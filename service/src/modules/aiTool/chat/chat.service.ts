@@ -1113,7 +1113,10 @@ export class OpenAIChatService {
       const text = completion?.choices?.[0]?.message?.content || '';
       const usage = completion?.usage ? this.mapDashscopeUsage(completion.usage) : undefined;
 
-      Logger.debug(`[通义DeepSeek] 提取的文本: "${text}", 长度: ${text.length}`, 'OpenAIChatService');
+      Logger.debug(
+        `[通义DeepSeek] 提取的文本: "${text}", 长度: ${text.length}`,
+        'OpenAIChatService',
+      );
 
       if (!text || text.trim() === '') {
         Logger.warn(

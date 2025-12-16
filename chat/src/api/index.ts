@@ -1,4 +1,19 @@
 import { get, post } from '@/utils/request'
+
+// 带超时的 fetch 封装
+function fetchWithTimeout(
+  url: string,
+  options: RequestInit = {},
+  timeout = 120000
+): Promise<Response> {
+  const controller = new AbortController()
+  const timeoutId = setTimeout(() => controller.abort(), timeout)
+
+  return fetch(url, {
+    ...options,
+    signal: controller.signal,
+  }).finally(() => clearTimeout(timeoutId))
+}
 import { fetchStream } from '@/utils/request/fetch'
 import type { AxiosProgressEvent, GenericAbortSignal } from 'axios'
 
@@ -252,13 +267,17 @@ export function fetchSendEmailCode<T>(data: {
 /* touchChat 相关接口 */
 // 获取设备角色信息（调用外部API）
 export function fetchDeviceRolesHtml<T>(data: { bracelet_id: string }): Promise<T> {
-  return fetch('https://admin.maobingai.com/api/user/getDeviceRolesHtml', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
+  return fetchWithTimeout(
+    'https://admin.maobingai.com/api/user/getDeviceRolesHtml',
+    {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(data),
     },
-    body: JSON.stringify(data),
-  }).then(res => res.json()) as Promise<T>
+    30000
+  ).then(res => res.json()) as Promise<T>
 }
 
 // touchChat专用的同步聊天接口（调用本地service）
@@ -303,7 +322,7 @@ export function getDeviceBackground<T>(braceletId: string): Promise<T> {
   }) as Promise<T>
 }
 
-// 上传文件到OSS（开放接口）
+// 上传文件到OSS（开放接口）- 5分钟超时
 export function uploadFileOpen<T>(file: File, userId: string, dir?: string): Promise<T> {
   const formData = new FormData()
   formData.append('file', file)
@@ -311,8 +330,12 @@ export function uploadFileOpen<T>(file: File, userId: string, dir?: string): Pro
   if (dir) {
     formData.append('dir', dir)
   }
-  return fetch('/api/open/upload/file', {
-    method: 'POST',
-    body: formData,
-  }).then(res => res.json()) as Promise<T>
+  return fetchWithTimeout(
+    '/api/open/upload/file',
+    {
+      method: 'POST',
+      body: formData,
+    },
+    300000
+  ).then(res => res.json()) as Promise<T>
 }

@@ -133,4 +133,7 @@ export class ChatLogEntity extends BaseEntity {
 
   @Column({ comment: '是否为开场白', nullable: true, default: false })
   isOpeningRemark: boolean;
+
+  @Column({ comment: '翻译后的内容', nullable: true, type: 'text' })
+  translatedContent: string;
 }

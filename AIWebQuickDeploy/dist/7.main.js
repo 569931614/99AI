@@ -3,16 +3,16 @@ exports.id = 7;
 exports.ids = [7];
 exports.modules = {
 
-/***/ 4455:
+/***/ 4458:
 /***/ ((__unused_webpack_module, __webpack_exports__, __webpack_require__) => {
 
 __webpack_require__.r(__webpack_exports__);
 /* harmony export */ __webpack_require__.d(__webpack_exports__, {
 /* harmony export */   fromIni: () => (/* binding */ fromIni)
 /* harmony export */ });
-/* harmony import */ var _smithy_shared_ini_file_loader__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(4448);
+/* harmony import */ var _smithy_shared_ini_file_loader__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(4451);
 /* harmony import */ var _smithy_shared_ini_file_loader__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(3087);
-/* harmony import */ var _resolveProfileData__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(4456);
+/* harmony import */ var _resolveProfileData__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(4459);
 
 
 const fromIni = (_init = {}) => async ({ callerClientConfig } = {}) => {
@@ -33,20 +33,20 @@ const fromIni = (_init = {}) => async ({ callerClientConfig } = {}) => {
 
 /***/ }),
 
-/***/ 4454:
+/***/ 4457:
 /***/ ((__unused_webpack_module, __webpack_exports__, __webpack_require__) => {
 
 __webpack_require__.r(__webpack_exports__);
 /* harmony export */ __webpack_require__.d(__webpack_exports__, {
 /* harmony export */   fromIni: () => (/* reexport safe */ _fromIni__WEBPACK_IMPORTED_MODULE_0__.fromIni)
 /* harmony export */ });
-/* harmony import */ var _fromIni__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(4455);
+/* harmony import */ var _fromIni__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(4458);
 
 
 
 /***/ }),
 
-/***/ 4457:
+/***/ 4460:
 /***/ ((__unused_webpack_module, __webpack_exports__, __webpack_require__) => {
 
 __webpack_require__.r(__webpack_exports__);
@@ -57,8 +57,8 @@ __webpack_require__.r(__webpack_exports__);
 /* harmony import */ var _aws_sdk_core_client__WEBPACK_IMPORTED_MODULE_4__ = __webpack_require__(3121);
 /* harmony import */ var _smithy_property_provider__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(3084);
 /* harmony import */ var _smithy_shared_ini_file_loader__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(3087);
-/* harmony import */ var _resolveCredentialSource__WEBPACK_IMPORTED_MODULE_3__ = __webpack_require__(4458);
-/* harmony import */ var _resolveProfileData__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(4456);
+/* harmony import */ var _resolveCredentialSource__WEBPACK_IMPORTED_MODULE_3__ = __webpack_require__(4461);
+/* harmony import */ var _resolveProfileData__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(4459);
 
 
 
@@ -92,7 +92,7 @@ const resolveAssumeRoleCredentials = async (profileName, profiles, options, visi
     const profileData = profiles[profileName];
     const { source_profile, region } = profileData;
     if (!options.roleAssumer) {
-        const { getDefaultRoleAssumer } = await __webpack_require__.e(/* import() */ 11).then(__webpack_require__.bind(__webpack_require__, 4512));
+        const { getDefaultRoleAssumer } = await __webpack_require__.e(/* import() */ 11).then(__webpack_require__.bind(__webpack_require__, 4515));
         options.roleAssumer = getDefaultRoleAssumer({
             ...options.clientConfig,
             credentialProviderLogger: options.logger,
@@ -143,7 +143,7 @@ const isCredentialSourceWithoutRoleArn = (section) => {
 
 /***/ }),
 
-/***/ 4458:
+/***/ 4461:
 /***/ ((__unused_webpack_module, __webpack_exports__, __webpack_require__) => {
 
 __webpack_require__.r(__webpack_exports__);
@@ -158,19 +158,19 @@ __webpack_require__.r(__webpack_exports__);
 const resolveCredentialSource = (credentialSource, profileName, logger) => {
     const sourceProvidersMap = {
         EcsContainer: async (options) => {
-            const { fromHttp } = await __webpack_require__.e(/* import() */ 8).then(__webpack_require__.bind(__webpack_require__, 4471));
-            const { fromContainerMetadata } = await __webpack_require__.e(/* import() */ 1).then(__webpack_require__.bind(__webpack_require__, 4420));
+            const { fromHttp } = await __webpack_require__.e(/* import() */ 8).then(__webpack_require__.bind(__webpack_require__, 4474));
+            const { fromContainerMetadata } = await __webpack_require__.e(/* import() */ 1).then(__webpack_require__.bind(__webpack_require__, 4423));
             logger?.debug("@aws-sdk/credential-provider-ini - credential_source is EcsContainer");
             return async () => (0,_smithy_property_provider__WEBPACK_IMPORTED_MODULE_0__.chain)(fromHttp(options ?? {}), fromContainerMetadata(options))().then(setNamedProvider);
         },
         Ec2InstanceMetadata: async (options) => {
             logger?.debug("@aws-sdk/credential-provider-ini - credential_source is Ec2InstanceMetadata");
-            const { fromInstanceMetadata } = await __webpack_require__.e(/* import() */ 1).then(__webpack_require__.bind(__webpack_require__, 4420));
+            const { fromInstanceMetadata } = await __webpack_require__.e(/* import() */ 1).then(__webpack_require__.bind(__webpack_require__, 4423));
             return async () => fromInstanceMetadata(options)().then(setNamedProvider);
         },
         Environment: async (options) => {
             logger?.debug("@aws-sdk/credential-provider-ini - credential_source is Environment");
-            const { fromEnv } = await __webpack_require__.e(/* import() */ 12).then(__webpack_require__.bind(__webpack_require__, 4532));
+            const { fromEnv } = await __webpack_require__.e(/* import() */ 12).then(__webpack_require__.bind(__webpack_require__, 4535));
             return async () => fromEnv(options)().then(setNamedProvider);
         },
     };
@@ -187,7 +187,7 @@ const setNamedProvider = (creds) => (0,_aws_sdk_core_client__WEBPACK_IMPORTED_MO
 
 /***/ }),
 
-/***/ 4459:
+/***/ 4462:
 /***/ ((__unused_webpack_module, __webpack_exports__, __webpack_require__) => {
 
 __webpack_require__.r(__webpack_exports__);
@@ -198,7 +198,7 @@ __webpack_require__.r(__webpack_exports__);
 /* harmony import */ var _aws_sdk_core_client__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(3121);
 
 const isProcessProfile = (arg) => Boolean(arg) && typeof arg === "object" && typeof arg.credential_process === "string";
-const resolveProcessCredentials = async (options, profile) => __webpack_require__.e(/* import() */ 5).then(__webpack_require__.bind(__webpack_require__, 4463)).then(({ fromProcess }) => fromProcess({
+const resolveProcessCredentials = async (options, profile) => __webpack_require__.e(/* import() */ 5).then(__webpack_require__.bind(__webpack_require__, 4466)).then(({ fromProcess }) => fromProcess({
     ...options,
     profile,
 })().then((creds) => (0,_aws_sdk_core_client__WEBPACK_IMPORTED_MODULE_0__.setCredentialFeature)(creds, "CREDENTIALS_PROFILE_PROCESS", "v")));
@@ -206,7 +206,7 @@ const resolveProcessCredentials = async (options, profile) => __webpack_require_
 
 /***/ }),
 
-/***/ 4456:
+/***/ 4459:
 /***/ ((__unused_webpack_module, __webpack_exports__, __webpack_require__) => {
 
 __webpack_require__.r(__webpack_exports__);
@@ -214,11 +214,11 @@ __webpack_require__.r(__webpack_exports__);
 /* harmony export */   resolveProfileData: () => (/* binding */ resolveProfileData)
 /* harmony export */ });
 /* harmony import */ var _smithy_property_provider__WEBPACK_IMPORTED_MODULE_5__ = __webpack_require__(3084);
-/* harmony import */ var _resolveAssumeRoleCredentials__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(4457);
-/* harmony import */ var _resolveProcessCredentials__WEBPACK_IMPORTED_MODULE_3__ = __webpack_require__(4459);
-/* harmony import */ var _resolveSsoCredentials__WEBPACK_IMPORTED_MODULE_4__ = __webpack_require__(4460);
-/* harmony import */ var _resolveStaticCredentials__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(4461);
-/* harmony import */ var _resolveWebIdentityCredentials__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(4462);
+/* harmony import */ var _resolveAssumeRoleCredentials__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(4460);
+/* harmony import */ var _resolveProcessCredentials__WEBPACK_IMPORTED_MODULE_3__ = __webpack_require__(4462);
+/* harmony import */ var _resolveSsoCredentials__WEBPACK_IMPORTED_MODULE_4__ = __webpack_require__(4463);
+/* harmony import */ var _resolveStaticCredentials__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(4464);
+/* harmony import */ var _resolveWebIdentityCredentials__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(4465);
 
 
 
@@ -251,7 +251,7 @@ const resolveProfileData = async (profileName, profiles, options, visitedProfile
 
 /***/ }),
 
-/***/ 4460:
+/***/ 4463:
 /***/ ((__unused_webpack_module, __webpack_exports__, __webpack_require__) => {
 
 __webpack_require__.r(__webpack_exports__);
@@ -262,7 +262,7 @@ __webpack_require__.r(__webpack_exports__);
 /* harmony import */ var _aws_sdk_core_client__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(3121);
 
 const resolveSsoCredentials = async (profile, profileData, options = {}) => {
-    const { fromSSO } = await __webpack_require__.e(/* import() */ 3).then(__webpack_require__.bind(__webpack_require__, 4435));
+    const { fromSSO } = await __webpack_require__.e(/* import() */ 3).then(__webpack_require__.bind(__webpack_require__, 4438));
     return fromSSO({
         profile,
         logger: options.logger,
@@ -287,7 +287,7 @@ const isSsoProfile = (arg) => arg &&
 
 /***/ }),
 
-/***/ 4461:
+/***/ 4464:
 /***/ ((__unused_webpack_module, __webpack_exports__, __webpack_require__) => {
 
 __webpack_require__.r(__webpack_exports__);
@@ -318,7 +318,7 @@ const resolveStaticCredentials = async (profile, options) => {
 
 /***/ }),
 
-/***/ 4462:
+/***/ 4465:
 /***/ ((__unused_webpack_module, __webpack_exports__, __webpack_require__) => {
 
 __webpack_require__.r(__webpack_exports__);
@@ -333,7 +333,7 @@ const isWebIdentityProfile = (arg) => Boolean(arg) &&
     typeof arg.web_identity_token_file === "string" &&
     typeof arg.role_arn === "string" &&
     ["undefined", "string"].indexOf(typeof arg.role_session_name) > -1;
-const resolveWebIdentityCredentials = async (profile, options) => __webpack_require__.e(/* import() */ 6).then(__webpack_require__.bind(__webpack_require__, 4468)).then(({ fromTokenFile }) => fromTokenFile({
+const resolveWebIdentityCredentials = async (profile, options) => __webpack_require__.e(/* import() */ 6).then(__webpack_require__.bind(__webpack_require__, 4471)).then(({ fromTokenFile }) => fromTokenFile({
     webIdentityTokenFile: profile.web_identity_token_file,
     roleArn: profile.role_arn,
     roleSessionName: profile.role_session_name,
@@ -345,7 +345,7 @@ const resolveWebIdentityCredentials = async (profile, options) => __webpack_requ
 
 /***/ }),
 
-/***/ 4449:
+/***/ 4452:
 /***/ ((__unused_webpack_module, __webpack_exports__, __webpack_require__) => {
 
 __webpack_require__.r(__webpack_exports__);
@@ -370,7 +370,7 @@ const mergeConfigFiles = (...files) => {
 
 /***/ }),
 
-/***/ 4448:
+/***/ 4451:
 /***/ ((__unused_webpack_module, __webpack_exports__, __webpack_require__) => {
 
 __webpack_require__.r(__webpack_exports__);
@@ -378,7 +378,7 @@ __webpack_require__.r(__webpack_exports__);
 /* harmony export */   parseKnownFiles: () => (/* binding */ parseKnownFiles)
 /* harmony export */ });
 /* harmony import */ var _loadSharedConfigFiles__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(3073);
-/* harmony import */ var _mergeConfigFiles__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(4449);
+/* harmony import */ var _mergeConfigFiles__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(4452);
 
 
 const parseKnownFiles = async (init) => {

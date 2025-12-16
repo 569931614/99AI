@@ -735,4 +735,33 @@ export class ChatLogService {
       return error.message;
     }
   }
+
+  /* 更新消息的翻译内容 */
+  async updateTranslation(
+    userId: number,
+    chatId: number,
+    translatedContent: string,
+  ): Promise<{ success: boolean; message: string }> {
+    try {
+      // 验证消息存在且属于该用户
+      const chatLog = await this.chatLogEntity.findOne({
+        where: { id: chatId, userId },
+      });
+
+      if (!chatLog) {
+        throw new HttpException('消息不存在或无权限', HttpStatus.NOT_FOUND);
+      }
+
+      // 更新翻译内容
+      await this.chatLogEntity.update(chatId, { translatedContent });
+
+      return { success: true, message: '翻译内容已保存' };
+    } catch (error) {
+      Logger.error(`更新翻译内容失败: ${error.message}`, error.stack, 'ChatLogService');
+      throw new HttpException(
+        error.message || '更新翻译内容失败',
+        error.status || HttpStatus.INTERNAL_SERVER_ERROR,
+      );
+    }
+  }
 }

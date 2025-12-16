@@ -108,22 +108,67 @@ export class MinimaxProvider {
     throw lastError;
   }
 
+  /** 将 MiniMax API 错误消息转换为友好的中文提示 */
+  private translateErrorMessage(message: string): string {
+    if (!message) return '操作失败，请重试';
+    const errorMap: Record<string, string> = {
+      'voice duration too short': '音频时长不能少于10秒，请重新上传',
+      'voice duration too long': '音频时长过长，请上传10秒至5分钟的音频',
+      'file not found': '音频文件不存在，请重新上传',
+      'invalid file format': '音频格式不支持，请上传 mp3、m4a、wav 格式',
+      'file size too large': '音频文件过大，请上传不超过20MB的文件',
+    };
+    // 遍历错误映射，进行模糊匹配
+    for (const [key, value] of Object.entries(errorMap)) {
+      if (message.toLowerCase().includes(key.toLowerCase())) {
+        return value;
+      }
+    }
+    return message;
+  }
+
+  /** 根据文件名或URL推断音频的 MIME 类型 */
+  private getAudioContentType(fileName?: string): string {
+    if (!fileName) return 'audio/wav';
+    const ext = fileName.toLowerCase().split('.').pop();
+    const mimeTypes: Record<string, string> = {
+      wav: 'audio/wav',
+      mp3: 'audio/mpeg',
+      m4a: 'audio/mp4',
+      aac: 'audio/aac',
+      ogg: 'audio/ogg',
+      flac: 'audio/flac',
+      webm: 'audio/webm',
+    };
+    return mimeTypes[ext || ''] || 'audio/wav';
+  }
+
   /** 上传音频文件 */
   async uploadFile(request: FileUploadRequest): Promise<{ fileId: number | string }> {
     const headers = await this.getHeaders(true);
     const formData = new FormData();
     formData.append('purpose', request.purpose || 'voice_clone');
 
+    // 根据文件名推断正确的 MIME 类型
+    const fileName = request.fileName || 'audio.wav';
+    const contentType = this.getAudioContentType(fileName);
+    this.logger.log(`[uploadFile] 上传文件: ${fileName}, contentType: ${contentType}`);
+
     if (request.audioBuffer) {
       formData.append('file', request.audioBuffer, {
-        filename: request.fileName || 'audio.wav',
-        contentType: 'audio/wav',
+        filename: fileName,
+        contentType,
       });
     } else if (request.audioUrl) {
+      // 从 URL 推断文件名和类型
+      const urlFileName = request.audioUrl.split('/').pop()?.split('?')[0] || fileName;
+      const urlContentType = this.getAudioContentType(urlFileName);
+      this.logger.log(`[uploadFile] 从URL下载: ${urlFileName}, contentType: ${urlContentType}`);
+
       const audioResponse = await axios.get(request.audioUrl, { responseType: 'arraybuffer' });
       formData.append('file', Buffer.from(audioResponse.data), {
-        filename: request.fileName || 'audio.wav',
-        contentType: 'audio/wav',
+        filename: urlFileName,
+        contentType: urlContentType,
       });
     } else {
       throw new HttpException('必须提供 audioUrl 或 audioBuffer', HttpStatus.BAD_REQUEST);
@@ -227,6 +272,8 @@ export class MinimaxProvider {
 
     try {
       this.logger.log(`[createTTSSync] 开始同步 TTS 合成，文本长度: ${request.text.length}`);
+      this.logger.log(`[createTTSSync] 完整文本内容: "${request.text}"`);
+      this.logger.log(`[createTTSSync] 请求参数: ${JSON.stringify(payload, null, 2)}`);
       const response = await this.retryRequest(
         () =>
           axios.post(`${this.baseUrl}/v1/t2a_v2`, payload, {
@@ -245,6 +292,11 @@ export class MinimaxProvider {
 
       // 同步接口返回 hex 编码的音频数据
       const audioHex = response.data.data?.audio;
+      this.logger.log(
+        `[createTTSSync] MiniMax响应: status_code=${
+          response.data.base_resp?.status_code
+        }, extra_info=${JSON.stringify(response.data.extra_info || {})}`,
+      );
       if (!audioHex) {
         throw new HttpException('TTS 合成未返回音频数据', HttpStatus.INTERNAL_SERVER_ERROR);
       }
@@ -380,18 +432,15 @@ export class MinimaxProvider {
       );
 
       if (response.data.base_resp?.status_code !== 0) {
-        throw new HttpException(
-          response.data.base_resp?.status_msg || '创建克隆音色失败',
-          HttpStatus.BAD_REQUEST,
-        );
+        const rawMsg = response.data.base_resp?.status_msg || '创建克隆音色失败';
+        throw new HttpException(this.translateErrorMessage(rawMsg), HttpStatus.BAD_REQUEST);
       }
       return { voiceId: options.voiceId, demoAudio: response.data.demo_audio, status: 'success' };
     } catch (error) {
       this.logger.error(`[createClonedVoice] ${error?.message || error}`);
-      throw new HttpException(
-        error?.response?.data?.base_resp?.status_msg || error?.message || '创建克隆音色失败',
-        HttpStatus.INTERNAL_SERVER_ERROR,
-      );
+      const rawMsg =
+        error?.response?.data?.base_resp?.status_msg || error?.message || '创建克隆音色失败';
+      throw new HttpException(this.translateErrorMessage(rawMsg), HttpStatus.INTERNAL_SERVER_ERROR);
     }
   }
 

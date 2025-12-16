@@ -1,16 +1,32 @@
 {
-  "apps": {
-    "name": "open-service",
-    "script": "./dist/main.js",
-    "watch": true,
-    "ignore_watch": ["node_modules", "logs", "public/file"],
-    "env": {
-      "TZ": "Asia/Shanghai"
+  "apps": [
+    {
+      "name": "open-service",
+      "script": "./dist/main.js",
+      "watch": true,
+      "ignore_watch": ["node_modules", "logs", "public/file"],
+      "env": {
+        "TZ": "Asia/Shanghai"
+      },
+      "instances": 1,
+      "error_file": "logs/err.log",
+      "out_file": "logs/out.log",
+      "log_date_format": "YYYY-MM-DD HH:mm:ss",
+      "max_memory_restart": "2000M",
+      "merge_logs": false
     },
-    "instances": 1,
-    "error_file": "logs/err.log",
-    "out_file": "logs/out.log",
-    "log_date_format": "YYYY-MM-DD HH:mm:ss",
-    "max_memory_restart": "2000M"
-  }
+    {
+      "name": "log-rotate",
+      "script": "./scripts/log-rotate.js",
+      "cron_restart": "0 * * * *",
+      "autorestart": false,
+      "watch": false,
+      "instances": 1,
+      "env": {
+        "TZ": "Asia/Shanghai"
+      },
+      "out_file": "logs/rotate-out.log",
+      "error_file": "logs/rotate-err.log"
+    }
+  ]
 }

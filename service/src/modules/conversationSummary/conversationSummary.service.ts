@@ -68,7 +68,12 @@ export class ConversationSummaryService {
           return;
         }
 
-        const newSummary = await this.generateSummary(previousSummary, validMessages, roleName, userName);
+        const newSummary = await this.generateSummary(
+          previousSummary,
+          validMessages,
+          roleName,
+          userName,
+        );
         if (!newSummary) {
           Logger.warn(`[对话总结] 总结生成失败，跳过保存`, 'ConversationSummaryService');
           return;

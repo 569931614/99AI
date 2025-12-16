@@ -123,4 +123,16 @@ export class OpenChatLogController {
     } as Request;
     return this.chatLogService.deleteChatLog(fakeReq, body as any);
   }
+
+  @Post('updateTranslation')
+  @ApiOperation({ summary: '【开放】更新消息的翻译内容（无鉴权，需显式 userId）' })
+  async updateTranslation(
+    @Body() body: { userId: number; chatId: number; translatedContent: string },
+  ) {
+    const { userId, chatId, translatedContent } = body;
+    if (!userId) throw new Error('userId 必填');
+    if (!chatId) throw new Error('chatId 必填');
+    if (translatedContent === undefined) throw new Error('translatedContent 必填');
+    return this.chatLogService.updateTranslation(userId, chatId, translatedContent);
+  }
 }

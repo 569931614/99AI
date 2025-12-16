@@ -8,6 +8,7 @@
   "bin": "./dist/main.js",
   "scripts": {
     "start": "pm2 start pm2.conf.json",
+    "start:all": "pm2 start pm2.ecosystem.json",
     "prebuild": "pnpm run format",
     "build": "pnpm format && nest build",
     "build:test": "nest build",
@@ -24,7 +25,10 @@
     "test:e2e": "jest --config ./test/jest-e2e.json",
     "pkg:win": "pkg . -t node16-win-x64 -o app-win --debug",
     "pkg:mac": "pkg . -t node16-mac-x64 -o app-mac --debug",
-    "pkg:linux": "pkg . -t node16-linux-x64 -o app-linux --debug"
+    "pkg:linux": "pkg . -t node16-linux-x64 -o app-linux --debug",
+    "log:rotate": "node scripts/log-rotate.js rotate",
+    "log:clean": "node scripts/log-rotate.js clean",
+    "log:clean:7d": "node scripts/log-rotate.js clean 7"
   },
   "dependencies": {
     "@alicloud/pop-core": "^1.8.0",

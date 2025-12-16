@@ -782,9 +782,7 @@ export class OpenChatController {
       const originalResponse = fullResponse;
       fullResponse = this.cleanAIResponseQuotesAndBrackets(fullResponse);
       if (originalResponse !== fullResponse) {
-        this.logger.log(
-          `[chat-process-sync] 清理后的回复: ${fullResponse}`,
-        );
+        this.logger.log(`[chat-process-sync] 清理后的回复: ${fullResponse}`);
       }
 
       if (chatId) {
@@ -839,14 +837,14 @@ export class OpenChatController {
         let calendarVoiceDuration: number | null = null;
 
         // 为完整文本生成语音
-        if (shouldGenerateTts && fullResponse && chatId) {
+        if (shouldGenerateTts && fullResponse) {
           this.logger.log(
             `[chat-process-sync] 🎤 为备忘录消息生成TTS: "${fullResponse.substring(0, 50)}..."`,
           );
           try {
             const ttsResult = await this.chatService.generateTtsWithEmotion({
               text: fullResponse,
-              chatId,
+              chatId: chatId || undefined,
               appId: body.appId || null,
               userId,
             });
@@ -945,6 +943,7 @@ export class OpenChatController {
               content: sentence,
               audioUrl: sentenceAudioUrl, // 直接保存语音URL
               ttsDuration: sentenceVoiceDuration, // 直接保存语音时长
+              display_state: sentenceAudioUrl ? 0 : 1, // 没有语音时强制显示文字
               promptTokens: 0,
               completionTokens: 0,
               totalTokens: 0,
@@ -973,12 +972,14 @@ export class OpenChatController {
             voiceDuration?: number | null;
             emotion?: string | null;
             chatId?: number | null;
+            display_state?: number;
           } = {
             text: sentence,
             audioUrl: sentenceAudioUrl,
             voiceDuration: sentenceVoiceDuration,
             emotion: sentenceEmotion,
             chatId: sentenceChatId,
+            display_state: sentenceAudioUrl ? 0 : 1,
           };
 
           dataArray.push(item);
@@ -1561,14 +1562,28 @@ export class OpenChatController {
   /**
    * 按强结束标点符号初步切分
    * 保留标点符号在句尾
+   * 在占位符（心理描述）前面切分，让每个心理描述成为新段落的开头
    */
   private splitByStrongPunctuation(text: string): string[] {
     const segments: string[] = [];
     let current = '';
     let i = 0;
 
+    // 检查文本是否包含占位符（心理描述）
+    const hasProtectedContent = text.includes('\x00PROTECTED');
+
     while (i < text.length) {
       const char = text[i];
+
+      // 如果有心理描述，在占位符前面切分（让每个心理描述成为新段落的开头）
+      if (hasProtectedContent && char === '\x00' && text.substring(i).startsWith('\x00PROTECTED')) {
+        // 如果当前已有内容，先保存
+        if (current.trim()) {
+          segments.push(current.trim());
+          current = '';
+        }
+      }
+
       current += char;
 
       // 检查是否是省略号（连续的点），不切分
@@ -1586,14 +1601,20 @@ export class OpenChatController {
       // 强结束符：句号、感叹号、问号
       if (this.isStrongEndPunctuation(char)) {
         // 检查后面是否还有连续的不同标点（如"？！"）
-        while (i + 1 < text.length && this.isStrongEndPunctuation(text[i + 1]) && text[i + 1] !== char) {
+        while (
+          i + 1 < text.length &&
+          this.isStrongEndPunctuation(text[i + 1]) &&
+          text[i + 1] !== char
+        ) {
           i++;
           current += text[i];
         }
 
-        // 检查后面是否紧跟【，如果是则不切分
+        // 检查后面是否紧跟【或占位符，如果是则不切分
         const nextNonSpace = this.findNextNonWhitespaceChar(text, i + 1);
-        if (nextNonSpace !== '【' && nextNonSpace !== '\x00') {
+        // 如果有心理描述，只在占位符前面切分，不在强结束符处切分
+        // 如果没有心理描述，按强结束符切分（但【后面不切分）
+        if (!hasProtectedContent && nextNonSpace !== '【') {
           segments.push(current.trim());
           current = '';
         }
@@ -2669,6 +2690,94 @@ ${example}
       return res.status(status).json({
         success: false,
         message: e.message || '删除失败',
+      });
+    }
+  }
+
+  @Post('translate')
+  @ApiOperation({ summary: '【开放】文本翻译（翻译成中文）' })
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        token: {
+          type: 'string',
+          description: 'Maobing平台用户token（可选）',
+        },
+        maobingBaseUrl: {
+          type: 'string',
+          description: 'Maobing基础域名（可选）',
+        },
+        userId: { type: 'number', description: '用户ID（可选）' },
+        text: { type: 'string', description: '要翻译的文本（必填）' },
+        targetLang: {
+          type: 'string',
+          description: '目标语言（可选，默认"中文"）',
+        },
+      },
+      required: ['text'],
+    },
+  })
+  async translate(@Body() body: any, @Res() res: Response) {
+    try {
+      const { token, userId: originalUserId, maobingBaseUrl, text, targetLang = '中文' } = body || {};
+
+      if (!text || text.trim() === '') {
+        throw new HttpException('翻译文本不能为空', HttpStatus.BAD_REQUEST);
+      }
+
+      // 验证用户身份（如果提供了token或userId）
+      let userId = originalUserId ? Number(originalUserId) : null;
+      if (token && !userId) {
+        const validatedUserId = await MaobingAuthUtil.validateTokenAndGetUserId(
+          token,
+          maobingBaseUrl,
+        );
+        if (validatedUserId) {
+          userId = validatedUserId;
+        }
+      }
+
+      // 构建翻译提示词
+      const systemMessage = `你是一个专业的翻译助手。请将用户提供的文本翻译成${targetLang}。
+要求：
+1. 只输出翻译后的内容，不要添加任何解释或额外的文字
+2. 保持原文的语气和风格
+3. 如果原文已经是${targetLang}，则原样输出`;
+
+      const prompt = text;
+
+      // 调用 AI 进行翻译
+      const result = await this.openAIChatService.chatFree(
+        prompt,
+        systemMessage,
+        [],
+        undefined,
+        undefined,
+        { userId },
+      );
+
+      const translatedText = result?.text?.trim() || '';
+
+      if (!translatedText) {
+        throw new HttpException('翻译失败，请稍后重试', HttpStatus.INTERNAL_SERVER_ERROR);
+      }
+
+      return res.status(200).json({
+        success: true,
+        data: {
+          originalText: text,
+          translatedText: translatedText,
+          targetLang: targetLang,
+        },
+        message: '翻译成功',
+      });
+    } catch (e: any) {
+      this.logger.error(`翻译失败: ${e.message}`);
+      const status = e instanceof HttpException ? e.getStatus() : HttpStatus.INTERNAL_SERVER_ERROR;
+      return res.status(status).json({
+        success: false,
+        message: e.message || '翻译失败',
       });
     }
   }

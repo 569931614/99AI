@@ -63,7 +63,7 @@ export class OpenUploadController {
   @UseInterceptors(
     FileInterceptor('file', {
       limits: {
-        fileSize: 10 * 1024 * 1024, // 10MB大小限制
+        fileSize: 20 * 1024 * 1024, // 20MB大小限制
       },
     }),
   )

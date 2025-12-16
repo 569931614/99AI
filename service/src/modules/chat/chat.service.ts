@@ -158,7 +158,11 @@ export class ChatService {
    * 获取当前时间和对应的情景提示语
    * @returns 包含格式化时间和情景提示的对象
    */
-  private getTimeContextPrompt(): { currentDate: string; timeContextPrompt: string } {
+  private getTimeContextPrompt(): {
+    currentDate: string;
+    timeContextPrompt: string;
+    timeAnswerPrompt: string;
+  } {
     const now = new Date();
 
     // 使用北京时间（东八区）
@@ -199,6 +203,10 @@ export class ChatService {
     const currentDate = `${year}年${month}月${day}日 ${weekDay} ${timePeriod}${hour12}:${String(
       minute,
     ).padStart(2, '0')}`;
+    // 简短时间格式，用于回答"几点了"这类问题（24小时制）
+    const shortTime = `${currentHour}点${minute > 0 ? minute + '分' : '整'}`;
+    // 简短日期格式，用于回答"今天几号"这类问题
+    const shortDate = `${month}月${day}日 ${weekDay}`;
 
     // 根据时间段生成情景提示
     let timeContextPrompt = '';
@@ -236,11 +244,10 @@ export class ChatService {
         '现在已经是深夜了，如果用户还未休息，请用你的语言风格适当关心他们的健康，建议他们早点休息。但不要过分打扰，如果用户有明确的任务或问题，优先解答。';
     }
 
-    // 添加时间使用说明（防止AI推测时间流逝）
-    timeContextPrompt +=
-      '\n【重要】如果用户询问当前时间，请直接使用上面显示的时间回答，不要根据对话推测时间的流逝。';
+    // 时间日期回答提示（始终添加，防止AI推测）
+    const timeAnswerPrompt = `当用户问几点了，现在是${shortTime}，用你的语言风格简洁回答；当用户问日期或星期几，今天是${shortDate}，用你的语言风格简洁回答。不要猜测时间。`;
 
-    return { currentDate, timeContextPrompt };
+    return { currentDate, timeContextPrompt, timeAnswerPrompt };
   }
 
   /**
@@ -535,8 +542,13 @@ export class ChatService {
 
       if (char === '】') {
         inTranslation = false;
-        // 翻译块结束，尝试切分（需满足最小长度）
-        tryPushChunk();
+        // 翻译块结束，检查后面是否还有内容
+        const remainingText = text.slice(i + 1).trim();
+        if (remainingText.length > 0) {
+          // 后面还有内容，进行切分
+          tryPushChunk();
+        }
+        // 后面没有内容，不切分
         continue;
       }
 
@@ -2102,7 +2114,7 @@ ${numberedOptions}
       }
 
       // 为应用预设添加【当前时间】和时间情景提示（放到最前面）
-      const { currentDate, timeContextPrompt } = this.getTimeContextPrompt();
+      const { currentDate, timeContextPrompt, timeAnswerPrompt } = this.getTimeContextPrompt();
 
       // 构建角色扮演系统提示词
       const rolePlayPrompt = `
@@ -2114,11 +2126,13 @@ ${appName ? `\n**用户对你的爱称：** ${appName}` : ''}
 要求：
 - 根据上述提供的角色设定，以第一人称视角进行表达。
 - 在回答时，尽可能地融入该角色的性格特点、语言风格以及其特有的口头禅或经典台词。
+- 【语言一致性要求】根据角色设定选择使用的语言，一旦确定语言后必须全程保持一致。如果使用中文回复，则绝对禁止在对话中突然切换成英文或其他外语；如果使用外语回复，也必须全程使用该外语。严禁出现前一句中文、后一句英文的情况。
+- 每次回复内容不能超过200个字（括号内的心理描述、动作描写不计入字数限制）。
+- 【单段回复要求】每次只能回复一段内容，不要一次性回复多段。即使历史对话中你回复了多条消息，当前回复也只能是一段完整的内容，不要用换行分隔成多段独立的回复。
+- ${timeAnswerPrompt}
 ${appName ? `- 用户会亲切地称呼你为"${appName}"，你应该自然地接受这个爱称。` : ''}`;
 
-      setSystemMessage = `【当前时间】${currentDate}
-${isCalendarMessage ? timeContextPrompt + '\n' : ''}
-${rolePlayPrompt}`;
+      setSystemMessage = `${isCalendarMessage ? timeContextPrompt + '\n' : ''}${rolePlayPrompt}`;
       // - 回复内容必须回复1个句子，并且用空行隔开，每个句子内容20字以内（如需添加心理描述，心理描述的括号内容不计入字数）。
     } else {
       if (usingPlugin?.parameters === 'mermaid') {
@@ -2214,14 +2228,16 @@ ${rolePlayPrompt}`;
         this.logDebug(`使用流程图插件`, 'ChatService');
       } else {
         // 使用全局预设
-        const { currentDate, timeContextPrompt } = this.getTimeContextPrompt();
+        const { currentDate, timeContextPrompt, timeAnswerPrompt } = this.getTimeContextPrompt();
 
         currentRequestModelKey = await this.modelsService.getCurrentModelKeyInfo(model);
 
-        // 只有当 isCalendarMessage = true 时才添加时间情景提示
+        // 只有当 isCalendarMessage = true 时才添加时间情景提示，timeAnswerPrompt 和中文回复限制始终添加
+        const chineseReplyPrompt =
+          '即使用户使用英文或其他外语提问，除非用户明确要求使用外语回复，否则一律使用中文进行回复。';
         const timePrefix = isCalendarMessage
-          ? `【当前时间】${currentDate}\n${timeContextPrompt}\n\n`
-          : `【当前时间】${currentDate}\n\n`;
+          ? `${timeContextPrompt}\n${timeAnswerPrompt}\n${chineseReplyPrompt}\n\n`
+          : `${timeAnswerPrompt}\n${chineseReplyPrompt}\n\n`;
 
         if (currentRequestModelKey.systemPromptType === 1) {
           setSystemMessage = timePrefix + systemPreMessage + currentRequestModelKey.systemPrompt;
@@ -2768,7 +2784,7 @@ ${rolePlayPrompt}`;
     let groupAllowEmoji = false; // 默认不允许表情包
     let groupAllowTap = false; // 默认不允许拍一拍
     let groupMaxReplyCount = 5; // 默认最多回复5条
-    let groupEnableTranslation = false; // 默认不开启翻译
+    let groupEnableTranslation = isCalendarMessage ? true : false; // 备忘录消息默认开启翻译，其他默认不开启
 
     if (appId && setSystemMessage && this.userAppSettingsService) {
       try {
@@ -2891,6 +2907,19 @@ ${rolePlayPrompt}`;
             // 如果没找到，就追加到最前面
             setSystemMessage = psychologicalDescPrompt + setSystemMessage;
           }
+        } else {
+          // 心理描述关闭时，明确告知AI不要添加心理描述和动作描述
+          const noPsychologicalDescPrompt = `\n【重要限制】回复内容中不要添加任何心理描述和动作描述，不要使用括号（）描述心理活动或动作，只回复纯消息内容。\n`;
+
+          const timeMarkerEnd = setSystemMessage.indexOf('\n\n');
+          if (timeMarkerEnd > 0) {
+            setSystemMessage =
+              setSystemMessage.substring(0, timeMarkerEnd) +
+              noPsychologicalDescPrompt +
+              setSystemMessage.substring(timeMarkerEnd);
+          } else {
+            setSystemMessage = noPsychologicalDescPrompt + setSystemMessage;
+          }
         }
       } catch (error) {
         Logger.warn(`获取心理描述开关失败: ${error?.message || error}`, 'ChatService');
@@ -2912,6 +2941,9 @@ ${rolePlayPrompt}`;
       `[翻译] 已添加翻译提示词到系统消息: groupId=${groupId}, enableTranslation=${groupEnableTranslation}`,
       'ChatService',
     );
+
+    // 添加防重复提示
+    setSystemMessage += `\n\n【重要提示】请务必根据用户的最新消息给出不同的、有意义的回应。不要重复之前说过的内容，要认真理解用户说的话并做出相应的回复。`;
 
     /* 获取历史消息 */
     const { messagesHistory } = await this.buildMessageFromParentMessageId(

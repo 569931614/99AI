@@ -27,6 +27,7 @@ import { Share } from '../share/share.entity';
 import { SigninEntity } from '../signin/signIn.entity';
 import { StickerEntity } from '../sticker/sticker.entity';
 import { UserEntity } from '../user/user.entity';
+import { UserApiConfigEntity } from '../user/userApiConfig.entity';
 import { AccountLogEntity } from '../userBalance/accountLog.entity';
 import { BalanceEntity } from '../userBalance/balance.entity';
 import { FingerprintLogEntity } from '../userBalance/fingerprint.entity';
@@ -62,6 +63,7 @@ import { DeviceBackgroundEntity } from '../deviceBackground/deviceBackground.ent
             ViolationLogEntity,
             ModelsEntity,
             UserEntity,
+            UserApiConfigEntity,
             AccountLogEntity,
             FingerprintLogEntity,
             BalanceEntity,

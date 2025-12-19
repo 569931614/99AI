@@ -891,7 +891,7 @@ export class OpenAIChatService {
       enableKnowledgeBase?: boolean;
       knowledgeBaseIds?: string;
       dialogueExamples?: string;
-      openingRemark?: string; // 添加开场白参数
+      openingRemark?: string;
     },
   ): Promise<{
     text: string;
@@ -919,55 +919,107 @@ export class OpenAIChatService {
           `用户 ${appConfig?.userId} 的自定义API请求失败，回退到全局配置: ${error.message}`,
           'OpenAIChatService',
         );
-        // 继续使用全局配置（星尘API）
       }
     }
 
-    // 使用全局配置（星尘API）
-    // 实现重试逻辑：如果返回内容为空，最多重试3次
-    const maxRetries = 3;
-    let lastError: Error | null = null;
+    // 使用全局配置（qwen-turbo）
+    const dashscopeApiKey = await this.globalConfigService.getConfigs(['dashscopeApiKey']);
+    const apiKey = dashscopeApiKey || process.env.DASHSCOPE_API_KEY || '';
 
-    for (let attempt = 1; attempt <= maxRetries; attempt++) {
-      try {
-        if (attempt > 1) {
-          Logger.warn(`星尘API第${attempt}次尝试（共${maxRetries}次）`, 'OpenAIChatService');
-        }
+    if (!apiKey) {
+      Logger.error('DashScope API Key未配置', 'OpenAIChatService');
+      throw new Error('DashScope API Key未配置');
+    }
 
-        const result = await this.chatFreeInternal(
-          prompt,
-          systemMessage,
-          messagesHistory,
-          imageUrl,
-          options,
-          appConfig,
-        );
+    const openai = new OpenAI({
+      apiKey,
+      baseURL: 'https://dashscope.aliyuncs.com/compatible-mode/v1',
+    });
 
-        // 如果成功返回非空内容，直接返回
-        return result;
-      } catch (error) {
-        lastError = error;
-        const errorMessage = error?.message || String(error);
+    // 构建消息
+    const messages: any[] = [];
+    if (systemMessage) {
+      messages.push({ role: 'system', content: systemMessage });
+    }
+    if (messagesHistory && messagesHistory.length > 0) {
+      messages.push(...messagesHistory);
+    }
+    if (prompt) {
+      messages.push({ role: 'user', content: prompt });
+    }
 
-        // 只对"返回内容为空"的错误进行重试
-        if (errorMessage.includes('返回内容为空')) {
-          if (attempt < maxRetries) {
-            Logger.warn(`星尘API返回内容为空，将进行第${attempt + 1}次重试`, 'OpenAIChatService');
-            // 等待一小段时间后重试（避免过快重试）
-            await new Promise(resolve => setTimeout(resolve, 1000 * attempt));
-            continue;
-          } else {
-            Logger.error(`星尘API重试${maxRetries}次后仍返回空内容，放弃重试`, 'OpenAIChatService');
+    try {
+      const completion = await openai.chat.completions.create({
+        model: 'qwen-turbo',
+        messages,
+      });
+
+      const result = completion?.choices?.[0]?.message?.content || '';
+      const usage = completion?.usage
+        ? {
+            inputTokens: completion.usage.prompt_tokens,
+            outputTokens: completion.usage.completion_tokens,
           }
-        }
+        : undefined;
 
-        // 其他类型的错误直接抛出，不重试
-        throw error;
-      }
+      Logger.debug(`chatFree完成: qwen-turbo`, 'OpenAIChatService');
+
+      return { text: result, usage };
+    } catch (error) {
+      Logger.error(`qwen-turbo调用失败: ${error.message}`, 'OpenAIChatService');
+      throw error;
+    }
+  }
+
+  /**
+   * 翻译方法 - 使用qwen-turbo模型
+   * @param text 要翻译的文本
+   * @param targetLang 目标语言，默认"中文"
+   */
+  async chatTranslate(text: string, targetLang: string = '中文'): Promise<{ text: string }> {
+    const dashscopeApiKey = await this.globalConfigService.getConfigs(['dashscopeApiKey']);
+    const apiKey = dashscopeApiKey || process.env.DASHSCOPE_API_KEY || '';
+
+    if (!apiKey) {
+      Logger.error('DashScope API Key未配置', 'OpenAIChatService');
+      throw new Error('DashScope API Key未配置');
     }
 
-    // 如果所有重试都失败，抛出最后一个错误
-    throw lastError || new Error('星尘API请求失败');
+    const openai = new OpenAI({
+      apiKey,
+      baseURL: 'https://dashscope.aliyuncs.com/compatible-mode/v1',
+    });
+
+    const systemMessage = `你是一个专业的翻译助手。请将用户提供的文本中的外语部分翻译成${targetLang}。
+
+严格要求：
+1. 只输出翻译后的完整文本，不要添加任何解释或额外的文字
+2. 【极其重要】所有标点符号必须100%保留不变，包括但不限于：括号（）、句号。、逗号，、问号？、感叹号！等
+3. 已经是${targetLang}的部分保持原样，只翻译外语部分
+4. 翻译后的文本结构和格式必须与原文完全一致
+5. 每一句外语都必须翻译，不能遗漏
+
+示例：
+输入：（整理了下头发，温柔地说）오랜만이에요.요즘 어떻게 지내요?
+输出：（整理了下头发，温柔地说）好久不见。最近怎么样？`;
+
+    try {
+      const completion = await openai.chat.completions.create({
+        model: 'qwen-turbo',
+        messages: [
+          { role: 'system', content: systemMessage },
+          { role: 'user', content: text },
+        ],
+      });
+
+      const result = completion?.choices?.[0]?.message?.content || '';
+      Logger.debug(`翻译完成: qwen-turbo`, 'OpenAIChatService');
+
+      return { text: result };
+    } catch (error) {
+      Logger.error(`qwen-turbo翻译失败: ${error.message}`, 'OpenAIChatService');
+      throw error;
+    }
   }
 
   async chatQwenPlusCharacter(
@@ -1147,470 +1199,6 @@ export class OpenAIChatService {
       }
 
       throw error;
-    }
-  }
-
-  /**
-   * chatFree的内部实现，不包含重试逻辑
-   */
-  private async chatFreeInternal(
-    prompt: string,
-    systemMessage?: string,
-    messagesHistory?: any[],
-    imageUrl?: any,
-    options?: { onProgress?: (textChunk: string) => void; abortSignal?: AbortSignal },
-    appConfig?: {
-      botName?: string;
-      userId?: number | string;
-      appId?: number | string;
-      enableRealTime?: boolean;
-      enableLongTermMemory?: boolean;
-      enableKnowledgeBase?: boolean;
-      knowledgeBaseIds?: string;
-      dialogueExamples?: string;
-      openingRemark?: string; // 添加开场白参数
-    },
-  ): Promise<{
-    text: string;
-    usage?: { userTokens?: number; inputTokens?: number; outputTokens?: number };
-  }> {
-    // 构造消息与 botProfile
-    let botContent = systemMessage || '';
-    const messages: any[] = [];
-
-    if (messagesHistory && messagesHistory.length > 0) {
-      let isFirstSystemMessage = true; // 标记是否为第一条system消息
-      for (const msg of messagesHistory) {
-        if (msg?.role === 'system') {
-          // 只有第一条system消息才用作botProfile
-          if (isFirstSystemMessage && !botContent && typeof msg.content === 'string') {
-            botContent = msg.content;
-            isFirstSystemMessage = false;
-            continue; // 第一条system消息不加入messages
-          }
-          // 后续的system消息保留在messages中（作为上下文）
-          isFirstSystemMessage = false;
-          messages.push(msg);
-          continue;
-        }
-        messages.push(msg);
-      }
-
-      // 合并表情包消息到前一条assistant消息
-      const mergedMessages: any[] = [];
-      for (let i = 0; i < messages.length; i++) {
-        const currentMsg = messages[i];
-
-        // 检查是否为assistant的表情包消息，且前一条也是assistant消息
-        if (
-          i > 0 &&
-          currentMsg.role === 'assistant' &&
-          mergedMessages[mergedMessages.length - 1]?.role === 'assistant' &&
-          this.isStickerMessage(currentMsg.content)
-        ) {
-          // 将表情包消息用[]包裹后拼接到前一条assistant消息后面
-          mergedMessages[mergedMessages.length - 1].content += '\n[' + currentMsg.content + ']';
-        } else {
-          // 正常添加消息
-          mergedMessages.push(currentMsg);
-        }
-      }
-
-      // 用合并后的消息替换原始消息
-      messages.length = 0;
-      messages.push(...mergedMessages);
-    } else {
-      // 简单单轮
-      messages.push({ role: 'user', content: prompt });
-    }
-
-    // 如果仍未获取到角色预设，则回退到全局预设（systemPreMessage）
-    if (!botContent) {
-      try {
-        const cfg: any = await this.globalConfigService.getConfigs(['systemPreMessage']);
-        const pre = typeof cfg === 'string' ? cfg : cfg?.systemPreMessage;
-        if (pre) botContent = pre;
-      } catch (_) {}
-    }
-
-    // 如果角色有开场白，添加到角色预设中
-    // if (appConfig?.openingRemark && appConfig.openingRemark.trim()) {
-    //   const openingRemarkPrompt = `\n\n【角色开场白】:\n"${appConfig.openingRemark}"`;
-    //   botContent = (botContent || '') + openingRemarkPrompt;
-    //   Logger.debug(
-    //     `已将开场白添加到角色预设中: ${appConfig.openingRemark.substring(0, 50)}...`,
-    //     'OpenAIChatService',
-    //   );
-    // }
-
-    // 确保 botContent 不为空（星尘API要求 botProfile.content 不能为空）
-    if (!botContent || botContent.trim() === '') {
-      botContent = '你是一个友好、乐于助人的AI助手。请用简洁、自然的方式回答用户的问题。';
-      Logger.debug('使用默认角色预设（botProfile.content不能为空）', 'OpenAIChatService');
-    }
-
-    // 读取星尘 Key（getConfigs 单键时返回字符串，兼容处理）
-    const cfgKey: any = await this.globalConfigService.getConfigs(['xingchenApiKey']);
-    const xingchenApiKey = typeof cfgKey === 'string' ? cfgKey : cfgKey?.xingchenApiKey;
-    const useKey = xingchenApiKey || process.env.XINGCHEN_API_KEY || '';
-
-    if (!useKey) {
-      Logger.error(
-        '星尘API Key未配置！请在系统配置中设置 xingchenApiKey，或在环境变量中设置 XINGCHEN_API_KEY',
-        'OpenAIChatService',
-      );
-      throw new Error('星尘API Key未配置');
-    }
-
-    Logger.debug(`星尘API Key已配置: ${useKey ? '已设置' : '未设置'}`, 'OpenAIChatService');
-
-    const url = 'https://nlp.aliyuncs.com/v2/api/chat/send';
-    const isStreaming = !!options?.onProgress;
-    const headers: any = {
-      'Content-Type': 'application/json',
-      Accept: 'text/event-stream, application/json;q=0.9, */*;q=0.8',
-      'x-fag-servicename': isStreaming ? 'aca-chat-send-sse' : 'aca-chat-send',
-      'x-fag-appcode': 'aca',
-      Authorization: `Bearer ${useKey}`,
-      'X-AcA-DataInspection': 'enable',
-      // 官方文档：可通过 X-AcA-SSE 控制是否开启流式
-      ...(isStreaming ? { 'X-AcA-SSE': 'enable' } : {}),
-    };
-
-    // 构建星尘API的aca配置对象
-    const botName = appConfig?.botName || 'AI助手';
-
-    // 构建组合的 userId：用户ID+应用ID
-    let composedUserId = 'system';
-    if (appConfig?.userId && appConfig?.appId) {
-      composedUserId = `user_${appConfig.userId}_app_${appConfig.appId}`;
-    } else if (appConfig?.userId) {
-      composedUserId = `user_${appConfig.userId}`;
-    }
-
-    const acaConfig: any = {
-      botProfile: {
-        name: botName,
-        content: botContent || '',
-      },
-      userProfile: {
-        userId: composedUserId,
-      },
-    };
-
-    // 添加星尘API扩展配置到 aca 对象
-    if (appConfig) {
-      // 1. scenario.isRealTime - 真实时间开关
-      if (appConfig.enableRealTime !== undefined) {
-        if (!acaConfig.scenario) {
-          acaConfig.scenario = {};
-        }
-        acaConfig.scenario.isRealTime = appConfig.enableRealTime;
-      }
-
-      // 2. memory - 长期记忆配置
-      if (appConfig.enableLongTermMemory !== undefined && appConfig.enableLongTermMemory) {
-        // 长期记忆对象，根据星尘API文档，传递空对象即开启
-        acaConfig.memory = {};
-      }
-
-      // 3. advancedSettings - 高级设置
-      const hasAdvancedSettings =
-        appConfig.enableKnowledgeBase !== undefined || appConfig.knowledgeBaseIds;
-
-      if (hasAdvancedSettings) {
-        if (!acaConfig.advancedSettings) {
-          acaConfig.advancedSettings = {};
-        }
-
-        // 3.1 enableCharacterKbSearch - 知识库搜索开关
-        if (appConfig.enableKnowledgeBase !== undefined) {
-          acaConfig.advancedSettings.enableCharacterKbSearch = appConfig.enableKnowledgeBase;
-        }
-
-        // 3.2 knowledgeBases - 知识库ID列表
-        if (appConfig.enableKnowledgeBase && appConfig.knowledgeBaseIds) {
-          try {
-            const kbIds = JSON.parse(appConfig.knowledgeBaseIds);
-            if (Array.isArray(kbIds) && kbIds.length > 0) {
-              acaConfig.advancedSettings.knowledgeBases = kbIds;
-            }
-          } catch (e) {
-            Logger.warn(`解析知识库ID列表失败: ${e}`, 'OpenAIChatService');
-          }
-        }
-      }
-
-      // 4. 对话示例（sampleMessages）
-      // 根据星尘API文档，对话示例参数为 input.aca.sampleMessages
-      if (appConfig.dialogueExamples) {
-        try {
-          const examples = JSON.parse(appConfig.dialogueExamples);
-          if (Array.isArray(examples) && examples.length > 0) {
-            // 添加为 sampleMessages 属性（星尘API标准参数）
-            acaConfig.sampleMessages = examples;
-            Logger.debug(`已添加对话示例到星尘API请求: ${examples.length}条`, 'OpenAIChatService');
-          }
-        } catch (e) {
-          Logger.warn(`解析对话示例失败: ${e}`, 'OpenAIChatService');
-        }
-      }
-
-      // 注意：openingRemark (开场白) 不是API请求参数
-      // 开场白应该在应用层面处理，例如作为第一条消息展示给用户
-    }
-
-    const payload: any = {
-      input: {
-        messages,
-        aca: acaConfig,
-      },
-      // 文档允许传 model，可为空按平台默认路由
-      // model: 'xingchen-plus-latest',
-      ...(isStreaming ? { parameters: { incrementalOutput: true } } : {}),
-      ...(isStreaming ? { stream: true } : {}),
-    };
-
-    try {
-      // 星尘请求体日志（脱敏）
-      const xingchenLog = this.sanitizeForLog({ url, headers, payload });
-      Logger.debug(`星尘请求 - body: ${JSON.stringify(xingchenLog)}`, 'OpenAIChatService');
-
-      // 若需要流式，则用 fetch 读取分块/SSE；否则兼容一次性
-      const controller = new AbortController();
-      const signal = options?.abortSignal || controller.signal;
-      const response = await fetch(url, {
-        method: 'POST',
-        headers,
-        body: JSON.stringify(payload),
-        signal,
-      } as any);
-
-      Logger.debug(
-        `星尘API响应状态: ${response.status} ${response.statusText}`,
-        'OpenAIChatService',
-      );
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        Logger.error(`星尘API请求失败: ${response.status} ${errorText}`, 'OpenAIChatService');
-        throw new Error(`星尘API请求失败: ${response.status} ${errorText}`);
-      }
-
-      const contentType = response.headers.get('content-type') || '';
-      const isSse = contentType.includes('text/event-stream');
-      const supportsStream =
-        !!(response as any).body && typeof (response as any).body.getReader === 'function';
-
-      Logger.debug(
-        `星尘API响应类型: contentType=${contentType}, isSse=${isSse}, supportsStream=${supportsStream}`,
-        'OpenAIChatService',
-      );
-
-      if (options?.onProgress && (isSse || supportsStream)) {
-        const reader = (response as any).body.getReader();
-        const decoder = new TextDecoder('utf-8');
-        let buffer = '';
-        let full = '';
-        let usage: any = null;
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-          buffer += decoder.decode(value, { stream: true });
-          if (isSse) {
-            // SSE: 以 "\n\n" 分隔事件，逐行解析 data:
-            let sepIndex;
-            while ((sepIndex = buffer.indexOf('\n\n')) !== -1) {
-              const eventChunk = buffer.slice(0, sepIndex);
-              buffer = buffer.slice(sepIndex + 2);
-              const dataLine = eventChunk
-                .split('\n')
-                .map(l => l.trim())
-                .find(l => l.startsWith('data:'));
-              if (!dataLine) continue;
-              const jsonStr = dataLine.replace(/^data:\s*/, '');
-              try {
-                const obj = JSON.parse(jsonStr);
-                let delta = '';
-                const choices = obj?.data?.choices || obj?.choices;
-                if (Array.isArray(choices) && choices.length) {
-                  const msgs = choices[0]?.messages;
-                  if (Array.isArray(msgs) && msgs.length) delta = msgs[0]?.content || '';
-                }
-                if (!delta && typeof obj?.output === 'string') delta = obj.output;
-                if (!delta && typeof obj?.content === 'string') delta = obj.content;
-                // 常见增量字段
-                if (!delta && typeof obj?.delta === 'string') delta = obj.delta;
-                if (!delta && typeof obj?.text === 'string') delta = obj.text;
-                if (delta) {
-                  full += delta;
-                  try {
-                    options.onProgress(delta);
-                  } catch {}
-                }
-                // 提取usage信息（星尘API在最后一个分块返回usage）
-                if (obj?.usage) {
-                  usage = obj.usage;
-                  Logger.debug(`星尘API返回usage: ${JSON.stringify(usage)}`, 'OpenAIChatService');
-                }
-              } catch {}
-            }
-          } else {
-            // 非SSE分块：尝试逐行解析JSON；失败则作为纯文本直接推送
-            let lineBreak;
-            while ((lineBreak = buffer.indexOf('\n')) !== -1) {
-              const line = buffer.slice(0, lineBreak).trim();
-              buffer = buffer.slice(lineBreak + 1);
-              if (!line) continue;
-              let delta = '';
-              try {
-                const obj = JSON.parse(line);
-                const choices = obj?.data?.choices || obj?.choices;
-                if (Array.isArray(choices) && choices.length) {
-                  const msgs = choices[0]?.messages;
-                  if (Array.isArray(msgs) && msgs.length) delta = msgs[0]?.content || '';
-                }
-                if (!delta && typeof obj?.output === 'string') delta = obj.output;
-                if (!delta && typeof obj?.content === 'string') delta = obj.content;
-                if (!delta && typeof obj?.delta === 'string') delta = obj.delta;
-                if (!delta && typeof obj?.text === 'string') delta = obj.text;
-                // 提取usage信息
-                if (obj?.usage) {
-                  usage = obj.usage;
-                  Logger.debug(`星尘API返回usage: ${JSON.stringify(usage)}`, 'OpenAIChatService');
-                }
-              } catch {
-                // 不是JSON，按纯文本增量
-                delta = line;
-              }
-              if (delta) {
-                full += delta;
-                try {
-                  options.onProgress(delta);
-                } catch {}
-              }
-            }
-          }
-        }
-        // 处理残留缓冲区
-        if (buffer && buffer.trim()) {
-          try {
-            const obj = JSON.parse(buffer.trim());
-            let tail = '';
-            const choices = obj?.data?.choices || obj?.choices;
-            if (Array.isArray(choices) && choices.length) {
-              const msgs = choices[0]?.messages;
-              if (Array.isArray(msgs) && msgs.length) tail = msgs[0]?.content || '';
-            }
-            if (!tail && typeof obj?.output === 'string') tail = obj.output;
-            if (!tail && typeof obj?.content === 'string') tail = obj.content;
-            if (!tail && typeof obj?.delta === 'string') tail = obj.delta;
-            if (!tail && typeof obj?.text === 'string') tail = obj.text;
-            if (tail) {
-              full += tail;
-              try {
-                options.onProgress(tail);
-              } catch {}
-            }
-            // 提取usage信息
-            if (obj?.usage) {
-              usage = obj.usage;
-              Logger.debug(`星尘API返回usage: ${JSON.stringify(usage)}`, 'OpenAIChatService');
-            }
-          } catch {
-            // 残留纯文本
-            full += buffer;
-            try {
-              options.onProgress(buffer);
-            } catch {}
-          }
-        }
-        // 检查返回内容是否为空
-        if (!full || full.trim() === '') {
-          Logger.warn(
-            `星尘API返回内容为空 - usage: ${JSON.stringify(usage)}, 将抛出错误以触发重试`,
-            'OpenAIChatService',
-          );
-          throw new Error('星尘API返回内容为空');
-        }
-
-        // 返回聚合文本和usage
-        return {
-          text: full,
-          usage: usage
-            ? {
-                userTokens: usage.userTokens,
-                inputTokens: usage.inputTokens,
-                outputTokens: usage.outputTokens,
-              }
-            : undefined,
-        };
-      }
-
-      // 非流式：一次性解析
-      let text = '';
-      let usage: any = null;
-      try {
-        const data = await response.json();
-        const choices = data?.data?.choices || data?.choices;
-        if (choices?.length) {
-          const msgs = choices[0]?.messages;
-          if (Array.isArray(msgs) && msgs.length) text = msgs[0]?.content || '';
-        }
-        if (!text && typeof data?.output === 'string') text = data.output;
-        if (!text && typeof data?.content === 'string') text = data.content;
-        // 提取usage信息
-        if (data?.usage) {
-          usage = data.usage;
-          Logger.debug(`星尘API返回usage: ${JSON.stringify(usage)}`, 'OpenAIChatService');
-        }
-      } catch {
-        // 回退到纯文本
-        try {
-          const raw = await response.text();
-          if (raw) text = raw;
-        } catch {}
-      }
-
-      // 检查返回内容是否为空
-      if (!text || text.trim() === '') {
-        Logger.warn(
-          `星尘API返回内容为空 - usage: ${JSON.stringify(usage)}, 将抛出错误以触发重试`,
-          'OpenAIChatService',
-        );
-        throw new Error('星尘API返回内容为空');
-      }
-
-      return {
-        text,
-        usage: usage
-          ? {
-              userTokens: usage.userTokens,
-              inputTokens: usage.inputTokens,
-              outputTokens: usage.outputTokens,
-            }
-          : undefined,
-      };
-    } catch (error) {
-      const errorMessage = handleError(error);
-      Logger.error(`星尘全局模型调用失败: ${errorMessage}`, 'OpenAIChatService');
-      Logger.error(`错误详情: ${JSON.stringify(error)}`, 'OpenAIChatService');
-
-      // 检查是否为内容审核错误
-      if (
-        errorMessage.includes('inappropriate content') ||
-        errorMessage.includes('内容不适当') ||
-        errorMessage.includes('敏感内容') ||
-        errorMessage.includes('DataInspectionFailed') ||
-        errorMessage.includes('安全审核')
-      ) {
-        Logger.warn(`[星尘API] ⚠️ 触发内容审核，返回友好错误提示给用户`, 'OpenAIChatService');
-        throw new BadRequestException(
-          '抱歉，您的消息或者角色提示词包含敏感内容，无法处理。请修改后重试。',
-        );
-      }
-
-      throw error; // 抛出错误而不是返回undefined
     }
   }
 

@@ -1610,11 +1610,12 @@ export class OpenChatController {
           current += text[i];
         }
 
-        // 检查后面是否紧跟【或占位符，如果是则不切分
+        // 检查后面是否紧跟【或占位符
         const nextNonSpace = this.findNextNonWhitespaceChar(text, i + 1);
-        // 如果有心理描述，只在占位符前面切分，不在强结束符处切分
-        // 如果没有心理描述，按强结束符切分（但【后面不切分）
-        if (!hasProtectedContent && nextNonSpace !== '【') {
+        // 按强结束符切分，但以下情况除外：
+        // 1. 后面紧跟【（让【和前面内容保持在一起）
+        // 2. 后面紧跟占位符\x00（让占位符成为新段落开头）
+        if (nextNonSpace !== '【' && nextNonSpace !== '\x00') {
           segments.push(current.trim());
           current = '';
         }
@@ -2695,24 +2696,23 @@ ${example}
   }
 
   @Post('translate')
-  @ApiOperation({ summary: '【开放】文本翻译（翻译成中文）' })
+  @ApiOperation({ summary: '【开放】文本翻译（翻译成中文），支持自动保存到chatLog' })
   @ApiBody({
     schema: {
       type: 'object',
       properties: {
-        token: {
-          type: 'string',
-          description: 'Maobing平台用户token（可选）',
-        },
-        maobingBaseUrl: {
-          type: 'string',
-          description: 'Maobing基础域名（可选）',
-        },
-        userId: { type: 'number', description: '用户ID（可选）' },
         text: { type: 'string', description: '要翻译的文本（必填）' },
         targetLang: {
           type: 'string',
           description: '目标语言（可选，默认"中文"）',
+        },
+        chatId: {
+          type: 'number',
+          description: '聊天记录ID（可选，传入则自动保存翻译结果到chatLog）',
+        },
+        userId: {
+          type: 'number',
+          description: '用户ID（可选，与chatId配合使用）',
         },
       },
       required: ['text'],
@@ -2720,47 +2720,30 @@ ${example}
   })
   async translate(@Body() body: any, @Res() res: Response) {
     try {
-      const { token, userId: originalUserId, maobingBaseUrl, text, targetLang = '中文' } = body || {};
+      const { text, targetLang = '中文', chatId, userId } = body || {};
 
       if (!text || text.trim() === '') {
         throw new HttpException('翻译文本不能为空', HttpStatus.BAD_REQUEST);
       }
 
-      // 验证用户身份（如果提供了token或userId）
-      let userId = originalUserId ? Number(originalUserId) : null;
-      if (token && !userId) {
-        const validatedUserId = await MaobingAuthUtil.validateTokenAndGetUserId(
-          token,
-          maobingBaseUrl,
-        );
-        if (validatedUserId) {
-          userId = validatedUserId;
-        }
-      }
-
-      // 构建翻译提示词
-      const systemMessage = `你是一个专业的翻译助手。请将用户提供的文本翻译成${targetLang}。
-要求：
-1. 只输出翻译后的内容，不要添加任何解释或额外的文字
-2. 保持原文的语气和风格
-3. 如果原文已经是${targetLang}，则原样输出`;
-
-      const prompt = text;
-
-      // 调用 AI 进行翻译
-      const result = await this.openAIChatService.chatFree(
-        prompt,
-        systemMessage,
-        [],
-        undefined,
-        undefined,
-        { userId },
-      );
+      // 调用 qwen-turbo 进行翻译
+      const result = await this.openAIChatService.chatTranslate(text, targetLang);
 
       const translatedText = result?.text?.trim() || '';
 
       if (!translatedText) {
         throw new HttpException('翻译失败，请稍后重试', HttpStatus.INTERNAL_SERVER_ERROR);
+      }
+
+      // 如果传入了 chatId 和 userId，自动保存翻译结果到 chatLog
+      if (chatId && userId) {
+        try {
+          await this.chatLogService.updateTranslation(userId, chatId, translatedText);
+          this.logger.log(`翻译结果已保存到chatLog: chatId=${chatId}, userId=${userId}`);
+        } catch (saveError) {
+          this.logger.warn(`保存翻译结果失败: ${saveError.message}，但翻译本身成功`);
+          // 保存失败不影响翻译结果返回
+        }
       }
 
       return res.status(200).json({

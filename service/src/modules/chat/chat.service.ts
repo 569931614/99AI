@@ -653,6 +653,150 @@ export class ChatService {
     return /^[^：]+：$/.test(normalized);
   }
 
+  /**
+   * 去除连续重复的 assistant 消息，防止模型陷入重复循环
+   * 当检测到连续多条内容相同的 assistant 消息时，只保留第一条
+   * @param messages 消息数组
+   * @returns 去重后的消息数组
+   */
+  private deduplicateConsecutiveAssistantMessages(
+    messages: Array<{ role: string; content: string | any }>,
+  ): Array<{ role: string; content: string | any }> {
+    if (!messages || messages.length <= 1) {
+      return messages;
+    }
+
+    const result: Array<{ role: string; content: string | any }> = [];
+    let lastAssistantContent: string | null = null;
+    let duplicateCount = 0;
+
+    for (let i = 0; i < messages.length; i++) {
+      const msg = messages[i];
+      const currentContent =
+        typeof msg.content === 'string' ? msg.content.trim() : JSON.stringify(msg.content);
+
+      if (msg.role === 'assistant') {
+        // 检查是否与上一条已添加的 assistant 消息内容相同
+        if (lastAssistantContent !== null && currentContent === lastAssistantContent) {
+          duplicateCount++;
+          this.logDebug(
+            `[消息去重] 跳过第 ${duplicateCount} 条重复的assistant消息: "${currentContent.substring(
+              0,
+              40,
+            )}..."`,
+            'ChatService',
+          );
+          continue; // 跳过重复的消息
+        }
+        // 内容不同，更新追踪内容
+        lastAssistantContent = currentContent;
+        duplicateCount = 0;
+      } else {
+        // 遇到非 assistant 消息，重置追踪
+        lastAssistantContent = null;
+        duplicateCount = 0;
+      }
+
+      result.push(msg);
+    }
+
+    if (duplicateCount > 0) {
+      this.logDebug(
+        `[消息去重] 总计过滤了 ${duplicateCount} 条连续重复的assistant消息`,
+        'ChatService',
+      );
+    }
+
+    return result;
+  }
+
+  /**
+   * 从历史消息中移除重复出现的句子/短语
+   * 防止模型看到多次重复的内容后陷入重复循环
+   * @param messages 消息数组
+   * @returns 处理后的消息数组
+   */
+  private removeRepeatedPhrases(
+    messages: Array<{ role: string; content: string | any }>,
+  ): Array<{ role: string; content: string | any }> {
+    if (!messages || messages.length <= 1) {
+      return messages;
+    }
+
+    // 收集所有 assistant 消息中的句子
+    const sentenceCount = new Map<string, number>();
+
+    // 第一遍：统计每个句子出现的次数
+    for (const msg of messages) {
+      if (msg.role === 'assistant' && typeof msg.content === 'string') {
+        // 按句号、问号、感叹号、换行分割句子
+        const sentences = msg.content.split(/[。！？\n]+/).filter(s => s.trim().length > 5);
+        for (const sentence of sentences) {
+          const normalized = sentence.trim();
+          if (normalized) {
+            sentenceCount.set(normalized, (sentenceCount.get(normalized) || 0) + 1);
+          }
+        }
+      }
+    }
+
+    // 找出重复出现（>=2次）的句子
+    const repeatedSentences = new Set<string>();
+    for (const [sentence, count] of sentenceCount) {
+      if (count >= 2) {
+        repeatedSentences.add(sentence);
+        this.logDebug(
+          `[重复句子检测] 句子出现${count}次: "${sentence.substring(0, 30)}..."`,
+          'ChatService',
+        );
+      }
+    }
+
+    // 如果没有重复句子，直接返回
+    if (repeatedSentences.size === 0) {
+      return messages;
+    }
+
+    // 第二遍：从除了第一次出现之外的消息中移除重复句子
+    const seenSentences = new Set<string>();
+    const result: Array<{ role: string; content: string | any }> = [];
+
+    for (const msg of messages) {
+      if (msg.role === 'assistant' && typeof msg.content === 'string') {
+        let newContent = msg.content;
+
+        // 检查并移除已经出现过的重复句子
+        for (const sentence of repeatedSentences) {
+          if (newContent.includes(sentence)) {
+            if (seenSentences.has(sentence)) {
+              // 已经出现过，移除这个句子
+              newContent = newContent.replace(sentence, '').replace(/[。！？]+[。！？]+/g, '。');
+              this.logDebug(
+                `[移除重复句子] 从消息中移除: "${sentence.substring(0, 30)}..."`,
+                'ChatService',
+              );
+            } else {
+              // 第一次出现，记录下来
+              seenSentences.add(sentence);
+            }
+          }
+        }
+
+        // 清理可能产生的多余标点或空白
+        newContent = newContent.replace(/\s+/g, ' ').trim();
+
+        result.push({
+          role: msg.role,
+          content: newContent,
+        });
+      } else {
+        result.push(msg);
+      }
+    }
+
+    return result;
+  }
+
   private clampReplyCount(value?: number | null, fallback = 1): number {
     const num = Number(value);
     if (Number.isFinite(num)) {
@@ -2942,8 +3086,12 @@ ${appName ? `- 用户会亲切地称呼你为"${appName}"，你应该自然地�
       'ChatService',
     );
 
-    // 添加防重复提示
-    setSystemMessage += `\n\n【重要提示】请务必根据用户的最新消息给出不同的、有意义的回应。不要重复之前说过的内容，要认真理解用户说的话并做出相应的回复。`;
+    // 添加防重复提示（增强版）
+    setSystemMessage += `\n\n【重要提示】
+- 请务必根据用户的最新消息给出全新的、有意义的回应。
+- 【严禁重复】绝对不要复制历史对话中你说过的任何句子或短语！即使历史中某句话出现多次，也绝对禁止再次使用。每次回复必须用全新的表达方式，展现角色的不同面貌。
+- 【时间问题】如果用户询问时间，根据系统消息中的当前时间回答，用角色风格简洁回复即可，不要添加额外的抒情或感慨。
+- 认真理解用户当前说的话，给出针对性的、独特的回复。`;
 
     /* 获取历史消息 */
     const { messagesHistory } = await this.buildMessageFromParentMessageId(
@@ -4342,6 +4490,27 @@ ${appName ? `- 用户会亲切地称呼你为"${appName}"，你应该自然地�
             }
           }
 
+          // 🔥 新增：去除连续重复的 assistant 消息（防止模型陷入重复循环）
+          const originalLength = messages.length;
+          let deduplicatedMessages = this.deduplicateConsecutiveAssistantMessages(messages);
+          // 🔥 新增：移除历史消息中重复出现的句子/短语
+          deduplicatedMessages = this.removeRepeatedPhrases(deduplicatedMessages);
+          if (deduplicatedMessages.length < originalLength) {
+            this.logDebug(
+              `[消息去重-群聊] 过滤了 ${
+                originalLength - deduplicatedMessages.length
+              } 条重复的assistant消息`,
+              'ChatService',
+            );
+            // 替换 messages 数组的内容
+            messages.length = 0;
+            messages.push(...deduplicatedMessages);
+          } else {
+            // 即使消息数量没变，内容可能已经被修改（移除了重复句子）
+            messages.length = 0;
+            messages.push(...deduplicatedMessages);
+          }
+
           this.logDebug(`[群聊历史构建] 最终消息数组长度=${messages.length}`, 'ChatService');
         } else {
           // 单聊模式：按时间顺序添加所有消息
@@ -4427,7 +4596,19 @@ ${appName ? `- 用户会亲切地称呼你为"${appName}"，你应该自然地�
             }
           }
 
-          messages.push(...mergedMessages);
+          // 🔥 新增：去除连续重复的 assistant 消息（防止模型陷入重复循环）
+          let deduplicatedMessages = this.deduplicateConsecutiveAssistantMessages(mergedMessages);
+          // 🔥 新增：移除历史消息中重复出现的句子/短语
+          deduplicatedMessages = this.removeRepeatedPhrases(deduplicatedMessages);
+          if (deduplicatedMessages.length < mergedMessages.length) {
+            this.logDebug(
+              `[消息去重-单聊] 过滤了 ${
+                mergedMessages.length - deduplicatedMessages.length
+              } 条重复的assistant消息`,
+              'ChatService',
+            );
+          }
+          messages.push(...deduplicatedMessages);
         }
       } catch (error) {
         Logger.error(`获取聊天历史记录失败: ${error.message}`, 'ChatService');

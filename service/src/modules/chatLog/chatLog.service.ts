@@ -367,6 +367,7 @@ export class ChatLogService {
         completionTokens,
         totalTokens,
         display_state,
+        translatedContent,
       } = item;
 
       // 获取原始内容
@@ -416,6 +417,7 @@ export class ChatLogService {
         completionTokens: completionTokens,
         totalTokens: totalTokens,
         display_state: display_state,
+        translatedContent: translatedContent || '',
       };
     });
 

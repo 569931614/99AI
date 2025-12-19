@@ -401,7 +401,9 @@ export class ChatService {
     // 5.1 将多个连续的标点符号简化
     result = result.replace(/[!！]{2,}/g, '！'); // 多个感叹号
     result = result.replace(/[?？]{2,}/g, '？'); // 多个问号
-    result = result.replace(/[.。]{2,}/g, '。'); // 多个句号
+    // 处理省略号：句末省略号转句号，句中省略号转逗号
+    result = result.replace(/[.。]{2,}(?=\s*$)/g, '。'); // 句末省略号转句号
+    result = result.replace(/[.。]{2,}/g, '，'); // 句中省略号转逗号
     result = result.replace(/[,，]{2,}/g, '，'); // 多个逗号
     result = result.replace(/[~～]{2,}/g, '～'); // 多个波浪号
     // 5.2 将英文标点统一为中文标点（可选，根据需要调整）

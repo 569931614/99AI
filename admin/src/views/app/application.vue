@@ -196,7 +196,7 @@ meta:
   async function queryVoiceList() {
     try {
       voiceLoading.value = true;
-      const res: any = await ApiVoice.list({ page_index: 0, page_size: 200 });
+      const res: any = await ApiVoice.list({ page_index: 0, page_size: 9999 });
       const body: any = res || {};
       // 兼容多种返回结构：优先使用 rows（数据库分页结构）
       const rawList =

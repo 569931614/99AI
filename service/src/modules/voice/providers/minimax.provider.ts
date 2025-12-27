@@ -405,6 +405,154 @@ export class MinimaxProvider {
     return { audioBuffer: result.audioBuffer };
   }
 
+  /**
+   * 流式 TTS 合成（真正的流式输出）
+   * 使用 MiniMax 的流式接口，边合成边输出音频片段
+   * @param request TTS 请求参数
+   * @param callbacks 流式回调
+   */
+  async streamTTS(
+    request: TTSCreateRequest,
+    callbacks: {
+      onStart?: (info: { format: string; sampleRate: number }) => void;
+      onData?: (chunk: Buffer) => void;
+      onEnd?: () => void;
+      onError?: (error: Error) => void;
+    },
+  ): Promise<void> {
+    const headers = await this.getHeaders();
+    const payload = {
+      model: request.model || 'speech-2.6-hd',
+      text: request.text,
+      stream: true, // 启用流式输出
+      language_boost: request.languageBoost || 'auto',
+      voice_setting: {
+        voice_id: String(request.voiceId),
+        speed: request.speed || 1,
+        vol: request.vol || 1,
+        pitch: request.pitch || 0,
+        ...(request.emotion ? { emotion: request.emotion } : {}),
+      },
+      audio_setting: {
+        audio_sample_rate: request.audioSampleRate || 32000,
+        bitrate: request.bitrate || 128000,
+        format: request.format || 'mp3',
+        channel: 1, // 🔥 改为单声道，避免重复播放问题
+      },
+    };
+
+    this.logger.log(`[streamTTS] 请求参数: ${JSON.stringify(payload)}`);
+
+    // 🔥 调试：收集所有音频数据用于保存
+    const allAudioChunks: Buffer[] = [];
+
+    try {
+      this.logger.log(`[streamTTS] 开始流式 TTS 合成，文本长度: ${request.text.length}`);
+
+      // 通知开始
+      callbacks.onStart?.({
+        format: request.format || 'mp3',
+        sampleRate: request.audioSampleRate || 32000,
+      });
+
+      const response = await axios.post(`${this.baseUrl}/v1/t2a_v2`, payload, {
+        headers,
+        responseType: 'stream',
+        timeout: 120000,
+      });
+
+      const stream = response.data;
+
+      // 处理流式数据（SSE 格式）
+      let buffer = '';
+      let chunkIndex = 0; // 🔥 调试：追踪chunk序号
+      let audioChunkCount = 0; // 🔥 调试：追踪音频块序号
+
+      stream.on('data', (chunk: Buffer) => {
+        const chunkStr = chunk.toString('utf-8');
+        buffer += chunkStr;
+        this.logger.debug(`[streamTTS] 收到原始数据 #${++chunkIndex}: ${chunk.length} bytes`);
+
+        // 解析 SSE 格式的数据
+        const lines = buffer.split('\n');
+        buffer = lines.pop() || ''; // 保留不完整的行
+
+        for (const line of lines) {
+          if (line.startsWith('data:')) {
+            const jsonStr = line.slice(5).trim();
+            if (jsonStr === '[DONE]') {
+              this.logger.debug(`[streamTTS] 收到 [DONE] 信号`);
+              continue;
+            }
+            try {
+              const data = JSON.parse(jsonStr);
+
+              // MiniMax 流式返回 hex 编码的音频数据
+              const audioHex = data.data?.audio;
+              if (audioHex) {
+                const audioBuffer = Buffer.from(audioHex, 'hex');
+                audioChunkCount++;
+                this.logger.debug(
+                  `[streamTTS] 解析到音频数据 #${audioChunkCount}: ${audioBuffer.length} bytes`,
+                );
+                allAudioChunks.push(audioBuffer); // 🔥 收集音频数据
+                callbacks.onData?.(audioBuffer);
+              }
+              // 检查是否有错误
+              if (data.base_resp?.status_code !== 0 && data.base_resp?.status_code !== undefined) {
+                throw new Error(data.base_resp?.status_msg || 'TTS 流式合成失败');
+              }
+            } catch (parseError) {
+              // 忽略解析错误，可能是不完整的数据
+              this.logger.debug(`[streamTTS] 解析数据失败: ${parseError.message}`);
+            }
+          }
+        }
+      });
+
+      stream.on('end', () => {
+        this.logger.log(`[streamTTS] 流式 TTS 完成, 共收到 ${allAudioChunks.length} 个音频块`);
+
+        // 🔥 保存音频文件用于调试
+        if (allAudioChunks.length > 0) {
+          const fs = require('fs');
+          const path = require('path');
+          const combinedBuffer = Buffer.concat(allAudioChunks);
+          const debugFilePath = path.join(process.cwd(), `minimax_debug_${Date.now()}.mp3`);
+          fs.writeFileSync(debugFilePath, combinedBuffer);
+          this.logger.log(
+            `[streamTTS] 🔥 调试音频已保存: ${debugFilePath}, 大小: ${combinedBuffer.length} bytes, 块数: ${allAudioChunks.length}`,
+          );
+
+          // 🔥 打印每个块的大小
+          allAudioChunks.forEach((chunk, i) => {
+            this.logger.debug(`[streamTTS] 块${i}: ${chunk.length} bytes`);
+          });
+        }
+
+        callbacks.onEnd?.();
+      });
+
+      stream.on('error', (error: Error) => {
+        this.logger.error(`[streamTTS] 流式错误: ${error.message}`);
+        callbacks.onError?.(error);
+      });
+
+      // 等待流结束
+      await new Promise<void>((resolve, reject) => {
+        stream.on('end', resolve);
+        stream.on('error', reject);
+      });
+    } catch (error) {
+      this.logger.error(`[streamTTS] ${error?.message || error}`);
+      callbacks.onError?.(error instanceof Error ? error : new Error(String(error)));
+      throw new HttpException(
+        error?.response?.data?.base_resp?.status_msg || error?.message || 'TTS 流式合成失败',
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
+    }
+  }
+
   /** 创建克隆音色 */
   async createClonedVoice(options: {
     fileId: string | number;

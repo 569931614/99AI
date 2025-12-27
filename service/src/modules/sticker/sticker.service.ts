@@ -194,12 +194,11 @@ export class StickerService {
         'StickerService',
       );
 
-      const dashscopeApiKey =
-        (await this.globalConfigService.getConfigs(['dashscopeApiKey'])) ||
-        process.env.DASHSCOPE_API_KEY;
+      // 使用 DeepSeek 官网 API
+      const deepseekApiKey = process.env.DEEPSEEK_API_KEY || '';
 
-      if (!dashscopeApiKey) {
-        Logger.warn('[Sticker普通AI识别] 未配置DashScope API Key，跳过AI识别', 'StickerService');
+      if (!deepseekApiKey) {
+        Logger.warn('[Sticker普通AI识别] 未配置DeepSeek API Key，跳过AI识别', 'StickerService');
         return null;
       }
 
@@ -264,41 +263,33 @@ ${scenarioListText}
 - **严禁自己编造场景**，只能从列表中复制一个
 - 如果列表只有一个选项，就输出那个选项`;
 
-      const requestBody = {
-        model: 'qwen-turbo',
-        input: {
-          messages: [
-            {
-              role: 'user',
-              content: prompt,
-            },
-          ],
-        },
-        parameters: {
-          max_tokens: 200, // 场景描述可能较长，增加 token 限制以避免截断
-          temperature: 0.1,
-        },
-      };
+      const baseURL = process.env.DEEPSEEK_BASE_URL || 'https://api.deepseek.com/v1';
+      const model = process.env.DEEPSEEK_MODEL || 'deepseek-chat';
 
       Logger.debug(
-        `[Sticker普通AI识别] 发送API请求 - model: qwen-turbo, 候选场景数: ${scenarios.length}`,
+        `[Sticker普通AI识别] 发送API请求 - model: ${model}, 候选场景数: ${scenarios.length}`,
         'StickerService',
       );
 
       const axios = require('axios');
       const response = await axios.post(
-        'https://dashscope.aliyuncs.com/api/v1/services/aigc/text-generation/generation',
-        requestBody,
+        `${baseURL}/chat/completions`,
+        {
+          model,
+          messages: [{ role: 'user', content: prompt }],
+          max_tokens: 200,
+          temperature: 0.1,
+        },
         {
           headers: {
-            Authorization: `Bearer ${dashscopeApiKey}`,
+            Authorization: `Bearer ${deepseekApiKey}`,
             'Content-Type': 'application/json',
           },
           timeout: 8000,
         },
       );
 
-      const result = response.data?.output?.text?.trim() || '';
+      const result = response.data?.choices?.[0]?.message?.content?.trim() || '';
       Logger.log(`[Sticker普通AI识别] ✓ API返回成功 - 原始返回: "${result}"`, 'StickerService');
 
       // 清理AI返回结果（移除可能的序号和前缀）
@@ -452,12 +443,11 @@ ${scenarioListText}
     try {
       Logger.log(`[Sticker场景AI判断] 开始判断 - 待分析文本: "${text}"`, 'StickerService');
 
-      const dashscopeApiKey =
-        (await this.globalConfigService.getConfigs(['dashscopeApiKey'])) ||
-        process.env.DASHSCOPE_API_KEY;
+      // 使用 DeepSeek 官网 API
+      const deepseekApiKey = process.env.DEEPSEEK_API_KEY || '';
 
-      if (!dashscopeApiKey) {
-        Logger.warn('[Sticker场景AI判断] 未配置DashScope API Key，跳过AI判断', 'StickerService');
+      if (!deepseekApiKey) {
+        Logger.warn('[Sticker场景AI判断] 未配置DeepSeek API Key，跳过AI判断', 'StickerService');
         return null;
       }
 
@@ -522,57 +512,49 @@ AI的回复中是否包含以下**确切支付信号**？
 请根据 AI 的具体行为进行关键词碰撞：
 
 *   **情形 A：AI 发红包 / 转账 / 给钱**
-    *   **首选匹配**：寻找包含“红包”、“转账”、“生活费”、“给钱”关键词的场景。
-    *   **次选匹配**：如果列表中没有上述词，寻找包含“添置东西”、“购买东西”、“奖励”的场景。
-    *   *注意：即使列表描述是“为用户添置购买东西”，发红包/转账也可以算作此类（因为钱是用来买东西的）。*
+    *   **首选匹配**：寻找包含"红包"、"转账"、"生活费"、"给钱"关键词的场景。
+    *   **次选匹配**：如果列表中没有上述词，寻找包含"添置东西"、"购买东西"、"奖励"的场景。
+    *   *注意：即使列表描述是"为用户添置购买东西"，发红包/转账也可以算作此类（因为钱是用来买东西的）。*
 
 *   **情形 B：AI 买零食 / 奶茶 / 饮料**
-    *   **首选匹配**：寻找包含“零食”、“奶茶”、“吃喝”关键词的场景。
-    *   **次选匹配**：寻找“购买东西”、“给钱”的通用场景。
+    *   **首选匹配**：寻找包含"零食"、"奶茶"、"吃喝"关键词的场景。
+    *   **次选匹配**：寻找"购买东西"、"给钱"的通用场景。
 
 *   **情形 C：AI 节日 / 补偿**
-    *   优先匹配“节日”、“庆祝”、“歉意”、“奖励”类场景。
+    *   优先匹配"节日"、"庆祝"、"歉意"、"奖励"类场景。
 
 # Output Rules
 1.  **必须输出**匹配到的【场景选项原文】。
 2.  仅在 Step 1 确实没有任何支付动作时，才输出 **NO**。`;
 
-      const requestBody = {
-        model: 'qwen-turbo',
-        input: {
-          messages: [
-            {
-              role: 'user',
-              content: prompt,
-            },
-          ],
-        },
-        parameters: {
-          max_tokens: 50,
-          temperature: 0.1,
-        },
-      };
+      const baseURL = process.env.DEEPSEEK_BASE_URL || 'https://api.deepseek.com/v1';
+      const model = process.env.DEEPSEEK_MODEL || 'deepseek-chat';
 
       Logger.debug(
-        `[Sticker场景AI判断] 发送API请求 - model: qwen-turbo, prompt长度: ${prompt.length}`,
+        `[Sticker场景AI判断] 发送API请求 - model: ${model}, prompt长度: ${prompt.length}`,
         'StickerService',
       );
       Logger.debug(`[Sticker场景AI判断] 完整Prompt:\n${prompt}`, 'StickerService');
 
       const axios = require('axios');
       const response = await axios.post(
-        'https://dashscope.aliyuncs.com/api/v1/services/aigc/text-generation/generation',
-        requestBody,
+        `${baseURL}/chat/completions`,
+        {
+          model,
+          messages: [{ role: 'user', content: prompt }],
+          max_tokens: 50,
+          temperature: 0.1,
+        },
         {
           headers: {
-            Authorization: `Bearer ${dashscopeApiKey}`,
+            Authorization: `Bearer ${deepseekApiKey}`,
             'Content-Type': 'application/json',
           },
           timeout: 8000,
         },
       );
 
-      const result = response.data?.output?.text?.trim() || '';
+      const result = response.data?.choices?.[0]?.message?.content?.trim() || '';
       Logger.log(`[Sticker场景AI判断] ✓ API返回成功 - 原始返回: "${result}"`, 'StickerService');
 
       // 检查是否为NO（不匹配任何场景）
@@ -704,6 +686,131 @@ AI的回复中是否包含以下**确切支付信号**？
         'StickerService',
       );
       Logger.error(`[Sticker场景AI判断] ✗ 请求详情 - 待分析文本: "${text}"`, 'StickerService');
+      return null;
+    }
+  }
+
+  /**
+   * 分析角色回复内容是否包含转账意图
+   * 使用DeepSeek判断角色是否想要给用户转账，以及转账金额
+   * @param content 角色回复的内容
+   * @param roleName 角色名称（可选）
+   * @returns { shouldTransfer: boolean, amount: string, description: string } | null
+   */
+  async analyzeTransferIntent(
+    content: string,
+    roleName?: string,
+  ): Promise<{ shouldTransfer: boolean; amount: string; description: string } | null> {
+    Logger.log(`[转账意图分析] 开始分析，内容长度: ${content?.length || 0}`, 'StickerService');
+
+    if (!content || content.trim() === '') {
+      Logger.log(`[转账意图分析] 内容为空，跳过分析`, 'StickerService');
+      return null;
+    }
+
+    Logger.log(`[转账意图分析] 调用大模型分析...`, 'StickerService');
+
+    try {
+      const deepseekApiKey = process.env.DEEPSEEK_API_KEY || '';
+
+      if (!deepseekApiKey) {
+        Logger.warn('[转账意图分析] 未配置DeepSeek API Key，跳过分析', 'StickerService');
+        return null;
+      }
+
+      const prompt = `# Role
+你是一个专门分析文本中转账意图的助手。
+
+# Task
+请分析${
+        roleName ? `角色"${roleName}"的` : ''
+      }回复内容，判断角色是否表达了要给用户转账/发红包/打钱的意图。
+
+# Input
+"${content}"
+
+# Rules
+1. 只有角色明确表示要**主动给用户转账/发红包**时才算有转账意图
+2. 以下情况**不算**转账意图：
+   - 用户请求转账，角色只是回应但没有实际给钱
+   - 角色拒绝转账
+   - 只是提到钱但没有转账动作
+   - 承诺以后给钱但不是现在
+   - 管理权限类（如"工资卡给你保管"）
+3. 金额必须是具体数字，如果没有明确金额则 shouldTransfer 为 false
+4. 金额单位默认为人民币元
+5. **description 必须极简**：
+   - 只能是2-6个字的简短词组
+   - 不要写完整句子，不要解释背景
+   - 示例：❌ "用户退回之前的转账，角色主动表示要再次转账" ✓ "再次转账"
+   - 示例：❌ "为了表达对用户的关心和爱意" ✓ "爱意表达"
+   - 示例：❌ "角色想要给用户零花钱" ✓ "零花钱"
+   - 示例：❌ "作为奖励给用户的红包" ✓ "奖励红包"
+
+# Output Format (JSON only)
+{"shouldTransfer": true/false, "amount": "金额数字", "description": "2-6字简短词组"}
+
+如果没有转账意图：
+{"shouldTransfer": false, "amount": "0", "description": ""}`;
+
+      const baseURL = process.env.DEEPSEEK_BASE_URL || 'https://api.deepseek.com/v1';
+      const model = process.env.DEEPSEEK_MODEL || 'deepseek-chat';
+
+      const axios = require('axios');
+      const response = await axios.post(
+        `${baseURL}/chat/completions`,
+        {
+          model,
+          messages: [{ role: 'user', content: prompt }],
+          max_tokens: 100,
+          temperature: 0.1,
+        },
+        {
+          headers: {
+            Authorization: `Bearer ${deepseekApiKey}`,
+            'Content-Type': 'application/json',
+          },
+          timeout: 10000,
+        },
+      );
+
+      const result = response.data?.choices?.[0]?.message?.content?.trim() || '';
+      Logger.log(`[转账意图分析] 大模型返回: ${result}`, 'StickerService');
+
+      if (!result) {
+        Logger.log(`[转账意图分析] 大模型返回为空`, 'StickerService');
+        return null;
+      }
+
+      // 解析JSON响应
+      const jsonMatch = result.match(/\{[\s\S]*\}/);
+      if (!jsonMatch) {
+        Logger.log(`[转账意图分析] 无法解析JSON响应`, 'StickerService');
+        return null;
+      }
+
+      const parsed = JSON.parse(jsonMatch[0]);
+      Logger.log(
+        `[转账意图分析] 解析结果: shouldTransfer=${parsed.shouldTransfer}, amount=${parsed.amount}`,
+        'StickerService',
+      );
+
+      if (parsed.shouldTransfer && parsed.amount && parseFloat(parsed.amount) > 0) {
+        Logger.log(
+          `[转账意图分析] ✅ 检测到转账意图 - 金额: ${parsed.amount}, 原因: ${parsed.description}`,
+          'StickerService',
+        );
+        return {
+          shouldTransfer: true,
+          amount: String(parseFloat(parsed.amount).toFixed(2)),
+          description: parsed.description || '',
+        };
+      }
+
+      Logger.log(`[转账意图分析] 未检测到有效的转账意图`, 'StickerService');
+      return null;
+    } catch (error: any) {
+      Logger.warn(`[转账意图分析] ⚠️ 分析失败: ${error?.message || error}`, 'StickerService');
       return null;
     }
   }

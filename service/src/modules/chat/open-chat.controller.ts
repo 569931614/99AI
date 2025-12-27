@@ -24,6 +24,8 @@ import { ChatGroupEntity } from '../chatGroup/chatGroup.entity';
 import { ChatLogService } from '../chatLog/chatLog.service';
 import { OpenAIChatService } from '../aiTool/chat/chat.service';
 import { DeviceBackgroundService } from '../deviceBackground/deviceBackground.service';
+import { RedisCacheService } from '../redisCache/redisCache.service';
+import { StickerService } from '../sticker/sticker.service';
 
 type CookieMessageType = 'text' | 'voice' | 'image';
 
@@ -55,6 +57,8 @@ export class OpenChatController {
     private readonly chatLogService: ChatLogService,
     private readonly openAIChatService: OpenAIChatService,
     private readonly deviceBackgroundService: DeviceBackgroundService,
+    private readonly redisCacheService: RedisCacheService,
+    private readonly stickerService: StickerService,
     @InjectRepository(ChatGroupEntity)
     private readonly chatGroupEntity: Repository<ChatGroupEntity>,
   ) {}
@@ -820,6 +824,13 @@ export class OpenChatController {
         emotion?: string | null;
         sticker?: any;
         chatId?: number | null;
+        extraParam?: any;
+        transfer?: {
+          amount: string;
+          description: string;
+          status: string;
+          chatId?: number | null;
+        };
       }> = [];
 
       // 获取IP地址用于chatlog
@@ -883,17 +894,50 @@ export class OpenChatController {
           )}`,
         );
 
+        // 预先用完整文本判断情绪和音色，所有分段使用同一情绪
+        let preselectedEmotion: string | null = null;
+        let preselectedVoiceId: string | null = null;
+        if (shouldGenerateTts && fullResponse && sentences.length > 0) {
+          this.logger.log(
+            `[chat-process-sync] 🎭 预先判断完整文本情绪: "${fullResponse.substring(0, 50)}..."`,
+          );
+          try {
+            const emotionResult = await this.chatService.preDetectEmotionForTts(
+              fullResponse,
+              body.appId || null,
+            );
+            if (emotionResult) {
+              preselectedEmotion = emotionResult.emotion;
+              preselectedVoiceId = emotionResult.voiceId;
+              this.logger.log(
+                `[chat-process-sync] ✅ 情绪预判成功 - emotion: ${preselectedEmotion}, voiceId: ${preselectedVoiceId}, method: ${emotionResult.method}`,
+              );
+            } else {
+              this.logger.log(`[chat-process-sync] ⚠️ 情绪预判返回空，各分段将独立判断情绪`);
+            }
+          } catch (emotionError: any) {
+            this.logger.warn(
+              `[chat-process-sync] ❌ 情绪预判失败: ${
+                emotionError?.message || emotionError
+              }，各分段将独立判断情绪`,
+            );
+          }
+        }
+
         for (let i = 0; i < sentences.length; i++) {
           const sentence = sentences[i];
           let sentenceAudioUrl: string | null = null;
           let sentenceVoiceDuration: number | null = null;
-          let sentenceEmotion: string | null = emotion; // 使用整体情绪
+          let sentenceEmotion: string | null = preselectedEmotion || emotion; // 优先使用预选情绪
           let sentenceChatId: number | null = null;
 
           // 先生成TTS（不更新chatlog），再一起保存到chatlog
           if (shouldGenerateTts && sentence) {
             this.logger.log(
-              `[chat-process-sync] 🎤 为第${i + 1}句生成TTS: "${sentence.substring(0, 30)}..."`,
+              `[chat-process-sync] 🎤 为第${i + 1}句生成TTS: "${sentence.substring(
+                0,
+                30,
+              )}...", 使用预选情绪: ${preselectedEmotion ?? 'N/A'}`,
             );
             try {
               const ttsResult = await this.chatService.generateTtsWithEmotion({
@@ -901,15 +945,17 @@ export class OpenChatController {
                 appId: body.appId || null,
                 userId,
                 skipChatLogUpdate: true, // 跳过chatlog更新，后面一起保存
+                preselectedEmotion, // 传递预选情绪
+                preselectedVoiceId, // 传递预选音色
               });
               if (ttsResult) {
                 sentenceAudioUrl = ttsResult.ttsUrl;
                 sentenceVoiceDuration = ttsResult.duration;
-                sentenceEmotion = ttsResult.emotion || emotion;
+                sentenceEmotion = ttsResult.emotion || preselectedEmotion || emotion;
                 this.logger.log(
                   `[chat-process-sync] ✅ 第${
                     i + 1
-                  }句TTS生成成功 - audioUrl: ${sentenceAudioUrl}, duration: ${sentenceVoiceDuration}s`,
+                  }句TTS生成成功 - audioUrl: ${sentenceAudioUrl}, duration: ${sentenceVoiceDuration}s, emotion: ${sentenceEmotion}`,
                 );
               } else {
                 this.logger.warn(`[chat-process-sync] ⚠️ 第${i + 1}句TTS生成返回空结果`);
@@ -1057,12 +1103,57 @@ export class OpenChatController {
         }
       }
 
-      // 根据最终返回的消息数扣费（每条消息1个饼干，备忘录消息跳过扣费）
+      // 新的扣费逻辑（备忘录消息跳过扣费）
+      // 规则：
+      // 1. 用户发送文字或语音消息 → 扣1个饼干
+      // 2. 用户发送图片或表情包或转账 → 扣1个饼干
+      // 3. 角色回复文字消息（无论几条） → 扣1个饼干
+      // 4. 角色回复语音消息 → 每条扣1个饼干
+      // 5. 角色转账或发送表情包 → 扣1个饼干
       if (body?.isCalendarMessage !== true && dataArray.length > 0) {
-        const totalCost = dataArray.length; // 每条消息1个饼干
+        // 用户发送消息扣费（文字/语音/图片/表情包/转账均扣1个饼干）
+        let userMessageCost = 1;
+
+        // 统计角色回复的类型
+        let hasTextReply = false; // 是否有文字回复
+        let voiceReplyCount = 0; // 语音回复数量
+        let hasStickerOrTransfer = false; // 是否有表情包或转账
+
+        for (const item of dataArray) {
+          // 判断是否为表情包或转账（extraParam中有sticker_image_url表示表情包）
+          const isSticker = item.sticker || item.extraParam?.sticker_image_url;
+          const isTransfer =
+            item.text?.includes('转账') && (item.sticker || item.extraParam?.sticker_image_url);
+
+          if (isSticker || isTransfer) {
+            hasStickerOrTransfer = true;
+          } else if (item.audioUrl) {
+            // 有语音URL的是语音回复
+            voiceReplyCount++;
+          } else if (item.text) {
+            // 纯文字回复
+            hasTextReply = true;
+          }
+        }
+
+        // 计算总费用
+        let totalCost = userMessageCost; // 用户发送消息 1 个饼干
+        if (hasTextReply) {
+          totalCost += 1; // 角色文字回复（无论几条） 1 个饼干
+        }
+        totalCost += voiceReplyCount; // 角色语音回复 每条 1 个饼干
+        if (hasStickerOrTransfer) {
+          totalCost += 1; // 角色转账或表情包 1 个饼干
+        }
+
         this.logger.log(
-          `[chat-process-sync] 🍪 根据返回消息数扣费 - 消息数: ${dataArray.length}, 扣除饼干: ${totalCost}`,
+          `[chat-process-sync] 🍪 扣费明细 - 用户消息:${userMessageCost}, 文字回复:${
+            hasTextReply ? 1 : 0
+          }, 语音回复:${voiceReplyCount}, 表情包/转账:${
+            hasStickerOrTransfer ? 1 : 0
+          }, 总计:${totalCost}`,
         );
+
         try {
           chargeReceipt = await this.chargeMultipleCookies(
             userId,
@@ -1073,6 +1164,72 @@ export class OpenChatController {
         } catch (chargeError: any) {
           this.logger.warn(
             `[chat-process-sync] ⚠️ 扣费失败但不影响返回: ${chargeError?.message || chargeError}`,
+          );
+        }
+      }
+
+      // 分析角色回复是否包含转账意图，作为独立消息添加到 dataArray
+      this.logger.log(
+        `[chat-process-sync] 准备分析转账意图 - fullResponse长度: ${
+          fullResponse?.length || 0
+        }, isCalendarMessage: ${body?.isCalendarMessage}`,
+      );
+      if (fullResponse && body?.isCalendarMessage !== true) {
+        try {
+          this.logger.log(`[chat-process-sync] 开始调用转账意图分析...`);
+          const transferIntent = await this.stickerService.analyzeTransferIntent(
+            fullResponse,
+            body.modelName,
+          );
+          if (transferIntent && transferIntent.shouldTransfer) {
+            this.logger.log(
+              `[chat-process-sync] 💰 检测到转账意图 - 金额: ${transferIntent.amount}, 说明: ${transferIntent.description}`,
+            );
+
+            // 保存转账消息到数据库（调用 service 层方法）
+            let transferChatId = null;
+            try {
+              const savedTransfer = await this.chatLogService.saveTransferMessage({
+                userId,
+                groupId: body.groupId || body.options?.groupId,
+                appId: body.appId,
+                model: body.model || 'gpt-3.5-turbo',
+                modelName: body.modelName || 'GPT-3.5',
+                modelAvatar: body._resolvedModelAvatar || body.modelAvatar || '',
+                curIp,
+                type: body.modelType || 1,
+                amount: transferIntent.amount,
+                description: transferIntent.description,
+              });
+              transferChatId = savedTransfer.chatId;
+              this.logger.log(`[chat-process-sync] 转账消息已保存, chatId: ${transferChatId}`);
+            } catch (saveError: any) {
+              this.logger.error(
+                `[chat-process-sync] 转账消息保存失败: ${saveError?.message || saveError}`,
+              );
+            }
+
+            // 添加转账消息到 dataArray（作为独立的消息项）
+            dataArray.push({
+              text: transferIntent.description || '',
+              audioUrl: null,
+              voiceDuration: null,
+              emotion: null,
+              chatId: transferChatId,
+              // 转账数据
+              transfer: {
+                amount: transferIntent.amount,
+                description: transferIntent.description,
+                status: 'pending', // 待领取状态
+                chatId: transferChatId, // 包含真实的chatId
+              },
+            });
+          }
+        } catch (transferError: any) {
+          this.logger.warn(
+            `[chat-process-sync] ⚠️ 转账意图分析失败但不影响返回: ${
+              transferError?.message || transferError
+            }`,
           );
         }
       }
@@ -2712,18 +2869,30 @@ ${example}
         },
         userId: {
           type: 'number',
-          description: '用户ID（可选，与chatId配合使用）',
+          description: '用户ID（必填，用于翻译扣费）',
+        },
+        token: {
+          type: 'string',
+          description: 'Maobing平台用户token（可选，用于扣费）',
+        },
+        maobingBaseUrl: {
+          type: 'string',
+          description: 'Maobing基础域名（可选，默认 https://admin.maobingai.com）',
         },
       },
-      required: ['text'],
+      required: ['text', 'userId'],
     },
   })
   async translate(@Body() body: any, @Res() res: Response) {
     try {
-      const { text, targetLang = '中文', chatId, userId } = body || {};
+      const { text, targetLang = '中文', chatId, userId, token, maobingBaseUrl } = body || {};
 
       if (!text || text.trim() === '') {
         throw new HttpException('翻译文本不能为空', HttpStatus.BAD_REQUEST);
+      }
+
+      if (!userId) {
+        throw new HttpException('用户ID不能为空', HttpStatus.BAD_REQUEST);
       }
 
       // 调用 qwen-turbo 进行翻译
@@ -2733,6 +2902,52 @@ ${example}
 
       if (!translatedText) {
         throw new HttpException('翻译失败，请稍后重试', HttpStatus.INTERNAL_SERVER_ERROR);
+      }
+
+      // 翻译扣费逻辑：10次翻译扣1个饼干
+      // 使用 Redis 存储翻译计数，key 格式: translate_count:{userId}
+      const translateCountKey = `translate_count:${userId}`;
+      try {
+        const currentCount = await this.redisCacheService.get({ key: translateCountKey });
+        const count = currentCount ? parseInt(currentCount, 10) + 1 : 1;
+
+        if (count >= 10) {
+          // 达到10次，扣1个饼干并重置计数
+          this.logger.log(`[翻译扣费] 用户 ${userId} 翻译次数达到10次，执行扣费`);
+          try {
+            const chargeResponse = await MaobingCookieUtil.deductCookies({
+              userId,
+              amount: 1,
+              remark: '消耗饼干-翻译功能（10次）',
+              maobingBaseUrl,
+              token,
+            });
+            if (chargeResponse.success) {
+              this.logger.log(`[翻译扣费] 扣费成功 - userId: ${userId}, 消耗: 1个饼干`);
+              // 重置计数
+              await this.redisCacheService.set({ key: translateCountKey, val: '0' }, 86400 * 7); // 7天过期
+            } else {
+              this.logger.warn(`[翻译扣费] 扣费失败但不影响翻译: ${chargeResponse.message}`);
+              // 扣费失败也重置计数，避免累积
+              await this.redisCacheService.set({ key: translateCountKey, val: '0' }, 86400 * 7);
+            }
+          } catch (chargeError: any) {
+            this.logger.warn(
+              `[翻译扣费] 扣费异常但不影响翻译: ${chargeError?.message || chargeError}`,
+            );
+            // 扣费异常也重置计数
+            await this.redisCacheService.set({ key: translateCountKey, val: '0' }, 86400 * 7);
+          }
+        } else {
+          // 未达到10次，更新计数
+          await this.redisCacheService.set(
+            { key: translateCountKey, val: count.toString() },
+            86400 * 7,
+          ); // 7天过期
+          this.logger.log(`[翻译计数] 用户 ${userId} 翻译次数: ${count}/10`);
+        }
+      } catch (countError: any) {
+        this.logger.warn(`[翻译计数] 计数失败但不影响翻译: ${countError?.message || countError}`);
       }
 
       // 如果传入了 chatId 和 userId，自动保存翻译结果到 chatLog
@@ -2761,6 +2976,58 @@ ${example}
       return res.status(status).json({
         success: false,
         message: e.message || '翻译失败',
+      });
+    }
+  }
+
+  /**
+   * AI决策转账是否领取或退回
+   */
+  @Post('transfer-decision')
+  @ApiOperation({ summary: 'AI决策转账是否领取或退回' })
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        appId: { type: 'number', description: '应用/角色ID' },
+        groupId: { type: 'number', description: '会话组ID' },
+        amount: { type: 'string', description: '转账金额' },
+        description: { type: 'string', description: '转账说明（可选）' },
+        userId: { type: 'number', description: '用户ID' },
+        token: { type: 'string', description: '用户token' },
+      },
+      required: ['appId', 'groupId', 'amount', 'userId'],
+    },
+  })
+  async transferDecision(@Body() body: any, @Req() req: Request, @Res() res: Response) {
+    try {
+      const { appId, groupId, amount, description, userId, token } = body;
+
+      if (!appId || !groupId || !amount || !userId) {
+        return res.status(400).json({
+          success: false,
+          message: '缺少必要参数：appId, groupId, amount, userId',
+        });
+      }
+
+      // 构造伪装的req.user对象供chatService使用
+      const fakeReq = {
+        ...req,
+        user: { id: userId },
+      } as any;
+
+      const result = await this.chatService.makeTransferDecision(
+        { appId, groupId, amount, description },
+        fakeReq,
+      );
+
+      return res.status(200).json(result);
+    } catch (e: any) {
+      this.logger.error(`转账决策失败: ${e.message}`);
+      const status = e instanceof HttpException ? e.getStatus() : HttpStatus.INTERNAL_SERVER_ERROR;
+      return res.status(status).json({
+        success: false,
+        message: e.message || '转账决策失败',
       });
     }
   }

@@ -14,6 +14,7 @@ import { QueryByAppIdDto } from './dto/queryByAppId.dto';
 import { QuerMyChatLogDto } from './dto/queryMyChatLog.dto';
 import { QuerySingleChatDto } from './dto/querySingleChat.dto';
 import { recDrawImgDto } from './dto/recDrawImg.dto';
+import { TransferActionDto } from './dto/transferAction.dto';
 
 @Controller('chatLog')
 @ApiTags('chatLog')
@@ -97,5 +98,21 @@ export class ChatLogController {
   @UseGuards(JwtAuthGuard)
   querySingleChat(@Req() req: Request, @Query() params: QuerySingleChatDto) {
     return this.chatLogService.querySingleChat(req, params);
+  }
+
+  @Get('transferDetail')
+  @ApiOperation({ summary: '获取转账详情' })
+  @ApiBearerAuth()
+  @UseGuards(JwtAuthGuard)
+  getTransferDetail(@Req() req: Request, @Query('chatId') chatId: number) {
+    return this.chatLogService.getTransferDetail(req.user.id, chatId);
+  }
+
+  @Post('transferAction')
+  @ApiOperation({ summary: '处理转账操作（领取/退还）' })
+  @ApiBearerAuth()
+  @UseGuards(JwtAuthGuard)
+  handleTransferAction(@Req() req: Request, @Body() body: TransferActionDto) {
+    return this.chatLogService.handleTransferAction(req.user.id, body.chatId, body.action);
   }
 }

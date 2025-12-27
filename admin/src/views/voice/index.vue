@@ -253,6 +253,7 @@
                       gptSovitsForm.promptAudioFile ? '重新选择音频' : '上传音频文件'
                     }}</el-button>
                   </el-upload>
+                  <div class="text-xs text-gray-400">要求：3~10秒、WAV/MP3/M4A/FLAC/OGG 格式</div>
                   <div
                     v-if="gptSovitsForm.promptAudioFileName"
                     class="text-xs text-gray-500 flex items-center gap-2"

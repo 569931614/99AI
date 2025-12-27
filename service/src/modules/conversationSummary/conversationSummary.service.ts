@@ -4,6 +4,9 @@ import { Repository } from 'typeorm';
 import { GlobalConfigService } from '../globalConfig/globalConfig.service';
 import { ConversationSummaryEntity } from './conversationSummary.entity';
 
+// 每隔多少轮对话进行一次总结
+const SUMMARY_INTERVAL = 10;
+
 @Injectable()
 export class ConversationSummaryService {
   constructor(
@@ -40,7 +43,71 @@ export class ConversationSummaryService {
   }
 
   /**
-   * 异步总结对话（非阻塞）
+   * 获取指定群组的未总结消息数
+   */
+  async getUnsummarizedCount(groupId: string): Promise<number> {
+    try {
+      const summary = await this.conversationSummaryRepo.findOne({
+        where: { groupId },
+      });
+      return summary?.unsummarizedCount || 0;
+    } catch (error: any) {
+      Logger.error(
+        `[对话总结] 获取未总结消息数失败: ${error?.message || error}`,
+        'ConversationSummaryService',
+      );
+      return 0;
+    }
+  }
+
+  /**
+   * 增加未总结消息计数，并判断是否需要触发总结
+   * @returns 是否需要触发总结
+   */
+  async incrementUnsummarizedCount(
+    groupId: string,
+    userId: number,
+    appId: number | null,
+  ): Promise<boolean> {
+    try {
+      let record = await this.conversationSummaryRepo.findOne({
+        where: { groupId },
+      });
+
+      if (record) {
+        record.unsummarizedCount = (record.unsummarizedCount || 0) + 1;
+        await this.conversationSummaryRepo.save(record);
+      } else {
+        record = this.conversationSummaryRepo.create({
+          groupId,
+          userId,
+          appId,
+          summary: '',
+          messageCount: 0,
+          unsummarizedCount: 1,
+          lastSummarizedAt: null,
+        });
+        await this.conversationSummaryRepo.save(record);
+      }
+
+      const shouldSummarize = record.unsummarizedCount >= SUMMARY_INTERVAL;
+      Logger.debug(
+        `[对话总结] 未总结计数: ${record.unsummarizedCount}/${SUMMARY_INTERVAL}, 需要总结: ${shouldSummarize}`,
+        'ConversationSummaryService',
+      );
+      return shouldSummarize;
+    } catch (error: any) {
+      Logger.error(
+        `[对话总结] 增加未总结计数失败: ${error?.message || error}`,
+        'ConversationSummaryService',
+      );
+      return false;
+    }
+  }
+
+  /**
+   * 异步总结对话（非阻塞）- 每10轮总结一次
+   * @param recentMessages 近10轮的对话消息（用于总结）
    * @param roleName 角色名称，用于在总结中替换"assistant"
    * @param userName 用户名称，用于在总结中替换"user"
    */
@@ -49,18 +116,18 @@ export class ConversationSummaryService {
     userId: number,
     appId: number | null,
     previousSummary: string | null,
-    newMessages: Array<{ role: string; content: string }>,
+    recentMessages: Array<{ role: string; content: string }>,
     roleName: string = '助理',
     userName: string = '用户',
   ): Promise<void> {
     setImmediate(async () => {
       try {
         Logger.debug(
-          `[对话总结] 开始异步总结 - groupId=${groupId}, 新消息数=${newMessages.length}, 角色名=${roleName}, 用户名=${userName}`,
+          `[对话总结] 开始异步总结 - groupId=${groupId}, 新消息数=${recentMessages.length}, 角色名=${roleName}, 用户名=${userName}`,
           'ConversationSummaryService',
         );
 
-        const validMessages = newMessages.filter(
+        const validMessages = recentMessages.filter(
           msg => msg.content && msg.content.trim().length > 0,
         );
         if (validMessages.length === 0) {
@@ -95,7 +162,7 @@ export class ConversationSummaryService {
   }
 
   /**
-   * 使用DashScope API生成总结
+   * 使用 DeepSeek 官网 API 生成总结
    * @param roleName 角色名称，用于替换"assistant"
    * @param userName 用户名称，用于替换"user"
    */
@@ -106,12 +173,11 @@ export class ConversationSummaryService {
     userName: string = '用户',
   ): Promise<string | null> {
     try {
-      const dashscopeApiKey =
-        (await this.globalConfigService.getConfigs(['dashscopeApiKey'])) ||
-        process.env.DASHSCOPE_API_KEY;
+      // 使用 DeepSeek 官网 API
+      const deepseekApiKey = process.env.DEEPSEEK_API_KEY || '';
 
-      if (!dashscopeApiKey) {
-        Logger.warn('[对话总结] 未配置DashScope API Key，跳过总结', 'ConversationSummaryService');
+      if (!deepseekApiKey) {
+        Logger.warn('[对话总结] 未配置DeepSeek API Key，跳过总结', 'ConversationSummaryService');
         return null;
       }
 
@@ -145,38 +211,31 @@ export class ConversationSummaryService {
         ? `之前的总结：\n${previousSummary}\n\n新的对话：\n${conversationText}`
         : `对话内容：\n${conversationText}`;
 
+      const baseURL = process.env.DEEPSEEK_BASE_URL || 'https://api.deepseek.com/v1';
+      const model = process.env.DEEPSEEK_MODEL || 'deepseek-chat';
+
       const axios = require('axios');
       const response = await axios.post(
-        'https://dashscope.aliyuncs.com/api/v1/services/aigc/text-generation/generation',
+        `${baseURL}/chat/completions`,
         {
-          model: 'qwen-turbo',
-          input: {
-            messages: [
-              {
-                role: 'system',
-                content: systemMessage,
-              },
-              {
-                role: 'user',
-                content: userMessage,
-              },
-            ],
-          },
-          parameters: {
-            max_tokens: 600,
-            temperature: 0.3,
-          },
+          model,
+          messages: [
+            { role: 'system', content: systemMessage },
+            { role: 'user', content: userMessage },
+          ],
+          max_tokens: 600,
+          temperature: 0.3,
         },
         {
           headers: {
-            Authorization: `Bearer ${dashscopeApiKey}`,
+            Authorization: `Bearer ${deepseekApiKey}`,
             'Content-Type': 'application/json',
           },
           timeout: 15000,
         },
       );
 
-      const summary = response.data?.output?.text?.trim() || '';
+      const summary = response.data?.choices?.[0]?.message?.content?.trim() || '';
       if (!summary) {
         Logger.warn(`[对话总结] API返回空内容`, 'ConversationSummaryService');
         return null;
@@ -195,7 +254,7 @@ export class ConversationSummaryService {
   }
 
   /**
-   * 保存总结到数据库
+   * 保存总结到数据库，并重置未总结计数
    */
   private async saveSummary(
     groupId: string,
@@ -213,6 +272,7 @@ export class ConversationSummaryService {
         // 更新现有记录
         record.summary = summary;
         record.messageCount = (record.messageCount || 0) + messageCount;
+        record.unsummarizedCount = 0; // 重置未总结计数
         record.lastSummarizedAt = new Date();
         await this.conversationSummaryRepo.save(record);
       } else {
@@ -223,13 +283,14 @@ export class ConversationSummaryService {
           appId,
           summary,
           messageCount,
+          unsummarizedCount: 0,
           lastSummarizedAt: new Date(),
         });
         await this.conversationSummaryRepo.save(record);
       }
 
       Logger.debug(
-        `[对话总结] ✓ 保存成功 - groupId=${groupId}, 累计消息=${record.messageCount}`,
+        `[对话总结] ✓ 保存成功 - groupId=${groupId}, 累计消息=${record.messageCount}, 未总结计数已重置`,
         'ConversationSummaryService',
       );
     } catch (error: any) {

@@ -1,175 +1,199 @@
 <template>
   <div class="touch-layout">
-    <!-- 上传中提示遮罩 -->
-    <div class="upload-overlay" v-if="isSavingBg">
-      <div class="upload-loading-box">
-        <div class="upload-spinner"></div>
-        <p>上传中...</p>
+    <!-- 视频邀请界面 -->
+    <div class="video-invitation" v-if="showInvitation">
+      <!-- 暗色渐变背景 -->
+      <div class="invitation-bg"></div>
+
+      <!-- 左上角Logo -->
+      <div class="invitation-logo">
+        <img
+          src="https://maobingai.oss-cn-shanghai.aliyuncs.com/mini_program/H5logo.png"
+          class="logo-img"
+          alt="猫饼AI"
+        />
+      </div>
+
+      <!-- 中间头像和名字 -->
+      <div class="invitation-content">
+        <div class="avatar-wrapper">
+          <img
+            v-if="pageData.coverImg || pageData.cover || pageData.avatar"
+            :src="pageData.coverImg || pageData.cover || pageData.avatar"
+            class="avatar-img"
+            alt="头像"
+          />
+          <div v-else class="avatar-placeholder">
+            <div class="avatar-loading"></div>
+          </div>
+        </div>
+        <div class="role-name-invitation">{{ pageData.name || '加载中...' }}</div>
+        <div class="invitation-text">正在邀请你视频中<span class="animated-dots"></span></div>
+      </div>
+
+      <!-- 底部接听按钮 -->
+      <div class="invitation-action">
+        <button class="accept-btn" @click="acceptInvitation">
+          <svg viewBox="0 0 24 24" fill="currentColor" width="32" height="32">
+            <path
+              d="M17 10.5V7c0-.55-.45-1-1-1H4c-.55 0-1 .45-1 1v10c0 .55.45 1 1 1h12c.55 0 1-.45 1-1v-3.5l4 4v-11l-4 4z"
+            />
+          </svg>
+        </button>
       </div>
     </div>
 
-    <!-- 背景层 - 支持图片/GIF/MP4 -->
-    <div class="background-layer">
+    <!-- 背景层 - 始终加载，邀请界面时隐藏 -->
+    <div class="background-layer" :class="{ 'bg-hidden': showInvitation }">
       <video
         v-if="isVideoBackground"
+        ref="bgVideoRef"
         :src="backgroundUrl"
         class="bg-media"
-        autoplay
         loop
         muted
         playsinline
+        preload="auto"
       />
       <img v-else :src="backgroundUrl || defaultBgUrl" class="bg-media" alt="背景" />
     </div>
 
-    <!-- 顶部导航栏 - 仅已绑定状态显示 -->
-    <div class="navbar" v-if="isBind">
-      <div class="nav-left">
-        <img
-          src="https://maobingai.oss-cn-shanghai.aliyuncs.com/mini_program/H5logo.png"
-          class="nav-logo"
-          alt="猫饼AI"
-        />
-      </div>
-      <div class="nav-right">
-        <button class="change-bg-btn" @click="showBgModal = true">更换背景</button>
-        <input
-          ref="fileInputRef"
-          type="file"
-          accept="image/*,video/mp4"
-          class="hidden-input"
-          @change="handleFileChange"
-        />
-      </div>
-    </div>
-
-    <!-- 隐藏的文件上传input（用于未绑定状态的弹窗） -->
-    <input
-      v-if="!isBind"
-      ref="fileInputRef"
-      type="file"
-      accept="image/*,video/mp4"
-      class="hidden-input"
-      @change="handleFileChange"
-    />
-
-    <!-- 更换背景弹窗 -->
-    <div class="bg-modal-overlay" v-if="showBgModal" @click.self="showBgModal = false">
-      <div class="bg-modal">
-        <div class="bg-modal-header">
-          <span>更换背景</span>
-          <button class="close-btn" @click="showBgModal = false">×</button>
+    <!-- 主内容区域（接听后显示） -->
+    <template v-if="!showInvitation">
+      <!-- 上传中提示遮罩 -->
+      <div class="upload-overlay" v-if="isSavingBg">
+        <div class="upload-loading-box">
+          <div class="upload-spinner"></div>
+          <p>上传中...</p>
         </div>
-        <div class="bg-modal-body">
-          <!-- 输入链接 -->
-          <div class="input-section">
-            <label>输入链接</label>
-            <input
-              v-model="bgLinkInput"
-              type="text"
-              placeholder="输入图片/GIF/视频链接"
-              class="link-input"
-            />
-            <button
-              class="confirm-link-btn"
-              @click="handleLinkSubmit"
-              :disabled="!bgLinkInput.trim() || isSavingBg"
-            >
-              {{ isSavingBg ? '保存中...' : '确认' }}
-            </button>
+      </div>
+
+      <!-- 顶部导航栏 - 仅已绑定状态显示 -->
+      <div class="navbar" v-if="isBind">
+        <div class="nav-left">
+          <img
+            src="https://maobingai.oss-cn-shanghai.aliyuncs.com/mini_program/H5logo.png"
+            class="nav-logo"
+            alt="猫饼AI"
+          />
+        </div>
+        <div class="nav-right">
+          <button class="continue-chat-btn" @click="closePopup">继续聊天</button>
+        </div>
+      </div>
+
+      <!-- 隐藏的文件上传input（用于未绑定状态的弹窗） -->
+      <input
+        v-if="!isBind"
+        ref="fileInputRef"
+        type="file"
+        accept="image/*,video/mp4"
+        class="hidden-input"
+        @change="handleFileChange"
+      />
+
+      <!-- 更换背景弹窗 -->
+      <div class="bg-modal-overlay" v-if="showBgModal" @click.self="showBgModal = false">
+        <div class="bg-modal">
+          <div class="bg-modal-header">
+            <span>更换背景</span>
+            <button class="close-btn" @click="showBgModal = false">×</button>
           </div>
-          <div class="divider-line">
-            <span>或</span>
-          </div>
-          <!-- 上传文件 -->
-          <div class="upload-section">
-            <button class="upload-btn" @click="triggerFileUpload" :disabled="isSavingBg">
-              <svg
-                v-if="!isSavingBg"
-                viewBox="0 0 24 24"
-                fill="currentColor"
-                width="20"
-                height="20"
+          <div class="bg-modal-body">
+            <!-- 输入链接 -->
+            <div class="input-section">
+              <label>输入链接</label>
+              <input
+                v-model="bgLinkInput"
+                type="text"
+                placeholder="输入图片/GIF/视频链接"
+                class="link-input"
+              />
+              <button
+                class="confirm-link-btn"
+                @click="handleLinkSubmit"
+                :disabled="!bgLinkInput.trim() || isSavingBg"
               >
-                <path d="M9 16h6v-6h4l-7-7-7 7h4v6zm-4 2h14v2H5v-2z" />
-              </svg>
-              <div v-else class="upload-loading"></div>
-              <span>{{ isSavingBg ? '上传中...' : '上传本地文件' }}</span>
-            </button>
-            <p class="upload-tip">支持 JPG、PNG、GIF、MP4 格式</p>
+                {{ isSavingBg ? '保存中...' : '确认' }}
+              </button>
+            </div>
+            <div class="divider-line">
+              <span>或</span>
+            </div>
+            <!-- 上传文件 -->
+            <div class="upload-section">
+              <button class="upload-btn" @click="triggerFileUpload" :disabled="isSavingBg">
+                <svg
+                  v-if="!isSavingBg"
+                  viewBox="0 0 24 24"
+                  fill="currentColor"
+                  width="20"
+                  height="20"
+                >
+                  <path d="M9 16h6v-6h4l-7-7-7 7h4v6zm-4 2h14v2H5v-2z" />
+                </svg>
+                <div v-else class="upload-loading"></div>
+                <span>{{ isSavingBg ? '上传中...' : '上传本地文件' }}</span>
+              </button>
+              <p class="upload-tip">支持 JPG、PNG、GIF、MP4 格式</p>
+            </div>
           </div>
         </div>
       </div>
-    </div>
 
-    <!-- 未绑定状态 -->
-    <template v-if="!isBind">
-      <div class="content-wrapper">
-        <!-- Logo图片 -->
-        <img :src="logoFullImg" class="logo-full" alt="猫饼AI" />
+      <!-- 未绑定状态 -->
+      <template v-if="!isBind">
+        <div class="content-wrapper">
+          <!-- Logo图片 -->
+          <img :src="logoFullImg" class="logo-full" alt="猫饼AI" />
 
-        <!-- 未绑定内容 -->
-        <div class="unbind-content">
-          <div class="unbind-tips">绑定后，即可通过触碰手机召唤指定角色</div>
-          <img :src="noBindImg" class="no-bind-img" alt="未绑定" />
-          <div class="unbind-text">暂未绑定角色</div>
+          <!-- 未绑定内容 -->
+          <div class="unbind-content">
+            <div class="unbind-tips">绑定后，即可通过触碰手机召唤指定角色</div>
+            <img :src="noBindImg" class="no-bind-img" alt="未绑定" />
+            <div class="unbind-text">暂未绑定角色</div>
+          </div>
         </div>
-      </div>
 
-      <!-- 底部绑定按钮 -->
-      <button class="bind-btn" @click="goToBind">打开猫饼小程序，绑定猫饼手环</button>
-    </template>
+        <!-- 底部绑定按钮 -->
+        <button class="bind-btn" @click="goToBind">打开猫饼小程序，绑定猫饼手环</button>
+      </template>
 
-    <!-- 已绑定状态 -->
-    <template v-else>
-      <!-- 加载提示 -->
-      <div class="chat-bubble loading-bubble" v-if="isLoading">
-        <div class="loading-content">
-          <div class="loading-spinner"></div>
-          <p class="loading-text">{{ loadingText }}</p>
+      <!-- 已绑定状态 -->
+      <template v-else>
+        <!-- 加载提示 -->
+        <div class="chat-bubble loading-bubble" v-if="isLoading">
+          <div class="loading-content">
+            <div class="loading-spinner"></div>
+            <p class="loading-text">{{ loadingText }}</p>
+          </div>
         </div>
-      </div>
 
-      <!-- 对话气泡 -->
-      <div class="chat-bubble" v-else-if="pageData.desAiText">
-        <p class="bubble-text">{{ pageData.desAiText }}</p>
-      </div>
+        <!-- 对话气泡 -->
+        <div class="chat-bubble" v-else-if="showBubbleText && displayedText">
+          <p class="bubble-text">{{ displayedText }}</p>
+        </div>
 
-      <!-- 角色信息区域 -->
-      <div class="role-info">
-        <div class="role-name">{{ pageData.name || '' }}</div>
-      </div>
+        <!-- 底部按钮区域 -->
+        <div class="bottom-actions" v-if="audioUrl">
+          <!-- 左下角下载音频按钮 -->
+          <button class="download-btn" @click="downloadAudio">
+            <svg viewBox="0 0 24 24" fill="currentColor" width="28" height="28">
+              <path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z" />
+            </svg>
+          </button>
 
-      <!-- 底部语音组件 - 靠左 -->
-      <div class="audio-player-mini" v-if="audioUrl" @click="playVoice">
-        <div class="play-btn-mini">
-          <div class="play-icon" v-if="!playing">
-            <svg viewBox="0 0 24 24" fill="currentColor" width="16" height="16">
+          <!-- 右下角播放按钮 -->
+          <button class="play-btn-large" @click="playVoice">
+            <svg v-if="!playing" viewBox="0 0 24 24" fill="currentColor" width="36" height="36">
               <path d="M8 5v14l11-7z" />
             </svg>
-          </div>
-          <div class="wave-animation-mini" v-else>
-            <span class="wave-bar"></span>
-            <span class="wave-bar"></span>
-            <span class="wave-bar"></span>
-          </div>
+            <svg v-else viewBox="0 0 24 24" fill="currentColor" width="36" height="36">
+              <path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z" />
+            </svg>
+          </button>
         </div>
-        <!-- 波浪纹 -->
-        <div class="waveform-mini">
-          <span
-            v-for="i in 18"
-            :key="i"
-            class="bar"
-            :style="{ height: getWaveHeight(i) + 'px' }"
-          ></span>
-        </div>
-        <div class="duration-mini">{{ voiceDuration }}″</div>
-      </div>
-
-      <!-- 继续聊天按钮 - 靠右 -->
-      <button class="enter-btn-inline" @click="closePopup">
-        <span>继续聊天</span>
-      </button>
+      </template>
     </template>
   </div>
 </template>
@@ -195,6 +219,17 @@ const audioContext = ref<HTMLAudioElement | null>(null)
 const audioUrl = ref('')
 const voiceDuration = ref(15)
 
+// 文字显示控制
+const showBubbleText = ref(false) // 是否显示气泡
+const displayedText = ref('') // 当前显示的文字
+const fullText = ref('') // 完整文字内容
+const isTextAnimating = ref(false) // 文字动画是否正在进行
+const stopTextAnimation = ref(false) // 停止文字动画标志
+const textAnimationIndex = ref(0) // 当前文字动画的位置索引
+
+// 视频邀请状态
+const showInvitation = ref(true)
+
 // 加载状态
 const isLoading = ref(false)
 const loadingText = ref('正在输入中...')
@@ -203,6 +238,7 @@ const braceletId = ref((route.query.id as string) || '8676')
 
 // 背景相关
 const fileInputRef = ref<HTMLInputElement | null>(null)
+const bgVideoRef = ref<HTMLVideoElement | null>(null)
 const backgroundUrl = ref('')
 const backgroundType = ref<'image' | 'gif' | 'video'>('image')
 const defaultBgUrl = '/page-bg.png'
@@ -218,12 +254,6 @@ const logoFullImg = imgPath + 'mb_xcx003@2x.png'
 const isVideoBackground = computed(() => {
   return backgroundType.value === 'video'
 })
-
-// 生成波形高度
-const getWaveHeight = (index: number) => {
-  const heights = [8, 16, 24, 12, 20, 28, 14, 22, 10, 18, 26, 16, 24, 12, 20, 28, 14, 22, 10, 18]
-  return heights[(index - 1) % heights.length]
-}
 
 // 触发文件上传
 const triggerFileUpload = () => {
@@ -457,6 +487,12 @@ const closePopup = () => {
   }
 }
 
+// 接听视频邀请
+const acceptInvitation = () => {
+  showInvitation.value = false
+  // 视频不自动播放，等待用户点击播放按钮
+}
+
 // 跳转到绑定角色页面（打开猫饼小程序）
 const goToBind = () => {
   // 如果有返回的跳转链接（wechat openlink），优先使用
@@ -486,9 +522,15 @@ const playVoice = () => {
   }
 
   if (playing.value) {
-    stopAudio()
+    // 暂停音频（不销毁，可以继续播放）
+    pauseAudio()
   } else {
-    startAudio()
+    // 继续或开始播放
+    resumeOrStartAudio()
+    // 继续或开始文字动画
+    if (fullText.value) {
+      resumeOrStartTextAnimation()
+    }
   }
 }
 
@@ -524,6 +566,12 @@ const startAudio = () => {
         .then(() => {
           console.log('音频播放启动成功')
           playing.value = true
+          // 语音播放时，视频也播放
+          if (bgVideoRef.value && isVideoBackground.value) {
+            bgVideoRef.value.play().catch(err => {
+              console.warn('视频播放失败:', err)
+            })
+          }
         })
         .catch(err => {
           console.error('音频播放失败:', err.name, err.message)
@@ -541,17 +589,62 @@ const startAudio = () => {
     console.log('音频播放结束')
     playing.value = false
     audioContext.value = null
+    // 语音结束时，视频也暂停
+    if (bgVideoRef.value && isVideoBackground.value) {
+      bgVideoRef.value.pause()
+    }
   }
 
   audio.onerror = e => {
     console.error('音频加载错误:', e)
     playing.value = false
     audioContext.value = null
+    // 出错时也暂停视频
+    if (bgVideoRef.value && isVideoBackground.value) {
+      bgVideoRef.value.pause()
+    }
   }
 
   // 设置 src 触发加载
   audio.src = audioUrl.value
   audio.load()
+}
+
+// 暂停音频（保留状态，可继续播放）
+const pauseAudio = () => {
+  if (audioContext.value) {
+    audioContext.value.pause()
+  }
+  playing.value = false
+  // 语音暂停时，视频也暂停
+  if (bgVideoRef.value && isVideoBackground.value) {
+    bgVideoRef.value.pause()
+  }
+  // 暂停文字动画
+  stopTextAnimation.value = true
+  isTextAnimating.value = false
+}
+
+// 继续或开始播放音频
+const resumeOrStartAudio = () => {
+  // 如果已有音频对象且未播放完，继续播放
+  if (audioContext.value && audioContext.value.currentTime > 0 && !audioContext.value.ended) {
+    audioContext.value
+      .play()
+      .then(() => {
+        playing.value = true
+        if (bgVideoRef.value && isVideoBackground.value) {
+          bgVideoRef.value.play().catch(err => console.warn('视频播放失败:', err))
+        }
+      })
+      .catch(err => {
+        console.error('继续播放失败:', err)
+        playing.value = false
+      })
+  } else {
+    // 否则重新开始播放
+    startAudio()
+  }
 }
 
 const stopAudio = () => {
@@ -560,19 +653,104 @@ const stopAudio = () => {
     audioContext.value = null
   }
   playing.value = false
+  // 语音停止时，视频也暂停
+  if (bgVideoRef.value && isVideoBackground.value) {
+    bgVideoRef.value.pause()
+  }
+  // 停止文字动画
+  stopTextAnimationFn()
+}
+
+// 下载音频
+const downloadAudio = async () => {
+  if (!audioUrl.value) {
+    alert('暂无音频可下载')
+    return
+  }
+
+  try {
+    const response = await fetch(audioUrl.value)
+    const blob = await response.blob()
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `voice_${Date.now()}.mp3`
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    URL.revokeObjectURL(url)
+  } catch (error) {
+    console.error('下载音频失败:', error)
+    // 降级方案：直接打开链接
+    window.open(audioUrl.value, '_blank')
+  }
+}
+
+// 继续或开始文字动画
+const resumeOrStartTextAnimation = () => {
+  if (!fullText.value) return
+
+  // 如果动画正在进行中，不重复启动
+  if (isTextAnimating.value) return
+
+  showBubbleText.value = true
+  isTextAnimating.value = true
+  stopTextAnimation.value = false
+
+  // 从当前位置继续动画
+  const startIndex = textAnimationIndex.value
+  const remainingText = fullText.value.slice(startIndex)
+
+  if (remainingText.length === 0) {
+    // 文字已经显示完毕
+    isTextAnimating.value = false
+    return
+  }
+
+  streamTextAsync(remainingText, (char: string) => {
+    displayedText.value += char
+    textAnimationIndex.value++
+  }).then(() => {
+    isTextAnimating.value = false
+  })
+}
+
+// 开始文字动画（从头开始）
+const startTextAnimation = () => {
+  if (!fullText.value || isTextAnimating.value) return
+
+  showBubbleText.value = true
+  isTextAnimating.value = true
+  stopTextAnimation.value = false
+  displayedText.value = ''
+  textAnimationIndex.value = 0
+
+  streamTextAsync(fullText.value, (char: string) => {
+    displayedText.value += char
+    textAnimationIndex.value++
+  }).then(() => {
+    isTextAnimating.value = false
+  })
+}
+
+// 停止文字动画（完全停止，重置状态）
+const stopTextAnimationFn = () => {
+  stopTextAnimation.value = true
+  isTextAnimating.value = false
 }
 
 const animationText = (text: string) => {
-  const totalAnswerStr = text
-  let currentAnswerStr = ''
-  streamTextAsync(totalAnswerStr, (char: string) => {
-    currentAnswerStr += char
-    pageData.value.desAiText = currentAnswerStr
-  })
+  // 保存完整文字，但不立即显示
+  fullText.value = text
+  // 不再自动开始动画，等待用户点击播放按钮
 }
 
 const streamTextAsync = async (text: string, callback: Function, interval: number = 150) => {
   for (const char of text) {
+    // 检查是否需要停止动画
+    if (stopTextAnimation.value) {
+      break
+    }
     callback(char)
     await new Promise(resolve => setTimeout(resolve, interval))
   }
@@ -723,6 +901,203 @@ onUnmounted(() => {
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
 }
 
+// 视频邀请界面
+.video-invitation {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 100;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+
+.invitation-bg {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(180deg, #1a1a2e 0%, #16213e 30%, #1a1a2e 70%, #0f0f23 100%);
+  z-index: 0;
+
+  &::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: radial-gradient(
+      ellipse at center bottom,
+      rgba(180, 130, 130, 0.3) 0%,
+      transparent 60%
+    );
+  }
+}
+
+.invitation-logo {
+  position: absolute;
+  top: 16px;
+  left: 20px;
+  z-index: 10;
+  padding-top: env(safe-area-inset-top, 0px);
+
+  .logo-img {
+    height: 40px;
+    width: auto;
+    object-fit: contain;
+  }
+}
+
+.invitation-translate {
+  position: absolute;
+  top: 16px;
+  right: 20px;
+  z-index: 10;
+  padding-top: env(safe-area-inset-top, 0px);
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  color: rgba(255, 255, 255, 0.8);
+  cursor: pointer;
+
+  &:hover {
+    background: rgba(255, 255, 255, 0.15);
+  }
+}
+
+.invitation-content {
+  position: relative;
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  margin-top: -80px;
+}
+
+.avatar-wrapper {
+  width: 140px;
+  height: 140px;
+  border-radius: 50%;
+  padding: 4px;
+  background: linear-gradient(135deg, #fff 0%, rgba(255, 255, 255, 0.8) 100%);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+  margin-bottom: 24px;
+
+  .avatar-img {
+    width: 100%;
+    height: 100%;
+    border-radius: 50%;
+    object-fit: cover;
+  }
+
+  .avatar-placeholder {
+    width: 100%;
+    height: 100%;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.9);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+
+    .avatar-loading {
+      width: 40px;
+      height: 40px;
+      border: 3px solid rgba(200, 150, 150, 0.3);
+      border-top-color: #d9a8a6;
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+    }
+  }
+}
+
+.role-name-invitation {
+  font-size: 28px;
+  font-weight: 600;
+  color: #fff;
+  margin-bottom: 16px;
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+}
+
+.invitation-text {
+  font-size: 16px;
+  color: rgba(255, 255, 255, 0.6);
+  letter-spacing: 2px;
+
+  .animated-dots {
+    &::after {
+      content: '';
+      animation: dots 1.5s steps(4, end) infinite;
+    }
+  }
+}
+
+@keyframes dots {
+  0% {
+    content: '';
+  }
+  25% {
+    content: '.';
+  }
+  50% {
+    content: '..';
+  }
+  75% {
+    content: '...';
+  }
+  100% {
+    content: '';
+  }
+}
+
+.invitation-action {
+  position: absolute;
+  bottom: 100px;
+  left: 0;
+  right: 0;
+  z-index: 10;
+  display: flex;
+  justify-content: center;
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+.accept-btn {
+  width: 72px;
+  height: 72px;
+  border-radius: 50%;
+  border: none;
+  background: linear-gradient(135deg, #4cd964 0%, #34c759 50%, #28a745 100%);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  box-shadow:
+    0 6px 20px rgba(52, 199, 89, 0.4),
+    0 3px 8px rgba(52, 199, 89, 0.3);
+
+  &:hover {
+    transform: scale(1.05);
+    box-shadow:
+      0 8px 28px rgba(52, 199, 89, 0.5),
+      0 4px 12px rgba(52, 199, 89, 0.4);
+  }
+
+  &:active {
+    transform: scale(0.95);
+  }
+}
+
 // 上传中提示遮罩
 .upload-overlay {
   position: fixed;
@@ -773,6 +1148,11 @@ onUnmounted(() => {
   bottom: 0;
   z-index: 0;
 
+  &.bg-hidden {
+    visibility: hidden;
+    pointer-events: none;
+  }
+
   .bg-media {
     width: 100%;
     height: 100%;
@@ -799,11 +1179,23 @@ onUnmounted(() => {
       width: auto;
       object-fit: contain;
     }
+
+    .nav-divider {
+      color: rgba(255, 255, 255, 0.6);
+      margin: 0 8px;
+      font-size: 14px;
+    }
+
+    .nav-subtitle {
+      color: rgba(255, 255, 255, 0.9);
+      font-size: 14px;
+      font-weight: 500;
+    }
   }
 
   .nav-right {
-    .change-bg-btn {
-      padding: 6px 12px;
+    .continue-chat-btn {
+      padding: 6px 16px;
       background: linear-gradient(180deg, #f0c4c4 0%, #e8b4b4 50%, #daa8a8 100%);
       border: none;
       border-radius: 16px;
@@ -825,10 +1217,6 @@ onUnmounted(() => {
       &:active {
         transform: scale(0.95);
       }
-    }
-
-    .hidden-input {
-      display: none;
     }
   }
 }
@@ -930,37 +1318,26 @@ onUnmounted(() => {
 // 对话气泡 - 固定底部距离，内容增加向上扩展
 .chat-bubble {
   position: absolute;
-  left: 20px;
-  bottom: 220px;
+  left: 2.5%;
+  right: 2.5%;
+  bottom: 150px;
   z-index: 10;
-  max-width: 75%;
-  padding: 20px 24px;
-  background: rgba(180, 130, 130, 0.5);
+  width: 95%;
+  box-sizing: border-box;
+  padding: 16px 20px;
+  background: rgba(255, 255, 255, 0.2);
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
-  border-radius: 16px;
-  border: 1px solid rgba(232, 165, 165, 0.5);
-
-  // 气泡三角形
-  &::after {
-    content: '';
-    position: absolute;
-    bottom: -10px;
-    left: 24px;
-    width: 0;
-    height: 0;
-    border-left: 10px solid transparent;
-    border-right: 10px solid transparent;
-    border-top: 10px solid rgba(232, 165, 165, 0.5);
-  }
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.3);
 
   .bubble-text {
     margin: 0;
-    font-size: 15px;
-    font-weight: 600;
-    line-height: 1.8;
+    font-size: 14px;
+    font-weight: 500;
+    line-height: 1.7;
     color: #fff;
-    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
   }
 
   // 加载状态样式
@@ -968,12 +1345,12 @@ onUnmounted(() => {
     .loading-content {
       display: flex;
       align-items: center;
-      gap: 12px;
+      gap: 10px;
     }
 
     .loading-spinner {
-      width: 20px;
-      height: 20px;
+      width: 18px;
+      height: 18px;
       border: 2px solid rgba(255, 255, 255, 0.3);
       border-top-color: #fff;
       border-radius: 50%;
@@ -982,10 +1359,10 @@ onUnmounted(() => {
 
     .loading-text {
       margin: 0;
-      font-size: 15px;
-      font-weight: 600;
+      font-size: 14px;
+      font-weight: 500;
       color: #fff;
-      text-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+      text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
     }
   }
 }
@@ -1002,7 +1379,7 @@ onUnmounted(() => {
   position: absolute;
   left: 20px;
   right: 20px;
-  bottom: 120px;
+  bottom: 160px;
   z-index: 10;
 
   .role-name {
@@ -1014,138 +1391,79 @@ onUnmounted(() => {
   }
 }
 
-// 底部语音播放器 - 靠左
-.audio-player-mini {
+// 底部按钮区域
+.bottom-actions {
   position: fixed;
   bottom: 38px;
   left: 20px;
+  right: 20px;
   z-index: 10;
   display: flex;
+  justify-content: space-between;
   align-items: center;
-  gap: 10px;
-  padding: 10px 18px;
-  min-width: 250px;
-  background: rgba(180, 130, 130, 0.75);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
-  border-radius: 30px;
-  border: 1px solid rgba(255, 255, 255, 0.2);
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+// 下载按钮
+.download-btn {
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  border: 3px solid rgba(255, 255, 255, 0.7);
+  background: transparent;
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
   cursor: pointer;
   transition: all 0.3s ease;
+  color: rgba(255, 255, 255, 0.9);
+
+  svg {
+    width: 32px;
+    height: 32px;
+  }
 
   &:hover {
-    background: rgba(180, 130, 130, 0.85);
+    background: rgba(255, 255, 255, 0.1);
+    transform: scale(1.05);
   }
 
   &:active {
     transform: scale(0.95);
   }
-
-  .play-btn-mini {
-    width: 30px;
-    height: 30px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    background: rgba(217, 168, 166, 0.9);
-    border-radius: 50%;
-    flex-shrink: 0;
-
-    .play-icon {
-      color: #fff;
-      padding-left: 2px;
-    }
-
-    .wave-animation-mini {
-      display: flex;
-      align-items: center;
-      gap: 2px;
-
-      .wave-bar {
-        width: 2px;
-        height: 10px;
-        background: #fff;
-        border-radius: 2px;
-        animation: wave-anim 0.8s ease-in-out infinite;
-
-        &:nth-child(1) {
-          animation-delay: 0s;
-        }
-        &:nth-child(2) {
-          animation-delay: 0.15s;
-        }
-        &:nth-child(3) {
-          animation-delay: 0.3s;
-        }
-      }
-    }
-  }
-
-  // 波浪纹
-  .waveform-mini {
-    display: flex;
-    align-items: center;
-    gap: 3px;
-    height: 24px;
-    flex: 1;
-
-    .bar {
-      width: 2px;
-      background: rgba(255, 255, 255, 0.7);
-      border-radius: 2px;
-      transition: height 0.2s ease;
-    }
-  }
-
-  .duration-mini {
-    font-size: 16px;
-    font-weight: 500;
-    color: rgba(255, 255, 255, 0.9);
-    min-width: 28px;
-    text-align: center;
-    flex-shrink: 0;
-  }
 }
 
-// 继续聊天按钮 - 靠右
-.enter-btn-inline {
-  position: fixed;
-  bottom: 38px;
-  right: 20px;
-  z-index: 10;
+// 播放按钮
+.play-btn-large {
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  border: 3px solid rgba(255, 255, 255, 0.7);
+  background: transparent;
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 6px;
-  padding: 8px 16px;
-  white-space: nowrap;
-  background: linear-gradient(180deg, #f0c4c4 0%, #e8b4b4 50%, #daa8a8 100%);
-  border: none;
-  border-radius: 20px;
-  color: #fff;
-  font-size: 14px;
-  font-weight: 600;
   cursor: pointer;
   transition: all 0.3s ease;
-  box-shadow:
-    0 4px 8px rgba(200, 150, 150, 0.3),
-    0 2px 4px rgba(200, 150, 150, 0.2),
-    inset 0 1px 1px rgba(255, 255, 255, 0.3),
-    inset 0 -1px 1px rgba(0, 0, 0, 0.05);
+  color: rgba(255, 255, 255, 0.9);
+
+  svg {
+    width: 32px;
+    height: 32px;
+    margin-left: 3px;
+  }
 
   &:hover {
-    transform: scale(1.02);
+    background: rgba(255, 255, 255, 0.1);
+    transform: scale(1.05);
   }
 
   &:active {
-    transform: scale(0.98);
-    box-shadow:
-      0 2px 4px rgba(200, 150, 150, 0.3),
-      inset 0 1px 2px rgba(0, 0, 0, 0.1);
-  }
-
-  svg {
-    flex-shrink: 0;
+    transform: scale(0.95);
   }
 }
 

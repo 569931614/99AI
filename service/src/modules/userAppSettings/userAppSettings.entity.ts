@@ -30,4 +30,13 @@ export class UserAppSettingsEntity extends BaseEntity {
 
   @Column({ type: 'text', comment: '我的简介', nullable: true })
   myProfile: string;
+
+  @Column({
+    type: 'varchar',
+    length: 200,
+    comment: 'NFC消息内容偏好，逗号分隔（calendar_reminder,chat_memory,check_in,report）',
+    nullable: true,
+    default: '',
+  })
+  nfcContentPreference: string;
 }

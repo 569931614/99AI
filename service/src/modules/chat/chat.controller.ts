@@ -16,6 +16,7 @@ import {
 } from '@nestjs/common';
 import { Request, Response } from 'express';
 import { ChatProcessDto } from './dto/chatProcess.dto';
+import { TransferDecisionDto } from './dto/transferDecision.dto';
 
 @ApiTags('chatgpt')
 @Controller('chatgpt')
@@ -143,5 +144,13 @@ export class ChatController {
       const message = e?.message || '语音对话处理失败';
       return res.status(status).json({ code: status, message });
     }
+  }
+
+  @Post('transfer-decision')
+  @ApiOperation({ summary: 'AI决策转账是否领取或退回' })
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  async transferDecision(@Body() body: TransferDecisionDto, @Req() req: Request) {
+    return this.chatService.makeTransferDecision(body, req);
   }
 }

@@ -1,7 +1,13 @@
 import { BaseEntity } from 'src/common/entity/baseEntity';
-import { Column, Entity } from 'typeorm';
+import { Column, Entity, Index } from 'typeorm';
 
 @Entity({ name: 'chatlog' })
+@Index('idx_chatlog_user_group_delete', ['userId', 'groupId', 'isDelete']) // 用户对话列表查询
+@Index('idx_chatlog_group_delete_created', ['groupId', 'isDelete', 'createdAt']) // 群组历史记录查询
+@Index('idx_chatlog_user_app', ['userId', 'appId']) // 应用使用记录查询
+@Index('idx_chatlog_user_type', ['userId', 'type']) // 用户绘图记录查询
+@Index('idx_chatlog_group_role', ['groupId', 'role']) // 群组角色消息统计
+@Index('idx_chatlog_group_app_opening', ['groupId', 'appId', 'isOpeningRemark']) // 开场白查询
 export class ChatLogEntity extends BaseEntity {
   @Column({ comment: '用户ID' })
   userId: number;
@@ -136,4 +142,21 @@ export class ChatLogEntity extends BaseEntity {
 
   @Column({ comment: '翻译后的内容', nullable: true, type: 'text' })
   translatedContent: string;
+
+  @Column({ comment: '转账金额', nullable: true, type: 'varchar', length: 50 })
+  transferAmount: string;
+
+  @Column({ comment: '转账说明', nullable: true, type: 'varchar', length: 200 })
+  transferDesc: string;
+
+  @Column({
+    comment: '转账状态: pending=待领取, received=已领取, returned=已被退还, refunded=已退回',
+    nullable: true,
+    type: 'varchar',
+    length: 20,
+  })
+  transferStatus: string;
+
+  @Column({ comment: '转账操作时间', nullable: true, type: 'datetime' })
+  transferActionTime: Date;
 }

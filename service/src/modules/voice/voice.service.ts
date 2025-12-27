@@ -2829,6 +2829,7 @@ export class VoiceService implements OnModuleInit {
       text: string;
       textLanguage?: string;
       cutPunc?: string;
+      streamingMode?: boolean;
     },
   ) {
     // 语言处理：保持 "auto" 不变，让服务器自动检测
@@ -2853,7 +2854,7 @@ export class VoiceService implements OnModuleInit {
       temperature: config.temperature,
       speed_factor: config.speed || 1.0,
       media_type: 'wav',
-      streaming_mode: false,
+      streaming_mode: options.streamingMode ?? false,
     };
 
     // 如果 config 中包含 characterName，优先使用 character_name
@@ -3132,6 +3133,93 @@ export class VoiceService implements OnModuleInit {
     );
   }
 
+  /**
+   * GPT-SoVITS 流式 TTS 请求
+   * 使用 streaming_mode: true 进行真正的流式输出
+   */
+  private async streamGptSovitsAudio(options: {
+    voice: VoiceEntity;
+    text: string;
+    textLanguage?: string;
+    cutPunc?: string;
+    sampleRate?: number;
+    onStart?: (info: { sampleRate: number }) => void;
+    onData?: (chunk: Buffer) => void;
+    onEnd?: () => void;
+    onError?: (error: Error) => void;
+  }): Promise<void> {
+    const config = this.getGptSovitsConfig(options.voice);
+    const sampleRate = Number(options.sampleRate ?? config.sampleRate ?? 32000);
+
+    // 构建流式请求 payload
+    const payload = this.buildGptSovitsPayload(config, {
+      text: options.text,
+      textLanguage: options.textLanguage,
+      cutPunc: options.cutPunc,
+      streamingMode: true, // 启用流式模式
+    });
+
+    // 使用同步流式接口 /tts
+    const streamUrl = this.normalizeGptSovitsUrl('/tts');
+    Logger.log(`[streamGptSovitsAudio] 使用流式模式调用 GPT-SoVITS: ${streamUrl}`, 'VoiceService');
+    Logger.debug(`[streamGptSovitsAudio] Payload: ${JSON.stringify(payload)}`, 'VoiceService');
+
+    try {
+      // 通知开始
+      options.onStart?.({ sampleRate });
+
+      const response = await axios.post(streamUrl, payload, {
+        responseType: 'stream',
+        timeout: 120000, // 2分钟超时
+        validateStatus: () => true,
+      });
+
+      if (response.status >= 400) {
+        const errorMsg = `GPT-SoVITS 流式请求失败 (status ${response.status})`;
+        Logger.error(`[streamGptSovitsAudio] ${errorMsg}`, 'VoiceService');
+        options.onError?.(new Error(errorMsg));
+        return;
+      }
+
+      const stream = response.data;
+
+      stream.on('data', (chunk: Buffer) => {
+        try {
+          options.onData?.(chunk);
+        } catch (err) {
+          Logger.warn(`[streamGptSovitsAudio] onData 回调异常: ${err}`, 'VoiceService');
+        }
+      });
+
+      stream.on('end', () => {
+        Logger.log(`[streamGptSovitsAudio] 流式 TTS 完成`, 'VoiceService');
+        try {
+          options.onEnd?.();
+        } catch (err) {
+          Logger.warn(`[streamGptSovitsAudio] onEnd 回调异常: ${err}`, 'VoiceService');
+        }
+      });
+
+      stream.on('error', (error: Error) => {
+        Logger.error(`[streamGptSovitsAudio] 流式错误: ${error.message}`, 'VoiceService');
+        options.onError?.(error);
+      });
+
+      // 等待流结束
+      await new Promise<void>((resolve, reject) => {
+        stream.on('end', resolve);
+        stream.on('error', reject);
+      });
+    } catch (error: any) {
+      Logger.error(`[streamGptSovitsAudio] 请求失败: ${error?.message || error}`, 'VoiceService');
+      options.onError?.(error instanceof Error ? error : new Error(String(error)));
+      throw new HttpException(
+        error?.response?.data?.message || error?.message || 'GPT-SoVITS 流式合成失败',
+        HttpStatus.BAD_GATEWAY,
+      );
+    }
+  }
+
   private async deleteVoiceAssociations(voiceId: string) {
     const appVoiceDeleteResult = await this.appVoiceRepo.delete({ voiceId });
     console.log(`删除应用音色关联: affected rows = ${appVoiceDeleteResult.affected}`);
@@ -3382,11 +3470,7 @@ export class VoiceService implements OnModuleInit {
 
   /**
    * 流式语音合成（旧版，单次文本）：边合成边通过回调吐出音频片段
-   * @deprecated 推荐使用 createTTSStreamSession 实现真正的流式合成
-   */
-  /**
-   * 流式语音合成（旧版，单次文本）：边合成边通过回调吐出音频片段
-   * @deprecated 推荐使用 createTTSStreamSession 实现真正的流式合成
+   * 支持 DashScope、GPT-SoVITS（流式）、MiniMax（流式）
    */
   async ttsStream(
     body: {
@@ -3401,6 +3485,7 @@ export class VoiceService implements OnModuleInit {
       instruction?: string;
       text_language?: string;
       cut_punc?: string;
+      emotion?: string;
     },
     opts?: {
       onStart?: (info: { format: 'mp3' | 'wav' | 'pcm'; sample_rate: number }) => void;
@@ -3415,14 +3500,15 @@ export class VoiceService implements OnModuleInit {
     const voiceEntity = await this.voiceRepo.findOne({ where: { voiceId: voice_id } });
     if (!voiceEntity) throw new HttpException(`音色不存在: ${voice_id}`, HttpStatus.NOT_FOUND);
 
+    // GPT-SoVITS 流式输出
     if ((voiceEntity.provider as VoiceProvider) === 'gpt-sovits') {
-      await this.requestGptSovitsAudio({
+      Logger.log(`[ttsStream] 使用 GPT-SoVITS 流式模式`, 'VoiceService');
+      await this.streamGptSovitsAudio({
         voice: voiceEntity,
         text,
         textLanguage: body.text_language,
         cutPunc: body.cut_punc,
         sampleRate: body.sample_rate,
-        stream: true,
         onStart: info => {
           try {
             opts?.onStart?.({ format: 'wav', sample_rate: info.sampleRate });
@@ -3442,6 +3528,53 @@ export class VoiceService implements OnModuleInit {
       return { success: true };
     }
 
+    // MiniMax 流式输出 - 改用同步接口避免重复播放问题
+    if ((voiceEntity.provider as VoiceProvider) === 'minimax') {
+      const config = (voiceEntity.config || {}) as any;
+      const minimaxVoiceId = voiceEntity.providerVoiceId || config.voiceId;
+      if (!minimaxVoiceId) {
+        throw new HttpException(
+          `音色 ${voiceEntity.voiceId} 缺少 MiniMax voiceId 配置`,
+          HttpStatus.BAD_REQUEST,
+        );
+      }
+
+      try {
+        // 通知开始
+        opts?.onStart?.({
+          format: (body.format || 'mp3') as any,
+          sample_rate: body.sample_rate || 32000,
+        });
+
+        // 使用同步接口获取完整音频
+        const result = await this.minimaxProvider.synthesizeSpeech({
+          text,
+          voiceId: String(minimaxVoiceId),
+          model: config.model || 'speech-2.6-hd',
+          speed: config.speed || 1,
+          vol: config.vol || 1,
+          pitch: config.pitch || 0,
+          languageBoost: config.languageBoost || 'auto',
+          audioSampleRate: body.sample_rate || 32000,
+          format: body.format || 'mp3',
+          emotion: body.emotion,
+        });
+
+        // 一次性发送完整音频
+        if (result.audioBuffer && result.audioBuffer.length > 0) {
+          opts?.onData?.(result.audioBuffer);
+        }
+
+        opts?.onEnd?.();
+      } catch (error: any) {
+        Logger.error(`[ttsStream] MiniMax TTS 失败: ${error?.message}`, 'VoiceService');
+        throw error;
+      }
+
+      return { success: true };
+    }
+
+    // DashScope (CosyVoice) 流式输出 - 保持原有逻辑
     const saved = (await this.getVoiceParams(voice_id)) || {};
     const format = (body.format || saved.format || 'mp3') as 'mp3' | 'wav' | 'pcm';
     const sample_rate = Number(body.sample_rate ?? saved.sample_rate ?? 24000);

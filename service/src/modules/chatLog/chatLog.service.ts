@@ -368,6 +368,11 @@ export class ChatLogService {
         totalTokens,
         display_state,
         translatedContent,
+        transferAmount,
+        transferDesc,
+        transferStatus,
+        transferActionTime,
+        extraParam,
       } = item;
 
       // 获取原始内容
@@ -418,6 +423,12 @@ export class ChatLogService {
         totalTokens: totalTokens,
         display_state: display_state,
         translatedContent: translatedContent || '',
+        // 转账相关字段
+        transferAmount: transferAmount || null,
+        transferDesc: transferDesc || '',
+        transferStatus: transferStatus || null,
+        transferActionTime: transferActionTime || null,
+        extraParam: extraParam || null,
       };
     });
 
@@ -764,6 +775,267 @@ export class ChatLogService {
         error.message || '更新翻译内容失败',
         error.status || HttpStatus.INTERNAL_SERVER_ERROR,
       );
+    }
+  }
+
+  /* 获取转账详情 */
+  async getTransferDetail(
+    userId: number,
+    chatId: number,
+  ): Promise<{
+    success: boolean;
+    data?: any;
+    message?: string;
+  }> {
+    try {
+      const chatLog = await this.chatLogEntity.findOne({
+        where: { id: chatId },
+      });
+
+      if (!chatLog) {
+        throw new HttpException('转账记录不存在', HttpStatus.NOT_FOUND);
+      }
+
+      // 检查是否是转账消息（通过extraParam判断）
+      let extraParam: any = {};
+      if (chatLog.extraParam) {
+        try {
+          extraParam = JSON.parse(chatLog.extraParam);
+        } catch (e) {
+          // 忽略JSON解析错误
+        }
+      }
+
+      if (extraParam.type !== 'transfer') {
+        throw new HttpException('该消息不是转账消息', HttpStatus.BAD_REQUEST);
+      }
+
+      return {
+        success: true,
+        data: {
+          chatId: chatLog.id,
+          amount: chatLog.transferAmount || extraParam.amount || 0,
+          desc: chatLog.transferDesc || extraParam.description || '',
+          status: chatLog.transferStatus || 'pending',
+          createdAt: chatLog.createdAt,
+          actionTime: chatLog.transferActionTime,
+          role: chatLog.role,
+          userId: chatLog.userId,
+        },
+      };
+    } catch (error) {
+      Logger.error(`获取转账详情失败: ${error.message}`, error.stack, 'ChatLogService');
+      throw new HttpException(
+        error.message || '获取转账详情失败',
+        error.status || HttpStatus.INTERNAL_SERVER_ERROR,
+      );
+    }
+  }
+
+  /* 处理转账操作（领取/退还） */
+  async handleTransferAction(
+    userId: number,
+    chatId: number,
+    action: 'received' | 'returned',
+    skipUserActionLog: boolean = false, // 是否跳过创建用户操作消息（AI决策转账时使用）
+  ): Promise<{
+    success: boolean;
+    message: string;
+    data?: any;
+  }> {
+    try {
+      const chatLog = await this.chatLogEntity.findOne({
+        where: { id: chatId },
+      });
+
+      if (!chatLog) {
+        throw new HttpException('转账记录不存在', HttpStatus.NOT_FOUND);
+      }
+
+      // 检查是否是转账消息（通过transferStatus或extraParam判断）
+      const isTransferMessage = chatLog.transferStatus !== null || chatLog.transferAmount !== null;
+
+      if (!isTransferMessage) {
+        // 再检查extraParam
+        let extraParam: any = {};
+        if (chatLog.extraParam) {
+          try {
+            extraParam = JSON.parse(chatLog.extraParam);
+          } catch (e) {
+            // 忽略JSON解析错误
+          }
+        }
+        if (extraParam.type !== 'transfer') {
+          throw new HttpException('该消息不是转账消息', HttpStatus.BAD_REQUEST);
+        }
+      }
+
+      // 检查当前状态是否允许操作
+      const currentStatus = chatLog.transferStatus || 'pending';
+      if (currentStatus !== 'pending') {
+        throw new HttpException(
+          `转账已${currentStatus === 'received' ? '被领取' : '被退还'}，无法重复操作`,
+          HttpStatus.BAD_REQUEST,
+        );
+      }
+
+      // 更新转账状态
+      const updateData = {
+        transferStatus: action,
+        transferActionTime: new Date(),
+      };
+
+      await this.chatLogEntity.update(chatId, updateData);
+
+      const actionText = action === 'received' ? '领取' : '退还';
+      const amount = chatLog.transferAmount || '0';
+
+      let userActionChatId: number | null = null;
+
+      // 只有在不跳过的情况下才添加用户操作消息记录
+      // skipUserActionLog=true 用于AI决策转账场景（用户发起转账给角色，角色做出决策）
+      // skipUserActionLog=false 用于用户操作场景（角色发起转账给用户，用户领取/退还）
+      if (!skipUserActionLog) {
+        const userActionContent =
+          action === 'received' ? `已领取 ${amount} 元` : `已退还 ${amount} 元`;
+
+        const userActionLog = await this.saveChatLog({
+          text: userActionContent,
+          content: userActionContent,
+          role: 'user',
+          groupId: chatLog.groupId || null,
+          conversationOptions: chatLog.groupId ? JSON.stringify({ groupId: chatLog.groupId }) : null,
+          userId,
+          appId: chatLog.appId || null,
+          curIp: '',
+          type: chatLog.type || 1,
+          progress: '100%',
+          status: 3,
+          model: chatLog.model || null,
+          modelName: chatLog.modelName || null,
+          modelAvatar: chatLog.modelAvatar || '',
+          display_state: 1,
+          promptTokens: 0,
+          completionTokens: 0,
+          totalTokens: 0,
+          // 转账相关字段（用户视角：receive=已收款，return=已退还）
+          transferAmount: amount,
+          transferDesc: chatLog.transferDesc || '',
+          transferStatus: action === 'received' ? 'receive' : 'return',
+          extraParam: JSON.stringify({
+            type: 'transfer_action',
+            action,
+            amount,
+            relatedChatId: chatId,
+          }),
+        });
+
+        userActionChatId = userActionLog.id;
+
+        Logger.log(
+          `转账操作成功 - chatId: ${chatId}, action: ${action}, userId: ${userId}, 用户操作消息chatId: ${userActionLog.id}`,
+          'ChatLogService',
+        );
+      } else {
+        Logger.log(
+          `转账操作成功 - chatId: ${chatId}, action: ${action}, userId: ${userId}, 跳过创建用户操作消息（AI决策模式）`,
+          'ChatLogService',
+        );
+      }
+
+      return {
+        success: true,
+        message: `${actionText}成功`,
+        data: {
+          chatId,
+          status: action,
+          actionTime: updateData.transferActionTime,
+          userActionChatId: userActionChatId,
+          // 转账详情
+          amount: amount,
+          desc: chatLog.transferDesc || '',
+          transferAmount: amount,
+          transferDesc: chatLog.transferDesc || '',
+          transferStatus: action,
+        },
+      };
+    } catch (error) {
+      Logger.error(`转账操作失败: ${error.message}`, error.stack, 'ChatLogService');
+      throw new HttpException(
+        error.message || '转账操作失败',
+        error.status || HttpStatus.INTERNAL_SERVER_ERROR,
+      );
+    }
+  }
+
+  /* 保存转账消息到聊天记录 */
+  async saveTransferMessage(params: {
+    userId: number;
+    groupId?: number;
+    appId?: number;
+    model?: string;
+    modelName?: string;
+    modelAvatar?: string;
+    curIp?: string;
+    type?: number;
+    amount: string;
+    description: string;
+  }): Promise<{ chatId: number }> {
+    const {
+      userId,
+      groupId,
+      appId,
+      model,
+      modelName,
+      modelAvatar,
+      curIp,
+      type,
+      amount,
+      description,
+    } = params;
+
+    Logger.log(
+      `[保存转账消息] 开始保存 - userId: ${userId}, groupId: ${groupId}, amount: ${amount}`,
+      'ChatLogService',
+    );
+
+    const transferContent = `[转账] ${description || '角色向你发起转账'}`;
+    const logInfo = {
+      text: transferContent,
+      content: transferContent,
+      role: 'assistant',
+      groupId: groupId || null,
+      conversationOptions: groupId ? JSON.stringify({ groupId }) : null,
+      userId,
+      appId: appId || null,
+      curIp: curIp || '',
+      type: type || 1,
+      progress: '100%',
+      status: 3,
+      model: model || null,
+      modelName: modelName || null,
+      modelAvatar: modelAvatar || '',
+      display_state: 1,
+      promptTokens: 0,
+      completionTokens: 0,
+      totalTokens: 0,
+      transferAmount: amount,
+      transferDesc: description,
+      transferStatus: 'pending',
+      extraParam: JSON.stringify({
+        type: 'transfer',
+        amount,
+        description,
+      }),
+    };
+
+    try {
+      const savedLog = await this.saveChatLog(logInfo);
+      Logger.log(`[保存转账消息] ✅ 保存成功 - chatId: ${savedLog.id}`, 'ChatLogService');
+      return { chatId: savedLog.id };
+    } catch (error) {
+      Logger.error(`[保存转账消息] ❌ 保存失败: ${error.message}`, error.stack, 'ChatLogService');
+      throw error;
     }
   }
 }

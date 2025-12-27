@@ -135,4 +135,79 @@ export class OpenChatLogController {
     if (translatedContent === undefined) throw new Error('translatedContent 必填');
     return this.chatLogService.updateTranslation(userId, chatId, translatedContent);
   }
+
+  @Post('save')
+  @ApiOperation({ summary: '【开放】保存聊天记录（无鉴权，需显式 userId）' })
+  async saveChatLog(
+    @Body()
+    body: {
+      userId: number;
+      groupId: number;
+      appId?: number;
+      role: 'user' | 'assistant';
+      content: string;
+      transferAmount?: string;
+      transferDesc?: string;
+      transferStatus?: string;
+    },
+  ) {
+    const { userId, groupId, appId, role, content, transferAmount, transferDesc, transferStatus } =
+      body;
+    if (!userId) throw new Error('userId 必填');
+    if (!groupId) throw new Error('groupId 必填');
+    if (!role) throw new Error('role 必填');
+    if (!content) throw new Error('content 必填');
+
+    const logInfo = {
+      text: content,
+      content: content,
+      role,
+      groupId: groupId,
+      conversationOptions: JSON.stringify({ groupId }),
+      userId,
+      appId: appId || null,
+      transferAmount,
+      transferDesc,
+      transferStatus,
+    };
+
+    const savedLog = await this.chatLogService.saveChatLog(logInfo);
+    return {
+      success: true,
+      data: {
+        id: savedLog.id,
+        chatId: savedLog.id,
+      },
+    };
+  }
+
+  @Post('transferAction')
+  @ApiOperation({ summary: '【开放】处理转账操作（领取/退还）' })
+  async transferAction(
+    @Body() body: { userId: number; chatId: number; action: 'received' | 'returned' },
+  ) {
+    const { userId, chatId, action } = body;
+    if (!userId) throw new Error('userId 必填');
+    if (!chatId) throw new Error('chatId 必填');
+    if (!action) throw new Error('action 必填');
+    if (!['received', 'returned'].includes(action)) {
+      throw new Error('action 必须是 received 或 returned');
+    }
+    return this.chatLogService.handleTransferAction(userId, chatId, action);
+  }
+
+  @Get('transferDetail')
+  @ApiOperation({ summary: '【开放】获取转账详情' })
+  @ApiQuery({
+    name: 'userId',
+    type: Number,
+    required: true,
+    description: '用户ID（系统内有效用户）',
+  })
+  @ApiQuery({ name: 'chatId', type: Number, required: true, description: '消息ID' })
+  async getTransferDetail(@Query('userId') userId: number, @Query('chatId') chatId: number) {
+    if (!userId) throw new Error('userId 必填');
+    if (!chatId) throw new Error('chatId 必填');
+    return this.chatLogService.getTransferDetail(Number(userId), Number(chatId));
+  }
 }

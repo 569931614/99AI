@@ -83,6 +83,64 @@ export class UserAppSettingsService {
    * @param appId 角色ID
    * @param settings 要更新的设置
    */
+  /**
+   * 获取用户 NFC 内容偏好
+   * @param userId 用户ID
+   * @param appId 角色ID
+   * @returns NFC 内容偏好字符串（逗号分隔），空字符串表示随机
+   */
+  async getNfcContentPreference(userId: number, appId: number): Promise<string> {
+    if (!userId || !appId) return '';
+
+    try {
+      const setting = await this.userAppSettingsEntity.findOne({
+        where: { userId, appId },
+      });
+      return setting?.nfcContentPreference ?? '';
+    } catch (error) {
+      this.logger.error(`获取NFC内容偏好失败: userId=${userId}, appId=${appId}`, error.stack);
+      return '';
+    }
+  }
+
+  /**
+   * 设置用户 NFC 内容偏好
+   * @param userId 用户ID
+   * @param appId 角色ID
+   * @param preference 内容偏好（逗号分隔的字符串）
+   */
+  async setNfcContentPreference(userId: number, appId: number, preference: string): Promise<void> {
+    try {
+      this.logger.debug(
+        `设置NFC内容偏好: userId=${userId}, appId=${appId}, preference=${preference}`,
+      );
+
+      const existing = await this.userAppSettingsEntity.findOne({
+        where: { userId, appId },
+      });
+
+      if (existing) {
+        existing.nfcContentPreference = preference;
+        await this.userAppSettingsEntity.save(existing);
+      } else {
+        const newSetting = this.userAppSettingsEntity.create({
+          userId,
+          appId,
+          nfcContentPreference: preference,
+        });
+        await this.userAppSettingsEntity.save(newSetting);
+      }
+
+      this.logger.debug('设置NFC内容偏好成功');
+    } catch (error) {
+      this.logger.error(
+        `设置NFC内容偏好失败: userId=${userId}, appId=${appId}, error=${error.message}`,
+        error.stack,
+      );
+      throw error;
+    }
+  }
+
   async updateUserAppSettings(
     userId: number,
     appId: number,
@@ -94,6 +152,7 @@ export class UserAppSettingsService {
       realTime: number;
       myName: string;
       myProfile: string;
+      nfcContentPreference: string;
     }>,
   ): Promise<UserAppSettingsEntity> {
     try {

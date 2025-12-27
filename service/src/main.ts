@@ -15,6 +15,7 @@ import 'reflect-metadata';
 import { AppModule } from './app.module';
 import { AllExceptionsFilter } from './common/filters/allExceptions.filter';
 import { OpenAIChatService } from './modules/aiTool/chat/chat.service';
+import { cleanTextForTTS } from './modules/chat/utils/text.utils';
 import { VoiceService } from './modules/voice/voice.service';
 Dotenv.config({ path: '.env' });
 
@@ -508,7 +509,6 @@ async function bootstrap() {
             {
               onProgress: (delta: string) => {
                 if (delta) {
-                  Logger.debug(`[VoiceCall] LLM流式输出: "${delta}"`, 'VoiceCall');
                   llmBuffer += delta;
                   sendJson({ type: 'llm.partial', text: delta });
                 }
@@ -525,21 +525,9 @@ async function bootstrap() {
 
           const xingchenText = xingchenResult.text || '';
 
-          Logger.debug(
-            `[VoiceCall] LLM调用完成: xingchenText="${xingchenText?.substring(
-              0,
-              100,
-            )}...", llmBuffer="${llmBuffer?.substring(0, 100)}..."`,
-            'VoiceCall',
-          );
-
           // 如果没有流式输出，使用完整结果
           if (!llmBuffer && xingchenText) {
             llmBuffer = xingchenText;
-            Logger.debug(
-              `[VoiceCall] 使用非流式结果: "${llmBuffer?.substring(0, 100)}..."`,
-              'VoiceCall',
-            );
           }
 
           if (!llmBuffer) {
@@ -594,7 +582,9 @@ async function bootstrap() {
             );
 
             // 5. 移除括号内容，得到实际要朗读的文本
-            const textToSpeak = voiceCallService.removeBracketedContent(llmBuffer);
+            const rawTextToSpeak = voiceCallService.removeBracketedContent(llmBuffer);
+            // 🔥 清理文本（句号转逗号等处理，与普通聊天TTS保持一致）
+            const textToSpeak = cleanTextForTTS(rawTextToSpeak);
 
             Logger.debug(
               `[TTS] 准备播报: textToSpeak="${textToSpeak?.substring(0, 100)}...", 长度=${
@@ -690,16 +680,9 @@ async function bootstrap() {
               // 如果成功解析且有 type 字段，则是控制消息
               if (msg && typeof msg.type === 'string') {
                 isControlMessage = true;
-                Logger.debug(`[VoiceCall] 收到控制消息: type=${msg.type}`, 'VoiceCall');
               }
             } catch (error) {
-              // JSON 解析失败，可能是音频数据被错误标记为非二进制
-              Logger.debug(
-                `[VoiceCall] 非二进制消息但JSON解析失败，作为音频处理: ${
-                  data?.length || 'N/A'
-                } bytes`,
-                'VoiceCall',
-              );
+              // JSON 解析失败，作为音频数据处理
               isControlMessage = false;
             }
           }
@@ -710,7 +693,6 @@ async function bootstrap() {
             // 重要：收到新音频数据时，重置取消标志，允许处理新的录音
             if (session.ttsCanceled && audioChunks.length === 0) {
               // 如果之前被取消且音频缓冲区为空，说明这是新一轮录音，重置标志
-              Logger.debug('[VoiceCall] 检测到新录音，重置ttsCanceled标志', 'VoiceCall');
               session.ttsCanceled = false;
             }
 
@@ -720,10 +702,6 @@ async function bootstrap() {
             }
 
             audioChunks.push(Buffer.from(data));
-            Logger.debug(
-              `收到音频数据: ${data.length} bytes, 累积: ${audioChunks.length} 块`,
-              'VoiceCall',
-            );
 
             // 诊断：累计与当前分片RMS
             try {
@@ -853,22 +831,14 @@ async function bootstrap() {
             }
             sendJson({ type: 'canceled' });
           } else if (msg?.type === 'stop') {
-            Logger.debug(
-              `[VoiceCall] 收到stop消息: audioChunks.length=${audioChunks.length}`,
-              'VoiceCall',
-            );
-
             const buf = Buffer.concat(audioChunks);
             audioChunks = [];
             if (!buf.length) {
               // 放宽：空音频直接返回空结果，避免前端体验受阻
-              Logger.debug(`[VoiceCall] 音频数据为空，返回空结果`, 'VoiceCall');
               sendJson({ type: 'asr.final', text: '' });
               sendJson({ type: 'done' });
               return;
             }
-
-            Logger.debug(`[VoiceCall] 开始处理音频: ${buf.length} bytes`, 'VoiceCall');
 
             const mime =
               cfg.format === 'wav'
@@ -998,7 +968,9 @@ async function bootstrap() {
               );
 
               // 4. 移除括号内容，得到实际要朗读的文本
-              const textToSpeak = voiceCallService.removeBracketedContent(llmFull);
+              const rawTextToSpeak = voiceCallService.removeBracketedContent(llmFull);
+              // 🔥 清理文本（句号转逗号等处理，与普通聊天TTS保持一致）
+              const textToSpeak = cleanTextForTTS(rawTextToSpeak);
 
               if (!textToSpeak || textToSpeak.trim().length === 0) {
                 Logger.warn('[VoiceCall] stop模式-移除括号后文本为空，跳过TTS', 'VoiceCall');

@@ -44,6 +44,7 @@ import { VerificationService } from '../verification/verification.service';
 import { VoiceModule } from '../voice/voice.module';
 import { ConversationSummaryModule } from '../conversationSummary/conversationSummary.module';
 import { StickerModule } from '../sticker/sticker.module';
+import { NfcContentModule } from '../nfcContent/nfcContent.module';
 import { ChatController } from './chat.controller';
 import { ChatService } from './chat.service';
 import { OpenChatController } from './open-chat.controller';
@@ -83,6 +84,7 @@ import { OpenChatController } from './open-chat.controller';
     ConversationSummaryModule,
     StickerModule,
     DeviceBackgroundModule,
+    NfcContentModule,
   ],
   controllers: [ChatController, OpenChatController],
   providers: [

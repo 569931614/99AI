@@ -273,7 +273,71 @@ async function bootstrap() {
         ttsActive?: boolean;
         chatConfig?: any;
         cache?: any;
-      } = { llmAbort: null, ttsCanceled: false, ttsActive: false, cache: {} };
+        // 通话计时相关
+        callStartTime?: number;
+        userToken?: string;
+        billingInterval?: NodeJS.Timeout;
+        totalBilledMinutes?: number;
+      } = { llmAbort: null, ttsCanceled: false, ttsActive: false, cache: {}, totalBilledMinutes: 0 };
+
+      // 每分钟扣费的函数
+      const processMinuteBilling = async () => {
+        if (!session.chatConfig?.userId || !session.userToken) {
+          Logger.warn(
+            `[VoiceCall] 无法扣费: userId=${session.chatConfig?.userId}, hasToken=${!!session.userToken}`,
+            'VoiceCall',
+          );
+          return;
+        }
+
+        session.totalBilledMinutes = (session.totalBilledMinutes || 0) + 1;
+
+        Logger.debug(
+          `[VoiceCall] 每分钟扣费: userId=${session.chatConfig.userId}, 第${session.totalBilledMinutes}分钟`,
+          'VoiceCall',
+        );
+
+        const result = await voiceCallService.deductVoiceCallCookies(
+          session.chatConfig.userId,
+          session.userToken,
+          1, // 每次扣1分钟
+        );
+
+        if (result.success) {
+          Logger.log(
+            `[VoiceCall] 扣费成功: userId=${session.chatConfig.userId}, 第${session.totalBilledMinutes}分钟, 免费分钟使用=${result.freeMinutesUsed}, 扣除饼干=${result.deducted}, 剩余免费分钟=${result.remainingFreeMinutes}`,
+            'VoiceCall',
+          );
+        } else {
+          Logger.warn(
+            `[VoiceCall] 扣费失败: userId=${session.chatConfig.userId}, message=${result.message}`,
+            'VoiceCall',
+          );
+          // 扣费失败（余额不足），通知前端并结束通话
+          sendJson({
+            type: 'error',
+            code: 'BILLING_FAILED',
+            message: result.message || '扣费失败，通话已结束',
+          });
+          // 停止计费定时器
+          if (session.billingInterval) {
+            clearInterval(session.billingInterval);
+            session.billingInterval = undefined;
+          }
+        }
+      };
+
+      // 停止计费定时器
+      const stopBillingInterval = () => {
+        if (session.billingInterval) {
+          clearInterval(session.billingInterval);
+          session.billingInterval = undefined;
+          Logger.debug(
+            `[VoiceCall] 停止计费定时器: userId=${session.chatConfig?.userId}, 总计费分钟=${session.totalBilledMinutes}`,
+            'VoiceCall',
+          );
+        }
+      };
 
       // 诊断指标
       let recvBytesTotal = 0;
@@ -494,6 +558,7 @@ async function bootstrap() {
 
         // 先收集完整的LLM回复
         llmBuffer = ''; // 重置缓冲区
+        let displayBuffer = ''; // 用于累积过滤后的显示文本
         try {
           Logger.debug(
             `[VoiceCall] 开始LLM处理: userId=${session.chatConfig?.userId}, appId=${session.chatConfig?.appId}`,
@@ -510,7 +575,9 @@ async function bootstrap() {
               onProgress: (delta: string) => {
                 if (delta) {
                   llmBuffer += delta;
-                  sendJson({ type: 'llm.partial', text: delta });
+                  // 实时过滤括号内容，发送显示文本
+                  const currentDisplayText = voiceCallService.removeBracketedContent(llmBuffer);
+                  sendJson({ type: 'llm.partial', text: delta, displayText: currentDisplayText });
                 }
               },
               abortSignal: abortController.signal,
@@ -536,7 +603,9 @@ async function bootstrap() {
             return;
           }
 
-          sendJson({ type: 'llm.final', text: llmBuffer });
+          // 发送最终结果，包含过滤后的显示文本
+          const finalDisplayText = voiceCallService.removeBracketedContent(llmBuffer);
+          sendJson({ type: 'llm.final', text: llmBuffer, displayText: finalDisplayText });
 
           // LLM完成后，进行情绪识别并选择音色
           if (!session.ttsCanceled && llmBuffer) {
@@ -753,6 +822,29 @@ async function bootstrap() {
               'VoiceCall',
             );
 
+            // 检查用户饼干余额是否足够
+            const userToken = msg.token || '';
+            if (userToken) {
+              const balanceCheck = await voiceCallService.checkVoiceCallBalance(userToken);
+              if (!balanceCheck.sufficient) {
+                Logger.warn(
+                  `[VoiceCall] 余额不足，拒绝通话: userId=${msg.userId}, balance=${balanceCheck.balance}, message=${balanceCheck.message}`,
+                  'VoiceCall',
+                );
+                sendJson({
+                  type: 'error',
+                  code: 'INSUFFICIENT_BALANCE',
+                  message: balanceCheck.message || '饼干不足，无法进行语音通话',
+                  balance: balanceCheck.balance,
+                });
+                return;
+              }
+              Logger.debug(
+                `[VoiceCall] 余额检查通过: userId=${msg.userId}, balance=${balanceCheck.balance}`,
+                'VoiceCall',
+              );
+            }
+
             // 检查是否切换了角色或用户，如果是则清除缓存
             if (
               session.chatConfig?.appId !== msg.appId ||
@@ -771,6 +863,15 @@ async function bootstrap() {
             cfg.voice_id = msg.voice_id || '';
             session.ttsCanceled = false;
             session.ttsActive = false;
+
+            // 记录通话开始时间和用户token（用于扣费）
+            session.callStartTime = Date.now();
+            session.userToken = userToken;
+            session.totalBilledMinutes = 0;
+            Logger.debug(
+              `[VoiceCall] 通话开始计时: userId=${msg.userId}, startTime=${session.callStartTime}, hasToken=${!!session.userToken}`,
+              'VoiceCall',
+            );
 
             // 保存角色配置（包括星尘API扩展配置）
             session.chatConfig = {
@@ -799,6 +900,14 @@ async function bootstrap() {
               'VoiceCall',
             );
 
+            // 立即扣第一分钟
+            await processMinuteBilling();
+
+            // 启动每分钟扣费定时器
+            session.billingInterval = setInterval(async () => {
+              await processMinuteBilling();
+            }, 60 * 1000); // 每60秒扣一次
+
             sendJson({ type: 'call_started', sampleRate: cfg.sampleRate, format: cfg.format });
           } else if (msg?.type === 'end_call') {
             // 结束持续通话模式
@@ -808,6 +917,10 @@ async function bootstrap() {
             } catch {}
             session.ttsCanceled = true;
             session.ttsActive = false;
+
+            // 停止计费定时器
+            stopBillingInterval();
+
             sendJson({ type: 'call_ended' });
           } else if (msg?.type === 'start') {
             audioChunks = [];
@@ -890,7 +1003,9 @@ async function bootstrap() {
                   onProgress: (delta: string) => {
                     if (delta) {
                       llmFull += delta;
-                      sendJson({ type: 'llm.partial', text: delta });
+                      // 实时过滤括号内容，发送显示文本
+                      const currentDisplayText = voiceCallService.removeBracketedContent(llmFull);
+                      sendJson({ type: 'llm.partial', text: delta, displayText: currentDisplayText });
                     }
                   },
                   abortSignal: abortController.signal,
@@ -910,7 +1025,9 @@ async function bootstrap() {
                 llmFull = xingchenText;
               }
 
-              sendJson({ type: 'llm.final', text: llmFull });
+              // 发送最终结果，包含过滤后的显示文本
+              const finalDisplayText = voiceCallService.removeBracketedContent(llmFull);
+              sendJson({ type: 'llm.final', text: llmFull, displayText: finalDisplayText });
             } catch (e: any) {
               sendJson({ type: 'error', stage: 'llm', message: e?.message || 'LLM failed' });
               return;
@@ -1050,7 +1167,12 @@ async function bootstrap() {
 
       socket.on('close', () => {
         clearInterval(pingInterval);
-        Logger.debug('WS client disconnected', 'VoiceCall');
+        // 连接断开时停止计费定时器
+        stopBillingInterval();
+        Logger.debug(
+          `WS client disconnected, 总计费分钟=${session.totalBilledMinutes}`,
+          'VoiceCall',
+        );
       });
       socket.on('error', (e: any) =>
         Logger.warn(`WS client error: ${e?.message || e}`, 'VoiceCall'),

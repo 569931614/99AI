@@ -219,6 +219,9 @@ const audioContext = ref<HTMLAudioElement | null>(null)
 const audioUrl = ref('')
 const voiceDuration = ref(15)
 
+// 邀请铃声音频
+const invitationAudio = ref<HTMLAudioElement | null>(null)
+
 // 文字显示控制
 const showBubbleText = ref(false) // 是否显示气泡
 const displayedText = ref('') // 当前显示的文字
@@ -489,8 +492,90 @@ const closePopup = () => {
 
 // 接听视频邀请
 const acceptInvitation = () => {
+  // 停止邀请铃声
+  stopInvitationAudio()
   showInvitation.value = false
   // 视频不自动播放，等待用户点击播放按钮
+}
+
+// 播放邀请铃声
+const playInvitationAudio = () => {
+  console.log('playInvitationAudio 被调用, showInvitation:', showInvitation.value)
+
+  if (!showInvitation.value) {
+    console.log('邀请界面未显示，跳过播放')
+    return
+  }
+
+  // 如果音频已经存在且正在播放，不重复创建
+  if (invitationAudio.value) {
+    console.log('音频已存在，跳过重复创建')
+    return
+  }
+
+  try {
+    // 创建音频对象 - 使用绝对路径，在 public 目录
+    const audioPath = `${window.location.origin}/call.mp3`
+    console.log('准备播放音频:', audioPath)
+
+    invitationAudio.value = new Audio(audioPath)
+    invitationAudio.value.loop = true // 循环播放
+    invitationAudio.value.preload = 'auto'
+
+    // 监听加载事件
+    invitationAudio.value.addEventListener('loadeddata', () => {
+      console.log('音频数据加载完成')
+    })
+
+    invitationAudio.value.addEventListener('error', e => {
+      console.error('音频加载错误:', e)
+      console.error('错误详情:', invitationAudio.value?.error)
+    })
+
+    // 尝试播放（处理自动播放策略）
+    const playPromise = invitationAudio.value.play()
+
+    if (playPromise !== undefined) {
+      playPromise
+        .then(() => {
+          console.log('✅ 邀请铃声播放成功')
+        })
+        .catch(err => {
+          console.warn('⚠️ 邀请铃声自动播放失败（浏览器限制）:', err.message)
+          console.log('等待用户交互后播放...')
+
+          // 添加页面点击监听，用户交互后再播放
+          const playOnInteraction = () => {
+            console.log('检测到用户交互，尝试播放铃声')
+            if (invitationAudio.value && showInvitation.value) {
+              invitationAudio.value
+                .play()
+                .then(() => {
+                  console.log('✅ 用户交互后铃声播放成功')
+                  document.removeEventListener('click', playOnInteraction)
+                  document.removeEventListener('touchstart', playOnInteraction)
+                })
+                .catch(e => console.warn('❌ 播放失败:', e))
+            }
+          }
+          document.addEventListener('click', playOnInteraction, { once: true })
+          document.addEventListener('touchstart', playOnInteraction, { once: true })
+        })
+    }
+  } catch (error) {
+    console.error('创建音频对象失败:', error)
+  }
+}
+
+// 停止邀请铃声
+const stopInvitationAudio = () => {
+  console.log('stopInvitationAudio 被调用')
+  if (invitationAudio.value) {
+    invitationAudio.value.pause()
+    invitationAudio.value.currentTime = 0
+    invitationAudio.value = null
+    console.log('✅ 邀请铃声已停止')
+  }
 }
 
 // 跳转到绑定角色页面（打开猫饼小程序）
@@ -850,6 +935,8 @@ const initPage = async () => {
   if (!braceletId.value) {
     pageData.value = {}
     isBind.value = false
+    // 如果没有绑定，也不显示邀请界面
+    showInvitation.value = false
     return
   }
 
@@ -863,17 +950,28 @@ const initPage = async () => {
           desAiText: '',
         }
         isBind.value = true
+
+        // 数据加载完成后播放邀请铃声
+        if (showInvitation.value) {
+          setTimeout(() => {
+            playInvitationAudio()
+          }, 100)
+        }
+
         fetchChatSuggestion().catch(err => {
           console.error('fetchChatSuggestion catch', err)
         })
       } else {
         pageData.value = res.data || {}
         isBind.value = false
+        // 未绑定时不显示邀请界面
+        showInvitation.value = false
       }
     })
     .catch(err => {
       pageData.value = {}
       isBind.value = false
+      showInvitation.value = false
     })
 }
 
@@ -883,6 +981,8 @@ onMounted(() => {
 
 onUnmounted(() => {
   stopAudio()
+  // 停止邀请铃声
+  stopInvitationAudio()
   // 清理 blob URL
   if (backgroundUrl.value && backgroundUrl.value.startsWith('blob:')) {
     URL.revokeObjectURL(backgroundUrl.value)

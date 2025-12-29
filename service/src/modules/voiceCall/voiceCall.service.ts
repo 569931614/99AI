@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
+import { MaobingCookieUtil } from '@/common/utils/maobing-cookie.util';
 import { AffectionService } from '../affection/affection.service';
 import { OpenAIChatService } from '../aiTool/chat/chat.service';
 import { AppEntity } from '../app/app.entity';
@@ -11,6 +12,9 @@ import { ChatService } from '../chat/chat.service';
  * 语音通话服务
  * 封装语音对话相关的业务逻辑，避免在 main.ts 中直接调用底层服务
  */
+// 语音通话每分钟消耗的饼干数量
+const VOICE_CALL_COOKIES_PER_MINUTE = 10;
+
 @Injectable()
 export class VoiceCallService {
   constructor(
@@ -218,5 +222,137 @@ export class VoiceCallService {
    */
   removeBracketedContent(text: string): string {
     return this.chatService.removeBracketedContent(text);
+  }
+
+  /**
+   * 检查用户饼干余额是否足够进行语音通话（至少需要10个饼干，即1分钟的费用）
+   * @param token 用户token（猫饼平台）
+   * @returns 检查结果
+   */
+  async checkVoiceCallBalance(
+    token: string,
+  ): Promise<{ sufficient: boolean; balance: number; message?: string }> {
+    try {
+      if (!token) {
+        return { sufficient: false, balance: 0, message: '缺少用户token' };
+      }
+
+      const result = await MaobingCookieUtil.getCookieBalance({ token });
+
+      if (!result.success) {
+        Logger.warn(
+          `[VoiceCallService] 查询饼干余额失败: ${result.message}`,
+          'VoiceCallService',
+        );
+        return { sufficient: false, balance: 0, message: result.message || '查询余额失败' };
+      }
+
+      const sufficient = result.balance >= VOICE_CALL_COOKIES_PER_MINUTE;
+
+      Logger.debug(
+        `[VoiceCallService] 余额检查(猫饼): balance=${result.balance}, 需要=${VOICE_CALL_COOKIES_PER_MINUTE}, 足够=${sufficient}`,
+        'VoiceCallService',
+      );
+
+      if (!sufficient) {
+        return {
+          sufficient: false,
+          balance: result.balance,
+          message: `饼干不足，语音通话需要至少${VOICE_CALL_COOKIES_PER_MINUTE}个饼干/分钟，当前余额${result.balance}个`,
+        };
+      }
+
+      return { sufficient: true, balance: result.balance };
+    } catch (error: any) {
+      Logger.error(
+        `[VoiceCallService] 检查余额异常: ${error?.message}`,
+        error?.stack,
+        'VoiceCallService',
+      );
+      return { sufficient: false, balance: 0, message: error?.message || '检查余额失败' };
+    }
+  }
+
+  /**
+   * 扣除语音通话费用（调用猫饼接口，按分钟扣费）
+   * 猫饼后端会自动处理：优先扣免费分钟数，不足部分按比例扣饼干
+   * @param userId 用户ID（猫饼平台）
+   * @param token 用户token（猫饼平台）
+   * @param durationMinutes 通话时长（分钟），不足1分钟按1分钟计算
+   * @returns 扣费结果
+   */
+  async deductVoiceCallCookies(
+    userId: number | string,
+    token: string,
+    durationMinutes: number,
+  ): Promise<{
+    success: boolean;
+    deducted: number;
+    message?: string;
+    freeMinutesUsed?: number;
+    remainingFreeMinutes?: number;
+  }> {
+    try {
+      const numericUserId = typeof userId === 'string' ? parseInt(userId, 10) : userId;
+      if (isNaN(numericUserId)) {
+        return { success: false, deducted: 0, message: '无效的用户ID' };
+      }
+
+      if (!token) {
+        Logger.warn(`[VoiceCallService] 缺少token，跳过扣费: userId=${numericUserId}`, 'VoiceCallService');
+        return { success: false, deducted: 0, message: '缺少用户token' };
+      }
+
+      // 不足1分钟按1分钟计算
+      const minutes = Math.max(1, Math.ceil(durationMinutes));
+
+      Logger.debug(
+        `[VoiceCallService] 开始语音通话扣费(猫饼): userId=${numericUserId}, 时长=${durationMinutes.toFixed(2)}分钟, 计费分钟=${minutes}`,
+        'VoiceCallService',
+      );
+
+      // 调用猫饼接口扣除饼干（语音通话模式）
+      const result = await MaobingCookieUtil.deductCookies({
+        userId: numericUserId,
+        amount: minutes * VOICE_CALL_COOKIES_PER_MINUTE, // 按每分钟10饼干计算（后端会根据免费分钟调整）
+        remark: `语音通话消费 ${minutes}分钟`,
+        token,
+        isVoiceCall: true,
+        callMinutes: minutes,
+      });
+
+      if (result.success) {
+        Logger.log(
+          `[VoiceCallService] 语音通话扣费成功(猫饼): userId=${numericUserId}, 通话${minutes}分钟, 免费分钟使用=${result.freeMinutesUsed}, 实际扣饼干=${result.cookieDeducted}, 剩余免费分钟=${result.remainingFreeMinutes}`,
+          'VoiceCallService',
+        );
+        return {
+          success: true,
+          deducted: result.cookieDeducted || 0,
+          freeMinutesUsed: result.freeMinutesUsed,
+          remainingFreeMinutes: result.remainingFreeMinutes,
+        };
+      } else {
+        Logger.warn(
+          `[VoiceCallService] 语音通话扣费失败(猫饼): userId=${numericUserId}, message=${result.message}`,
+          'VoiceCallService',
+        );
+        return { success: false, deducted: 0, message: result.message };
+      }
+    } catch (error: any) {
+      Logger.error(
+        `[VoiceCallService] 扣费异常(猫饼): userId=${userId}, error=${error?.message}`,
+        error?.stack,
+        'VoiceCallService',
+      );
+      return { success: false, deducted: 0, message: error?.message || '扣费失败' };
+    }
+  }
+
+  /**
+   * 获取语音通话每分钟消耗的饼干数量
+   */
+  getCookiesPerMinute(): number {
+    return VOICE_CALL_COOKIES_PER_MINUTE;
   }
 }
